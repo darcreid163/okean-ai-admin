@@ -19,3 +19,5 @@ jobs:
           coverage: none
       - name: Static safety audit
         run: php tools/oai-static-audit.php
+      - name: WP-CLI parser and registry contract tests
+        run: php tools/oai-cli-contract-test.php
