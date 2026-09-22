@@ -1,0 +1,4 @@
+AI Admin 2.0.13
+Build: 2.0.13-wpcli-gutenberg-hardening-20260922
+Author: Андриянов Н.Г.
+Copyright: Андриянов Н.Г.
