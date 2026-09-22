@@ -109,7 +109,7 @@ class OAI_Workspace {
  public static function write($id,$path,$content){
   $base=self::base($id); if(is_wp_error($base))return $base; $path=ltrim(str_replace('\\','/',(string)$path),'/');
   if($path===''||strpos($path,'..')!==false||preg_match('#(^|/)\.\.?(/|$)#',$path))return new WP_Error('oai_path_denied','Invalid workspace path',array('status'=>403));
-  $file=$base.'/theme/'.$path; $root=realpath($base.'/theme'); $parent=realpath(dirname($file)); if($parent===false){$parent=dirname($file);wp_mkdir_p($parent);$parent=realpath($parent);} if(!$root||strpos($parent,$root)!==0)return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
+  $file=$base.'/theme/'.$path; $root=realpath($base.'/theme'); $parent=realpath(dirname($file)); if($parent===false){$parent=dirname($file);wp_mkdir_p($parent);$parent=realpath($parent);} if(!$root||($parent!==$root && strpos($parent,trailingslashit($root))!==0))return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
   $fs=self::fs(); $old_exists=is_file($file); $old=$old_exists?($fs?$fs->get_contents($file):@file_get_contents($file)):''; if($old===false)$old='';
   $guard=OAI_Security::php_guard($file,$content); if(empty($guard['ok']))return new WP_Error('oai_php_guard','PHP safety check failed',$guard);
   if($fs){if(!$fs->put_contents($file,$content,FS_CHMOD_FILE))return new WP_Error('oai_write','Workspace write failed',array('status'=>500));}else return new WP_Error('oai_workspace_fs','WordPress Filesystem unavailable',array('status'=>500));
