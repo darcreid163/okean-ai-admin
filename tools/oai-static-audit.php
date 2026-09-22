@@ -36,6 +36,7 @@ $rest=read_audit($root.'/includes/class-oai-rest.php');
 $dispatcher=read_audit($root.'/includes/class-oai-execution-dispatcher.php');
 $cli=read_audit($root.'/includes/class-oai-wp-cli-execution.php');
 $registry=read_audit($root.'/includes/class-oai-command-registry.php');
+$gutenberg=read_audit($root.'/includes/class-oai-gutenberg-resolver.php');
 if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),'public static function restore($id,$path,$exists,$content=\'\'){\\n')!==false)fail_audit('Workspace restore method contains a literal \\n escape instead of PHP newlines');
 if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),'strpos($real,$root_real)!==0')!==false)fail_audit('Workspace file boundary uses unsafe prefix-only realpath check');
 if(strpos(read_audit($root.'/includes/class-oai-files.php'),"expected_sha256=''")===false)fail_audit('File writer is missing expected SHA-256 conflict guard');
@@ -59,7 +60,7 @@ $required=array(
  'Gutenberg freeform mode'=>'freeform_html',
  'Woo composite resolver'=>"case 'woocommerce_product'"
 );
-foreach($required as $label=>$needle)if(strpos($rest.$dispatcher.$cli.$registry,$needle)===false)fail_audit("Missing safety invariant: ".$label);
+foreach($required as $label=>$needle)if(strpos($rest.$dispatcher.$cli.$registry.$gutenberg,$needle)===false)fail_audit("Missing safety invariant: ".$label);
 if(preg_match('/mode\s*=\s*[\'\"]apply[\'\"]/', $dispatcher))warn_audit('Dispatcher contains an apply-mode literal; verify it is not an execution bypass.');
 $direct_patterns=array(
  '/->save\s*\(/'=>'direct object save call',
