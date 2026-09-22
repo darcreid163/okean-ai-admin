@@ -89,7 +89,7 @@ class OAI_MCP {
    } elseif($name==='gutenberg.get_blocks'){
     $schema=array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1)));
    } elseif($name==='gutenberg.locate_block'){
-    $schema=array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string')));
+    $schema=array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string'),'html_contains'=>array('type'=>'string')));
    }
    $tools[]=array('name'=>$name,'description'=>'Okean AI read tool: '.$name,'inputSchema'=>$schema);
   }
@@ -146,12 +146,12 @@ class OAI_MCP {
    case 'wp_execution_readiness':$out=OAI_REST::execution_readiness();break;
    case 'wordpress_execute':$cmd=$a['command']??null;$mode=sanitize_key((string)($a['mode']??'read'));$out=OAI_Execution_Dispatcher::dispatch($cmd,$mode);break;
    case 'gutenberg_get_blocks':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0));$rr->set_url_params(array('id'=>absint($a['post_id']??0)));$out=OAI_REST::gutenberg_resolved($rr);break;
-   case 'gutenberg_locate_block':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0).'/locate');$rr->set_url_params(array('id'=>absint($a['post_id']??0)));foreach(array('block_name','path','text') as $k){if(array_key_exists($k,$a))$rr->set_param($k,$a[$k]);}$out=OAI_REST::gutenberg_locate($rr);break;
+   case 'gutenberg_locate_block':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0).'/locate');$rr->set_url_params(array('id'=>absint($a['post_id']??0)));foreach(array('block_name','path','text','html_contains') as $k){if(array_key_exists($k,$a))$rr->set_param($k,$a[$k]);}$out=OAI_REST::gutenberg_locate($rr);break;
    case 'gutenberg_patch':$rr=new WP_REST_Request('POST','/okean-ai/v1/gutenberg/patch');foreach($a as $k=>$v)$rr->set_param($k,$v);$out=OAI_REST::gutenberg_patch($rr);break;
    case 'content_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/content/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::content_patch($r);break;
    case 'woocommerce_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_patch($r);break;
    case 'elementor_create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_create_page($r);break;
-   case 'operation_approve':$r=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.absint($a['id']??0).'/approve');$out=OAI_REST::sandbox_action($r);break;
+   case 'operation_approve':$oid=absint($a['id']??0);$r=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$oid.'/approve');$r->set_url_params(array('id'=>$oid));$r->set_route('/okean-ai/v1/sandbox/'.$oid.'/approve');$out=OAI_REST::sandbox_action($r);break;
    case 'operation_apply':$license=OAI_License::can('mcp_apply');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));return self::response($id,null,array('code'=>-32003,'message'=>'Human approval required in wp-admin before apply'));
    case 'operation_rollback':$license=OAI_License::can('mcp_apply');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin'));
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
