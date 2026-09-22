@@ -769,11 +769,32 @@ frame.addEventListener('load',function(){
  public static function snapshot_for_verify($type,$target){ return self::current($type,$target); }
  private static function current($type,$target){ switch($type){case 'elementor_page_create': $parts=explode(':',(string)$target,2); $pid=absint($parts[1]??0); if(!$pid)return array(false,null); $v=OAI_Verify::elementor_page($pid); return is_wp_error($v)?array(false,$v):array(true,$v); case 'option_update': $exists=get_option($target,null); return array($exists!==null,$exists); case 'post_title': return array(true,get_post_field('post_title',(int)$target)); case 'post_excerpt': return array(true,get_post_field('post_excerpt',(int)$target)); case 'post_content': return array(true,get_post_field('post_content',(int)$target)); case 'elementor_widget_html': return self::elementor_widget_html_current($target); case 'elementor_widget_settings': $parts=explode(':',(string)$target,2); $ref=OAI_Elementor::find_node(absint($parts[0]??0),sanitize_text_field($parts[1]??'')); return is_wp_error($ref)?array(false,null):array(true,is_array($ref['node']['settings']??null)?$ref['node']['settings']:array()); case 'file_write': $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); $r=OAI_Files::read($parts[0],$parts[1]); if(is_wp_error($r))return array(false,null); return array(true,$r['content']??''); case 'theme_file_write': $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); $r=OAI_Files::read($parts[0],$parts[1]); if(is_wp_error($r))return array(false,null); return array(true,$r['content']??''); case 'woo_product_price': if(!class_exists('WooCommerce'))return array(false,null); $p=wc_get_product((int)$target); return array((bool)$p,$p?$p->get_regular_price():null); case 'woo_product_stock': if(!class_exists('WooCommerce'))return array(false,null); $p=wc_get_product((int)$target); return array((bool)$p,$p?array('stock'=>$p->get_stock_quantity(),'manage_stock'=>$p->managing_stock(),'stock_status'=>$p->get_stock_status()):null); case 'woocommerce_product': if(!class_exists('WooCommerce'))return array(false,null); $v=OAI_WooCommerce::get((int)explode(':',(string)$target,2)[0]); return is_wp_error($v)?array(false,$v):array(true,$v); } return array(false,null); }
  public static function sandbox_list(){ $rows=OAI_DB::all(); foreach($rows as &$r){foreach(array('before_data','after_data','applied_data','meta_data','diff_data') as $k)$r[$k]=json_decode($r[$k],true);} return array('items'=>$rows); }
+ private static function validate_sandbox_target($type,$target){
+  if(in_array($type,array('post_title','post_excerpt','post_content'),true)){
+   $id=absint($target); if(!$id || !get_post($id))return new WP_Error('oai_target','Post not found',array('status'=>404));
+  }
+  if(in_array($type,array('elementor_widget_html','elementor_widget_settings'),true)){
+   $parts=explode(':',(string)$target,2); $pid=absint($parts[0]??0); $wid=sanitize_text_field($parts[1]??'');
+   if(!$pid || $wid==='')return new WP_Error('oai_target','Invalid Elementor widget target',array('status'=>400));
+   $ref=OAI_Elementor::find_node($pid,$wid); if(is_wp_error($ref))return $ref;
+  }
+  if(in_array($type,array('woo_product_price','woo_product_stock'),true)){
+   $pid=absint($target); if(!$pid)return new WP_Error('oai_target','Invalid WooCommerce product target',array('status'=>400));
+   $product=wc_get_product($pid); if(!$product)return new WP_Error('oai_target','Product not found',array('status'=>404));
+  }
+  if($type==='file_write'){
+   $parts=explode(':',(string)$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400));
+   $file=OAI_Security::resolve_path($parts[0],$parts[1]); if(is_wp_error($file))return $file;
+   if(is_dir($file))return new WP_Error('oai_not_file','File target points to a directory',array('status'=>400));
+  }
+  return true;
+ }
  public static function sandbox_create($req){
   $type=sanitize_key($req->get_param('type'));
   $target=sanitize_text_field((string)$req->get_param('target'));
   $allowed=array('option_update','post_title','post_excerpt','post_content','woo_product_price','woo_product_stock','elementor_widget_html','elementor_widget_settings','elementor_page_create','file_write');
   if(!in_array($type,$allowed,true))return new WP_Error('oai_type','Unsupported type',array('status'=>400));
+  $target_guard=self::validate_sandbox_target($type,$target); if(is_wp_error($target_guard))return $target_guard;
   $raw=$req->get_param('value');
   $requested_before=$req->get_param('old_data');
   $requested_after=$req->get_param('new_data');
