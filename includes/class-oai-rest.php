@@ -911,8 +911,8 @@ frame.addEventListener('load',function(){
    if($r['status']!=='applied')return new WP_Error('oai_state','Operation must be applied',array('status'=>409));
    $before=json_decode((string)$r['before_data'],true);
    $applied=json_decode((string)$r['applied_data'],true);
-   if(in_array($r['type'],array('file_write','theme_file_write'),true))$meta['applied_sha256']=hash('sha256',(string)$applied);
    if($r['applied_data']===null || $r['applied_data']==='')$applied=json_decode((string)$r['after_data'],true);
+   if(in_array($r['type'],array('file_write','theme_file_write'),true))$meta['applied_sha256']=hash('sha256',(string)$applied);
 
    // Rollback is destructive too: never overwrite a change made after Apply.
    // The live target must still equal the state AI Admin itself verified after Apply.
