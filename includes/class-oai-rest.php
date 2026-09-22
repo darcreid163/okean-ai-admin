@@ -1101,7 +1101,11 @@ frame.addEventListener('load',function(){
   $op='OAI-'.gmdate('Ymd-His').'-'.wp_rand(1000,9999);
   $meta=array('workspace_id'=>$wid,'workspace_path'=>$path,'before_exists'=>$before_exists,'after_exists'=>true,'sandbox_artifact'=>true,'rollback_descriptor'=>OAI_Lifecycle::descriptor('theme_file_write',$target,$before,array('before_exists'=>$before_exists)));
   $row=array('operation_id'=>$op,'status'=>'pending','type'=>'theme_file_write','target'=>$target,'before_data'=>wp_json_encode($before),'after_data'=>wp_json_encode($content),'meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'diff_data'=>wp_json_encode(OAI_Operations::diff($before,$content),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'risk'=>'high','phase'=>'awaiting_approval','workspace_id'=>$wid,'rollback_data'=>wp_json_encode($meta['rollback_descriptor']),'created_at'=>current_time('mysql',true),'expires_at'=>gmdate('Y-m-d H:i:s',time()+7*DAY_IN_SECONDS));
-  $id=OAI_DB::insert($row); if(is_wp_error($id)){\n   // A failed ledger insert must not leave an untracked workspace draft.\n   OAI_Workspace::restore($wid,$path,$before_exists,$before);\n   return $id;\n  } OAI_Audit::log('workspace_file_changed',array_merge($row,array('id'=>$id)),array('workspace_id'=>$wid,'path'=>$path)); return self::row($id);
+  $id=OAI_DB::insert($row); if(is_wp_error($id)){
+   // A failed ledger insert must not leave an untracked workspace draft.
+   OAI_Workspace::restore($wid,$path,$before_exists,$before);
+   return $id;
+  } OAI_Audit::log('workspace_file_changed',array_merge($row,array('id'=>$id)),array('workspace_id'=>$wid,'path'=>$path)); return self::row($id);
  }
  public static function workspace_surfaces($req){return OAI_Workspace::surfaces((string)$req->get_param('workspace_id'));}
  public static function surfaces_catalog($req){return OAI_Surfaces::catalog();}
