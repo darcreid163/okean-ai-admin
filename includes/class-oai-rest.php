@@ -814,6 +814,16 @@ frame.addEventListener('load',function(){
   if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
   $meta=json_decode((string)$r['meta_data'],true); if(!is_array($meta))$meta=array();
 
+  // A sandbox snapshot is valid only until its explicit expiry. Never approve
+  // or apply an operation against a stale snapshot; rollback of an already
+  // applied operation remains available independently.
+  if(in_array($action,array('approve','apply'),true) && in_array($r['status'],array('pending','approved'),true) && !empty($r['expires_at']) && strtotime((string)$r['expires_at']) < time()){
+   OAI_DB::update($id,array('status'=>'expired','phase'=>'expired'));
+   OAI_Audit::log('expired',array_merge($r,array('status'=>'expired')),array('reason'=>'sandbox_expired'));
+   OAI_Receipts::store($id,array('event'=>'expired','status'=>'expired','at'=>gmdate('c'),'reason'=>'sandbox_expired'),OAI_Proof::make($id));
+   return new WP_Error('oai_expired','Sandbox operation has expired; create a fresh snapshot before approval/apply',array('status'=>409,'expires_at'=>$r['expires_at']));
+  }
+
   if($action==='approve'){
    if($r['status']!=='pending')return new WP_Error('oai_state','Operation is not pending',array('status'=>409));
    OAI_DB::update($id,array('status'=>'approved','phase'=>'approved','approved_at'=>current_time('mysql',true)));
