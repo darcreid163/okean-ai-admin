@@ -16,7 +16,7 @@ class OAI_Security {
   $candidate=$base.DIRECTORY_SEPARATOR.str_replace('/',DIRECTORY_SEPARATOR,$relative);
   $real=realpath($candidate);
   if($real===false){$parent=realpath(dirname($candidate)); if($parent===false || strpos($parent,$base)!==0)return new WP_Error('oai_path_denied','Path escapes allowed scope',array('status'=>403)); $real=$candidate;}
-  if(strpos($real,$base)!==0)return new WP_Error('oai_path_denied','Path escapes allowed scope',array('status'=>403));
+  if($real!==$base && strpos($real,trailingslashit($base))!==0)return new WP_Error('oai_path_denied','Path escapes allowed scope',array('status'=>403));
   $name=basename($real);
   if(in_array(strtolower($name),array('wp-config.php','.htaccess','.user.ini'),true))return new WP_Error('oai_path_denied','Sensitive file denied',array('status'=>403));
   return $real;
