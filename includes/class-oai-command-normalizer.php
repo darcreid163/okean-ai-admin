@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) exit;
 class OAI_Command_Normalizer {
  public static function normalize($command){
   if(is_array($command))return self::from_array($command);
-  $t=OAI_Argument_Parser::tokenize((string)$command); if(!$t)return new WP_Error('oai_cli_empty','Command is empty',array('status'=>400));
+  $t=OAI_Argument_Parser::tokenize((string)$command); if(is_wp_error($t))return $t; if(!$t)return new WP_Error('oai_cli_empty','Command is empty',array('status'=>400));
   if(strtolower($t[0])==='wp')array_shift($t);
   if(!$t)return new WP_Error('oai_cli_empty','Command is empty',array('status'=>400));
   $f=OAI_Argument_Parser::flags($t); $a=$f['args']; $flags=$f['flags']; $family=sanitize_key($a[0]??'');$verb=sanitize_key($a[1]??'');$subverb=''; if($family===''||$verb==='')return new WP_Error('oai_cli_shape','Command must contain a command family and verb',array('status'=>400,'args'=>$a));
