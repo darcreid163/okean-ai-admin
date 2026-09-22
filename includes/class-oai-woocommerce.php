@@ -23,5 +23,17 @@ class OAI_WooCommerce {
   if(array_key_exists('manage_stock',$changes))$after['manage_stock']=(bool)$changes['manage_stock'];
   return array('before'=>$before,'after'=>$after,'changes'=>$changes,'id'=>(int)$id);
 }
- public static function apply($id,$changes){$p=wc_get_product((int)$id);if(!$p)return new WP_Error('oai_not_found','Product not found',array('status'=>404));if(array_key_exists('regular_price',$changes))$p->set_regular_price(wc_format_decimal($changes['regular_price']));if(array_key_exists('sale_price',$changes))$p->set_sale_price(wc_format_decimal($changes['sale_price']));if(array_key_exists('manage_stock',$changes))$p->set_manage_stock((bool)$changes['manage_stock']);if(array_key_exists('stock_quantity',$changes))$p->set_stock_quantity($changes['stock_quantity']===null?null:wc_stock_amount($changes['stock_quantity']));if(array_key_exists('stock_status',$changes))$p->set_stock_status(sanitize_key($changes['stock_status']));$p->save();wc_delete_product_transients((int)$id);return self::get($id);}
+ public static function apply($id,$changes){
+  $p=wc_get_product((int)$id);
+  if(!$p)return new WP_Error('oai_not_found','Product not found',array('status'=>404));
+  if(array_key_exists('regular_price',$changes))$p->set_regular_price(wc_format_decimal($changes['regular_price']));
+  if(array_key_exists('sale_price',$changes))$p->set_sale_price(wc_format_decimal($changes['sale_price']));
+  if(array_key_exists('manage_stock',$changes))$p->set_manage_stock((bool)$changes['manage_stock']);
+  if(array_key_exists('stock_quantity',$changes))$p->set_stock_quantity($changes['stock_quantity']===null?null:wc_stock_amount($changes['stock_quantity']));
+  elseif(array_key_exists('stock',$changes))$p->set_stock_quantity($changes['stock']===null?null:wc_stock_amount($changes['stock']));
+  if(array_key_exists('stock_status',$changes))$p->set_stock_status(sanitize_key($changes['stock_status']));
+  $p->save();
+  wc_delete_product_transients((int)$id);
+  return self::get($id);
+}
 }
