@@ -68,8 +68,8 @@ class OAI_REST {
   register_rest_route($n,'/mcp/token',array('methods'=>'POST','callback'=>array('OAI_MCP','admin_generate_token'))+$args);
   register_rest_route($n,'/license/status',array('methods'=>'GET','callback'=>array(__CLASS__,'license_status'))+$args);
   register_rest_route($n,'/auth/status',array('methods'=>'GET','callback'=>array(__CLASS__,'auth_status'))+$args);
-  register_rest_route($n,'/license/local-activate',array('methods'=>'POST','callback'=>array(__CLASS__,'license_local_activate'),'permission_callback'=>function(){return current_user_can('manage_options');}));
-  register_rest_route($n,'/license/local-deactivate',array('methods'=>'POST','callback'=>array(__CLASS__,'license_local_deactivate'),'permission_callback'=>function(){return current_user_can('manage_options');}));
+  register_rest_route($n,'/license/local-activate',array('methods'=>'POST','callback'=>array(__CLASS__,'license_local_activate'),'permission_callback'=>array(__CLASS__,'perm')));
+  register_rest_route($n,'/license/local-deactivate',array('methods'=>'POST','callback'=>array(__CLASS__,'license_local_deactivate'),'permission_callback'=>array(__CLASS__,'perm')));
   register_rest_route($n,'/agent/intent',array('methods'=>'POST','callback'=>array(__CLASS__,'intent_normalize'))+$args);
   register_rest_route($n,'/agent/plan',array('methods'=>'POST','callback'=>array(__CLASS__,'agent_plan'))+$args);
   register_rest_route($n,'/operations/catalog',array('methods'=>'GET','callback'=>array(__CLASS__,'operation_catalog'))+$args);
