@@ -18,6 +18,7 @@ function sanitize_key($key){
 require_once __DIR__.'/../includes/class-oai-argument-parser.php';
 require_once __DIR__.'/../includes/class-oai-command-normalizer.php';
 require_once __DIR__.'/../includes/class-oai-command-registry.php';
+require_once __DIR__.'/../includes/class-oai-agent.php';
 
 $fail=0; $tests=0;
 function check_test($ok,$label){
@@ -52,6 +53,11 @@ check_test(is_wp_error($r) && $r->get_error_code()==='oai_cli_unclosed_quote','n
 
 $r=OAI_Command_Registry::resolve('');
 check_test(is_wp_error($r) && $r->get_error_code()==='oai_cli_empty','empty command rejected');
+
+$am=new ReflectionMethod('OAI_Agent','allowlist'); $am->setAccessible(true); $sm=new ReflectionMethod('OAI_Agent','scope_for'); $sm->setAccessible(true);
+$allow=$am->invoke(null); $scope_errors=array();
+foreach(array_keys($allow) as $action){ $scope=$sm->invoke(null,$action); if($scope==='')$scope_errors[]=$action; }
+check_test(empty($scope_errors),'every Agent allowlist action has a scope mapping'.(empty($scope_errors)?'':': '.implode(',',$scope_errors)));
 
 echo "WP-CLI parser/registry contract tests: {$tests} tests, {$fail} failures\n";
 if($fail)exit(1);
