@@ -5,7 +5,17 @@
 if (!defined('ABSPATH')) exit;
 class OAI_Files {
  public static function list_files($scope,$path=''){
-  $base=OAI_Security::resolve_path($scope,$path===''?'.':$path); if(is_wp_error($base))return $base;
+  // Root listing is a valid read operation. resolve_path() intentionally
+  // rejects an empty/"." relative path, so resolve the registered scope root
+  // directly here and keep all non-root paths behind the normal boundary check.
+  if($path===''){
+   $scopes=OAI_Security::scopes(); $scope=sanitize_key($scope);
+   if(!isset($scopes[$scope]))return new WP_Error('oai_path_scope','Invalid file scope',array('status'=>400));
+   $base=realpath($scopes[$scope]);
+   if($base===false)return new WP_Error('oai_path_scope','Base path unavailable',array('status'=>500));
+  }else{
+   $base=OAI_Security::resolve_path($scope,$path); if(is_wp_error($base))return $base;
+  }
   if(!is_dir($base))return new WP_Error('oai_not_dir','Directory not found',array('status'=>404));
   $items=array(); foreach(scandir($base) as $name){if($name==='.'||$name==='..'||$name[0]==='.')continue; $full=$base.DIRECTORY_SEPARATOR.$name; $items[]=array('name'=>$name,'type'=>is_dir($full)?'dir':'file','bytes'=>is_file($full)?filesize($full):null,'modified'=>filemtime($full));}
   return array('scope'=>$scope,'path'=>$path,'items'=>$items);
