@@ -893,6 +893,20 @@ frame.addEventListener('load',function(){
   elseif($action==='rollback'){
    if($r['status']!=='applied')return new WP_Error('oai_state','Operation must be applied',array('status'=>409));
    $before=json_decode((string)$r['before_data'],true);
+   $applied=json_decode((string)$r['applied_data'],true);
+   if($r['applied_data']===null || $r['applied_data']==='')$applied=json_decode((string)$r['after_data'],true);
+
+   // Rollback is destructive too: never overwrite a change made after Apply.
+   // The live target must still equal the state AI Admin itself verified after Apply.
+   $rollback_conflict=self::rollback_conflict_check($r,$applied,$meta);
+   if(is_wp_error($rollback_conflict)){
+    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
+    $details=$rollback_conflict->get_error_data();
+    OAI_Receipts::store($id,array('event'=>'rollback_conflict','status'=>'rollback_failed','at'=>gmdate('c'),'reason'=>'post_apply_change','details'=>$details),OAI_Proof::make($id));
+    OAI_Audit::log('rollback_conflict',array_merge($r,array('status'=>'rollback_failed')),array('reason'=>'post_apply_change','details'=>$details));
+    return $rollback_conflict;
+   }
+
    OAI_DB::update($id,array('status'=>'rollback_pending','phase'=>'rollback_pending'));
    OAI_DB::update($id,array('status'=>'rolling_back','phase'=>'rolling_back'));
    try { $err=self::rollback_write($r['type'],$r['target'],$before,$meta); }
@@ -903,27 +917,37 @@ frame.addEventListener('load',function(){
     OAI_Audit::log('rollback_failed',array_merge($r,array('status'=>'rollback_failed')),array('error'=>$err->get_error_message()));
     return $err;
    }
-   self::refresh_verification_target($r['type'],$r['target'],$meta);
-   $verification=OAI_Verify::operation($id,$before,'rollback');
-   if(is_wp_error($verification) || empty($verification['verified'])){
-    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
-    OAI_Receipts::store($id,array('event'=>'rollback_failed','status'=>'rollback_failed','at'=>gmdate('c'),'verification'=>$verification),OAI_Proof::make($id));
-    return new WP_Error('oai_rollback_verify_failed','Rollback completed but verification failed',array('status'=>500,'verification'=>$verification));
-   }
-   self::refresh_verification_target($r['type'],$r['target'],$meta);
-   $verification2=OAI_Verify::operation($id,$before,'rollback');
-   if(is_wp_error($verification2) || empty($verification2['verified'])){
-    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
-    OAI_Receipts::store($id,array('event'=>'rollback_failed','status'=>'rollback_failed','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
-    return new WP_Error('oai_rollback_verify_failed','Rollback verification was not stable on the second authoritative read',array('status'=>500,'verification'=>$verification2));
-   }
-   OAI_DB::update($id,array('status'=>'rolled_back','phase'=>'rolled_back','rolled_back_at'=>current_time('mysql',true)));
-   OAI_Audit::log('rolled_back',array_merge($r,array('status'=>'rolled_back')),array('verified'=>true,'verification'=>$verification2));
-   OAI_Receipts::store($id,array('event'=>'rollback','status'=>'rolled_back','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
-  }
   return self::row($id);
  }
 
+ private static function rollback_conflict_check($r,$applied,$meta=array()){
+  $type=(string)$r['type']; $target=(string)$r['target'];
+
+  if($type==='elementor_page_create'){
+   $page_id=absint($meta['preview_page_id']??0);
+   if(!$page_id){$parts=explode(':',$target,2);$page_id=absint($parts[1]??0);}
+   $current=OAI_Verify::elementor_page($page_id);
+   if(is_wp_error($current))return new WP_Error('oai_rollback_conflict','Created Elementor page is no longer available; refusing destructive rollback',array('status'=>409,'current'=>null,'expected_applied'=>$applied));
+   $current_data=$current['data']??null;
+   if(!OAI_Verify::same($current_data,$applied))return new WP_Error('oai_rollback_conflict','Target changed after Apply; rollback was blocked to protect the newer change',array('status'=>409,'current'=>$current_data,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+   return true;
+  }
+
+  list($exists,$current)=self::current($type,$target);
+  $expected_exists=array_key_exists('after_exists',$meta)?(bool)$meta['after_exists']:true;
+  if($exists!==$expected_exists)return new WP_Error('oai_rollback_conflict','Target existence changed after Apply; rollback was blocked',array('status'=>409,'current_exists'=>$exists,'expected_exists'=>$expected_exists,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+
+  if($exists){
+   if($type==='woocommerce_product'){
+    if(!self::snapshot_fields_match($current,$applied,array('id','sku','name','regular_price','sale_price','price','stock','stock_status','manage_stock','status')))return new WP_Error('oai_rollback_conflict','WooCommerce product changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+   } elseif(in_array($type,array('woo_product_price','woo_product_stock'),true)){
+    if(!OAI_Verify::same($current,$applied))return new WP_Error('oai_rollback_conflict','WooCommerce product state changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+   } else {
+    if(!OAI_Verify::same($current,$applied))return new WP_Error('oai_rollback_conflict','Target changed after Apply; rollback was blocked to protect the newer change',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+   }
+  }
+  return true;
+ }
  private static function snapshot_fields_match($current,$before,$fields){
   if(!is_array($current)||!is_array($before)) return OAI_Verify::same($current,$before);
   foreach($fields as $field){
@@ -993,7 +1017,7 @@ frame.addEventListener('load',function(){
   return wp_update_post(array('ID'=>$page_id,'post_status'=>'publish'),true);
  }
  private static function write($type,$target,$v){ switch($type){case 'elementor_page_create': return self::elementor_page_publish($target); case 'option_update':update_option($target,$v,false);return true; case 'post_title':return wp_update_post(array('ID'=>(int)$target,'post_title'=>$v),true); case 'post_excerpt':return wp_update_post(array('ID'=>(int)$target,'post_excerpt'=>$v),true); case 'post_content':return wp_update_post(array('ID'=>(int)$target,'post_content'=>$v),true); case 'elementor_widget_html':return self::elementor_widget_html_write($target,$v); case 'elementor_widget_settings':return OAI_Elementor::save_settings($target,is_array($v)?$v:array()); case 'file_write': $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); $w=OAI_Files::write($parts[0],$parts[1],(string)$v); return is_wp_error($w)?$w:true; case 'theme_file_write': $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); $w=OAI_Files::write($parts[0],$parts[1],(string)$v); return is_wp_error($w)?$w:true; case 'woo_product_price':$p=wc_get_product((int)$target);if(!$p)return new WP_Error('oai_target','Product not found',array('status'=>404));$p->set_regular_price($v);$p->set_price($v);$p->save();return true; case 'woo_product_stock':$p=wc_get_product((int)$target);if(!$p)return new WP_Error('oai_target','Product not found',array('status'=>404));$stock=is_array($v)?($v['stock']??null):$v;$p->set_manage_stock(true);$p->set_stock_quantity($stock===null?null:(int)$stock);$p->set_stock_status($stock===null?'instock':((int)$stock>0?'instock':'outofstock'));$p->save();return true;} return new WP_Error('oai_type','Unsupported type',array('status'=>400)); }
- private static function rollback_write($type,$target,$v,$meta){ if($type==='elementor_page_create'){ $page_id=absint($meta['preview_page_id']??0); if($page_id){wp_delete_post($page_id,false);} return true; } if($type==='file_write'||$type==='theme_file_write'){ $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); if(empty($meta['before_exists'])){ $path=OAI_Security::resolve_path($parts[0],$parts[1]); if(is_wp_error($path))return $path; if(is_file($path) && !@unlink($path))return new WP_Error('oai_rollback','Could not remove created file',array('status'=>500)); return true; } $w=OAI_Files::write($parts[0],$parts[1],(string)$v); return is_wp_error($w)?$w:true; } if($type==='option_update' && empty($meta['before_exists'])){delete_option($target);return true;} if($type==='woo_product_stock' && is_array($v)){ $p=wc_get_product((int)$target);if(!$p)return new WP_Error('oai_target','Product not found',array('status'=>404));$p->set_manage_stock((bool)($v['manage_stock']??false));$p->set_stock_quantity($v['stock']??null);$p->set_stock_status($v['stock_status']??'instock');$p->save();return true;} return self::write($type,$target,$v); }
+ private static function rollback_write($type,$target,$v,$meta){ if($type==='elementor_page_create'){ $page_id=absint($meta['preview_page_id']??0); if($page_id){wp_delete_post($page_id,false);} return true; } if($type==='file_write'||$type==='theme_file_write'){ $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); if(empty($meta['before_exists'])){ $path=OAI_Security::resolve_path($parts[0],$parts[1]); if(is_wp_error($path))return $path; if(is_file($path) && !@unlink($path))return new WP_Error('oai_rollback','Could not remove created file',array('status'=>500)); return true; } $w=OAI_Files::write($parts[0],$parts[1],(string)$v); return is_wp_error($w)?$w:true; } if($type==='option_update' && empty($meta['before_exists'])){delete_option($target);return true;} if($type==='woo_product_stock' && is_array($v)){ $p=wc_get_product((int)$target);if(!$p)return new WP_Error('oai_target','Product not found',array('status'=>404));$p->set_manage_stock((bool)($v['manage_stock']??false));$p->set_stock_quantity($v['stock']??null);$p->set_stock_status($v['stock_status']??'instock');$p->save();return true;} if($type==='woocommerce_product'){ $parts=explode(':',$target,2); $product_id=absint($parts[0]??0); if(!$product_id)return new WP_Error('oai_target','Invalid WooCommerce product target',array('status'=>400)); $w=OAI_WooCommerce::apply($product_id,is_array($v)?$v:array()); return is_wp_error($w)?$w:true; } return self::write($type,$target,$v); }
  public static function files_list($req){return OAI_Files::list_files((string)$req->get_param('scope'),(string)$req->get_param('path'));}
  public static function files_read($req){return OAI_Files::read((string)$req->get_param('scope'),(string)$req->get_param('path'));}
  public static function files_search($req){return OAI_Files::search((string)$req->get_param('scope'),(string)$req->get_param('q'),(string)$req->get_param('path'),min(100,max(1,absint($req->get_param('limit')?:50))));}
