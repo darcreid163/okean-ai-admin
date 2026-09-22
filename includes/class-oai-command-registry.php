@@ -3,9 +3,9 @@
 if (!defined('ABSPATH')) exit;
 class OAI_Command_Registry {
  public static function all(){return array(
-  'core version'=>array('family'=>'core','handler'=>'core','read'=>true),
+  'core version'=>array('family'=>'core','handler'=>'core','read'=>true,'execution_mode'=>'read_only'),
   'plugin list'=>array('family'=>'plugin','handler'=>'plugin_list','read'=>true),
-  'plugin activate'=>array('family'=>'plugin','handler'=>'plugin_activate','read'=>false,'approval'=>true),
+  'plugin activate'=>array('family'=>'plugin','handler'=>'plugin_activate','read'=>false,'approval'=>true,'execution_mode'=>'plan_only'),
   'plugin deactivate'=>array('family'=>'plugin','handler'=>'plugin_deactivate','read'=>false,'approval'=>true),
   'plugin update'=>array('family'=>'plugin','handler'=>'plugin_update','read'=>false,'approval'=>true),
   'theme list'=>array('family'=>'theme','handler'=>'theme_list','read'=>true),
@@ -32,7 +32,7 @@ class OAI_Command_Registry {
   $source=$ref?$ref->getFileName():null; $text=($source&&is_readable($source))?file_get_contents($source):'';
   foreach($all as $key=>$entry){$h=(string)($entry['handler']??''); $implemented[$h]=($h!==''&&$text!==''&&strpos($text,"case '".$h."'")!==false);}
   $missing=array(); foreach($implemented as $h=>$ok)if(!$ok)$missing[]=$h;
-  return array('registered'=>count($all),'handlers'=>count(array_unique(array_keys($implemented))),'missing_handlers'=>$missing,'ok'=>empty($missing));
+  return array('registered'=>count($all),'handlers'=>count(array_unique(array_keys($implemented))),'missing_handlers'=>$missing,'planned_write_commands'=>array_values(array_map(function($k)use($all){return $k;},array_keys(array_filter($all,function($x){return empty($x['read']);})))),'ok'=>empty($missing));
  }
  public static function catalog(){return self::all();}
 }
