@@ -39,6 +39,8 @@ $registry=read_audit($root.'/includes/class-oai-command-registry.php');
 if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),"public static function restore($id,$path,$exists,$content=''){\\n")!==false)fail_audit('Workspace restore method contains a literal \\n escape instead of PHP newlines');
 if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),"strpos($real,$root_real)!==0")!==false)fail_audit('Workspace file boundary uses unsafe prefix-only realpath check');
 if(strpos(read_audit($root.'/includes/class-oai-files.php'),"expected_sha256=''")===false)fail_audit('File writer is missing expected SHA-256 conflict guard');
+if(strpos(read_audit($root.'/includes/class-oai-files.php'),'public static function delete($scope,$path,$expected_sha256=')===false)fail_audit('File delete path is missing SHA-256 conflict guard');
+if(strpos(read_audit($root.'/includes/class-oai-mcp.php'),"permission_callback'=>array(__CLASS__,'permission')")===false)fail_audit('MCP route does not use unified authentication permission callback');
 if(strpos($rest,"permission_callback'=>function(){return current_user_can('manage_options');}")!==false)fail_audit('REST route bypasses unified authentication with a direct current_user_can callback');
 $mcp=read_audit($root.'/includes/class-oai-mcp.php');
 if(strpos($mcp,"'operation_approve':")!==false && strpos($mcp,"Human approval is required in wp-admin")===false)fail_audit('MCP approve tool is not restricted to human wp-admin approval');
