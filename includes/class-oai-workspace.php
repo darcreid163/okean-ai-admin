@@ -96,7 +96,7 @@ class OAI_Workspace {
   $path=ltrim(str_replace('\\','/',(string)$path),'/');
   if(strpos($path,'..')!==false)return new WP_Error('oai_path_denied','Invalid workspace path',array('status'=>403));
   $target=$root.($path!==''?'/'.$path:''); $real=realpath($target); $root_real=realpath($root);
-  if($real===false || strpos($real,$root_real)!==0)return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
+  if($real===false || !$root_real || ($real!==$root_real && strpos($real,trailingslashit($root_real))!==0))return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
   if(is_file($real))return array('workspace'=>self::get($id),'path'=>$path,'type'=>'file','bytes'=>filesize($real),'sha256'=>hash_file('sha256',$real));
   $items=array(); foreach(scandir($real) as $name){if($name==='.'||$name==='..'||$name[0]==='.')continue;$f=$real.'/'.$name;$items[]=array('name'=>$name,'type'=>is_dir($f)?'dir':'file','bytes'=>is_file($f)?filesize($f):null,'sha256'=>is_file($f)?hash_file('sha256',$f):null);}
   return array('workspace'=>self::get($id),'path'=>$path,'type'=>'dir','items'=>$items);
@@ -123,7 +123,7 @@ class OAI_Workspace {
   if(!$root||!$parent||($parent!==$root && strpos($parent,trailingslashit($root))!==0))return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
   $fs=self::fs(); if(!$fs)return new WP_Error('oai_workspace_fs','WordPress Filesystem unavailable',array('status'=>500));
   if($exists){if(!$fs->put_contents($file,(string)$content,FS_CHMOD_FILE))return new WP_Error('oai_write','Workspace restore failed',array('status'=>500));}
-  elseif(is_file($file)){@unlink($file);}
+  elseif(is_file($file)){if(method_exists($fs,'delete_file')){if(!$fs->delete_file($file))return new WP_Error('oai_write','Workspace restore delete failed',array('status'=>500));}else{@unlink($file);}}
   return true;
  }
 
