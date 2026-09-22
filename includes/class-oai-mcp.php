@@ -6,8 +6,8 @@ if (!defined('ABSPATH')) exit;
 
 class OAI_MCP {
  public static function register_routes(){
-  register_rest_route('okean-ai','/mcp',array('methods'=>'POST','callback'=>array(__CLASS__,'handle'),'permission_callback'=>'__return_true'));
-  register_rest_route('okean-ai','/mcp',array('methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>'__return_true'));
+  register_rest_route('okean-ai','/mcp',array('methods'=>'POST','callback'=>array(__CLASS__,'handle'),'permission_callback'=>array(__CLASS__,'permission')));
+  register_rest_route('okean-ai','/mcp',array('methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>array(__CLASS__,'permission')));
  }
  public static function info(){return array('name'=>'Okean AI Admin MCP','version'=>OAI_VERSION,'protocol'=>'MCP Streamable HTTP / JSON-RPC 2.0','enabled'=>(bool)get_option('oai_mcp_enabled',false),'license'=>OAI_License::status(),'auth'=>'Bearer access token','write_model'=>'sandbox + human approval');}
  private static function token_hash(){return (string)get_option('oai_mcp_token_hash','');}
@@ -97,7 +97,7 @@ class OAI_MCP {
   $tools[] = array('name'=>'wp.execution_readiness','description'=>'Readiness report for Universal Execution Core','inputSchema'=>array('type'=>'object','additionalProperties'=>false));
   $tools[] = array('name'=>'wordpress.execute','description'=>'Universal WordPress command resolver; reads execute directly, writes return a sandbox/approval plan','inputSchema'=>array('type'=>'object','required'=>array('command'),'properties'=>array('command'=>array('type'=>'string','minLength'=>1),'mode'=>array('type'=>'string','enum'=>array('read','plan')))));
   $tools[] = array('name'=>'gutenberg.get_blocks','description'=>'Resolve a WordPress post and parse Gutenberg blocks into a normalized tree','inputSchema'=>array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))));
-  $tools[] = array('name'=>'gutenberg.locate_block','description'=>'Locate Gutenberg blocks by block name, path or text','inputSchema'=>array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string'))));
+  $tools[] = array('name'=>'gutenberg.locate_block','description'=>'Locate Gutenberg blocks by block name, path or text','inputSchema'=>array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string'),'html_contains'=>array('type'=>'string'))));
   $tools[] = array('name'=>'gutenberg.patch','description'=>'Create a sandbox Gutenberg block patch; never writes live content directly','inputSchema'=>array('type'=>'object','required'=>array('post_id','selector'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'selector'=>array('type'=>'object'),'attrs'=>array('type'=>'object'),'html'=>array('type'=>'string'))));
   $tools[] = array('name'=>'content.patch','description'=>'Create a sandbox content patch; does not write live content','inputSchema'=>array('type'=>'object','required'=>array('post_id','field','old_content','new_content')));
   $tools[] = array('name'=>'woocommerce.patch','description'=>'Create a sandbox WooCommerce product patch; does not write live data','inputSchema'=>array('type'=>'object','required'=>array('product_id','changes')));
@@ -152,7 +152,7 @@ class OAI_MCP {
    case 'content_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/content/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::content_patch($r);break;
    case 'woocommerce_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_patch($r);break;
    case 'elementor_create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_create_page($r);break;
-   case 'operation_approve':$oid=absint($a['id']??0);$r=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$oid.'/approve');$r->set_url_params(array('id'=>$oid));$r->set_route('/okean-ai/v1/sandbox/'.$oid.'/approve');$out=OAI_REST::sandbox_action($r);break;
+   case 'operation_approve':return self::response($id,null,array('code'=>-32003,'message'=>'Human approval is required in wp-admin; MCP cannot approve operations'));
    case 'operation_apply':$license=OAI_License::can('mcp_apply');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));return self::response($id,null,array('code'=>-32003,'message'=>'Human approval required in wp-admin before apply'));
    case 'operation_rollback':$license=OAI_License::can('mcp_apply');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin'));
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
