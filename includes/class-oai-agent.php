@@ -133,6 +133,7 @@ class OAI_Agent {
   );
  }
  private static function route($action,$params){
+  if(in_array($action,array('approve','apply','rollback'),true)) return new WP_Error('oai_agent_human_approval','Approve, apply and rollback are restricted to wp-admin human confirmation',array('status'=>403));
   $map=self::allowlist();
   if(!isset($map[$action])) return new WP_Error('oai_agent_action','Agent action is not allowed',array('status'=>403));
   $scope=self::scope_for($action);
