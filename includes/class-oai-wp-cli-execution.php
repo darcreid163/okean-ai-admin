@@ -14,10 +14,25 @@ class OAI_WP_CLI_Execution {
   case 'term_list':$tax=sanitize_key((string)($a[0]??'category'));return array('taxonomy'=>$tax,'terms'=>get_terms(array('taxonomy'=>$tax,'hide_empty'=>false,'number'=>100,'fields'=>'all')));
   case 'menu_list':return array('menus'=>wp_get_nav_menus());
   case 'media_list':$ps=get_posts(array('post_type'=>'attachment','post_status'=>'inherit','posts_per_page'=>50));$rows=array();foreach($ps as $p)$rows[]=array('id'=>$p->ID,'title'=>$p->post_title,'mime'=>get_post_mime_type($p->ID),'url'=>wp_get_attachment_url($p->ID));return self::format($rows,$f);
-  case 'cron_list':return array('events'=>wp_get_scheduled_events());
+  case 'cron_list':return self::cron_list($f);
   case 'db_query':return self::db_query($a,$f);
   case 'cache_purge':if(function_exists('wp_cache_flush'))wp_cache_flush();if(function_exists('rocket_clean_domain'))rocket_clean_domain();return array('purged'=>true);
   default:return new WP_Error('oai_cli_not_implemented','Command is registered but its execution handler is not implemented',array('status'=>501,'handler'=>$h,'canonical'=>$resolved['canonical']??null));}}
+ private static function cron_list($f){
+  $cron=function_exists('_get_cron_array')?_get_cron_array():array();
+  $events=array();
+  foreach((array)$cron as $timestamp=>$hooks){
+   foreach((array)$hooks as $hook=>$instances){
+    foreach((array)$instances as $sig=>$event){
+     $args=isset($event['args'])&&is_array($event['args'])?$event['args']:array();
+     $events[]=array('timestamp'=>(int)$timestamp,'hook'=>(string)$hook,'sig'=>(string)$sig,'args'=>$args,'schedule'=>$event['schedule']??false,'interval'=>isset($event['interval'])?(int)$event['interval']:0);
+    }
+   }
+  }
+  usort($events,function($a,$b){return $a['timestamp']<=>$b['timestamp'];});
+  $limit=isset($f['number'])?max(1,min(100,(int)$f['number'])):100;
+  return self::format(array_slice($events,0,$limit),$f);
+ }
  private static function db_query($a,$f){
   $sql=trim(implode(' ',array_map('strval',$a)));
   if($sql==='')return new WP_Error('oai_db_empty','SQL query is empty',array('status'=>400));
