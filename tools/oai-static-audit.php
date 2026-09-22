@@ -36,6 +36,11 @@ $rest=read_audit($root.'/includes/class-oai-rest.php');
 $dispatcher=read_audit($root.'/includes/class-oai-execution-dispatcher.php');
 $cli=read_audit($root.'/includes/class-oai-wp-cli-execution.php');
 $registry=read_audit($root.'/includes/class-oai-command-registry.php');
+if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),"public static function restore($id,$path,$exists,$content=''){\\n")!==false)fail_audit('Workspace restore method contains a literal \\n escape instead of PHP newlines');
+if(strpos($rest,"permission_callback'=>function(){return current_user_can('manage_options');}")!==false)fail_audit('REST route bypasses unified authentication with a direct current_user_can callback');
+$mcp=read_audit($root.'/includes/class-oai-mcp.php');
+if(strpos($mcp,"'operation_approve':")!==false && strpos($mcp,"set_route('/okean-ai/v1/sandbox/'.$oid.'/approve')")===false)fail_audit('MCP approve tool does not bind the sandbox action route');
+if(strpos($mcp,"methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>'__return_true'")!==false)fail_audit('MCP GET info route is publicly exposed');
 $required=array(
  'REST sandbox route'=>'register_rest_route($n,\'/sandbox\',',
  'Sandbox apply lifecycle'=>"if($action==='apply')",
