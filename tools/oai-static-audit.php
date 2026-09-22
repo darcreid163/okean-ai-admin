@@ -36,8 +36,8 @@ $rest=read_audit($root.'/includes/class-oai-rest.php');
 $dispatcher=read_audit($root.'/includes/class-oai-execution-dispatcher.php');
 $cli=read_audit($root.'/includes/class-oai-wp-cli-execution.php');
 $registry=read_audit($root.'/includes/class-oai-command-registry.php');
-if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),"public static function restore($id,$path,$exists,$content=''){\\n")!==false)fail_audit('Workspace restore method contains a literal \\n escape instead of PHP newlines');
-if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),"strpos($real,$root_real)!==0")!==false)fail_audit('Workspace file boundary uses unsafe prefix-only realpath check');
+if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),'public static function restore($id,$path,$exists,$content=')!==false)fail_audit('Workspace restore method contains a literal \\n escape instead of PHP newlines');
+if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),'strpos($real,$root_real)!==0')!==false)fail_audit('Workspace file boundary uses unsafe prefix-only realpath check');
 if(strpos(read_audit($root.'/includes/class-oai-files.php'),"expected_sha256=''")===false)fail_audit('File writer is missing expected SHA-256 conflict guard');
 if(strpos(read_audit($root.'/includes/class-oai-files.php'),'public static function delete($scope,$path,$expected_sha256=')===false)fail_audit('File delete path is missing SHA-256 conflict guard');
 if(strpos(read_audit($root.'/includes/class-oai-mcp.php'),"permission_callback'=>array(__CLASS__,'permission')")===false)fail_audit('MCP route does not use unified authentication permission callback');
@@ -48,10 +48,10 @@ if(strpos(read_audit($root.'/includes/class-oai-agent.php'),"oai_agent_human_app
 if(strpos($mcp,"methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>'__return_true'")!==false)fail_audit('MCP GET info route is publicly exposed');
 $required=array(
  'REST sandbox route'=>'register_rest_route($n,\'/sandbox\',',
- 'Sandbox apply lifecycle'=>"if($action==='apply')",
- 'Sandbox rollback lifecycle'=>"if($action==='rollback')",
+ 'Sandbox apply lifecycle'=>'if($action===\'apply\')',
+ 'Sandbox rollback lifecycle'=>'if($action===\'rollback\')',
  'Rollback conflict guard'=>'rollback_conflict_check',
- 'Rollback double verification'=>"OAI_Verify::operation($id,$before,'rollback')",
+ 'Rollback double verification'=>'OAI_Verify::operation($id,$before,\'rollback\')',
  'Execution mode allowlist'=>"array('read','plan')",
  'WP-CLI direct write guard'=>'oai_cli_write_requires_lifecycle',
  'CLI planned writes'=>'planned_write_commands',
