@@ -779,6 +779,8 @@ frame.addEventListener('load',function(){
   $requested_after=$req->get_param('new_data');
   if($type==='elementor_widget_settings'){
    if(!is_array($raw))return new WP_Error('oai_changes','Elementor changes must be an object',array('status'=>400));
+   // Pure sandbox calculation: read current settings and build before/after snapshots.
+   // No Elementor save pipeline is called here.
    $patch=OAI_Elementor::patch_settings($target,$raw); if(is_wp_error($patch))return $patch;
    $before=$patch['before_settings']; $after=$patch['after_settings']; $exists=true;
   } else {
@@ -828,10 +830,23 @@ frame.addEventListener('load',function(){
    $after=json_decode((string)$r['after_data'],true); $before=json_decode((string)$r['before_data'],true);
 
    // Conflict checks happen BEFORE entering applying, so a rejected conflict can never leave the operation stuck in applying.
-   if(!in_array($r['type'],array('woocommerce_product','post_title','post_excerpt','post_content','elementor_page_create'),true)){
+   // Every existing live target must still match the sandbox snapshot before apply.
+   // Page creation is the only operation whose target is intentionally created by apply.
+   if($r['type']!=='elementor_page_create'){
     list($cur_exists,$current_now)=self::current($r['type'],$r['target']);
     $before_exists=array_key_exists('before_exists',$meta)?(bool)$meta['before_exists']:true;
-    if($cur_exists !== $before_exists || ($cur_exists && !OAI_Verify::same($current_now,$before))){
+    $conflict=false;
+    if($cur_exists !== $before_exists){
+     $conflict=true;
+    } elseif($cur_exists){
+     if($r['type']==='woocommerce_product'){
+      // Compare the authoritative fields from the original full product snapshot.
+      if(!self::snapshot_fields_match($current_now,$before,array('id','sku','name','regular_price','sale_price','price','stock','stock_status','manage_stock','status'))) $conflict=true;
+     } else {
+      $conflict=!OAI_Verify::same($current_now,$before);
+     }
+    }
+    if($conflict){
      OAI_DB::update($id,array('status'=>'apply_failed','phase'=>'apply_failed'));
      OAI_Receipts::store($id,array('event'=>'apply_failed','status'=>'apply_failed','reason'=>'conflict','at'=>gmdate('c'),'current'=>$current_now,'expected_before'=>$before),OAI_Proof::make($id));
      OAI_Audit::log('apply_failed',array_merge($r,array('status'=>'apply_failed')),array('reason'=>'conflict','current'=>$current_now,'expected_before'=>$before));
@@ -909,6 +924,15 @@ frame.addEventListener('load',function(){
   return self::row($id);
  }
 
+ private static function snapshot_fields_match($current,$before,$fields){
+  if(!is_array($current)||!is_array($before)) return OAI_Verify::same($current,$before);
+  foreach($fields as $field){
+   $a=array_key_exists($field,$current)?$current[$field]:null;
+   $b=array_key_exists($field,$before)?$before[$field]:null;
+   if(!OAI_Verify::same($a,$b)) return false;
+  }
+  return true;
+ }
  private static function refresh_verification_target($type,$target,$meta=array()){
   if(in_array($type,array('post_title','post_excerpt','post_content','elementor_widget_html','elementor_widget_settings','elementor_page_create'),true)){
    $parts=explode(':',(string)$target,2); $post_id=absint($parts[0]??0); if($post_id) clean_post_cache($post_id);
