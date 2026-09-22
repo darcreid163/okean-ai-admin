@@ -818,9 +818,15 @@ frame.addEventListener('load',function(){
   // or apply an operation against a stale snapshot; rollback of an already
   // applied operation remains available independently.
   if(in_array($action,array('approve','apply'),true) && in_array($r['status'],array('pending','approved'),true) && !empty($r['expires_at']) && strtotime((string)$r['expires_at']) < time()){
+   // Elementor page creation uses a private draft as a preview artifact. An
+   // expired operation must not leave orphaned draft pages behind.
+   if($r['type']==='elementor_page_create'){
+    $preview_id=absint($meta['preview_page_id']??0);
+    if($preview_id && get_post($preview_id))wp_delete_post($preview_id,true);
+   }
    OAI_DB::update($id,array('status'=>'expired','phase'=>'expired'));
-   OAI_Audit::log('expired',array_merge($r,array('status'=>'expired')),array('reason'=>'sandbox_expired'));
-   OAI_Receipts::store($id,array('event'=>'expired','status'=>'expired','at'=>gmdate('c'),'reason'=>'sandbox_expired'),OAI_Proof::make($id));
+   OAI_Audit::log('expired',array_merge($r,array('status'=>'expired')),array('reason'=>'sandbox_expired','preview_artifact_cleaned'=>($r['type']==='elementor_page_create')));
+   OAI_Receipts::store($id,array('event'=>'expired','status'=>'expired','at'=>gmdate('c'),'reason'=>'sandbox_expired','preview_artifact_cleaned'=>($r['type']==='elementor_page_create')),OAI_Proof::make($id));
    return new WP_Error('oai_expired','Sandbox operation has expired; create a fresh snapshot before approval/apply',array('status'=>409,'expires_at'=>$r['expires_at']));
   }
 
