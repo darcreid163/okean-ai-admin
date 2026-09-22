@@ -66,6 +66,11 @@ if(preg_match('/\\$callbacks=array\\((.*?)\\n\\s*\\);/s',$agent_source,$cm) && p
 } else {$callback_errors=array('callback-map-unparseable');}
 check_test(empty($callback_errors),'every non-lifecycle Agent allowlist action has a callback'.(empty($callback_errors)?'':': '.implode(',',$callback_errors)));
 
+$gutenberg_source=file_get_contents(__DIR__.'/../includes/class-oai-gutenberg-resolver.php');
+$matcher_pos=strpos($gutenberg_source,'private static function find_raw_matches');
+$matcher_tail=$matcher_pos===false?'':substr($gutenberg_source,$matcher_pos,2500);
+check_test($matcher_pos!==false && strpos($matcher_tail,"isset($selector['html_contains'])")!==false,'native Gutenberg matcher honors html_contains');
+
 echo "WP-CLI parser/registry contract tests: {$tests} tests, {$fail} failures\n";
 if($fail)exit(1);
 echo "RESULT: PASS\n";
