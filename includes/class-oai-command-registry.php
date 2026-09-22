@@ -30,9 +30,10 @@ class OAI_Command_Registry {
   $all=self::all(); $implemented=array();
   $ref=class_exists('OAI_WP_CLI_Execution')?new ReflectionClass('OAI_WP_CLI_Execution'):null;
   $source=$ref?$ref->getFileName():null; $text=($source&&is_readable($source))?file_get_contents($source):'';
-  foreach($all as $key=>$entry){$h=(string)($entry['handler']??''); $implemented[$h]=($h!==''&&$text!==''&&strpos($text,"case '".$h."'")!==false);}
+  foreach($all as $key=>$entry){$h=(string)($entry['handler']??''); if(!empty($entry['read']))$implemented[$h]=($h!==''&&$text!==''&&strpos($text,"case '".$h."'")!==false);}
   $missing=array(); foreach($implemented as $h=>$ok)if(!$ok)$missing[]=$h;
-  return array('registered'=>count($all),'handlers'=>count(array_unique(array_keys($implemented))),'missing_handlers'=>$missing,'planned_write_commands'=>array_values(array_map(function($k)use($all){return $k;},array_keys(array_filter($all,function($x){return empty($x['read']);})))),'ok'=>empty($missing));
+  $planned=array(); foreach($all as $key=>$entry)if(empty($entry['read']))$planned[]=$key;
+  return array('registered'=>count($all),'handlers'=>count(array_unique(array_keys($implemented))),'missing_handlers'=>$missing,'planned_write_commands'=>$planned,'write_commands_require_sandbox_lifecycle'=>true,'ok'=>empty($missing));
  }
  public static function catalog(){return self::all();}
 }
