@@ -37,7 +37,8 @@ class OAI_MCP {
   if(!self::token_hash()||!hash_equals(self::token_hash(),hash('sha256',$parts[1])))return new WP_Error('oai_mcp_auth','Invalid MCP token',array('status'=>401));
   return OAI_Rate_Limit::check('mcp',120,60);
  }
- public static function permission($req){ $x=self::auth($req); return is_wp_error($x)?$x:true; }\n private static function response($id,$result=null,$error=null){$r=array('jsonrpc'=>'2.0','id'=>$id);if($error!==null)$r['error']=$error;else$r['result']=$result;return new WP_REST_Response($r,200,array('Content-Type'=>'application/json; charset=utf-8','Cache-Control'=>'no-store'));}
+ public static function permission($req){ $x=self::auth($req); return is_wp_error($x)?$x:true; }
+ private static function response($id,$result=null,$error=null){$r=array('jsonrpc'=>'2.0','id'=>$id);if($error!==null)$r['error']=$error;else$r['result']=$result;return new WP_REST_Response($r,200,array('Content-Type'=>'application/json; charset=utf-8','Cache-Control'=>'no-store'));}
  public static function handle($req){
   $auth=self::auth();if(is_wp_error($auth))return $auth;
   $body=$req->get_json_params();if(!is_array($body))return self::response(null,null,array('code'=>-32600,'message'=>'Invalid Request'));
