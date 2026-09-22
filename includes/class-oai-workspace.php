@@ -96,7 +96,13 @@ class OAI_Workspace {
   $path=ltrim(str_replace('\\','/',(string)$path),'/');
   if(strpos($path,'..')!==false)return new WP_Error('oai_path_denied','Invalid workspace path',array('status'=>403));
   $target=$root.($path!==''?'/'.$path:''); $real=realpath($target); $root_real=realpath($root);
-  if($real===false || !$root_real || ($real!==$root_real && strpos($real,trailingslashit($root_real))!==0))return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
+  if(!$root_real)return new WP_Error('oai_path_denied','Workspace root unavailable',array('status'=>403));
+  if($real===false){
+   $parent=realpath(dirname($target));
+   if(!$parent || ($parent!==$root_real && strpos($parent,trailingslashit($root_real))!==0))return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
+   return new WP_Error('oai_not_file','Workspace file not found',array('status'=>404));
+  }
+  if($real!==$root_real && strpos($real,trailingslashit($root_real))!==0)return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
   if(is_file($real))return array('workspace'=>self::get($id),'path'=>$path,'type'=>'file','bytes'=>filesize($real),'sha256'=>hash_file('sha256',$real));
   $items=array(); foreach(scandir($real) as $name){if($name==='.'||$name==='..'||$name[0]==='.')continue;$f=$real.'/'.$name;$items[]=array('name'=>$name,'type'=>is_dir($f)?'dir':'file','bytes'=>is_file($f)?filesize($f):null,'sha256'=>is_file($f)?hash_file('sha256',$f):null);}
   return array('workspace'=>self::get($id),'path'=>$path,'type'=>'dir','items'=>$items);
