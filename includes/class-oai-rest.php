@@ -917,6 +917,28 @@ frame.addEventListener('load',function(){
     OAI_Audit::log('rollback_failed',array_merge($r,array('status'=>'rollback_failed')),array('error'=>$err->get_error_message()));
     return $err;
    }
+
+   self::refresh_verification_target($r['type'],$r['target'],$meta);
+   $verification=OAI_Verify::operation($id,$before,'rollback');
+   if(is_wp_error($verification) || empty($verification['verified'])){
+    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
+    OAI_Receipts::store($id,array('event'=>'rollback_failed','status'=>'rollback_failed','at'=>gmdate('c'),'verification'=>$verification),OAI_Proof::make($id));
+    OAI_Audit::log('rollback_failed',array_merge($r,array('status'=>'rollback_failed')),array('verification'=>$verification));
+    return new WP_Error('oai_rollback_verify_failed','Rollback completed but verification failed',array('status'=>500,'verification'=>$verification));
+   }
+
+   self::refresh_verification_target($r['type'],$r['target'],$meta);
+   $verification2=OAI_Verify::operation($id,$before,'rollback');
+   if(is_wp_error($verification2) || empty($verification2['verified'])){
+    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
+    OAI_Receipts::store($id,array('event'=>'rollback_failed','status'=>'rollback_failed','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
+    OAI_Audit::log('rollback_failed',array_merge($r,array('status'=>'rollback_failed')),array('verification'=>$verification2));
+    return new WP_Error('oai_rollback_verify_failed','Rollback verification was not stable on the second authoritative read',array('status'=>500,'verification'=>$verification2));
+   }
+
+   OAI_DB::update($id,array('status'=>'rolled_back','phase'=>'rolled_back','rolled_back_at'=>current_time('mysql',true)));
+   OAI_Audit::log('rolled_back',array_merge($r,array('status'=>'rolled_back')),array('verified'=>true,'verification'=>$verification2));
+   OAI_Receipts::store($id,array('event'=>'rollback','status'=>'rolled_back','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
   return self::row($id);
  }
 
