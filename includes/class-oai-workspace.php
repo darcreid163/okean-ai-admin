@@ -115,7 +115,19 @@ class OAI_Workspace {
   if($fs){if(!$fs->put_contents($file,$content,FS_CHMOD_FILE))return new WP_Error('oai_write','Workspace write failed',array('status'=>500));}else return new WP_Error('oai_workspace_fs','WordPress Filesystem unavailable',array('status'=>500));
   return array('before_exists'=>$old_exists,'before'=>$old,'after'=>$content,'before_sha256'=>hash('sha256',$old),'after_sha256'=>hash('sha256',$content),'path'=>$path,'bytes'=>strlen($content));
  }
- public static function restore($id,$path,$exists,$content=''){\n  $base=self::base($id); if(is_wp_error($base))return $base;\n  $path=ltrim(str_replace('\\\\','/',(string)$path),'/');\n  if($path===''||strpos($path,'..')!==false||preg_match('#(^|/)\\.\\.?(/|$)#',$path))return new WP_Error('oai_path_denied','Invalid workspace path',array('status'=>403));\n  $root=realpath($base.'/theme'); $file=$base.'/theme/'.$path; $parent=realpath(dirname($file));\n  if(!$root||!$parent||($parent!==$root && strpos($parent,trailingslashit($root))!==0))return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));\n  $fs=self::fs(); if(!$fs)return new WP_Error('oai_workspace_fs','WordPress Filesystem unavailable',array('status'=>500));\n  if($exists){if(!$fs->put_contents($file,(string)$content,FS_CHMOD_FILE))return new WP_Error('oai_write','Workspace restore failed',array('status'=>500));}\n  elseif(is_file($file)){@unlink($file);}\n  return true;\n }\n\n public static function surfaces($id=''){
+ public static function restore($id,$path,$exists,$content=''){
+  $base=self::base($id); if(is_wp_error($base))return $base;
+  $path=ltrim(str_replace('\\','/',(string)$path),'/');
+  if($path===''||strpos($path,'..')!==false||preg_match('#(^|/)\.\.?(/|$)#',$path))return new WP_Error('oai_path_denied','Invalid workspace path',array('status'=>403));
+  $root=realpath($base.'/theme'); $file=$base.'/theme/'.$path; $parent=realpath(dirname($file));
+  if(!$root||!$parent||($parent!==$root && strpos($parent,trailingslashit($root))!==0))return new WP_Error('oai_path_denied','Workspace path denied',array('status'=>403));
+  $fs=self::fs(); if(!$fs)return new WP_Error('oai_workspace_fs','WordPress Filesystem unavailable',array('status'=>500));
+  if($exists){if(!$fs->put_contents($file,(string)$content,FS_CHMOD_FILE))return new WP_Error('oai_write','Workspace restore failed',array('status'=>500));}
+  elseif(is_file($file)){@unlink($file);}
+  return true;
+ }
+
+ public static function surfaces($id=''){
   $w=self::get($id); $theme=$w['theme']??array();
   return array('workspace'=>$w,'surfaces'=>array(
    array('id'=>'theme.files','kind'=>'theme','scope'=>'workspace','editable'=>true,'description'=>'Draft theme files'),
