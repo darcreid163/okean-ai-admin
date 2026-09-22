@@ -1146,7 +1146,7 @@ frame.addEventListener('load',function(){
  public static function execution_plan($req){$cmd=self::execution_input($req,'command',null);return OAI_Execution_Dispatcher::dispatch($cmd,'plan');}
  public static function execution_wordpress($req){$cmd=self::execution_input($req,'command',null);$mode=sanitize_key((string)self::execution_input($req,'mode','read'));return OAI_Execution_Dispatcher::dispatch($cmd,$mode);}
  public static function gutenberg_resolved($req){return OAI_Gutenberg_Resolver::resolve_post(absint($req['id']));}
- public static function gutenberg_locate($req){$sel=array();foreach(array('block_name','path','text') as $k){$v=$req->get_param($k);if($v!==null)$sel[$k]=sanitize_text_field((string)$v);}return OAI_Gutenberg_Resolver::locate(absint($req['id']),$sel);}
+ public static function gutenberg_locate($req){$sel=array();foreach(array('block_name','path','text','html_contains') as $k){$v=$req->get_param($k);if($v!==null)$sel[$k]=sanitize_text_field((string)$v);}return OAI_Gutenberg_Resolver::locate(absint($req['id']),$sel);}
  public static function gutenberg_patch($req){$id=absint($req->get_param('post_id'));$selector=$req->get_param('selector');if(is_string($selector))$selector=json_decode($selector,true);if(!is_array($selector))$selector=array();$attrs=$req->get_param('attrs');$html=$req->get_param('html');$x=OAI_Gutenberg_Resolver::patch($id,$selector,$attrs,$html);if(is_wp_error($x))return $x;return self::sandbox_create_from_patch('post_content',$id,'post_content',$x['before'],$x['after'],array('kind'=>'gutenberg_block_patch','selector'=>$selector,'block_path'=>$x['path']));}
 
 }
