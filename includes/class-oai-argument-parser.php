@@ -49,20 +49,30 @@ class OAI_Argument_Parser {
    $tokenStarted=true;
   }
   if($escaped) $buf.='\\';
+  if($quote!==null)return new WP_Error('oai_cli_unclosed_quote','Unclosed quote in command',array('status'=>400));
   if($tokenStarted) $out[]=$buf;
   return $out;
  }
  public static function flags($tokens){
+  $tokens=array_values((array)$tokens);
   $pos=array();
   $flags=array();
-  foreach((array)$tokens as $t){
+  $count=count($tokens);
+  for($i=0;$i<$count;$i++){
+   $t=(string)$tokens[$i];
    if(strpos($t,'--')===0){
     $x=substr($t,2);
+    if($x==='')continue;
     if(strpos($x,'=')!==false){
      list($k,$v)=explode('=',$x,2);
      $flags[sanitize_key($k)]=$v;
-    }else{
-     $flags[sanitize_key($x)]=true;
+     continue;
+    }
+    $key=sanitize_key($x);
+    if($key!=='' && isset($tokens[$i+1]) && strpos((string)$tokens[$i+1],'--')!==0){
+     $flags[$key]=(string)$tokens[++$i];
+    }elseif($key!==''){
+     $flags[$key]=true;
     }
    }else{
     $pos[]=$t;
