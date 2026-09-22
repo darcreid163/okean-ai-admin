@@ -32,5 +32,15 @@ class OAI_Files {
   $backup=$old!==''?$old:null; $ok=$fs->put_contents($file,$content,FS_CHMOD_FILE); if(!$ok)return new WP_Error('oai_write','File write failed',array('status'=>500));
   return array('ok'=>true,'before_sha256'=>$old_hash,'after_sha256'=>hash('sha256',$content),'backup'=>$backup,'bytes'=>strlen($content),'path'=>$path);
  }
+ public static function delete($scope,$path,$expected_sha256=''){
+  $file=OAI_Security::resolve_path($scope,$path); if(is_wp_error($file))return $file;
+  if(!is_file($file))return new WP_Error('oai_not_file','File not found',array('status'=>404));
+  $fs=self::fs(); if(!$fs)return new WP_Error('oai_filesystem','WordPress Filesystem unavailable',array('status'=>500));
+  $data=$fs->get_contents($file); if($data===false)return new WP_Error('oai_read','Could not read file before delete',array('status'=>500));
+  $current=hash('sha256',(string)$data);
+  if($expected_sha256!=='' && !hash_equals($expected_sha256,$current))return new WP_Error('oai_conflict','File changed since snapshot',array('status'=>409,'current_sha256'=>$current));
+  if(!$fs->delete_file($file))return new WP_Error('oai_delete','File delete failed',array('status'=>500));
+  return array('ok'=>true,'before_sha256'=>$current,'path'=>$path);
+ }
  private static function fs(){ global $wp_filesystem; if(!empty($wp_filesystem))return $wp_filesystem; if(!function_exists('WP_Filesystem'))require_once ABSPATH.'wp-admin/includes/file.php'; if(!WP_Filesystem())return false; return $wp_filesystem; }
 }
