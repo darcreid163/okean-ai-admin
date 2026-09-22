@@ -41,7 +41,8 @@ if(strpos(read_audit($root.'/includes/class-oai-workspace.php'),"strpos($real,$r
 if(strpos(read_audit($root.'/includes/class-oai-files.php'),"expected_sha256=''")===false)fail_audit('File writer is missing expected SHA-256 conflict guard');
 if(strpos($rest,"permission_callback'=>function(){return current_user_can('manage_options');}")!==false)fail_audit('REST route bypasses unified authentication with a direct current_user_can callback');
 $mcp=read_audit($root.'/includes/class-oai-mcp.php');
-if(strpos($mcp,"'operation_approve':")!==false && strpos($mcp,"set_route('/okean-ai/v1/sandbox/'.$oid.'/approve')")===false)fail_audit('MCP approve tool does not bind the sandbox action route');
+if(strpos($mcp,"'operation_approve':")!==false && strpos($mcp,"Human approval is required in wp-admin")===false)fail_audit('MCP approve tool is not restricted to human wp-admin approval');
+if(strpos(read_audit($root.'/includes/class-oai-agent.php'),"oai_agent_human_approval")===false)fail_audit('Agent lifecycle actions are not restricted to human wp-admin approval');
 if(strpos($mcp,"methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>'__return_true'")!==false)fail_audit('MCP GET info route is publicly exposed');
 $required=array(
  'REST sandbox route'=>'register_rest_route($n,\'/sandbox\',',
