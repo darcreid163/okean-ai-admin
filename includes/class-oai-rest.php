@@ -975,6 +975,18 @@ frame.addEventListener('load',function(){
   OAI_Audit::log('apply_failed',array_merge($r,array('status'=>'apply_failed')),array('verification'=>$verification));
   OAI_Receipts::store($id,array('event'=>'apply_failed','status'=>'apply_failed','at'=>gmdate('c'),'verification'=>$verification,'rollback_attempted'=>false),OAI_Proof::make($id));
 
+  // Automatic recovery is destructive as well. Only roll back when the live
+  // target still equals the intended post-apply state; otherwise preserve the
+  // newer/partial state and require manual inspection.
+  $expected_after=json_decode((string)$r['after_data'],true);
+  $recovery_conflict=self::rollback_conflict_check($r,$expected_after,$meta);
+  if(is_wp_error($recovery_conflict)){
+   OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
+   $details=$recovery_conflict->get_error_data();
+   OAI_Receipts::store($id,array('event'=>'rollback_conflict','status'=>'rollback_failed','at'=>gmdate('c'),'reason'=>'automatic_recovery_post_apply_change','details'=>$details),OAI_Proof::make($id));
+   OAI_Audit::log('rollback_conflict',array_merge($r,array('status'=>'rollback_failed')),array('reason'=>'automatic_recovery_post_apply_change','details'=>$details));
+   return new WP_Error('oai_apply_rollback_conflict','Apply failed and automatic rollback was blocked because the live target no longer matches the intended applied state',array('status'=>409,'apply_failure'=>$verification,'conflict'=>$details));
+  }
   OAI_DB::update($id,array('status'=>'rollback_pending','phase'=>'rollback_pending'));
   OAI_DB::update($id,array('status'=>'rolling_back','phase'=>'rolling_back'));
   try { $rollback=self::rollback_write($r['type'],$r['target'],$before,$meta); }
