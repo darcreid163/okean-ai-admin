@@ -63,7 +63,7 @@ class OAI_Agent {
  }
  private static function has_scope($scope){ return in_array($scope,self::scopes(),true); }
  private static function scope_for($action){
-  if(in_array($action,array('status','foundation_capabilities','intent_normalize','agent_plan','operation_catalog','read_discover','error_contract'),true) || $action==='operation' || $action==='proof' || strpos($action,'read_')===0 || $action==='diagnostics' || $action==='mcp_status' || $action==='license_status') return 'read';
+  if(in_array($action,array('status','diagnostics','foundation_capabilities','intent_normalize','agent_plan','operation_catalog','read_discover','error_contract','operation_receipt','workspace_status','workspace_files','workspace_read','workspace_surfaces','surfaces_catalog','search_files','operation','proof','mcp_status','license_status'),true) || strpos($action,'read_')===0) return 'read';
   if($action==='sandbox_create' || $action==='sandbox_list' || $action==='elementor_create_page' || $action==='content_patch' || $action==='woocommerce_patch' || $action==='workspace_create' || $action==='workspace_write') return 'sandbox';
   if($action==='preview_link' || $action==='preview_page') return 'preview';
   if($action==='verify') return 'verify';
