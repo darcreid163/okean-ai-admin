@@ -59,6 +59,13 @@ $allow=$am->invoke(null); $scope_errors=array();
 foreach(array_keys($allow) as $action){ $scope=$sm->invoke(null,$action); if($scope==='')$scope_errors[]=$action; }
 check_test(empty($scope_errors),'every Agent allowlist action has a scope mapping'.(empty($scope_errors)?'':': '.implode(',',$scope_errors)));
 
+$agent_source=file_get_contents(__DIR__.'/../includes/class-oai-agent.php'); $callback_errors=array();
+if(preg_match('/\\$callbacks=array\\((.*?)\\n\\s*\\);/s',$agent_source,$cm) && preg_match_all("/'([^']+)'\\s*=>\\s*array\\(/",$cm[1],$km)){
+ $callback_keys=array_fill_keys($km[1],true);
+ foreach(array_keys($allow) as $action){ if(in_array($action,array('approve','apply','rollback'),true))continue; if(!isset($callback_keys[$action]))$callback_errors[]=$action; }
+} else {$callback_errors=array('callback-map-unparseable');}
+check_test(empty($callback_errors),'every non-lifecycle Agent allowlist action has a callback'.(empty($callback_errors)?'':': '.implode(',',$callback_errors)));
+
 echo "WP-CLI parser/registry contract tests: {$tests} tests, {$fail} failures\n";
 if($fail)exit(1);
 echo "RESULT: PASS\n";
