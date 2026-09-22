@@ -47,6 +47,8 @@ $mcp=read_audit($root.'/includes/class-oai-mcp.php');
 if(strpos($mcp,"'operation_approve':")!==false && strpos($mcp,"Human approval is required in wp-admin")===false)fail_audit('MCP approve tool is not restricted to human wp-admin approval');
 if(strpos(read_audit($root.'/includes/class-oai-agent.php'),"oai_agent_human_approval")===false)fail_audit('Agent lifecycle actions are not restricted to human wp-admin approval');
 if(strpos($mcp,"methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>'__return_true'")!==false)fail_audit('MCP GET info route is publicly exposed');
+if(strpos($rest,"wp_delete_post(absint($meta['preview_page_id']),true)")===false)fail_audit('Elementor preview rejection/cleanup is not force-deleting the sandbox artifact');
+if(strpos($rest,"$meta['applied_sha256']=hash('sha256',(string)$expected_after)")===false)fail_audit('Automatic file rollback recovery is missing the post-apply SHA-256 write/delete guard');
 $required=array(
  'REST sandbox route'=>'register_rest_route($n,\'/sandbox\',',
  'Sandbox apply lifecycle'=>'if($action===\'apply\')',
