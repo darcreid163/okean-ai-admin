@@ -2,7 +2,7 @@
 /** Авторские права Андриянов Н.Г. */
 if (!defined('ABSPATH')) exit;
 class OAI_WP_CLI_Execution {
- public static function execute($resolved){$h=$resolved['handler'];$a=$resolved['args'];$f=$resolved['flags'];switch($h){
+ public static function execute($resolved){if(empty($resolved['read']))return new WP_Error('oai_cli_write_requires_lifecycle','Write WP-CLI commands must go through sandbox → approval → apply lifecycle',array('status'=>409,'execution_model'=>'sandbox_then_approval','handler'=>$resolved['handler']??null,'canonical'=>$resolved['canonical']??null));$h=$resolved['handler'];$a=$resolved['args'];$f=$resolved['flags'];switch($h){
   case 'core':return array('version'=>get_bloginfo('version'),'command'=>'core version');
   case 'plugin_list':require_once ABSPATH.'wp-admin/includes/plugin.php';$all=get_plugins();$rows=array();foreach($all as $file=>$data)$rows[]=array('plugin'=>$file,'name'=>$data['Name'],'version'=>$data['Version'],'active'=>is_plugin_active($file));return self::format($rows,$f);
   case 'theme_list':$rows=array();foreach(wp_get_themes() as $stylesheet=>$t)$rows[]=array('stylesheet'=>$stylesheet,'name'=>$t->get('Name'),'version'=>$t->get('Version'),'active'=>$stylesheet===get_option('stylesheet'));return self::format($rows,$f);
@@ -33,5 +33,5 @@ class OAI_WP_CLI_Execution {
  }
  public static function readiness(){return array('handlers'=>OAI_Command_Registry::handler_audit(),'direct_write_execution'=>false,'db_query_read_only'=>true,'db_query_max_rows'=>100);}
  private static function format($rows,$f){if(isset($f['format'])&&$f['format']==='ids'){return array_values(array_map(function($x){return (int)$x['id'];},$rows));}if(isset($f['format'])&&$f['format']==='count')return count($rows);return $rows;}
- public static function plan($resolved){$perm=OAI_Permission_Resolver::resolve($resolved);return array('canonical'=>$resolved['canonical'],'handler'=>$resolved['handler'],'args'=>$resolved['args'],'flags'=>$resolved['flags'],'permission'=>$perm,'execution_model'=>empty($resolved['read'])?'sandbox_then_approval':'read_only');}
+ public static function plan($resolved){$perm=OAI_Permission_Resolver::resolve($resolved);$write=empty($resolved['read']);$implemented=false;if(isset($resolved['handler'])){$ref=new ReflectionClass(__CLASS__);$m=$ref->getMethod('execute');$src=$m->getFileName();if($src&&is_readable($src)){$text=file_get_contents($src);$implemented=strpos($text,"case '".$resolved['handler']."'")!==false;}}return array('canonical'=>$resolved['canonical'],'handler'=>$resolved['handler'],'args'=>$resolved['args'],'flags'=>$resolved['flags'],'permission'=>$perm,'execution_model'=>$write?'sandbox_then_approval':'read_only','executable_now'=>!$write,'handler_implemented'=>$implemented,'next_step'=>$write?'create_operation_and_require_approval':'execute_read');}
 }
