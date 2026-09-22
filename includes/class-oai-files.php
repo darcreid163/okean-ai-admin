@@ -26,9 +26,21 @@ class OAI_Files {
   $fs=self::fs(); $data=$fs?$fs->get_contents($file):file_get_contents($file); return array('scope'=>$scope,'path'=>$path,'bytes'=>strlen($data),'sha256'=>hash('sha256',$data),'content'=>$data);
  }
  public static function search($scope,$q,$path='',$limit=50){
-  $base=OAI_Security::resolve_path($scope,$path===''?'.':$path); if(is_wp_error($base))return $base; $q=(string)$q; if($q==='')return new WP_Error('oai_query','q is required',array('status'=>400));
+  $scope=sanitize_key((string)$scope); $q=(string)$q; $path=(string)$path;
+  if($q==='')return new WP_Error('oai_query','q is required',array('status'=>400));
+  if($path===''){
+   $scopes=OAI_Security::scopes();
+   if(!isset($scopes[$scope]))return new WP_Error('oai_path_scope','Invalid file scope',array('status'=>400));
+   $base=realpath($scopes[$scope]);
+   if($base===false)return new WP_Error('oai_path_scope','Base path unavailable',array('status'=>500));
+  }else{
+   $base=OAI_Security::resolve_path($scope,$path);
+   if(is_wp_error($base))return $base;
+  }
+  if(!is_dir($base))return new WP_Error('oai_not_dir','Directory not found',array('status'=>404));
+  $limit=max(1,min(100,(int)$limit));
   $out=array(); $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($base,FilesystemIterator::SKIP_DOTS));
-  foreach($it as $f){if(count($out)>=$limit)break; if(!$f->isFile()||$f->getSize()>2*1024*1024)continue; $name=$f->getFilename(); if($name[0]==='.')continue; $c=@file_get_contents($f->getPathname()); if($c!==false && stripos($c,$q)!==false){$pos=stripos($c,$q);$out[]=array('path'=>str_replace(OAI_Security::scopes()[$scope],'', $f->getPathname()),'bytes'=>$f->getSize(),'snippet'=>substr($c,max(0,$pos-180),min(500,strlen($c)-max(0,$pos-180))));}}
+  foreach($it as $f){if(count($out)>=$limit)break; if(!$f->isFile()||$f->getSize()>2*1024*1024)continue; $name=$f->getFilename(); if($name[0]==='.')continue; $c=@file_get_contents($f->getPathname()); if($c!==false && stripos($c,$q)!==false){$pos=stripos($c,$q);$out[]=array('path'=>str_replace(trailingslashit($base),'',$f->getPathname()),'bytes'=>$f->getSize(),'snippet'=>substr($c,max(0,$pos-180),min(500,strlen($c)-max(0,$pos-180))));}}
   return array('scope'=>$scope,'query'=>$q,'count'=>count($out),'items'=>$out);
  }
  public static function write($scope,$path,$content,$expected_sha256=''){
