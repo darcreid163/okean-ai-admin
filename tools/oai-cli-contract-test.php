@@ -1,0 +1,58 @@
+<?php
+/**
+ * AI Admin WP-CLI parser/registry contract tests.
+ * Runs without WordPress by providing the minimal WP helpers used by these classes.
+ */
+class WP_Error {
+ private $code; private $message; private $data;
+ public function __construct($code,$message='',$data=array()){ $this->code=$code; $this->message=$message; $this->data=$data; }
+ public function get_error_code(){return $this->code;}
+ public function get_error_message(){return $this->message;}
+ public function get_error_data(){return $this->data;}
+}
+function is_wp_error($v){return $v instanceof WP_Error;}
+function sanitize_key($key){
+ $key=strtolower((string)$key);
+ return preg_replace('/[^a-z0-9_\\-]/','',$key);
+}
+require_once __DIR__.'/../includes/class-oai-argument-parser.php';
+require_once __DIR__.'/../includes/class-oai-command-normalizer.php';
+require_once __DIR__.'/../includes/class-oai-command-registry.php';
+
+$fail=0; $tests=0;
+function check_test($ok,$label){
+ global $fail,$tests; $tests++;
+ if(!$ok){$fail++;echo "FAIL: {$label}\n";} else echo "PASS: {$label}\n";
+}
+
+$t=OAI_Argument_Parser::tokenize('wp post list --number 1 --post_type page');
+check_test(is_array($t) && $t[0]==='wp' && $t[2]==='list' && $t[3]==='--number' && $t[4]==='1','tokenize basic CLI');
+$f=OAI_Argument_Parser::flags($t);
+check_test($f['flags']['number']==='1' && $f['flags']['post_type']==='page' && count($f['args'])===3,'parse separated flag values');
+$r=OAI_Command_Registry::resolve('wp post list --number 1 --post_type page');
+check_test(!is_wp_error($r) && $r['canonical']==='post list' && $r['flags']['number']==='1' && $r['flags']['post_type']==='page','registry resolves separated flags');
+
+$r=OAI_Command_Registry::resolve('post list --number=1 --bogus=1');
+check_test(is_wp_error($r) && $r->get_error_code()==='oai_cli_unknown_flag','registry rejects unknown flags');
+
+$r=OAI_Command_Registry::resolve('wp option update demo_key demo_value');
+check_test(!is_wp_error($r) && empty($r['read']) && $r['execution_mode']==='plan_only','writes remain plan-only');
+
+$r=OAI_Command_Registry::resolve('cron event list --number 2');
+check_test(!is_wp_error($r) && $r['canonical']==='cron event list' && $r['flags']['number']==='2','cron subcommand normalization');
+
+$r=OAI_Command_Registry::resolve('db query "SELECT 1 LIMIT 1"');
+check_test(!is_wp_error($r) && $r['canonical']==='db query' && $r['args'][0]==='SELECT 1 LIMIT 1','quoted SQL argument');
+
+$bad=OAI_Argument_Parser::tokenize('post get "123');
+check_test(is_wp_error($bad) && $bad->get_error_code()==='oai_cli_unclosed_quote','unclosed quotes rejected');
+
+$r=OAI_Command_Normalizer::normalize('post get "123');
+check_test(is_wp_error($r) && $r->get_error_code()==='oai_cli_unclosed_quote','normalizer propagates parser error');
+
+$r=OAI_Command_Registry::resolve('');
+check_test(is_wp_error($r) && $r->get_error_code()==='oai_cli_empty','empty command rejected');
+
+echo "WP-CLI parser/registry contract tests: {$tests} tests, {$fail} failures\n";
+if($fail)exit(1);
+echo "RESULT: PASS\n";
