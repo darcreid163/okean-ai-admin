@@ -82,6 +82,15 @@ function Invoke-Mcp-ExpectedError {
   param([int]$Id,[string]$Method,[hashtable]$Params,[int[]]$ExpectedCodes)
   try {
     $r=Invoke-Mcp-Raw $Id $Method $Params
+    if($null -ne $r.error) {
+      $code=[int]$r.error.code
+      foreach($expected in $ExpectedCodes){
+        if($code -eq $expected){
+          return @{ ok=$true; detail=("error_code="+$code) }
+        }
+      }
+      return @{ ok=$false; detail=("Unexpected JSON-RPC error code="+$code+" message="+[string]$r.error.message) }
+    }
     return @{ ok=$false; detail="Expected JSON-RPC error but request returned a result" }
   } catch {
     $msg=[string]$_.Exception.Message
