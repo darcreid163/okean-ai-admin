@@ -21,6 +21,7 @@ class OAI_Admin {
   if(!in_array($action,array('approve','reject','apply','rollback'),true))return new WP_Error('oai_action','Unknown sandbox action',array('status'=>400));
   $req=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.absint($id).'/'.$action);
   $req->set_url_params(array('id'=>absint($id),'action'=>$action));
+  if(!defined('OAI_ADMIN_HUMAN_APPROVAL')) define('OAI_ADMIN_HUMAN_APPROVAL',true);
   return OAI_REST::sandbox_action($req);
  }
  public static function page(){
