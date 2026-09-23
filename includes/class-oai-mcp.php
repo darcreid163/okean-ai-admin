@@ -187,12 +187,42 @@ class OAI_MCP {
     break;
    case 'elementor_get_schema':$out=OAI_Elementor::widget_schema((string)($a['widget_type']??''));break;
    case 'elementor_get_globals':$out=OAI_Elementor::globals();break;
-   case 'woocommerce_get_product':$out=OAI_REST::woocommerce((new WP_REST_Request('GET','/okean-ai/v1/read/woocommerce/'.absint($a['product_id']??0))));break;
-   case 'operation_get_receipt':$out=OAI_REST::receipt((new WP_REST_Request('GET','/okean-ai/v1/operations/'.absint($a['id']??0).'/receipt')));break;
-   case 'operation_get':$out=OAI_REST::operation((new WP_REST_Request('GET','/okean-ai/v1/operations/'.absint($a['id']??0))));break;
-   case 'operation_verify':$out=OAI_REST::verify((new WP_REST_Request('GET','/okean-ai/v1/verify/'.absint($a['id']??0))));break;
-   case 'operation_proof':$out=OAI_REST::proof((new WP_REST_Request('GET','/okean-ai/v1/proof/'.absint($a['id']??0))));break;
-   case 'operation_preview_link':$out=OAI_REST::preview_link((new WP_REST_Request('GET','/okean-ai/v1/preview-link/'.absint($a['id']??0))));break;
+   case 'woocommerce_get_product':
+    $pid=absint($a['product_id']??0);
+    $rr=new WP_REST_Request('GET','/okean-ai/v1/read/woocommerce/'.$pid);
+    $rr->set_url_params(array('id'=>$pid));
+    $out=OAI_REST::woocommerce($rr);
+    break;
+   case 'operation_get_receipt':
+    $oid=absint($a['id']??0);
+    $rr=new WP_REST_Request('GET','/okean-ai/v1/operations/'.$oid.'/receipt');
+    $rr->set_url_params(array('id'=>$oid));
+    $out=OAI_REST::receipt($rr);
+    break;
+   case 'operation_get':
+    $oid=absint($a['id']??0);
+    $rr=new WP_REST_Request('GET','/okean-ai/v1/operations/'.$oid);
+    $rr->set_url_params(array('id'=>$oid));
+    $out=OAI_REST::operation($rr);
+    break;
+   case 'operation_verify':
+    $oid=absint($a['id']??0);
+    $rr=new WP_REST_Request('GET','/okean-ai/v1/verify/'.$oid);
+    $rr->set_url_params(array('id'=>$oid));
+    $out=OAI_REST::verify($rr);
+    break;
+   case 'operation_proof':
+    $oid=absint($a['id']??0);
+    $rr=new WP_REST_Request('GET','/okean-ai/v1/proof/'.$oid);
+    $rr->set_url_params(array('id'=>$oid));
+    $out=OAI_REST::proof($rr);
+    break;
+   case 'operation_preview_link':
+    $oid=absint($a['id']??0);
+    $rr=new WP_REST_Request('GET','/okean-ai/v1/preview-link/'.$oid);
+    $rr->set_url_params(array('id'=>$oid));
+    $out=OAI_REST::preview_link($rr);
+    break;
    case 'wp_execution_readiness':$out=OAI_REST::execution_readiness();break;
    case 'builder_catalog':$out=OAI_Adapter_Catalog::catalog();break;
    case 'builder_detect':$out=OAI_Adapter_Catalog::detect(absint($a['post_id']??0));break;
