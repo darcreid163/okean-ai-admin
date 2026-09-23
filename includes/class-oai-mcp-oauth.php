@@ -80,6 +80,11 @@ class OAI_MCP_OAuth {
    'callback'=>array(__CLASS__,'authorize'),
    'permission_callback'=>'__return_true'
   ));
+  register_rest_route('okean-ai/v1','/oauth/login',array(
+   'methods'=>'GET',
+   'callback'=>array(__CLASS__,'login_bridge'),
+   'permission_callback'=>'__return_true'
+  ));
   register_rest_route('okean-ai/v1','/oauth/token',array(
    'methods'=>'POST',
    'callback'=>array(__CLASS__,'token'),
@@ -87,8 +92,9 @@ class OAI_MCP_OAuth {
   ));
  }
 
- public static function well_known_hooks(){
+ public static function init_hooks(){
   add_action('template_redirect',array(__CLASS__,'well_known'));
+  add_filter('login_redirect',array(__CLASS__,'login_redirect'),9999,3);
  }
 
  public static function well_known(){
@@ -137,6 +143,37 @@ class OAI_MCP_OAuth {
   return $client && is_array($client['redirect_uris']) && in_array($redirect_uri,$client['redirect_uris'],true);
  }
 
+ private static function login_continuation_key($continuation){
+  return 'oai_oauth_login_'.hash('sha256',(string)$continuation);
+ }
+
+ private static function login_continuation_valid($continuation){
+  return is_string($continuation)
+   && preg_match('/^[A-Za-z0-9_-]{32,128}$/',$continuation)
+   && is_array(get_transient(self::login_continuation_key($continuation)));
+ }
+
+ private static function store_login_continuation($params){
+  $continuation='oai_continue_'.wp_generate_password(48,false,false);
+  if(!set_transient(self::login_continuation_key($continuation),$params,10*MINUTE_IN_SECONDS)){
+   return false;
+  }
+  return $continuation;
+ }
+
+ public static function login_redirect($redirect_to,$requested_redirect_to,$user){
+  if(!is_string($requested_redirect_to)) return $redirect_to;
+  $path=parse_url($requested_redirect_to,PHP_URL_PATH);
+  $bridge_path=parse_url(rest_url('okean-ai/v1/oauth/login'),PHP_URL_PATH);
+  $host=strtolower((string)parse_url($requested_redirect_to,PHP_URL_HOST));
+  $site_host=strtolower((string)parse_url(home_url('/'),PHP_URL_HOST));
+  if(!$path || $path!==$bridge_path || !$host || $host!==$site_host) return $redirect_to;
+  parse_str((string)parse_url($requested_redirect_to,PHP_URL_QUERY),$query);
+  $continuation=(string)($query['continuation']??'');
+  if(!self::login_continuation_valid($continuation)) return $redirect_to;
+  return $requested_redirect_to;
+ }
+
  public static function register_client($req){
   $data=$req->get_json_params();
   if(!is_array($data)) return self::json_error('invalid_client_metadata','JSON object required');
@@ -171,8 +208,29 @@ class OAI_MCP_OAuth {
   ),201);
  }
 
- private static function authorize_url($client,$redirect_uri,$params){
-  return add_query_arg($params,$redirect_uri);
+ public static function login_bridge($req){
+  $continuation=sanitize_text_field((string)$req->get_param('continuation'));
+  if(!self::login_continuation_valid($continuation)){
+   return self::json_error('invalid_request','OAuth login continuation is invalid or expired',400);
+  }
+
+  $params=get_transient(self::login_continuation_key($continuation));
+  if(!is_array($params)){
+   return self::json_error('invalid_request','OAuth login continuation is invalid or expired',400);
+  }
+
+  if(!is_user_logged_in()){
+   nocache_headers();
+   $bridge=add_query_arg(array('continuation'=>$continuation),rest_url('okean-ai/v1/oauth/login'));
+   wp_safe_redirect(wp_login_url($bridge));
+   exit;
+  }
+
+  delete_transient(self::login_continuation_key($continuation));
+  $url=add_query_arg($params,rest_url('okean-ai/v1/oauth/authorize'));
+  nocache_headers();
+  wp_safe_redirect($url);
+  exit;
  }
 
  public static function authorize($req){
@@ -191,10 +249,23 @@ class OAI_MCP_OAuth {
   if($resource!=='' && !hash_equals(rest_url('okean-ai/mcp'),$resource)) return self::json_error('invalid_target','Authorization resource must be this MCP server');
 
   if(!is_user_logged_in()){
-   $url=wp_login_url(add_query_arg($_GET,rest_url('okean-ai/v1/oauth/authorize')));
-   wp_safe_redirect($url);
+   $continuation=self::store_login_continuation(array(
+    'client_id'=>$p['client_id'],
+    'redirect_uri'=>$p['redirect_uri'],
+    'response_type'=>$p['response_type'],
+    'scope'=>$p['scope'],
+    'state'=>$p['state'],
+    'code_challenge'=>$p['code_challenge'],
+    'code_challenge_method'=>$p['code_challenge_method'],
+    'resource'=>$resource
+   ));
+   if(!$continuation) return self::json_error('server_error','Could not create OAuth login continuation',500);
+   $bridge=add_query_arg(array('continuation'=>$continuation),rest_url('okean-ai/v1/oauth/login'));
+   nocache_headers();
+   wp_safe_redirect(wp_login_url($bridge));
    exit;
   }
+
   $user=wp_get_current_user();
   if(!$user || !$user->exists() || !user_can($user,'manage_options')){
    return self::json_error('access_denied','A WordPress administrator must approve this connection',403);
