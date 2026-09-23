@@ -11,6 +11,8 @@ class OAI_Quota {
  public static function plans(){return self::PLANS;}
  public static function current_plan(){
   $s=OAI_License::status(); $p=sanitize_key((string)($s['plan']??''));
+  // The local-owner license is an administrative bootstrap mode; its user-facing quota is Free.
+  if($p==='local-owner') $p='free';
   if(isset(self::PLANS[$p])) return $p;
   $p=sanitize_key((string)get_option('oai_plan','free'));
   return isset(self::PLANS[$p])?$p:'free';
