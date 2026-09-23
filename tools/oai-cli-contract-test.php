@@ -33,6 +33,10 @@ check_test($f['flags']['number']==='1' && $f['flags']['post_type']==='page' && c
 $r=OAI_Command_Registry::resolve('wp post list --number 1 --post_type page');
 check_test(!is_wp_error($r) && $r['canonical']==='post list' && $r['flags']['number']==='1' && $r['flags']['post_type']==='page','registry resolves separated flags');
 
+
+$r=OAI_Command_Registry::resolve('db query "SELECT 1" --bogus=1');
+check_test(is_wp_error($r) && $r->get_error_code()==='oai_cli_unknown_flag','db query rejects unsupported flags');
+
 $r=OAI_Command_Registry::resolve('post list --number=1 --bogus=1');
 check_test(is_wp_error($r) && $r->get_error_code()==='oai_cli_unknown_flag','registry rejects unknown flags');
 
