@@ -8,7 +8,7 @@
  */
 if (!defined('ABSPATH')) exit;
 define('OAI_VERSION','2.0.13');
-define('OAI_BUILD_ID','2.0.13-wpcli-gutenberg-hardening-20260922');
+define('OAI_BUILD_ID','2.0.13-wpcli-gutenberg-hardening-oauth-login-bridge-20260923');
 define('OAI_DB_VERSION',21);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
