@@ -65,7 +65,7 @@ add_action('wp_abilities_api_init', array('OAI_Abilities','register'));
 add_action('rest_api_init', array('OAI_REST','register_routes'));
 add_action('rest_api_init', array('OAI_MCP_OAuth','register_routes'), 19);
 add_action('rest_api_init', array('OAI_MCP','register_routes'), 20);
-add_action('init', array('OAI_MCP_OAuth','well_known_hooks'));
+add_action('init', array('OAI_MCP_OAuth','init_hooks'));
 add_action('admin_menu', array('OAI_Admin','menu'));
 add_action('admin_init', array('OAI_Admin','ensure_token'));
 
