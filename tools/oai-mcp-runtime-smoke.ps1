@@ -25,7 +25,11 @@ function Write-Result {
 function Invoke-Mcp {
   param([int]$Id,[string]$Method,[hashtable]$Params=@{})
   $body=@{jsonrpc="2.0";id=$Id;method=$Method;params=$Params}|ConvertTo-Json -Depth 20
-  Invoke-RestMethod -Uri $Endpoint -Method POST -Headers $headers -ContentType "application/json" -Body $body
+  $r=Invoke-RestMethod -Uri $Endpoint -Method POST -Headers $headers -ContentType "application/json" -Body $body
+  if($null -ne $r.error) {
+    throw ("JSON-RPC {0}: {1}" -f $r.error.code,$r.error.message)
+  }
+  return $r
 }
 
 Write-Host "Okean AI Admin MCP runtime smoke"
@@ -92,7 +96,7 @@ try {
   $toolText=[string]$r.result.content[0].text
   $data=$toolText|ConvertFrom-Json
   $ids=@($data.matches|ForEach-Object{$_.id})
-  Write-Result "MCP builder.detect Gutenberg" ($ids -contains "gutenberg" -and $data.primary.id -eq "gutenberg")
+  Write-Result "MCP builder.detect Gutenberg" ($ids -contains "gutenberg" -and $data.primary -eq "gutenberg")
 } catch { Write-Result "MCP builder.detect Gutenberg" $false $_.Exception.Message }
 
 try {
@@ -100,7 +104,7 @@ try {
   $toolText=[string]$r.result.content[0].text
   $data=$toolText|ConvertFrom-Json
   $ids=@($data.matches|ForEach-Object{$_.id})
-  Write-Result "MCP builder.detect Elementor" ($ids -contains "elementor" -and $data.primary.id -eq "elementor")
+  Write-Result "MCP builder.detect Elementor" ($ids -contains "elementor" -and $data.primary -eq "elementor")
 } catch { Write-Result "MCP builder.detect Elementor" $false $_.Exception.Message }
 
 try {
