@@ -1,4 +1,4 @@
 AI Admin 2.0.17
-Build: 2.0.17-dashboard-licensing-20260923
+Build: 2.0.17-dashboard-licensing-engineering-quota-idempotency-20260923
 Author: Андриянов Н.Г.
 Copyright: Андриянов Н.Г.
