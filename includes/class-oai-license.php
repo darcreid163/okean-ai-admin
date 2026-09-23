@@ -8,7 +8,7 @@ class OAI_License {
  const MODE='subscription-ready';
  const LOCAL_MODE='local-owner';
  const LOCAL_PLAN='local-owner';
- const LOCAL_FEATURES=array('mcp','mcp_apply','mcp_rollback','agent','sandbox','preview','verify','proof','rollback');
+ const LOCAL_FEATURES=array('mcp','mcp_apply','mcp_rollback','agent','sandbox','preview','verify','proof','rollback','elementor','gutenberg','woocommerce','wp_cli');
 
  public static function status(){
   $lic=get_option('oai_license',array());
