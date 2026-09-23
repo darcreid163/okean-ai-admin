@@ -28,6 +28,7 @@ require_once OAI_DIR.'includes/class-oai-abilities.php';
 require_once OAI_DIR.'includes/class-oai-read.php';
 require_once OAI_DIR.'includes/class-oai-diagnostics.php';
 require_once OAI_DIR.'includes/class-oai-capabilities.php';
+require_once OAI_DIR.'includes/class-oai-adapter-catalog.php';
 require_once OAI_DIR.'includes/class-oai-planner.php';
 require_once OAI_DIR.'includes/class-oai-elementor.php';
 require_once OAI_DIR.'includes/class-oai-builder.php';
