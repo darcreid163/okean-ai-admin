@@ -79,7 +79,12 @@ class OAI_MCP {
    // One quota unit represents one user-visible MCP tool request. Internal
    // resolver steps are not charged separately.
    if(class_exists('OAI_Quota')){
-    $quota=OAI_Quota::consume(1);
+    $arguments=is_array($params['arguments']??null)?$params['arguments']:array();
+    $fingerprint=wp_json_encode(array('method'=>'tools/call','tool'=>$tool_name,'arguments'=>$arguments),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    $request_id=(string)($id??'');
+    if($request_id==='') $request_id=hash('sha256',$fingerprint);
+    $request_key=OAI_Quota::request_key('mcp',$request_id,$fingerprint);
+    $quota=OAI_Quota::consume_request($request_key,'mcp',1);
     if(is_wp_error($quota)) return self::response($id,null,array('code'=>-32029,'message'=>$quota->get_error_message(),'data'=>$quota->get_error_data()));
    }
    return self::call_tool($id,$params);
