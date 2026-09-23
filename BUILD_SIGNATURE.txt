@@ -1,4 +1,4 @@
 AI Admin 2.0.13
-Build: 2.0.13-wpcli-gutenberg-hardening-20260922
+Build: 2.0.13-wpcli-gutenberg-hardening-oauth-login-bridge-20260923
 Author: Андриянов Н.Г.
 Copyright: Андриянов Н.Г.
