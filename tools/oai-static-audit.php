@@ -49,6 +49,8 @@ if(strpos(read_audit($root.'/includes/class-oai-agent.php'),"oai_agent_human_app
 if(strpos($mcp,"methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>'__return_true'")!==false)fail_audit('MCP GET info route is publicly exposed');
 if(strpos($rest,'wp_delete_post(absint($meta[\'preview_page_id\']),true)')===false)fail_audit('Elementor preview rejection/cleanup is not force-deleting the sandbox artifact');
 if(strpos($rest,'$meta[\'applied_sha256\']=hash(\'sha256\',(string)$expected_after)')===false)fail_audit('Automatic file rollback recovery is missing the post-apply SHA-256 write/delete guard');
+if(strpos($mcp,'private static function has_scope($scope)')===false)fail_audit('MCP OAuth scope enforcement helper is missing');
+if(strpos($mcp,"'mcp:write'")===false || strpos($mcp,'tool_requires_write')===false)fail_audit('MCP write-scope enforcement is missing');
 $required=array(
  'REST sandbox route'=>'register_rest_route($n,\'/sandbox\',',
  'Sandbox apply lifecycle'=>'if($action===\'apply\')',
