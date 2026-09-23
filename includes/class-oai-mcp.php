@@ -43,10 +43,11 @@ class OAI_MCP {
   $auth=self::auth();if(is_wp_error($auth))return $auth;
   $body=$req->get_json_params();if(!is_array($body))return self::response(null,null,array('code'=>-32600,'message'=>'Invalid Request'));
   $id=$body['id']??null;$method=(string)($body['method']??'');$params=is_array($body['params']??null)?$body['params']:array();
-  if($method==='initialize')return self::response($id,array('protocolVersion'=>'2025-06-18','capabilities'=>array('tools'=>array()),'serverInfo'=>array('name'=>'okean-ai-admin','version'=>OAI_VERSION,'vendor'=>'Андриянов Н.Г.')));
+  if($method==='initialize')return self::response($id,array('protocolVersion'=>OAI_MCP_VERSION,'capabilities'=>array('tools'=>array('listChanged'=>false),'resources'=>array('subscribe'=>false,'listChanged'=>false),'prompts'=>array('listChanged'=>false)),'serverInfo'=>array('name'=>'okean-ai-admin','version'=>OAI_VERSION,'vendor'=>'Андриянов Н.Г.')));
   if($method==='notifications/initialized'||$method==='ping')return self::response($id,array());
   if($method==='tools/list')return self::response($id,array('tools'=>self::tools()));
   if($method==='resources/list')return self::response($id,array('resources'=>self::resources()));
+  if($method==='resources/read')return self::resource_read($id,$params);
   if($method==='prompts/list')return self::response($id,array('prompts'=>self::prompts()));
   if($method==='tools/call')return self::call_tool($id,$params);
   return self::response($id,null,array('code'=>-32601,'message'=>'Method not found'));
@@ -58,53 +59,65 @@ class OAI_MCP {
    array('uri'=>'okean://operations','name'=>'Okean operations','description'=>'Sandbox operation ledger','mimeType'=>'application/json')
   );
  }
+ private static function resource_read($id,$p){
+  $uri=(string)($p['uri']??'');
+  if($uri==='okean://site/status')$value=OAI_REST::site();
+  elseif($uri==='okean://capabilities')$value=OAI_Capabilities::available();
+  elseif($uri==='okean://operations')$value=OAI_REST::sandbox_list();
+  else return self::response($id,null,array('code'=>-32002,'message'=>'Unknown resource'));
+  if(is_wp_error($value))return self::response($id,null,array('code'=>-32000,'message'=>$value->get_error_message(),'data'=>$value->get_error_data()));
+  return self::response($id,array('contents'=>array(array('uri'=>$uri,'mimeType'=>'application/json','text'=>wp_json_encode($value,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)))));
+ }
  private static function prompts(){
   return array(
    array('name'=>'safe-change','description'=>'Plan a WordPress change using sandbox, diff, preview, approval, apply and verification.'),
    array('name'=>'diagnostics','description'=>'Run a read-only site diagnostic before proposing changes.')
   );
  }
+ private static function tool($name,$description,$schema=array('type'=>'object'),$annotations=array()){
+  $tool=array('name'=>$name,'description'=>$description,'inputSchema'=>$schema);
+  if(!empty($annotations))$tool['annotations']=$annotations;
+  return $tool;
+ }
  private static function tools(){
-  $ro=array('wp.get_site','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','wp.list_files','wp.search_files','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','operation.get_receipt');
+  $schemas=array(
+   'elementor.get_structure'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'widget'=>array('type'=>'string'),'limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>500),'include_html'=>array('type'=>'boolean'))),
+   'elementor.get_widget'=>array('type'=>'object','required'=>array('post_id','widget_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'widget_id'=>array('type'=>'string','minLength'=>1))),
+   'elementor.get_schema'=>array('type'=>'object','required'=>array('widget_type'),'additionalProperties'=>false,'properties'=>array('widget_type'=>array('type'=>'string','minLength'=>1))),
+   'elementor.get_globals'=>array('type'=>'object','additionalProperties'=>false),
+   'woocommerce.get_product'=>array('type'=>'object','required'=>array('product_id'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1))),
+   'operation.get_receipt'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
+   'wordpress.execute'=>array('type'=>'object','required'=>array('command'),'additionalProperties'=>false,'properties'=>array('command'=>array('type'=>'string','minLength'=>1),'mode'=>array('type'=>'string','enum'=>array('read','plan')))),
+   'gutenberg.get_blocks'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
+   'gutenberg.locate_block'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string'),'html_contains'=>array('type'=>'string'))),
+   'gutenberg.patch'=>array('type'=>'object','required'=>array('post_id','selector'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'selector'=>array('type'=>'object'),'attrs'=>array('type'=>'object'),'html'=>array('type'=>'string'))),
+   'content.patch'=>array('type'=>'object','required'=>array('post_id','field','old_content','new_content'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'field'=>array('type'=>'string'),'old_content'=>array('type'=>'string'),'new_content'=>array('type'=>'string'),'replace_all'=>array('type'=>'boolean'))),
+   'woocommerce.patch'=>array('type'=>'object','required'=>array('product_id','changes'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1),'changes'=>array('type'=>'object'))),
+   'elementor.create_draft'=>array('type'=>'object','required'=>array('title','data'),'additionalProperties'=>false,'properties'=>array('title'=>array('type'=>'string'),'data'=>array('type'=>'array'),'page_template'=>array('type'=>'string'))),
+   'builder.detect'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
+   'wp.list_files'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('scope'=>array('type'=>'string'),'path'=>array('type'=>'string'))),
+   'wp.search_files'=>array('type'=>'object','required'=>array('q'),'additionalProperties'=>false,'properties'=>array('scope'=>array('type'=>'string'),'q'=>array('type'=>'string','minLength'=>1),'path'=>array('type'=>'string'),'limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100))),
+   'operation.approve'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
+   'operation.apply'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
+   'operation.rollback'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1)))
+  );
+  $read=array(
+   'wp.get_site','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations',
+   'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','operation.get_receipt',
+   'gutenberg.get_blocks','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities'
+  );
   $tools=array();
-  foreach($ro as $name){
-   $schema=array('type'=>'object','additionalProperties'=>true);
-   if($name==='elementor.get_structure'){
-    $schema=array('type'=>'object','required'=>array('post_id'),'properties'=>array(
-     'post_id'=>array('type'=>'integer','minimum'=>1),
-     'widget'=>array('type'=>'string','description'=>'Optional Elementor widget type filter, e.g. html or heading'),
-     'limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>500),
-     'include_html'=>array('type'=>'boolean')
-    ));
-   } elseif($name==='elementor.get_widget'){
-    $schema=array('type'=>'object','required'=>array('post_id','widget_id'),'properties'=>array(
-     'post_id'=>array('type'=>'integer','minimum'=>1),
-     'widget_id'=>array('type'=>'string','minLength'=>1)
-    ));
-   } elseif($name==='elementor.get_schema'){
-    $schema=array('type'=>'object','required'=>array('widget_type'),'properties'=>array('widget_type'=>array('type'=>'string','minLength'=>1)));
-   } elseif($name==='elementor.get_globals'){
-    $schema=array('type'=>'object','additionalProperties'=>false);
-   } elseif($name==='wordpress.execute'){
-    $schema=array('type'=>'object','required'=>array('command'),'properties'=>array('command'=>array('type'=>'string','minLength'=>1),'mode'=>array('type'=>'string','enum'=>array('read','plan'))));
-   } elseif($name==='gutenberg.get_blocks'){
-    $schema=array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1)));
-   } elseif($name==='gutenberg.locate_block'){
-    $schema=array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string'),'html_contains'=>array('type'=>'string')));
-   }
-   $tools[]=array('name'=>$name,'description'=>'Okean AI read tool: '.$name,'inputSchema'=>$schema);
+  foreach($read as $name){
+   $tools[]=self::tool($name,'Okean AI read tool: '.$name,$schemas[$name]??array('type'=>'object'),array('readOnlyHint'=>true,'destructiveHint'=>false));
   }
-  $tools[] = array('name'=>'wp.execution_readiness','description'=>'Readiness report for Universal Execution Core','inputSchema'=>array('type'=>'object','additionalProperties'=>false));
-  $tools[] = array('name'=>'wordpress.execute','description'=>'Universal WordPress command resolver; reads execute directly, writes return a sandbox/approval plan','inputSchema'=>array('type'=>'object','required'=>array('command'),'properties'=>array('command'=>array('type'=>'string','minLength'=>1),'mode'=>array('type'=>'string','enum'=>array('read','plan')))));
-  $tools[] = array('name'=>'gutenberg.get_blocks','description'=>'Resolve a WordPress post and parse Gutenberg blocks into a normalized tree','inputSchema'=>array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))));
-  $tools[] = array('name'=>'gutenberg.locate_block','description'=>'Locate Gutenberg blocks by block name, path or text','inputSchema'=>array('type'=>'object','required'=>array('post_id'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string'),'html_contains'=>array('type'=>'string'))));
-  $tools[] = array('name'=>'gutenberg.patch','description'=>'Create a sandbox Gutenberg block patch; never writes live content directly','inputSchema'=>array('type'=>'object','required'=>array('post_id','selector'),'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'selector'=>array('type'=>'object'),'attrs'=>array('type'=>'object'),'html'=>array('type'=>'string'))));
-  $tools[] = array('name'=>'content.patch','description'=>'Create a sandbox content patch; does not write live content','inputSchema'=>array('type'=>'object','required'=>array('post_id','field','old_content','new_content')));
-  $tools[] = array('name'=>'woocommerce.patch','description'=>'Create a sandbox WooCommerce product patch; does not write live data','inputSchema'=>array('type'=>'object','required'=>array('product_id','changes')));
-  $tools[] = array('name'=>'elementor.create_draft','description'=>'Create an Elementor draft through the builder-owned save pipeline; never publishes','inputSchema'=>array('type'=>'object','required'=>array('title','data'),'properties'=>array('title'=>array('type'=>'string'),'data'=>array('type'=>'array'),'page_template'=>array('type'=>'string'))));
-  $tools[] = array('name'=>'operation.approve','description'=>'Approve a sandbox operation; apply remains a separate action','inputSchema'=>array('type'=>'object','required'=>array('id'),'properties'=>array('id'=>array('type'=>'integer'))));
-  $tools[] = array('name'=>'operation.apply','description'=>'Apply an already approved sandbox operation. Human approval is still required for live changes.','inputSchema'=>array('type'=>'object','required'=>array('id'),'properties'=>array('id'=>array('type'=>'integer')),'x-okean-approval-required'=>true));
-  $tools[] = array('name'=>'operation.rollback','description'=>'Rollback an applied sandbox operation','inputSchema'=>array('type'=>'object','required'=>array('id'),'properties'=>array('id'=>array('type'=>'integer')),'x-okean-approval-required'=>true));
+  $tools[]=self::tool('wordpress.execute','Universal WordPress command resolver. Reads execute directly; writes remain plan-only.',{"type":"object","required":["command"],"additionalProperties":false,"properties":{"command":{"type":"string","minLength":1},"mode":{"type":"string","enum":["read","plan"]}}},array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('gutenberg.patch','Create a sandbox Gutenberg patch; live content is not written.',{"type":"object","required":["post_id","selector"],"additionalProperties":false,"properties":{"post_id":{"type":"integer","minimum":1},"selector":{"type":"object"},"attrs":{"type":"object"},"html":{"type":"string"}}},array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('content.patch','Create a sandbox content patch; live content is not written.',{"type":"object","required":["post_id","field","old_content","new_content"],"additionalProperties":false,"properties":{"post_id":{"type":"integer","minimum":1},"field":{"type":"string"},"old_content":{"type":"string"},"new_content":{"type":"string"},"replace_all":{"type":"boolean"}}},array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('woocommerce.patch','Create a sandbox WooCommerce product patch; live data is not written.',{"type":"object","required":["product_id","changes"],"additionalProperties":false,"properties":{"product_id":{"type":"integer","minimum":1},"changes":{"type":"object"}}},array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('elementor.create_draft','Create and verify an Elementor draft preview through the builder-owned pipeline.',{"type":"object","required":["title","data"],"additionalProperties":false,"properties":{"title":{"type":"string"},"data":{"type":"array"},"page_template":{"type":"string"}}},array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('operation.approve','Approval endpoint reserved for the human wp-admin confirmation flow.',{"type":"object","required":["id"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1}}},array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('operation.apply','Apply endpoint reserved for the human wp-admin confirmation flow.',{"type":"object","required":["id"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1}}},array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('operation.rollback','Rollback endpoint reserved for the human wp-admin confirmation flow.',{"type":"object","required":["id"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1}}},array('readOnlyHint'=>false,'destructiveHint'=>true));
   return $tools;
  }
  private static function call_tool($id,$p){
@@ -145,6 +158,9 @@ class OAI_MCP {
    case 'woocommerce_get_product':$out=OAI_REST::woocommerce((new WP_REST_Request('GET','/okean-ai/v1/read/woocommerce/'.absint($a['product_id']??0))));break;
    case 'operation_get_receipt':$out=OAI_REST::receipt((new WP_REST_Request('GET','/okean-ai/v1/operations/'.absint($a['id']??0).'/receipt')));break;
    case 'wp_execution_readiness':$out=OAI_REST::execution_readiness();break;
+   case 'builder_catalog':$out=OAI_Adapter_Catalog::catalog();break;
+   case 'builder_detect':$out=OAI_Adapter_Catalog::detect(absint($a['post_id']??0));break;
+   case 'system_capabilities':$out=array('capabilities'=>OAI_Capabilities::available(),'adapters'=>OAI_Adapter_Catalog::catalog(),'execution'=>OAI_REST::execution_readiness());break;
    case 'wordpress_execute':$cmd=$a['command']??null;$mode=sanitize_key((string)($a['mode']??'read'));$out=OAI_Execution_Dispatcher::dispatch($cmd,$mode);break;
    case 'gutenberg_get_blocks':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0));$rr->set_url_params(array('id'=>absint($a['post_id']??0)));$out=OAI_REST::gutenberg_resolved($rr);break;
    case 'gutenberg_locate_block':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0).'/locate');$rr->set_url_params(array('id'=>absint($a['post_id']??0)));foreach(array('block_name','path','text','html_contains') as $k){if(array_key_exists($k,$a))$rr->set_param($k,$a[$k]);}$out=OAI_REST::gutenberg_locate($rr);break;
