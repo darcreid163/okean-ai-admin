@@ -19,6 +19,8 @@ require_once __DIR__.'/../includes/class-oai-argument-parser.php';
 require_once __DIR__.'/../includes/class-oai-command-normalizer.php';
 require_once __DIR__.'/../includes/class-oai-command-registry.php';
 require_once __DIR__.'/../includes/class-oai-agent.php';
+if(!defined('ABSPATH')) define('ABSPATH',dirname(__DIR__).'/');
+require_once __DIR__.'/../includes/class-oai-mcp.php';
 
 $fail=0; $tests=0;
 function check_test($ok,$label){
@@ -74,6 +76,14 @@ $gutenberg_source=file_get_contents(__DIR__.'/../includes/class-oai-gutenberg-re
 $matcher_pos=strpos($gutenberg_source,'private static function find_raw_matches');
 $matcher_tail=$matcher_pos===false?'':substr($gutenberg_source,$matcher_pos,2500);
 check_test($matcher_pos!==false && strpos($matcher_tail,'isset($selector[\'html_contains\'])')!==false,'native Gutenberg matcher honors html_contains');
+
+$mcp_method=new ReflectionMethod('OAI_MCP','tools'); $mcp_method->setAccessible(true); $mcp_tools=$mcp_method->invoke(null);
+$mcp_names=array_map(function($x){return (string)($x['name']??'');},$mcp_tools);
+check_test(count($mcp_names)===count(array_unique($mcp_names)),'MCP tool catalog contains no duplicate names');
+check_test(in_array('wordpress.execute',$mcp_names,true) && in_array('builder.catalog',$mcp_names,true) && in_array('builder.detect',$mcp_names,true) && in_array('system.capabilities',$mcp_names,true),'Native AI Gateway exposes core system and builder tools');
+$mcp_schema_errors=array();
+foreach($mcp_tools as $tool){if(!isset($tool['inputSchema'])||!is_array($tool['inputSchema']))$mcp_schema_errors[]=$tool['name']??'unknown';}
+check_test(empty($mcp_schema_errors),'Every MCP tool has an input schema'.(empty($mcp_schema_errors)?'':': '.implode(',',$mcp_schema_errors)));
 
 $cli_source=file_get_contents(__DIR__.'/../includes/class-oai-wp-cli-execution.php');
 check_test(strpos($cli_source,"'oai_db_limit'")!==false && strpos($cli_source,"requested_limit")!==false,'DB resolver enforces maximum SQL row limit');
