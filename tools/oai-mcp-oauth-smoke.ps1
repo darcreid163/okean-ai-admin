@@ -57,15 +57,18 @@ $authUri = $asm.authorization_endpoint + "?" + $query.ToString()
 $authUriObj = [Uri]$authUri
 Write-Host ("Authorization endpoint: " + $authUriObj.Scheme + "://" + $authUriObj.Host + $authUriObj.AbsolutePath)
 Write-Host ("Redirect URI: " + $redirect)
-
+Write-Host ""
+Write-Host "FULL OAuth authorization URL (paste into the SAME browser/profile where wp-admin is already open):"
+Write-Host $authUri
+Write-Host ""
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://127.0.0.1:$port/")
 $listener.Start()
 
 Write-Host ""
-Write-Host "Открою окно WordPress авторизации."
-Write-Host "На сайте нажми «Разрешить», затем вернись сюда."
+Write-Host "Открою OAuth URL в браузере по умолчанию."
+Write-Host "Если открылся wp-login.php, НЕ вводи пароль здесь: используй полную ссылку выше в том же браузере/профиле, где wp-admin уже авторизован."
 Start-Process $authUri
 
 $context = $listener.GetContext()
