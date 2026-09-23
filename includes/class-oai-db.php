@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) exit;
 class OAI_DB {
  public static function table(){global $wpdb; return $wpdb->prefix.'oai_operations';}
  public static function audit_table(){global $wpdb; return $wpdb->prefix.'oai_audit_log';}
+ public static function quota_table(){global $wpdb; return $wpdb->prefix.'oai_quota_usage';}
  public static function install(){global $wpdb; require_once ABSPATH.'wp-admin/includes/upgrade.php'; $t=self::table(); $charset=$wpdb->get_charset_collate(); $sql="CREATE TABLE $t (
  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
  operation_id varchar(64) NOT NULL,
@@ -32,6 +33,15 @@ class OAI_DB {
  PRIMARY KEY (id), UNIQUE KEY operation_id (operation_id), KEY status (status), KEY created_at (created_at)
 ) $charset;"; dbDelta($sql);
  $a=self::audit_table();
+ $q=self::quota_table();
+ $qsql="CREATE TABLE $q (
+ plan varchar(32) NOT NULL,
+ period_key varchar(32) NOT NULL,
+ used bigint(20) unsigned NOT NULL DEFAULT 0,
+ updated_at datetime NOT NULL,
+ PRIMARY KEY (plan,period_key)
+ ) $charset;";
+ dbDelta($qsql);
  $asql="CREATE TABLE $a (
  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
  operation_id varchar(64) NOT NULL,
