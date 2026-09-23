@@ -1,0 +1,24 @@
+name: AI Admin 2.0.17 PHP lint
+on:
+  push:
+    branches:
+      - feature/2.0.17-dashboard-licensing
+  pull_request:
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -e
+          find . -type f -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
+      - name: Secret exposure guard
+        shell: bash
+        run: |
+          set -e
+          ! grep -R "Bearer <?php echo esc_html(\$token" -n includes || true
