@@ -76,6 +76,12 @@ class OAI_MCP {
    $write=self::tool_requires_write($tool_name,is_array($params['arguments']??null)?$params['arguments']:array());
    if($write && !self::has_scope('mcp:write')) return self::scope_error($id,'mcp:write');
    if(!$write && !self::has_scope('mcp:read')) return self::scope_error($id,'mcp:read');
+   // One quota unit represents one user-visible MCP tool request. Internal
+   // resolver steps are not charged separately.
+   if(class_exists('OAI_Quota')){
+    $quota=OAI_Quota::consume(1);
+    if(is_wp_error($quota)) return self::response($id,null,array('code'=>-32029,'message'=>$quota->get_error_message(),'data'=>$quota->get_error_data()));
+   }
    return self::call_tool($id,$params);
   }
   return self::response($id,null,array('code'=>-32601,'message'=>'Method not found'));
