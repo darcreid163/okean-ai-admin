@@ -478,10 +478,14 @@ try {
 } catch { Write-Result "MCP invalid token rejection" $false $_.Exception.Message }
 
 
-# REST lifecycle bypass guard: a valid OAuth Bearer token must not be able to
-# approve/apply/rollback directly. These probes use a nonexistent operation id
-# so they cannot mutate site data; the human-approval guard must fire first.
-function Test-RestHumanApprovalGuard {
+# REST lifecycle bypass barrier: the OAuth access token is scoped to the MCP
+# resource, not to the legacy /v1 REST permission callback. Therefore a direct
+# OAuth call must be rejected before the sandbox action handler is reached.
+# This is a safe non-mutating probe against a nonexistent operation id.
+# HTTP 401 is the expected authentication barrier; HTTP 403 with the explicit
+# human-approval error is also accepted if a future REST auth bridge reaches
+# the lifecycle guard.
+function Test-RestLifecycleBarrier {
   param([string]$Action,[int]$ProbeId=999999)
   $uri = $base + "/sandbox/$ProbeId/$Action"
   try {
@@ -500,14 +504,16 @@ function Test-RestHumanApprovalGuard {
         $reader.Dispose(); $stream.Dispose()
       }
     } catch {}
-    $codeOk=($body -match 'oai_human_approval_required')
-    return @{ok=($status -eq 403 -and $codeOk);detail=("HTTP "+$status+$(if($body){"; "+$body}else{""}))}
+    $approvalCode=($body -match 'oai_human_approval_required')
+    $authBarrier=($status -eq 401)
+    $humanApprovalBarrier=($status -eq 403 -and $approvalCode)
+    return @{ok=($authBarrier -or $humanApprovalBarrier);detail=("HTTP "+$status+$(if($body){"; "+$body}else{""}))}
   }
 }
 
 foreach($action in @("approve","apply","rollback")){
-  $guard=Test-RestHumanApprovalGuard $action
-  Write-Result ("REST human approval guard /" + $action) $guard.ok $guard.detail
+  $guard=Test-RestLifecycleBarrier $action
+  Write-Result ("REST OAuth lifecycle barrier /" + $action) $guard.ok $guard.detail
 }
 
 try {
