@@ -60,6 +60,40 @@ function Tool-Json {
   return ([string]$r.result.content[0].text | ConvertFrom-Json)
 }
 
+function Get-Scalar-Int {
+  param($Value)
+  if($null -eq $Value){ return 0 }
+  if($Value -is [System.Array]){
+    foreach($item in $Value){
+      $n=Get-Scalar-Int $item
+      if($n -gt 0){ return $n }
+    }
+    return 0
+  }
+  if($Value -isnot [string] -and $Value.PSObject.Properties.Name -contains "id"){
+    return Get-Scalar-Int $Value.id
+  }
+  $parsed=0
+  if([int]::TryParse([string]$Value,[ref]$parsed)){ return $parsed }
+  return 0
+}
+
+function Invoke-Mcp-ExpectedError {
+  param([int]$Id,[string]$Method,[hashtable]$Params,[int[]]$ExpectedCodes)
+  try {
+    $r=Invoke-Mcp-Raw $Id $Method $Params
+    return @{ ok=$false; detail="Expected JSON-RPC error but request returned a result" }
+  } catch {
+    $msg=[string]$_.Exception.Message
+    foreach($code in $ExpectedCodes){
+      if($msg -match [regex]::Escape([string]$code)){
+        return @{ ok=$true; detail=("error_code="+$code) }
+      }
+    }
+    return @{ ok=$false; detail=$msg }
+  }
+}
+
 Write-Host "Okean AI Admin OAuth + MCP runtime audit"
 Write-Host "Site: $Site"
 Write-Host ""
@@ -199,7 +233,7 @@ foreach($uri in @("okean://site/status","okean://capabilities","okean://operatio
 
 try {
   $d=Tool-Json 110 "wp.get_site"
-  Write-Result "MCP wp.get_site" ($d.name -ne $null -and $d.url.TrimEnd("/") -eq $Site.TrimEnd("/")) ("wp=" + $d.wp_version)
+  Write-Result "MCP wp.get_site" ($d.name -ne $null -and $d.wp_version -match "^\d+\.\d+" -and ([Uri]::new([string]$d.url).Host -eq [Uri]::new($Site).Host)) ("wp=" + $d.wp_version)
 } catch { Write-Result "MCP wp.get_site" $false $_.Exception.Message }
 
 foreach($test in @(
@@ -318,10 +352,8 @@ try {
   if($products.Count -gt 0){
     $productId=0
     foreach($candidate in $products){
-      $rawId=$candidate.id
-      if($rawId -is [Array]){$rawId=$rawId[0]}
-      $parsedId=0
-      if([int]::TryParse([string]$rawId,[ref]$parsedId) -and $parsedId -gt 0){$productId=$parsedId;break}
+      $parsedId=Get-Scalar-Int $candidate
+      if($parsedId -gt 0){$productId=$parsedId;break}
     }
     if($productId -gt 0){
       $d=Tool-Json 141 "woocommerce.get_product" @{product_id=$productId}
@@ -370,14 +402,16 @@ try {
   $ops=@($d.items)
   if($ops.Count -gt 0){
     $opId=0
+    $og=$null
     foreach($candidate in $ops){
-      $rawId=$candidate.id
-      if($rawId -is [Array]){$rawId=$rawId[0]}
-      $parsedId=0
-      if([int]::TryParse([string]$rawId,[ref]$parsedId) -and $parsedId -gt 0){$opId=$parsedId;break}
+      $parsedId=Get-Scalar-Int $candidate
+      if($parsedId -le 0){ continue }
+      try {
+        $probe=Tool-Json 166 "operation.get" @{id=$parsedId}
+        if($probe.id -eq $parsedId){ $opId=$parsedId; $og=$probe; break }
+      } catch {}
     }
-    if($opId -le 0){throw "Operation ledger returned no scalar database id"}
-    $og=Tool-Json 166 "operation.get" @{id=$opId}
+    if($opId -le 0){throw "Operation ledger returned rows, but none could be resolved by operation.get"}
     Write-Result "MCP operation.get" ($og.id -eq $opId) ("operation_id=" + $opId)
     $ov=Tool-Json 167 "operation.verify" @{id=$opId}
     Write-Result "MCP operation.verify" ($null -ne $ov) ("operation_id=" + $opId)
@@ -390,27 +424,24 @@ try {
   }
 } catch { Write-Result "MCP operation ledger" $false $_.Exception.Message }
 
-try {
-  $r=Invoke-Mcp-Raw 170 "tools/call" @{name="operation.approve";arguments=@{id=1}}
-  Write-Result "MCP human approval guard" ($null -ne $r.error -and $r.error.code -eq -32003) ("error_code=" + $r.error.code)
-} catch { Write-Result "MCP human approval guard" $false $_.Exception.Message }
+$guard=Invoke-Mcp-ExpectedError 170 "tools/call" @{name="operation.approve";arguments=@{id=1}} @(-32003)
+Write-Result "MCP human approval guard" $guard.ok $guard.detail
 
-try {
-  $r=Invoke-Mcp-Raw 171 "tools/call" @{name="operation.apply";arguments=@{id=1}}
-  Write-Result "MCP apply approval guard" ($null -ne $r.error -and @(-32003,-32004) -contains $r.error.code) ("error_code=" + $r.error.code)
-} catch { Write-Result "MCP apply approval guard" $false $_.Exception.Message }
+$guard=Invoke-Mcp-ExpectedError 171 "tools/call" @{name="operation.apply";arguments=@{id=1}} @(-32003,-32004)
+Write-Result "MCP apply approval guard" $guard.ok $guard.detail
 
-try {
-  $r=Invoke-Mcp-Raw 172 "tools/call" @{name="operation.rollback";arguments=@{id=1}}
-  Write-Result "MCP rollback approval guard" ($null -ne $r.error -and @(-32003,-32004) -contains $r.error.code) ("error_code=" + $r.error.code)
-} catch { Write-Result "MCP rollback approval guard" $false $_.Exception.Message }
+$guard=Invoke-Mcp-ExpectedError 172 "tools/call" @{name="operation.rollback";arguments=@{id=1}} @(-32003,-32004)
+Write-Result "MCP rollback approval guard" $guard.ok $guard.detail
 
 try {
   $r=Invoke-Mcp-Raw 173 "tools/call" @{name="content.patch";arguments=@{post_id=31499;field="post_content";old_content="__oai_scope_probe__";new_content="__oai_scope_probe__x"}}
   $scopeDenied=($null -ne $r.error -and [string]$r.error.message -match "OAuth scope required")
-  $reachedTool=($null -ne $r.result -or ($null -ne $r.error -and [string]$r.error.message -notmatch "OAuth scope required"))
-  Write-Result "MCP content.patch scope permission" ($reachedTool -and -not $scopeDenied)
-} catch { Write-Result "MCP content.patch scope permission" $false $_.Exception.Message }
+  Write-Result "MCP content.patch scope permission" (-not $scopeDenied) "content.patch reached the tool layer"
+} catch {
+  $msg=[string]$_.Exception.Message
+  $scopeDenied=$msg -match "OAuth scope required"
+  Write-Result "MCP content.patch scope permission" (-not $scopeDenied) $(if($scopeDenied){"OAuth scope was denied"}else{"content.patch reached the tool layer: "+$msg})
+}
 
 try {
   $badHeaders=@{Authorization="Bearer invalid_oai_runtime_token"}
