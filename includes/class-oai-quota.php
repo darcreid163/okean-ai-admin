@@ -14,6 +14,11 @@ class OAI_Quota {
 
  public static function plans(){return self::PLANS;}
 
+ public static function usage_events($limit=100){
+  global $wpdb; $limit=max(1,min(500,absint($limit))); $table=OAI_DB::quota_events_table();
+  return $wpdb->get_results($wpdb->prepare('SELECT request_key,channel,units,created_at FROM '.$table.' ORDER BY id DESC LIMIT %d',$limit),ARRAY_A);
+ }
+
  public static function is_engineering_access(){
   $s=OAI_License::status();
   return !empty($s['active'])
@@ -64,6 +69,40 @@ class OAI_Quota {
    'period_key'=>$period,
    'reset_at'=>self::reset_at($cfg['period']),
   );
+ }
+
+ public static function request_key($channel,$request_id,$fingerprint=''){
+  $uid=get_current_user_id();
+  $channel=sanitize_key((string)$channel);
+  $request_id=(string)$request_id;
+  $fingerprint=(string)$fingerprint;
+  return hash('sha256',$channel.'|'.$uid.'|'.$request_id.'|'.$fingerprint);
+ }
+
+ public static function consume_request($request_key,$channel='unknown',$amount=1){
+  if(self::is_engineering_access()) return self::status();
+  $request_key=(string)$request_key;
+  if($request_key==='') return self::consume($amount);
+  global $wpdb;
+  $events=OAI_DB::quota_events_table();
+  $existing=$wpdb->get_var($wpdb->prepare('SELECT id FROM '.$events.' WHERE request_key=%s LIMIT 1',$request_key));
+  if($existing) return self::status();
+  $result=self::consume($amount);
+  if(is_wp_error($result)) return $result;
+  $inserted=$wpdb->query($wpdb->prepare(
+   'INSERT IGNORE INTO '.$events.' (request_key,channel,units,created_at) VALUES (%s,%s,%d,%s)',
+   $request_key,sanitize_key((string)$channel),max(1,absint($amount)),current_time('mysql',true)
+  ));
+  if($inserted!==1){
+   // A concurrent identical request already consumed this logical request.
+   // Compensate the aggregate counter so retries cannot double-charge.
+   $wpdb->query($wpdb->prepare(
+    'UPDATE '.OAI_DB::quota_table().' SET used=GREATEST(used-%d,0), updated_at=%s WHERE plan=%s AND period_key=%s',
+    max(1,absint($amount)),current_time('mysql',true),$result['plan'],$result['period_key']
+   ));
+   return self::status();
+  }
+  return $result;
  }
 
  public static function consume($amount=1){
