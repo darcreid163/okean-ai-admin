@@ -75,6 +75,12 @@ class OAI_MCP {
    $tool_name=sanitize_key(str_replace('.','_',strtolower((string)($params['name']??''))));
    $write=self::tool_requires_write($tool_name,is_array($params['arguments']??null)?$params['arguments']:array());
    if($write && !self::has_scope('mcp:write')) return self::scope_error($id,'mcp:write');
+   if($write){
+    $feature='mcp_apply';
+    if($tool_name==='operation_rollback') $feature='mcp_rollback';
+    $license=OAI_License::can($feature);
+    if(is_wp_error($license)) return self::response($id,null,array('code'=>-32030,'message'=>$license->get_error_message(),'data'=>$license->get_error_data()));
+   }
    if(!$write && !self::has_scope('mcp:read')) return self::scope_error($id,'mcp:read');
    // One quota unit represents one user-visible MCP tool request. Internal
    // resolver steps are not charged separately.
