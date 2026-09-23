@@ -38,11 +38,16 @@ function Write-Skip {
   Write-Host ("SKIP  " + $Name + $(if($Detail){" :: $Detail"}else{""}))
 }
 
-function Invoke-Mcp {
+function Invoke-Mcp-Raw {
   param([int]$Id,[string]$Method,[hashtable]$Params=@{},[hashtable]$HeadersOverride=$null)
   $h = if($null -ne $HeadersOverride){$HeadersOverride}else{$script:headers}
   $body=@{jsonrpc="2.0";id=$Id;method=$Method;params=$Params}|ConvertTo-Json -Depth 30
-  $r=Invoke-RestMethod -Uri $script:mcp -Method POST -Headers $h -ContentType "application/json" -Body $body
+  return Invoke-RestMethod -Uri $script:mcp -Method POST -Headers $h -ContentType "application/json" -Body $body
+}
+
+function Invoke-Mcp {
+  param([int]$Id,[string]$Method,[hashtable]$Params=@{},[hashtable]$HeadersOverride=$null)
+  $r=Invoke-Mcp-Raw $Id $Method $Params $HeadersOverride
   if($null -ne $r.error) {
     throw ("JSON-RPC {0}: {1}" -f $r.error.code,$r.error.message)
   }
@@ -194,7 +199,7 @@ foreach($uri in @("okean://site/status","okean://capabilities","okean://operatio
 
 try {
   $d=Tool-Json 110 "wp.get_site"
-  Write-Result "MCP wp.get_site" ($d.name -ne $null -and $d.url -eq $Site.TrimEnd("/")) ("wp=" + $d.wp_version)
+  Write-Result "MCP wp.get_site" ($d.name -ne $null -and $d.url.TrimEnd("/") -eq $Site.TrimEnd("/")) ("wp=" + $d.wp_version)
 } catch { Write-Result "MCP wp.get_site" $false $_.Exception.Message }
 
 foreach($test in @(
@@ -250,8 +255,14 @@ try {
   Write-Result "MCP Elementor get_widget" ($d.widget_id -eq $elementorWidgetId -and $d.widgetType -ne $null)
 } catch { Write-Result "MCP Elementor get_widget" $false $_.Exception.Message }
 
+$schemaWidgetType="html"
+try {
+  $structureProbe=Tool-Json 128 "elementor.get_structure" @{post_id=$elementorId;limit=50;include_html=$false}
+  foreach($node in @($structureProbe.nodes)){if([string]$node.widgetType -ne ""){$schemaWidgetType=[string]$node.widgetType;break}}
+} catch {}
+
 foreach($test in @(
-  @{id=126;name="elementor.get_schema";args=@{widget_type="html"}},
+  @{id=126;name="elementor.get_schema";args=@{widget_type=$schemaWidgetType}},
   @{id=127;name="elementor.get_globals";args=@{}}
 )){
   try { $d=Tool-Json $test.id $test.name $test.args; Write-Result ("MCP " + $test.name) ($null -ne $d) }
@@ -305,9 +316,19 @@ try {
   $r=Invoke-Mcp 140 "tools/call" @{name="wordpress.execute";arguments=@{command="post list --post_type=product --post_status=any --number=10";mode="read"}}
   $products=@($r.result.content[0].text | ConvertFrom-Json)
   if($products.Count -gt 0){
-    $productId=[int]$products[0].id
-    $d=Tool-Json 141 "woocommerce.get_product" @{product_id=$productId}
-    Write-Result "MCP WooCommerce get_product" ($d.id -eq $productId) ("product_id=" + $productId)
+    $productId=0
+    foreach($candidate in $products){
+      $rawId=$candidate.id
+      if($rawId -is [Array]){$rawId=$rawId[0]}
+      $parsedId=0
+      if([int]::TryParse([string]$rawId,[ref]$parsedId) -and $parsedId -gt 0){$productId=$parsedId;break}
+    }
+    if($productId -gt 0){
+      $d=Tool-Json 141 "woocommerce.get_product" @{product_id=$productId}
+      Write-Result "MCP WooCommerce get_product" ($d.id -eq $productId) ("product_id=" + $productId)
+    } else {
+      Write-Result "MCP WooCommerce get_product" $false "Could not resolve a scalar product ID from WP-CLI output"
+    }
   } else {
     Write-Skip "MCP WooCommerce get_product" "No product found"
   }
@@ -348,7 +369,14 @@ try {
   $d=Tool-Json 165 "wp.list_operations"
   $ops=@($d.items)
   if($ops.Count -gt 0){
-    $opId=[int]$ops[0].id
+    $opId=0
+    foreach($candidate in $ops){
+      $rawId=$candidate.id
+      if($rawId -is [Array]){$rawId=$rawId[0]}
+      $parsedId=0
+      if([int]::TryParse([string]$rawId,[ref]$parsedId) -and $parsedId -gt 0){$opId=$parsedId;break}
+    }
+    if($opId -le 0){throw "Operation ledger returned no scalar database id"}
     $og=Tool-Json 166 "operation.get" @{id=$opId}
     Write-Result "MCP operation.get" ($og.id -eq $opId) ("operation_id=" + $opId)
     $ov=Tool-Json 167 "operation.verify" @{id=$opId}
@@ -363,23 +391,25 @@ try {
 } catch { Write-Result "MCP operation ledger" $false $_.Exception.Message }
 
 try {
-  $r=Invoke-Mcp 170 "tools/call" @{name="operation.approve";arguments=@{id=1}}
+  $r=Invoke-Mcp-Raw 170 "tools/call" @{name="operation.approve";arguments=@{id=1}}
   Write-Result "MCP human approval guard" ($null -ne $r.error -and $r.error.code -eq -32003) ("error_code=" + $r.error.code)
 } catch { Write-Result "MCP human approval guard" $false $_.Exception.Message }
 
 try {
-  $r=Invoke-Mcp 171 "tools/call" @{name="operation.apply";arguments=@{id=1}}
+  $r=Invoke-Mcp-Raw 171 "tools/call" @{name="operation.apply";arguments=@{id=1}}
   Write-Result "MCP apply approval guard" ($null -ne $r.error -and @(-32003,-32004) -contains $r.error.code) ("error_code=" + $r.error.code)
 } catch { Write-Result "MCP apply approval guard" $false $_.Exception.Message }
 
 try {
-  $r=Invoke-Mcp 172 "tools/call" @{name="operation.rollback";arguments=@{id=1}}
+  $r=Invoke-Mcp-Raw 172 "tools/call" @{name="operation.rollback";arguments=@{id=1}}
   Write-Result "MCP rollback approval guard" ($null -ne $r.error -and @(-32003,-32004) -contains $r.error.code) ("error_code=" + $r.error.code)
 } catch { Write-Result "MCP rollback approval guard" $false $_.Exception.Message }
 
 try {
-  $r=Invoke-Mcp 173 "tools/call" @{name="content.patch";arguments=@{post_id=1;field="post_content";old_content="";new_content="x"}}
-  Write-Result "MCP content.patch scope permission" ($null -ne $r.result -or $null -ne $r.error)
+  $r=Invoke-Mcp-Raw 173 "tools/call" @{name="content.patch";arguments=@{post_id=31499;field="post_content";old_content="__oai_scope_probe__";new_content="__oai_scope_probe__x"}}
+  $scopeDenied=($null -ne $r.error -and [string]$r.error.message -match "OAuth scope required")
+  $reachedTool=($null -ne $r.result -or ($null -ne $r.error -and [string]$r.error.message -notmatch "OAuth scope required"))
+  Write-Result "MCP content.patch scope permission" ($reachedTool -and -not $scopeDenied)
 } catch { Write-Result "MCP content.patch scope permission" $false $_.Exception.Message }
 
 try {
