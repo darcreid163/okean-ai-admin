@@ -94,6 +94,7 @@ class OAI_MCP_OAuth {
  public static function well_known(){
   $path=parse_url((string)($_SERVER['REQUEST_URI']??''),PHP_URL_PATH);
   if($path!=='/.well-known/oauth-protected-resource' && $path!=='/.well-known/oauth-authorization-server') return;
+  status_header(200);
   nocache_headers();
   header('Content-Type: application/json; charset=utf-8');
   header('Cache-Control: no-store');
