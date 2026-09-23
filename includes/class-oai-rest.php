@@ -835,7 +835,12 @@ frame.addEventListener('load',function(){
   $id=absint($req['id']);
   $path=$req->get_route();
   if(!preg_match('#/sandbox/\d+/(approve|reject|apply|rollback)$#',$path,$m))return new WP_Error('oai_action','Unknown action',array('status'=>400));
-  $action=$m[1]; $r=OAI_DB::get($id);
+  $action=$m[1];
+  if(in_array($action,array('approve','apply','rollback'),true) && !defined('OAI_ADMIN_HUMAN_APPROVAL')){
+   $nonce=(string)$req->get_header('X-WP-Nonce');
+   if($nonce==='' || !wp_verify_nonce($nonce,'wp_rest'))return new WP_Error('oai_human_approval_required','Approve, Apply and Rollback require an authenticated WP-admin human approval context',array('status'=>403));
+  }
+  $r=OAI_DB::get($id);
   if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
   $meta=json_decode((string)$r['meta_data'],true); if(!is_array($meta))$meta=array();
 
