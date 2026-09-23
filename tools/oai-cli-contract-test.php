@@ -84,6 +84,9 @@ check_test(in_array('wordpress.execute',$mcp_names,true) && in_array('builder.ca
 $mcp_schema_errors=array();
 foreach($mcp_tools as $tool){if(!isset($tool['inputSchema'])||!is_array($tool['inputSchema']))$mcp_schema_errors[]=$tool['name']??'unknown';}
 check_test(empty($mcp_schema_errors),'Every MCP tool has an input schema'.(empty($mcp_schema_errors)?'':': '.implode(',',$mcp_schema_errors)));
+check_test(strpos(file_get_contents(__DIR__.'/../includes/class-oai-mcp.php'),"'resources/read'")!==false,'MCP resources/read method is exposed');
+check_test(strpos(file_get_contents(__DIR__.'/../includes/class-oai-mcp.php'),"'listChanged'=>false")!==false && strpos(file_get_contents(__DIR__.'/../includes/class-oai-mcp.php'),"'protocolVersion'=>OAI_MCP_VERSION")!==false,'MCP initialize advertises protocol and capabilities');
+check_test(strpos(file_get_contents(__DIR__.'/../includes/class-oai-adapter-catalog.php'),'contract\'=>\'ai-admin/adapters/v1\'')!==false,'Native adapter catalog declares a versioned contract');
 
 $cli_source=file_get_contents(__DIR__.'/../includes/class-oai-wp-cli-execution.php');
 check_test(strpos($cli_source,"'oai_db_limit'")!==false && strpos($cli_source,"requested_limit")!==false,'DB resolver enforces maximum SQL row limit');
