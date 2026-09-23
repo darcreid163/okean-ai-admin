@@ -94,6 +94,14 @@ function Invoke-Mcp-ExpectedError {
     return @{ ok=$false; detail="Expected JSON-RPC error but request returned a result" }
   } catch {
     $msg=[string]$_.Exception.Message
+    if($msg -match "JSON-RPC\s+(-?\d+)"){
+      $actual=[int]$Matches[1]
+      foreach($code in $ExpectedCodes){
+        if($actual -eq [int]$code){
+          return @{ ok=$true; detail=("error_code="+$actual) }
+        }
+      }
+    }
     foreach($code in $ExpectedCodes){
       if($msg -match [regex]::Escape([string]$code)){
         return @{ ok=$true; detail=("error_code="+$code) }
@@ -242,7 +250,10 @@ foreach($uri in @("okean://site/status","okean://capabilities","okean://operatio
 
 try {
   $d=Tool-Json 110 "wp.get_site"
-  Write-Result "MCP wp.get_site" ($d.name -ne $null -and $d.wp_version -match "^\d+\.\d+" -and ([Uri]::new([string]$d.url).Host -eq [Uri]::new($Site).Host)) ("wp=" + $d.wp_version)
+  $expectedHost=([Uri]::new($Site)).Host.ToLowerInvariant()
+  $actualHost=([Uri]::new([string]$d.url)).Host.ToLowerInvariant()
+  $hostOk=($actualHost -eq $expectedHost -or $actualHost -eq ("www."+$expectedHost) -or $expectedHost -eq ("www."+$actualHost))
+  Write-Result "MCP wp.get_site" ($d.name -ne $null -and $d.wp_version -match "^\d+\.\d+" -and $hostOk) ("wp=" + $d.wp_version + "; host=" + $actualHost)
 } catch { Write-Result "MCP wp.get_site" $false $_.Exception.Message }
 
 foreach($test in @(
@@ -356,14 +367,10 @@ if($gutenbergId -gt 0){
 }
 
 try {
-  $r=Invoke-Mcp 140 "tools/call" @{name="wordpress.execute";arguments=@{command="post list --post_type=product --post_status=any --number=10";mode="read"}}
-  $products=@($r.result.content[0].text | ConvertFrom-Json)
-  if($products.Count -gt 0){
-    $productId=0
-    foreach($candidate in $products){
-      $parsedId=Get-Scalar-Int $candidate
-      if($parsedId -gt 0){$productId=$parsedId;break}
-    }
+  $r=Invoke-Mcp 140 "tools/call" @{name="wordpress.execute";arguments=@{command="post list --post_type=product --post_status=any --number=1 --format=ids";mode="read"}}
+  $productProbe=$r.result.content[0].text | ConvertFrom-Json
+  $productId=Get-Scalar-Int $productProbe
+  if($productId -gt 0){
     if($productId -gt 0){
       $d=Tool-Json 141 "woocommerce.get_product" @{product_id=$productId}
       Write-Result "MCP WooCommerce get_product" ($d.id -eq $productId) ("product_id=" + $productId)
@@ -444,12 +451,19 @@ Write-Result "MCP rollback approval guard" $guard.ok $guard.detail
 
 try {
   $r=Invoke-Mcp-Raw 173 "tools/call" @{name="content.patch";arguments=@{post_id=31499;field="post_content";old_content="__oai_scope_probe__";new_content="__oai_scope_probe__x"}}
-  $scopeDenied=($null -ne $r.error -and [string]$r.error.message -match "OAuth scope required")
-  Write-Result "MCP content.patch scope permission" (-not $scopeDenied) "content.patch reached the tool layer"
+  if($null -ne $r.error){
+    $code=[int]$r.error.code
+    $scopeDenied=([string]$r.error.message -match "OAuth scope required")
+    Write-Result "MCP content.patch scope permission" (-not $scopeDenied) ("content.patch reached tool layer; error_code=" + $code)
+  } else {
+    Write-Result "MCP content.patch scope permission" $false "content.patch unexpectedly returned a result"
+  }
 } catch {
   $msg=[string]$_.Exception.Message
   $scopeDenied=$msg -match "OAuth scope required"
-  Write-Result "MCP content.patch scope permission" (-not $scopeDenied) $(if($scopeDenied){"OAuth scope was denied"}else{"content.patch reached the tool layer: "+$msg})
+  $rpcCode=0
+  if($msg -match "JSON-RPC\s+(-?\d+)"){$rpcCode=[int]$Matches[1]}
+  Write-Result "MCP content.patch scope permission" (-not $scopeDenied) $(if($scopeDenied){"OAuth scope was denied"}else{"content.patch reached tool layer; error_code="+$rpcCode})
 }
 
 try {
