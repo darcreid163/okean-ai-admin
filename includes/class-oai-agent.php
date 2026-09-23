@@ -245,6 +245,10 @@ class OAI_Agent {
   $params=$req->get_json_params(); if(!is_array($params)) $params=array();
   $action=sanitize_key((string)($params['action']??''));
   if($action==='') return new WP_Error('oai_agent_action','action is required',array('status'=>400));
+  if(class_exists('OAI_Quota')){
+   $quota=OAI_Quota::consume(1);
+   if(is_wp_error($quota)) return $quota;
+  }
   $result=self::route($action,$params);
   if(is_wp_error($result)) return $result;
   return array('ok'=>true,'action'=>$action,'result'=>$result);
