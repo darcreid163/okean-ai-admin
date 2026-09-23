@@ -7,9 +7,9 @@
  * Copyright: Андриянов Н.Г.
  */
 if (!defined('ABSPATH')) exit;
-define('OAI_VERSION','2.0.16');
-define('OAI_BUILD_ID','2.0.16-runtime-smoke-hardening-approval-guards-20260923');
-define('OAI_DB_VERSION',21);
+define('OAI_VERSION','2.0.17');
+define('OAI_BUILD_ID','2.0.17-dashboard-licensing-20260923');
+define('OAI_DB_VERSION',22);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
 define('OAI_DIR',plugin_dir_path(__FILE__));
@@ -35,6 +35,8 @@ require_once OAI_DIR.'includes/class-oai-builder.php';
 require_once OAI_DIR.'includes/class-oai-elementor-adapter.php';
 require_once OAI_DIR.'includes/class-oai-rate-limit.php';
 require_once OAI_DIR.'includes/class-oai-license.php';
+require_once OAI_DIR.'includes/class-oai-quota.php';
+require_once OAI_DIR.'includes/class-oai-entitlements.php';
 require_once OAI_DIR.'includes/class-oai-mcp-oauth.php';
 require_once OAI_DIR.'includes/class-oai-mcp.php';
 require_once OAI_DIR.'includes/class-oai-rest.php';
