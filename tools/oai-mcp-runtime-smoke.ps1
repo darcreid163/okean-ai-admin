@@ -46,7 +46,7 @@ try {
   $r=Invoke-Mcp 2 "tools/list"
   $names=@($r.result.tools|ForEach-Object{$_.name})
   $unique=(@($names|Select-Object -Unique)).Count -eq $names.Count
-  $required=@("wordpress.execute","builder.catalog","builder.detect","system.capabilities")
+  $required=@("wordpress.execute","builder.catalog","builder.detect","system.capabilities","operation.get","operation.verify","operation.proof","operation.preview_link")
   $present=$true
   foreach($n in $required){if($names -notcontains $n){$present=$false}}
   Write-Result "MCP tools/list" ($r.jsonrpc -eq "2.0" -and $unique -and $present -and $names.Count -gt 20) ("tools=" + $names.Count)
@@ -146,7 +146,31 @@ try {
 } catch { Write-Result "MCP wordpress.execute write remains planned" $false $_.Exception.Message }
 
 try {
-  $r=Invoke-Mcp 17 "tools/call" @{name="operation.approve";arguments=@{id=1}}
+  $r=Invoke-Mcp 17 "tools/call" @{name="wp.list_operations";arguments=@{}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  $items=@($data.items)
+  if($items.Count -gt 0) {
+    $id=[int]$items[0].id
+    $g=Invoke-Mcp 18 "tools/call" @{name="operation.get";arguments=@{id=$id}}
+    $gt=[string]$g.result.content[0].text
+    $gd=$gt|ConvertFrom-Json
+    Write-Result "MCP operation.get" ($gd.id -eq $id)
+    $v=Invoke-Mcp 19 "tools/call" @{name="operation.verify";arguments=@{id=$id}}
+    $vt=[string]$v.result.content[0].text
+    $vd=$vt|ConvertFrom-Json
+    Write-Result "MCP operation.verify" ($null -ne $vd)
+    $p=Invoke-Mcp 20 "tools/call" @{name="operation.proof";arguments=@{id=$id}}
+    $pt=[string]$p.result.content[0].text
+    $pd=$pt|ConvertFrom-Json
+    Write-Result "MCP operation.proof" ($null -ne $pd)
+  } else {
+    Write-Host "SKIP  Operation inspection (no operations on site)"
+  }
+} catch { Write-Result "MCP operation inspection" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 21 "tools/call" @{name="operation.approve";arguments=@{id=1}}
   $ok=($null -ne $r.error -and $r.error.code -eq -32003)
   Write-Result "MCP human approval guard" $ok
 } catch { Write-Result "MCP human approval guard" $false $_.Exception.Message }
