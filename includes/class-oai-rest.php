@@ -166,6 +166,7 @@ class OAI_REST {
  public static function elementor_schema($req){return OAI_Elementor::widget_schema((string)$req['widget_type']);}
  public static function elementor_globals(){return OAI_Elementor::globals();}
  public static function elementor_patch($req){
+  $license=OAI_License::can('elementor'); if(is_wp_error($license)) return $license;
   $target=sanitize_text_field((string)$req->get_param('target'));
   $changes=$req->get_param('changes');
   if(!is_array($changes))return new WP_Error('oai_changes','changes must be an object',array('status'=>400));
@@ -175,6 +176,7 @@ class OAI_REST {
   return self::sandbox_create($req);
  }
  public static function elementor_create_page($req){
+  $license=OAI_License::can('elementor'); if(is_wp_error($license)) return $license;
   if(!OAI_Elementor::available())return new WP_Error('oai_elementor_unavailable','Elementor is not available',array('status'=>503));
   $title_b64=(string)$req->get_param('title_b64'); $excerpt_b64=(string)$req->get_param('excerpt_b64'); $slug_b64=(string)$req->get_param('slug_b64'); $data_b64=(string)$req->get_param('data_b64');
   $title=$title_b64!==''?self::decode_b64_text($title_b64):sanitize_text_field((string)$req->get_param('title'));
@@ -1150,7 +1152,7 @@ frame.addEventListener('load',function(){
  public static function gutenberg($req){return OAI_Gutenberg::blocks(absint($req['id']));}
  public static function woocommerce($req){return OAI_WooCommerce::get(absint($req['id']));}
  public static function content_patch($req){$id=absint($req->get_param('post_id'));$field=sanitize_key((string)$req->get_param('field'));$old=(string)$req->get_param('old_content');$new=(string)$req->get_param('new_content');$all=filter_var($req->get_param('replace_all'),FILTER_VALIDATE_BOOLEAN);$x=OAI_Content::patch($id,$field,$old,$new,$all);if(is_wp_error($x))return $x;return self::sandbox_create_from_patch($field,$id,$field,$x['before'],$x['after'],array('kind'=>'content_patch','field'=>$field,'before_exists'=>true));}
- public static function woocommerce_patch($req){$id=absint($req->get_param('product_id'));$changes=$req->get_param('changes');if(is_string($changes))$changes=json_decode($changes,true);$x=OAI_WooCommerce::patch($id,is_array($changes)?$changes:array());if(is_wp_error($x))return $x;return self::sandbox_create_from_patch('woocommerce_product',$id,'product',$x['before'],$x['after'],array('kind'=>'woocommerce_patch','changes'=>$changes));}
+ public static function woocommerce_patch($req){$license=OAI_License::can('woocommerce');if(is_wp_error($license))return $license;$id=absint($req->get_param('product_id'));$changes=$req->get_param('changes');if(is_string($changes))$changes=json_decode($changes,true);$x=OAI_WooCommerce::patch($id,is_array($changes)?$changes:array());if(is_wp_error($x))return $x;return self::sandbox_create_from_patch('woocommerce_product',$id,'product',$x['before'],$x['after'],array('kind'=>'woocommerce_patch','changes'=>$changes));}
  private static function sandbox_create_from_patch($type,$id,$field,$before,$after,$meta=array()){ $op='OAI-'.gmdate('Ymd-His').'-'.wp_rand(1000,9999);$target=$id.':'.$field;$descriptor=OAI_Lifecycle::descriptor($type,$target,$before,array_merge(array('before_exists'=>true),$meta));$meta=array_merge($meta,array('rollback_descriptor'=>$descriptor));$row=array('operation_id'=>$op,'status'=>'pending','type'=>$type,'target'=>$target,'before_data'=>wp_json_encode($before,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'after_data'=>wp_json_encode($after,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'applied_data'=>null,'meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'diff_data'=>wp_json_encode(OAI_Operations::diff($before,$after),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'risk'=>OAI_Operations::risk($type,$field),'created_at'=>current_time('mysql',true),'expires_at'=>gmdate('Y-m-d H:i:s',time()+7*DAY_IN_SECONDS));$row['rollback_data']=wp_json_encode($descriptor,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);$idb=OAI_DB::insert($row);if(is_wp_error($idb))return $idb;OAI_Audit::log('created',array_merge($row,array('id'=>$idb)));return self::row($idb);}
 
  public static function runtime_fingerprint(){
@@ -1200,9 +1202,9 @@ frame.addEventListener('load',function(){
   return $out;
  }
  public static function execution_plan($req){$cmd=self::execution_input($req,'command',null);return OAI_Execution_Dispatcher::dispatch($cmd,'plan');}
- public static function execution_wordpress($req){$cmd=self::execution_input($req,'command',null);$mode=sanitize_key((string)self::execution_input($req,'mode','read'));return OAI_Execution_Dispatcher::dispatch($cmd,$mode);}
+ public static function execution_wordpress($req){$license=OAI_License::can('wp_cli');if(is_wp_error($license))return $license;$cmd=self::execution_input($req,'command',null);$mode=sanitize_key((string)self::execution_input($req,'mode','read'));return OAI_Execution_Dispatcher::dispatch($cmd,$mode);}
  public static function gutenberg_resolved($req){return OAI_Gutenberg_Resolver::resolve_post(absint($req['id']));}
  public static function gutenberg_locate($req){$sel=array();foreach(array('block_name','path','text','html_contains') as $k){$v=$req->get_param($k);if($v!==null)$sel[$k]=sanitize_text_field((string)$v);}return OAI_Gutenberg_Resolver::locate(absint($req['id']),$sel);}
- public static function gutenberg_patch($req){$id=absint($req->get_param('post_id'));$selector=$req->get_param('selector');if(is_string($selector))$selector=json_decode($selector,true);if(!is_array($selector))$selector=array();$attrs=$req->get_param('attrs');$html=$req->get_param('html');$x=OAI_Gutenberg_Resolver::patch($id,$selector,$attrs,$html);if(is_wp_error($x))return $x;return self::sandbox_create_from_patch('post_content',$id,'post_content',$x['before'],$x['after'],array('kind'=>'gutenberg_block_patch','selector'=>$selector,'block_path'=>$x['path']));}
+ public static function gutenberg_patch($req){$license=OAI_License::can('gutenberg');if(is_wp_error($license))return $license;$id=absint($req->get_param('post_id'));$selector=$req->get_param('selector');if(is_string($selector))$selector=json_decode($selector,true);if(!is_array($selector))$selector=array();$attrs=$req->get_param('attrs');$html=$req->get_param('html');$x=OAI_Gutenberg_Resolver::patch($id,$selector,$attrs,$html);if(is_wp_error($x))return $x;return self::sandbox_create_from_patch('post_content',$id,'post_content',$x['before'],$x['after'],array('kind'=>'gutenberg_block_patch','selector'=>$selector,'block_path'=>$x['path']));}
 
 }
