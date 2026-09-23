@@ -11,10 +11,10 @@ class OAI_MCP {
  }
  public static function info(){return array('name'=>'Okean AI Admin MCP','version'=>OAI_VERSION,'protocol'=>'MCP Streamable HTTP / JSON-RPC 2.0','enabled'=>(bool)get_option('oai_mcp_enabled',false),'license'=>OAI_License::status(),'auth'=>'Bearer access token','write_model'=>'sandbox + human approval');}
  private static function token_hash(){return (string)get_option('oai_mcp_token_hash','');}
- public static function generate_token(){ $token='oai_mcp_'.wp_generate_password(56,false,false); update_option('oai_mcp_token_hash',hash('sha256',$token),false); update_option('oai_mcp_enabled',true,false); return $token; }
+ public static function generate_token($user_id=0){ $token='oai_mcp_'.wp_generate_password(56,false,false); update_option('oai_mcp_token_hash',hash('sha256',$token),false); if($user_id) update_option('oai_mcp_token_user_id',absint($user_id),false); else delete_option('oai_mcp_token_user_id'); update_option('oai_mcp_enabled',true,false); return $token; }
  public static function admin_generate_token(){
   if(!current_user_can('manage_options')) return new WP_Error('oai_forbidden','Administrator capability required',array('status'=>403));
-  $token=self::generate_token();
+  $token=self::generate_token(get_current_user_id());
   return array('ok'=>true,'token'=>$token,'enabled'=>true,'message'=>'MCP token generated. Store it securely; it will not be shown again.');
  }
  private static function auth(){
@@ -35,6 +35,10 @@ class OAI_MCP {
   }
   $parts=preg_split('/\s+/',trim($auth)); if(count($parts)!==2||strtolower($parts[0])!=='bearer')return new WP_Error('oai_mcp_auth','Bearer token or WordPress Application Password required',array('status'=>401));
   if(!self::token_hash()||!hash_equals(self::token_hash(),hash('sha256',$parts[1])))return new WP_Error('oai_mcp_auth','Invalid MCP token',array('status'=>401));
+  $uid=absint(get_option('oai_mcp_token_user_id',0));
+  $user=$uid?get_user_by('id',$uid):false;
+  if(!$user || !user_can($user,'manage_options')) return new WP_Error('oai_mcp_auth','MCP token owner is not a valid administrator',array('status'=>403));
+  wp_set_current_user($user->ID);
   return OAI_Rate_Limit::check('mcp',120,60);
  }
  public static function permission($req){ $x=self::auth($req); return is_wp_error($x)?$x:true; }
