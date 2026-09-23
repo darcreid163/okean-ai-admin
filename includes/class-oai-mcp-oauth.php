@@ -143,6 +143,28 @@ class OAI_MCP_OAuth {
   return $client && is_array($client['redirect_uris']) && in_array($redirect_uri,$client['redirect_uris'],true);
  }
 
+ private static function browser_user(){
+  $user=wp_get_current_user();
+  if($user instanceof WP_User && $user->exists()) return $user;
+
+  $cookies=array();
+  if(defined('LOGGED_IN_COOKIE')) $cookies[]='logged_in';
+  if(defined('SECURE_AUTH_COOKIE')) $cookies[]='secure_auth';
+  if(defined('AUTH_COOKIE')) $cookies[]='auth';
+
+  foreach($cookies as $scheme){
+   $constant=$scheme==='logged_in'?'LOGGED_IN_COOKIE':($scheme==='secure_auth'?'SECURE_AUTH_COOKIE':'AUTH_COOKIE');
+   if(!defined($constant) || empty($_COOKIE[constant($constant)])) continue;
+   $uid=wp_validate_auth_cookie(wp_unslash($_COOKIE[constant($constant)]),$scheme);
+   if($uid){
+    wp_set_current_user($uid);
+    $user=wp_get_current_user();
+    if($user instanceof WP_User && $user->exists()) return $user;
+   }
+  }
+  return null;
+ }
+
  private static function login_continuation_key($continuation){
   return 'oai_oauth_login_'.hash('sha256',(string)$continuation);
  }
@@ -219,7 +241,8 @@ class OAI_MCP_OAuth {
    return self::json_error('invalid_request','OAuth login continuation is invalid or expired',400);
   }
 
-  if(!is_user_logged_in()){
+  $user=self::browser_user();
+  if(!$user){
    nocache_headers();
    $bridge=add_query_arg(array('continuation'=>$continuation),rest_url('okean-ai/v1/oauth/login'));
    wp_safe_redirect(wp_login_url($bridge));
@@ -248,7 +271,8 @@ class OAI_MCP_OAuth {
   $resource=esc_url_raw((string)$req->get_param('resource'));
   if($resource!=='' && !hash_equals(rest_url('okean-ai/mcp'),$resource)) return self::json_error('invalid_target','Authorization resource must be this MCP server');
 
-  if(!is_user_logged_in()){
+  $user=self::browser_user();
+  if(!$user){
    $continuation=self::store_login_continuation(array(
     'client_id'=>$p['client_id'],
     'redirect_uri'=>$p['redirect_uri'],
@@ -266,7 +290,6 @@ class OAI_MCP_OAuth {
    exit;
   }
 
-  $user=wp_get_current_user();
   if(!$user || !$user->exists() || !user_can($user,'manage_options')){
    return self::json_error('access_denied','A WordPress administrator must approve this connection',403);
   }
