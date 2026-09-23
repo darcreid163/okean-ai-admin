@@ -23,7 +23,7 @@ class OAI_Command_Registry {
   'media list'=>array('family'=>'media','handler'=>'media_list','read'=>true,'execution_mode'=>'read_only'),
   'cron event list'=>array('family'=>'cron','handler'=>'cron_list','read'=>true,'execution_mode'=>'read_only'),
   'cache purge'=>array('family'=>'cache','handler'=>'cache_purge','read'=>false,'approval'=>true,'execution_mode'=>'plan_only'),
-  'db query'=>array('family'=>'db','handler'=>'db_query','read'=>true,'execution_mode'=>'read_only'),
+  'db query'=>array('family'=>'db','handler'=>'db_query','read'=>true,'execution_mode'=>'read_only','allowed_flags'=>array('limit')),
  );}
  public static function resolve($command){$n=OAI_Command_Normalizer::normalize($command); if(is_wp_error($n)) return $n; $key=$n['family'].' '.$n['verb']; if(!empty($n['subverb']))$key.=' '.$n['subverb']; $all=self::all(); if(isset($all[$key])) { $entry=$all[$key]; $allowed=isset($entry['allowed_flags'])?(array)$entry['allowed_flags']:array(); foreach(array_keys($n['flags']) as $flag){if(!in_array($flag,$allowed,true))return new WP_Error('oai_cli_unknown_flag','Flag is not allowed for this command',array('status'=>400,'command'=>$key,'flag'=>$flag,'allowed_flags'=>$allowed));} return array_merge($n,$entry,array('canonical'=>$key)); } return new WP_Error('oai_cli_not_allowed','Command is not allowed by the single CommandRegistry',array('status'=>403,'command'=>$n));}
  public static function handler_audit(){
