@@ -162,7 +162,11 @@ $headers=@{Authorization="Bearer "+$accessToken}
 try {
   $r=Invoke-Mcp 100 "initialize"
   Write-Result "MCP initialize" ($r.jsonrpc -eq "2.0" -and $r.result.protocolVersion -eq "2025-06-18")
-} catch { Write-Result "MCP initialize" $false $_.Exception.Message }
+  $r2=Invoke-Mcp 99 "notifications/initialized"
+  Write-Result "MCP notifications/initialized" ($r2.jsonrpc -eq "2.0")
+  $r3=Invoke-Mcp 98 "ping"
+  Write-Result "MCP ping" ($r3.jsonrpc -eq "2.0")
+} catch { Write-Result "MCP session handshake" $false $_.Exception.Message }
 
 try {
   $r=Invoke-Mcp 101 "tools/list"
@@ -316,7 +320,7 @@ try {
 
 try {
   $d=Tool-Json 151 "wp.search_files" @{scope="child_theme";q="OAI_";limit=5}
-  Write-Result "MCP files search child_theme" ($d.scope -eq "child_theme" -and $null -ne $d.matches) ("matches=" + @($d.matches).Count)
+  Write-Result "MCP files search child_theme" ($d.scope -eq "child_theme" -and $null -ne $d.items) ("matches=" + @($d.items).Count)
 } catch { Write-Result "MCP files search child_theme" $false $_.Exception.Message }
 
 try {
@@ -336,8 +340,27 @@ try {
 
 try {
   $d=Tool-Json 163 "wordpress.execute" @{command="core version";mode="plan"}
-  Write-Result "MCP plan mode does not execute read command" ($d.execution_model -eq "read_only" -and $d.executable_now -eq $true)
+  $propertyNames=@($d.PSObject.Properties|ForEach-Object{$_.Name})
+  Write-Result "MCP plan mode routes through plan layer" ($d.execution_model -eq "read_only" -and $d.executable_now -eq $true -and ($propertyNames -notcontains "version"))
 } catch { Write-Result "MCP plan mode does not execute read command" $false $_.Exception.Message }
+
+try {
+  $d=Tool-Json 165 "wp.list_operations"
+  $ops=@($d.items)
+  if($ops.Count -gt 0){
+    $opId=[int]$ops[0].id
+    $og=Tool-Json 166 "operation.get" @{id=$opId}
+    Write-Result "MCP operation.get" ($og.id -eq $opId) ("operation_id=" + $opId)
+    $ov=Tool-Json 167 "operation.verify" @{id=$opId}
+    Write-Result "MCP operation.verify" ($null -ne $ov) ("operation_id=" + $opId)
+    $op=Tool-Json 168 "operation.proof" @{id=$opId}
+    Write-Result "MCP operation.proof" ($null -ne $op) ("operation_id=" + $opId)
+    $or=Tool-Json 169 "operation.get_receipt" @{id=$opId}
+    Write-Result "MCP operation.get_receipt" ($null -ne $or) ("operation_id=" + $opId)
+  } else {
+    Write-Skip "MCP operation ledger" "No operations recorded on site"
+  }
+} catch { Write-Result "MCP operation ledger" $false $_.Exception.Message }
 
 try {
   $r=Invoke-Mcp 170 "tools/call" @{name="operation.approve";arguments=@{id=1}}
