@@ -1,4 +1,4 @@
-AI Admin 2.0.16
-Build: 2.0.16-runtime-smoke-hardening-approval-guards-20260923
+AI Admin 2.0.17
+Build: 2.0.17-dashboard-licensing-20260923
 Author: Андриянов Н.Г.
 Copyright: Андриянов Н.Г.
