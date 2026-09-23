@@ -7,6 +7,7 @@ class OAI_DB {
  public static function table(){global $wpdb; return $wpdb->prefix.'oai_operations';}
  public static function audit_table(){global $wpdb; return $wpdb->prefix.'oai_audit_log';}
  public static function quota_table(){global $wpdb; return $wpdb->prefix.'oai_quota_usage';}
+ public static function quota_events_table(){global $wpdb; return $wpdb->prefix.'oai_quota_events';}
  public static function install(){global $wpdb; require_once ABSPATH.'wp-admin/includes/upgrade.php'; $t=self::table(); $charset=$wpdb->get_charset_collate(); $sql="CREATE TABLE $t (
  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
  operation_id varchar(64) NOT NULL,
@@ -34,6 +35,15 @@ class OAI_DB {
 ) $charset;"; dbDelta($sql);
  $a=self::audit_table();
  $q=self::quota_table();
+ $qe=self::quota_events_table();
+ $qesql="CREATE TABLE $qe (
+ request_key char(64) NOT NULL,
+ channel varchar(32) NOT NULL,
+ units bigint(20) unsigned NOT NULL DEFAULT 1,
+ created_at datetime NOT NULL,
+ PRIMARY KEY (request_key), KEY created_at (created_at), KEY channel (channel)
+ ) $charset;";
+ dbDelta($qesql);
  $qsql="CREATE TABLE $q (
  plan varchar(32) NOT NULL,
  period_key varchar(32) NOT NULL,
