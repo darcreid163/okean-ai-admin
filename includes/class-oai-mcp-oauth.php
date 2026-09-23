@@ -95,6 +95,8 @@ class OAI_MCP_OAuth {
  public static function init_hooks(){
   add_action('template_redirect',array(__CLASS__,'well_known'));
   add_filter('login_redirect',array(__CLASS__,'login_redirect'),9999,3);
+  add_action('admin_post_oai_oauth_authorize',array(__CLASS__,'admin_post_authorize'));
+  add_action('admin_post_nopriv_oai_oauth_authorize',array(__CLASS__,'admin_post_authorize'));
  }
 
  public static function well_known(){
@@ -230,6 +232,15 @@ class OAI_MCP_OAuth {
   ),201);
  }
 
+ public static function admin_post_authorize(){
+  $request=new WP_REST_Request('POST','/okean-ai/v1/oauth/authorize');
+  foreach(array('client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method','resource','oauth_action','decision','_wpnonce') as $key){
+   if(isset($_POST[$key])) $request->set_param($key,wp_unslash($_POST[$key]));
+  }
+  $request->set_param('action','approve');
+  return self::authorize($request);
+ }
+
  public static function login_bridge($req){
   $continuation=sanitize_text_field((string)$req->get_param('continuation'));
   if(!self::login_continuation_valid($continuation)){
@@ -302,7 +313,7 @@ class OAI_MCP_OAuth {
    <p class="muted">Приложение <strong><?php echo esc_html($client['client_name']);?></strong> запрашивает доступ к сайту.</p>
    <p>Доступ будет выполняться от имени WordPress-пользователя <strong><?php echo esc_html($user->display_name?:$user->user_login);?></strong>.</p>
    <p class="muted">Изменения сайта по-прежнему проходят через sandbox, diff, preview и подтверждение.</p>
-   <form method="post"><input type="hidden" name="action" value="approve"><?php
+   <form method="post" action="<?php echo esc_url(admin_url('admin-post.php'));?>"><input type="hidden" name="action" value="oai_oauth_authorize"><input type="hidden" name="oauth_action" value="approve"><?php
    foreach($p as $k=>$v) echo '<input type="hidden" name="'.esc_attr($k).'" value="'.esc_attr($v).'">';
    echo '<input type="hidden" name="_wpnonce" value="'.esc_attr($nonce).'">';
    ?><div class="actions"><button class="btn deny" name="decision" value="deny" type="submit">Отклонить</button><button class="btn allow" name="decision" value="approve" type="submit">Разрешить</button></div></form>
@@ -318,7 +329,9 @@ class OAI_MCP_OAuth {
    exit;
   }
 
-  if($req->get_param('action')!=='approve' || !wp_verify_nonce((string)$req->get_param('_wpnonce'),'oai_oauth_authorize')) return self::json_error('invalid_request','Invalid authorization confirmation',400);
+  $oauth_action=(string)$req->get_param('oauth_action');
+  if($oauth_action==='' && $req->get_param('action')==='approve') $oauth_action='approve';
+  if($oauth_action!=='approve' || !wp_verify_nonce((string)$req->get_param('_wpnonce'),'oai_oauth_authorize')) return self::json_error('invalid_request','Invalid authorization confirmation',400);
   $decision=(string)$req->get_param('decision');
   if($decision!=='approve'){
    return self::redirect_error($p['redirect_uri'],$p['state'],'access_denied','User denied access');
