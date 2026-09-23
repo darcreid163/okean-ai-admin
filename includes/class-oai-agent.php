@@ -45,6 +45,8 @@ class OAI_Agent {
  }
  public static function perm($req){
   if(!self::enabled()) return false;
+  $license=OAI_License::can('agent');
+  if(is_wp_error($license)) return false;
   $key=(string)$req->get_header('x-oai-agent-key');
   $sig=(string)$req->get_header('x-oai-agent-signature');
   $ts=(string)$req->get_header('x-oai-agent-timestamp');
