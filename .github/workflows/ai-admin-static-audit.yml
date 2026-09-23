@@ -33,4 +33,5 @@ jobs:
         run: |
           [void][scriptblock]::Create((Get-Content -Raw tools/oai-runtime-smoke.ps1))
           [void][scriptblock]::Create((Get-Content -Raw tools/oai-mcp-runtime-smoke.ps1))
+          [void][scriptblock]::Create((Get-Content -Raw tools/oai-mcp-oauth-smoke.ps1))
           Write-Host "PowerShell runtime smoke scripts syntax: PASS"
