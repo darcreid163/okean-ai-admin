@@ -68,8 +68,6 @@ class OAI_REST {
   register_rest_route($n,'/mcp/token',array('methods'=>'POST','callback'=>array('OAI_MCP','admin_generate_token'))+$args);
   register_rest_route($n,'/license/status',array('methods'=>'GET','callback'=>array(__CLASS__,'license_status'))+$args);
   register_rest_route($n,'/auth/status',array('methods'=>'GET','callback'=>array(__CLASS__,'auth_status'))+$args);
-  register_rest_route($n,'/license/local-activate',array('methods'=>'POST','callback'=>array(__CLASS__,'license_local_activate'),'permission_callback'=>array(__CLASS__,'perm')));
-  register_rest_route($n,'/license/local-deactivate',array('methods'=>'POST','callback'=>array(__CLASS__,'license_local_deactivate'),'permission_callback'=>array(__CLASS__,'perm')));
   register_rest_route($n,'/agent/intent',array('methods'=>'POST','callback'=>array(__CLASS__,'intent_normalize'))+$args);
   register_rest_route($n,'/agent/plan',array('methods'=>'POST','callback'=>array(__CLASS__,'agent_plan'))+$args);
   register_rest_route($n,'/operations/catalog',array('methods'=>'GET','callback'=>array(__CLASS__,'operation_catalog'))+$args);
@@ -146,8 +144,6 @@ class OAI_REST {
 
  public static function license_status(){return OAI_License::user_status();}
  public static function auth_status($req){return self::auth_status_info($req);}
- public static function license_local_activate(){return OAI_License::activate_local_owner();}
- public static function license_local_deactivate(){return OAI_License::deactivate_local_owner();}
  public static function intent_normalize($req){ $context=$req->get_param('context'); return OAI_Intent::normalize($req->get_param('intent'),is_array($context)?$context:array()); }
  public static function operation_catalog(){ return array('contract'=>'ai-admin/operations/v1','items'=>OAI_Operation_Schema::catalog()); }
  public static function read_discover($req){ $intent=$req->get_param('intent'); $normalized=is_array($intent)?$intent:OAI_Intent::normalize($intent,$req->get_param('context')); if(is_wp_error($normalized))return $normalized; $params=$req->get_json_params(); if(!is_array($params))$params=array(); return OAI_Read_Engine::discover($normalized,$params); }
