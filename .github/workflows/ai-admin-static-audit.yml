@@ -28,8 +28,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Parse runtime smoke script
+      - name: Parse runtime smoke scripts
         shell: pwsh
         run: |
           [void][scriptblock]::Create((Get-Content -Raw tools/oai-runtime-smoke.ps1))
-          Write-Host "PowerShell runtime smoke script syntax: PASS"
+          [void][scriptblock]::Create((Get-Content -Raw tools/oai-mcp-runtime-smoke.ps1))
+          Write-Host "PowerShell runtime smoke scripts syntax: PASS"
