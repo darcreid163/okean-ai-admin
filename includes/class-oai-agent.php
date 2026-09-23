@@ -246,7 +246,11 @@ class OAI_Agent {
   $action=sanitize_key((string)($params['action']??''));
   if($action==='') return new WP_Error('oai_agent_action','action is required',array('status'=>400));
   if(class_exists('OAI_Quota')){
-   $quota=OAI_Quota::consume(1);
+   $fingerprint=wp_json_encode($params,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+   $request_id=(string)($req->get_header('x-oai-agent-request-id')?:'');
+   if($request_id==='') $request_id=hash('sha256',$fingerprint);
+   $request_key=OAI_Quota::request_key('agent',$request_id,$fingerprint);
+   $quota=OAI_Quota::consume_request($request_key,'agent',1);
    if(is_wp_error($quota)) return $quota;
   }
   $result=self::route($action,$params);
