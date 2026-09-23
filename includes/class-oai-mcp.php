@@ -55,7 +55,7 @@ class OAI_MCP {
   return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope));
  }
  private static function tool_requires_write($name,$args){
-  if(in_array($name,array('gutenberg.patch','content.patch','woocommerce.patch','elementor.create_draft','operation.approve','operation.apply','operation.rollback'),true)) return true;
+  if(in_array($name,array('gutenberg_patch','content_patch','woocommerce_patch','elementor_create_draft','operation_approve','operation_apply','operation_rollback'),true)) return true;
   if($name==='wordpress.execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
   return false;
  }
