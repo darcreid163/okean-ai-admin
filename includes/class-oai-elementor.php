@@ -54,11 +54,17 @@ class OAI_Elementor {
   if(!self::available()) return new WP_Error('oai_elementor_unavailable','Elementor is not available',array('status'=>503));
   $widget_type=sanitize_key($widget_type); if($widget_type==='')return new WP_Error('oai_widget_type','widget_type is required',array('status'=>400));
   try {
-   $widgets=\Elementor\Plugin::$instance->widgets_manager->get_widget_types();
-   if(empty($widgets[$widget_type])) return new WP_Error('oai_widget_type','Elementor widget type not found',array('status'=>404));
-   $widget=$widgets[$widget_type];
+   $widget=\Elementor\Plugin::$instance->widgets_manager->get_widget_types($widget_type);
+   if(!$widget) return new WP_Error('oai_widget_type','Elementor widget type not found',array('status'=>404));
    $controls=array();
-   if(method_exists($widget,'get_controls')) $raw=$widget->get_controls(); else $raw=array();
+   if(method_exists($widget,'get_stack')){
+    $stack=$widget->get_stack(false);
+    $raw=is_array($stack)&&isset($stack['controls'])&&is_array($stack['controls'])?$stack['controls']:array();
+   } elseif(method_exists($widget,'get_controls')) {
+    $raw=$widget->get_controls();
+   } else {
+    $raw=array();
+   }
    foreach((array)$raw as $id=>$control){
     if(!is_array($control))continue;
     $controls[$id]=array(
