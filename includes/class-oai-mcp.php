@@ -87,6 +87,10 @@ class OAI_MCP {
    'elementor.get_globals'=>array('type'=>'object','additionalProperties'=>false),
    'woocommerce.get_product'=>array('type'=>'object','required'=>array('product_id'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1))),
    'operation.get_receipt'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
+   'operation.get'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
+   'operation.verify'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
+   'operation.proof'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
+   'operation.preview_link'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
    'wordpress.execute'=>array('type'=>'object','required'=>array('command'),'additionalProperties'=>false,'properties'=>array('command'=>array('type'=>'string','minLength'=>1),'mode'=>array('type'=>'string','enum'=>array('read','plan')))),
    'gutenberg.get_blocks'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
    'gutenberg.locate_block'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string'),'html_contains'=>array('type'=>'string'))),
@@ -102,7 +106,7 @@ class OAI_MCP {
    'operation.rollback'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1)))
   );
   $read=array(
-   'wp.get_site','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations',
+   'wp.get_site','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
    'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','operation.get_receipt',
    'gutenberg.get_blocks','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities'
   );
@@ -157,6 +161,10 @@ class OAI_MCP {
    case 'elementor_get_globals':$out=OAI_Elementor::globals();break;
    case 'woocommerce_get_product':$out=OAI_REST::woocommerce((new WP_REST_Request('GET','/okean-ai/v1/read/woocommerce/'.absint($a['product_id']??0))));break;
    case 'operation_get_receipt':$out=OAI_REST::receipt((new WP_REST_Request('GET','/okean-ai/v1/operations/'.absint($a['id']??0).'/receipt')));break;
+   case 'operation_get':$out=OAI_REST::operation((new WP_REST_Request('GET','/okean-ai/v1/operations/'.absint($a['id']??0))));break;
+   case 'operation_verify':$out=OAI_REST::verify((new WP_REST_Request('GET','/okean-ai/v1/verify/'.absint($a['id']??0))));break;
+   case 'operation_proof':$out=OAI_REST::proof((new WP_REST_Request('GET','/okean-ai/v1/proof/'.absint($a['id']??0))));break;
+   case 'operation_preview_link':$out=OAI_REST::preview_link((new WP_REST_Request('GET','/okean-ai/v1/preview-link/'.absint($a['id']??0))));break;
    case 'wp_execution_readiness':$out=OAI_REST::execution_readiness();break;
    case 'builder_catalog':$out=OAI_Adapter_Catalog::catalog();break;
    case 'builder_detect':$out=OAI_Adapter_Catalog::detect(absint($a['post_id']??0));break;
