@@ -30,6 +30,21 @@ class OAI_License {
   );
  }
 
+ /**
+  * User-facing license state. Internal local-owner identifiers and features
+  * are deliberately normalized away.
+  */
+ public static function user_status(){
+  $s=self::status();
+  $plan=sanitize_key((string)($s['plan']??''));
+  if($plan===self::LOCAL_PLAN) $plan='free';
+  return array(
+   'active'=>(bool)$s['active'],
+   'plan'=>$plan ?: 'unlicensed',
+   'expires_at'=>$s['expires_at'],
+  );
+ }
+
  public static function site_id(){
   $id=get_option('oai_site_id','');
   if(!$id){$id=wp_generate_uuid4();update_option('oai_site_id',$id,false);}
