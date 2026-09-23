@@ -81,7 +81,72 @@ try {
 } catch { Write-Result "MCP system.capabilities" $false $_.Exception.Message }
 
 try {
-  $r=Invoke-Mcp 7 "tools/call" @{name="operation.approve";arguments=@{id=1}}
+  $r=Invoke-Mcp 8 "tools/call" @{name="wp.get_site";arguments=@{}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  Write-Result "MCP wp.get_site" ($data.name -ne $null -and $data.url -ne $null)
+} catch { Write-Result "MCP wp.get_site" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 9 "tools/call" @{name="builder.detect";arguments=@{post_id=35279}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  $ids=@($data.matches|ForEach-Object{$_.id})
+  Write-Result "MCP builder.detect Gutenberg" ($ids -contains "gutenberg" -and $data.primary.id -eq "gutenberg")
+} catch { Write-Result "MCP builder.detect Gutenberg" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 10 "tools/call" @{name="builder.detect";arguments=@{post_id=31499}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  $ids=@($data.matches|ForEach-Object{$_.id})
+  Write-Result "MCP builder.detect Elementor" ($ids -contains "elementor" -and $data.primary.id -eq "elementor")
+} catch { Write-Result "MCP builder.detect Elementor" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 11 "tools/call" @{name="gutenberg.get_blocks";arguments=@{post_id=35279}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  Write-Result "MCP Gutenberg get_blocks" ($data.post_id -eq 35279 -and $null -ne $data.blocks)
+} catch { Write-Result "MCP Gutenberg get_blocks" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 12 "tools/call" @{name="gutenberg.locate_block";arguments=@{post_id=35279;text="доставка"}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  Write-Result "MCP Gutenberg locate_block" ($data.post_id -eq 35279 -and $null -ne $data.count)
+} catch { Write-Result "MCP Gutenberg locate_block" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 13 "tools/call" @{name="elementor.get_widget";arguments=@{post_id=31499;widget_id="14a1e75"}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  Write-Result "MCP Elementor get_widget" ($data.widget_id -eq "14a1e75" -and $data.widget_type -eq "html")
+} catch { Write-Result "MCP Elementor get_widget" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 14 "tools/call" @{name="woocommerce.get_product";arguments=@{product_id=35127}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  Write-Result "MCP WooCommerce get_product" ($data.id -eq 35127 -and $data.sku -ne $null)
+} catch { Write-Result "MCP WooCommerce get_product" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 15 "tools/call" @{name="wordpress.execute";arguments=@{command="core version";mode="read"}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  Write-Result "MCP wordpress.execute read" ($data.version -match '^\\d+\\.\\d+')
+} catch { Write-Result "MCP wordpress.execute read" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 16 "tools/call" @{name="wordpress.execute";arguments=@{command="option update oai_mcp_runtime_plan_probe 1";mode="plan"}}
+  $toolText=[string]$r.result.content[0].text
+  $data=$toolText|ConvertFrom-Json
+  Write-Result "MCP wordpress.execute write remains planned" ($data.execution_model -eq "sandbox_then_approval" -and $data.executable_now -eq $false)
+} catch { Write-Result "MCP wordpress.execute write remains planned" $false $_.Exception.Message }
+
+try {
+  $r=Invoke-Mcp 17 "tools/call" @{name="operation.approve";arguments=@{id=1}}
   $ok=($null -ne $r.error -and $r.error.code -eq -32003)
   Write-Result "MCP human approval guard" $ok
 } catch { Write-Result "MCP human approval guard" $false $_.Exception.Message }
