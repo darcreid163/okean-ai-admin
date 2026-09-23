@@ -30,6 +30,7 @@ class OAI_MCP_OAuth {
    user_id bigint(20) unsigned NOT NULL,
    redirect_uri text NOT NULL,
    scope varchar(255) NOT NULL,
+   resource text NULL,
    code_challenge varchar(255) NOT NULL,
    created_at datetime NOT NULL,
    expires_at datetime NOT NULL,
@@ -46,6 +47,7 @@ class OAI_MCP_OAuth {
    client_id varchar(128) NOT NULL,
    user_id bigint(20) unsigned NOT NULL,
    scope varchar(255) NOT NULL,
+   resource text NULL,
    created_at datetime NOT NULL,
    expires_at datetime NOT NULL,
    refresh_expires_at datetime NULL,
@@ -180,10 +182,12 @@ class OAI_MCP_OAuth {
   if($p['response_type']!=='code') return self::json_error('unsupported_response_type','Only response_type=code is supported');
   if($p['code_challenge']==='' || $p['code_challenge_method']!=='S256') return self::json_error('invalid_request','PKCE S256 code_challenge is required');
 
-  $scope_tokens=preg_split('/s+/',trim($p['scope']?:'mcp:read'));
+  $scope_tokens=preg_split('/\s+/',trim($p['scope']?:'mcp:read'));
   $allowed=array('mcp:read','mcp:write');
   foreach($scope_tokens as $s) if($s!=='' && !in_array($s,$allowed,true)) return self::json_error('invalid_scope','Unsupported scope');
   $scope=implode(' ',array_values(array_unique(array_filter($scope_tokens))));
+  $resource=esc_url_raw((string)$req->get_param('resource'));
+  if($resource!=='' && !hash_equals(rest_url('okean-ai/mcp'),$resource)) return self::json_error('invalid_target','Authorization resource must be this MCP server');
 
   if(!is_user_logged_in()){
    $url=wp_login_url(add_query_arg($_GET,rest_url('okean-ai/v1/oauth/authorize')));
@@ -225,6 +229,7 @@ class OAI_MCP_OAuth {
    'user_id'=>$user->ID,
    'redirect_uri'=>$p['redirect_uri'],
    'scope'=>$scope,
+   'resource'=>rest_url('okean-ai/mcp'),
    'code_challenge'=>$p['code_challenge'],
    'created_at'=>current_time('mysql',true),
    'expires_at'=>gmdate('Y-m-d H:i:s',time()+300),
@@ -258,6 +263,7 @@ class OAI_MCP_OAuth {
  }
 
  private static function exchange_code($req){
+  $resource=esc_url_raw((string)$req->get_param('resource'));
   $code=(string)$req->get_param('code'); $client_id=sanitize_text_field((string)$req->get_param('client_id')); $redirect=(string)$req->get_param('redirect_uri'); $verifier=(string)$req->get_param('code_verifier');
   if($code===''||$client_id===''||$redirect===''||$verifier==='') return self::json_error('invalid_request','code, client_id, redirect_uri and code_verifier are required');
   global $wpdb;
@@ -265,12 +271,14 @@ class OAI_MCP_OAuth {
   if(!$row) return self::json_error('invalid_grant','Authorization code is invalid');
   if((int)$row['used']===1 || strtotime($row['expires_at'])<time()) return self::json_error('invalid_grant','Authorization code is expired or already used');
   if($row['client_id']!==$client_id || $row['redirect_uri']!==$redirect || !self::verify_pkce($verifier,$row['code_challenge'])) return self::json_error('invalid_grant','Authorization code validation failed');
+  $expected_resource=rest_url('okean-ai/mcp');
+  if($resource!=='' && !hash_equals($expected_resource,$resource)) return self::json_error('invalid_target','Authorization request resource is not this MCP server');
   $wpdb->update(self::codes_table(),array('used'=>1),array('id'=>(int)$row['id']));
 
-  return self::issue_tokens((int)$row['user_id'],$client_id,$row['scope']);
+  return self::issue_tokens((int)$row['user_id'],$client_id,$row['scope'],(string)($row['resource']??rest_url('okean-ai/mcp')));
  }
 
- private static function issue_tokens($user_id,$client_id,$scope){
+ private static function issue_tokens($user_id,$client_id,$scope,$resource=''){
   $access='oai_access_'.wp_generate_password(72,false,false);
   $refresh='oai_refresh_'.wp_generate_password(72,false,false);
   global $wpdb;
@@ -280,6 +288,7 @@ class OAI_MCP_OAuth {
    'client_id'=>$client_id,
    'user_id'=>absint($user_id),
    'scope'=>$scope,
+   'resource'=>$resource?:rest_url('okean-ai/mcp'),
    'created_at'=>current_time('mysql',true),
    'expires_at'=>gmdate('Y-m-d H:i:s',time()+3600),
    'refresh_expires_at'=>gmdate('Y-m-d H:i:s',time()+30*DAY_IN_SECONDS),
@@ -291,7 +300,8 @@ class OAI_MCP_OAuth {
    'token_type'=>'Bearer',
    'expires_in'=>3600,
    'refresh_token'=>$refresh,
-   'scope'=>$scope
+   'scope'=>$scope,
+   'resource'=>$resource?:rest_url('okean-ai/mcp')
   ),200);
  }
 
@@ -302,7 +312,7 @@ class OAI_MCP_OAuth {
   $row=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::tokens_table().' WHERE refresh_hash=%s AND client_id=%s LIMIT 1',hash('sha256',$refresh),$client_id),ARRAY_A);
   if(!$row || (int)$row['revoked']===1 || empty($row['refresh_expires_at']) || strtotime($row['refresh_expires_at'])<time()) return self::json_error('invalid_grant','Refresh token is invalid or expired');
   $wpdb->update(self::tokens_table(),array('revoked'=>1),array('id'=>(int)$row['id']));
-  return self::issue_tokens((int)$row['user_id'],$client_id,$row['scope']);
+  return self::issue_tokens((int)$row['user_id'],$client_id,$row['scope'],(string)($row['resource']??rest_url('okean-ai/mcp')));
  }
 
  public static function authenticate_access_token($token){
