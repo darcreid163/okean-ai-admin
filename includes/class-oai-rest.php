@@ -144,7 +144,7 @@ class OAI_REST {
 
  }
 
- public static function license_status(){return OAI_License::status();}
+ public static function license_status(){return OAI_License::user_status();}
  public static function auth_status($req){return self::auth_status_info($req);}
  public static function license_local_activate(){return OAI_License::activate_local_owner();}
  public static function license_local_deactivate(){return OAI_License::deactivate_local_owner();}
