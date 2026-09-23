@@ -67,8 +67,8 @@ $listener.Prefixes.Add("http://127.0.0.1:$port/")
 $listener.Start()
 
 Write-Host ""
-Write-Host "Открою OAuth URL в браузере по умолчанию."
-Write-Host "Если открылся wp-login.php, НЕ вводи пароль здесь: используй полную ссылку выше в том же браузере/профиле, где wp-admin уже авторизован."
+Write-Host "Opening OAuth URL in the default browser."
+Write-Host "If wp-login.php opens, do not enter the password here; use the full URL above in the same browser/profile where wp-admin is already logged in."
 Start-Process $authUri
 
 $context = $listener.GetContext()
@@ -79,7 +79,7 @@ try {
   if($q["error"]) { throw ("OAuth authorization failed: " + $q["error"] + " " + $q["error_description"]) }
   $code = [string]$q["code"]
   if($code -eq "") { throw "Authorization callback returned no code" }
-  $html = "<html><body><h2>Okean AI Admin: авторизация получена.</h2><p>Можно вернуться в PowerShell.</p></body></html>"
+  $html = "<html><body><h2>Okean AI Admin: authorization received.</h2><p>You can return to PowerShell.</p></body></html>"
   $bytes=[Text.Encoding]::UTF8.GetBytes($html)
   $context.Response.ContentType="text/html; charset=utf-8"
   $context.Response.ContentLength64=$bytes.Length
