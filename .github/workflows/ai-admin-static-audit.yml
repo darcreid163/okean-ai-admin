@@ -21,3 +21,15 @@ jobs:
         run: php tools/oai-static-audit.php
       - name: WP-CLI parser and registry contract tests
         run: php tools/oai-cli-contract-test.php
+
+
+  powershell-contract:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Parse runtime smoke script
+        shell: pwsh
+        run: |
+          [void][scriptblock]::Create((Get-Content -Raw tools/oai-runtime-smoke.ps1))
+          Write-Host "PowerShell runtime smoke script syntax: PASS"
