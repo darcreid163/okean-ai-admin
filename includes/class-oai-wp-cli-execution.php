@@ -41,7 +41,13 @@ class OAI_WP_CLI_Execution {
   $upper=strtoupper($sql);
   foreach(array('SLEEP\s*\(','BENCHMARK\s*\(','LOAD_FILE\s*\(','INTO\s+OUTFILE','INTO\s+DUMPFILE','FOR\s+UPDATE','LOCK\s+IN\s+SHARE') as $rx){if(preg_match('/'.$rx.'/i',$sql))return new WP_Error('oai_db_unsafe','Unsafe SQL construct is not allowed',array('status'=>403));}
   $limit=isset($f['limit'])?max(1,min(100,(int)$f['limit'])):100;
-  if(!preg_match('/\blimit\s+\d+(?:\s*,\s*\d+)?\s*$/i',$sql))$sql=rtrim($sql). ' LIMIT '.$limit;
+  if(preg_match('/\blimit\s+(\d+)(?:\s*,\s*(\d+))?\s*$/i',$sql,$lm)){
+   $requested=(int)($lm[2]??$lm[1]);
+   if($requested>100)return new WP_Error('oai_db_limit','SQL row limit may not exceed 100',array('status'=>400,'requested_limit'=>$requested,'max_limit'=>100));
+  } else {
+   if(preg_match('/\blimit\b/i',$sql))return new WP_Error('oai_db_limit','Only a trailing LIMIT N or LIMIT offset,N clause is supported, with N <= 100',array('status'=>400,'max_limit'=>100));
+   $sql=rtrim($sql). ' LIMIT '.$limit;
+  }
   global $wpdb; $rows=$wpdb->get_results($sql,ARRAY_A);
   if($wpdb->last_error)return new WP_Error('oai_db_query','Database query failed',array('status'=>400,'db_error'=>$wpdb->last_error));
   return array('rows'=>$rows,'count'=>count($rows),'limited_to'=>$limit,'sql_hash'=>hash('sha256',$sql));
