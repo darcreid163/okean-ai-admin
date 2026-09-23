@@ -211,6 +211,25 @@ try {
   Write-Result "DB mutating SQL rejected" $false $_.Exception.Message
 }
 
+try {
+  $r = Invoke-OaiPostRaw "/execution/wordpress" '{"command":"db query \"SELECT 1 LIMIT 101\"","mode":"read"}'
+  $body = $r.Body | ConvertFrom-Json
+  Write-Result "DB explicit LIMIT > 100 rejected" ($r.Status -eq 400 -and $body.code -eq "oai_db_limit")
+} catch {
+  Write-Result "DB explicit LIMIT > 100 rejected" $false $_.Exception.Message
+}
+
+$probe = "oai_runtime_smoke_" + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+try {
+  $plan = Invoke-OaiPost "/execution/wordpress" @{ command = "option update $probe 1"; mode = "read" }
+  Write-Result "Planned option write does not execute" ($plan.execution_model -eq "sandbox_then_approval" -and $plan.executable_now -eq $false)
+  $check = Invoke-OaiPost "/execution/wordpress" @{ command = "option get $probe"; mode = "read" }
+  $value = $check.value
+  Write-Result "Planned option write left no live value" ($null -eq $value)
+} catch {
+  Write-Result "Planned option write left no live value" $false $_.Exception.Message
+}
+
 if($RunSandboxCreateReject) {
   try {
     $op = Invoke-OaiPost "/woocommerce/patch" @{
