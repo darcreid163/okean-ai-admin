@@ -44,8 +44,8 @@ class OAI_DB {
  created_at datetime NOT NULL,
  PRIMARY KEY (id), KEY operation_id (operation_id), KEY event (event), KEY created_at (created_at)
  ) $charset;";
- dbDelta($asql); update_option('oai_db_version',OAI_DB_VERSION); self::migrate_token(); }
- public static function maybe_upgrade(){if((int)get_option('oai_db_version',0)<OAI_DB_VERSION) self::install(); else self::migrate_token();}
+ dbDelta($asql); update_option('oai_db_version',OAI_DB_VERSION); if(class_exists('OAI_MCP_OAuth')) OAI_MCP_OAuth::install(); self::migrate_token(); }
+ public static function maybe_upgrade(){if((int)get_option('oai_db_version',0)<OAI_DB_VERSION) self::install(); else { if(class_exists('OAI_MCP_OAuth')) OAI_MCP_OAuth::install(); self::migrate_token(); }}
  public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
  public static function insert($data){global $wpdb; $t=self::table(); $ok=$wpdb->insert($t,$data); if(!$ok) return new WP_Error('oai_db','Could not create operation',array('status'=>500,'db_error'=>$wpdb->last_error)); return (int)$wpdb->insert_id;}
  public static function get($id){global $wpdb; return $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE id=%d',$id),ARRAY_A);}
