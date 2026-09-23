@@ -1,5 +1,5 @@
 # Okean AI Admin runtime smoke audit
-# Revision: 2.0.16-r2
+# Revision: 2.0.16-r3
 # Updated: 2026-09-23
 
 param(
@@ -476,6 +476,39 @@ try {
     Write-Result "MCP invalid token rejection" ($msg -match "401|Unauthorized")
   }
 } catch { Write-Result "MCP invalid token rejection" $false $_.Exception.Message }
+
+
+# REST lifecycle bypass guard: a valid OAuth Bearer token must not be able to
+# approve/apply/rollback directly. These probes use a nonexistent operation id
+# so they cannot mutate site data; the human-approval guard must fire first.
+function Test-RestHumanApprovalGuard {
+  param([string]$Action,[int]$ProbeId=999999)
+  $uri = $base + "/sandbox/$ProbeId/$Action"
+  try {
+    $r = Invoke-WebRequest -Uri $uri -Method POST -Headers @{Authorization="Bearer "+$accessToken} -ContentType "application/json" -Body "{}" -ErrorAction Stop
+    return @{ok=$false;detail=("HTTP "+[int]$r.StatusCode+" unexpectedly returned success")}
+  } catch {
+    $resp=$_.Exception.Response
+    if($null -eq $resp){ return @{ok=$false;detail=$_.Exception.Message} }
+    $status=[int]$resp.StatusCode
+    $body=""
+    try {
+      $stream=$resp.GetResponseStream()
+      if($null -ne $stream){
+        $reader=New-Object System.IO.StreamReader($stream)
+        $body=$reader.ReadToEnd()
+        $reader.Dispose(); $stream.Dispose()
+      }
+    } catch {}
+    $codeOk=($body -match 'oai_human_approval_required')
+    return @{ok=($status -eq 403 -and $codeOk);detail=("HTTP "+$status+$(if($body){"; "+$body}else{""}))}
+  }
+}
+
+foreach($action in @("approve","apply","rollback")){
+  $guard=Test-RestHumanApprovalGuard $action
+  Write-Result ("REST human approval guard /" + $action) $guard.ok $guard.detail
+}
 
 try {
   $oldAccess=$accessToken
