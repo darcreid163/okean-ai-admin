@@ -176,7 +176,7 @@ try {
 try {
   $r=Invoke-Mcp 21 "tools/call" @{name="operation.approve";arguments=@{id=1}}
   $ok=($null -ne $r.error -and $r.error.code -eq -32003)
-  Write-Result "MCP human approval guard" $ok
+  Write-Result "MCP human approval guard" $ok ("error_code=" + $r.error.code)
 } catch { Write-Result "MCP human approval guard" $false $_.Exception.Message }
 
 Write-Host ""
