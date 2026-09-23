@@ -40,24 +40,19 @@ class OAI_Quota {
 
  public static function status(){
   $plan=self::current_plan();
-  if($plan===self::ENGINEERING_PLAN){
-   return array(
-    'plan'=>'engineering',
-    'label'=>'Free',
-    'limit'=>PHP_INT_MAX,
-    'used'=>0,
-    'remaining'=>PHP_INT_MAX,
-    'period'=>'day',
-    'period_key'=>'unlimited',
-    'reset_at'=>null,
-    'unlimited'=>true,
-   );
-  }
+  // Engineering access is intentionally not represented in the public quota model.
+  if($plan===self::ENGINEERING_PLAN) return self::public_status('free');
+  return self::public_status($plan);
+ }
 
+ private static function public_status($plan){
   global $wpdb;
-  $cfg=self::PLANS[$plan];
+  $cfg=self::PLANS[$plan]??self::PLANS['free'];
   $period=self::period_key($plan);
-  $row=$wpdb->get_row($wpdb->prepare('SELECT used FROM '.OAI_DB::quota_table().' WHERE plan=%s AND period_key=%s',$plan,$period),ARRAY_A);
+  $row=$wpdb->get_row($wpdb->prepare(
+   'SELECT used FROM '.OAI_DB::quota_table().' WHERE plan=%s AND period_key=%s',
+   $plan,$period
+  ),ARRAY_A);
   $used=$row?(int)$row['used']:0;
   return array(
    'plan'=>$plan,
@@ -68,23 +63,22 @@ class OAI_Quota {
    'period'=>$cfg['period'],
    'period_key'=>$period,
    'reset_at'=>self::reset_at($cfg['period']),
-   'unlimited'=>false,
   );
  }
 
  public static function consume($amount=1){
-  if(self::is_engineering_access()) return self::status();
+  if(self::is_engineering_access()){
+   // Internal engineering mode: no quota row is written and no usage is exposed.
+   return self::status();
+  }
 
   global $wpdb;
   $amount=max(1,absint($amount));
   $s=self::status();
   if($s['used']+$amount>$s['limit']){
    return new WP_Error('oai_quota_exceeded','Лимит запросов текущего периода исчерпан',array(
-    'status'=>429,
-    'limit'=>$s['limit'],
-    'used'=>$s['used'],
-    'remaining'=>$s['remaining'],
-    'reset_at'=>$s['reset_at'],
+    'status'=>429,'limit'=>$s['limit'],'used'=>$s['used'],
+    'remaining'=>$s['remaining'],'reset_at'=>$s['reset_at']
    ));
   }
 
@@ -100,11 +94,8 @@ class OAI_Quota {
   if($updated!==1){
    $latest=self::status();
    return new WP_Error('oai_quota_exceeded','Лимит запросов текущего периода исчерпан',array(
-    'status'=>429,
-    'limit'=>$latest['limit'],
-    'used'=>$latest['used'],
-    'remaining'=>$latest['remaining'],
-    'reset_at'=>$latest['reset_at'],
+    'status'=>429,'limit'=>$latest['limit'],'used'=>$latest['used'],
+    'remaining'=>$latest['remaining'],'reset_at'=>$latest['reset_at']
    ));
   }
   return self::status();
