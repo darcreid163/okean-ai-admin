@@ -5,6 +5,7 @@
 if (!defined('ABSPATH')) exit;
 
 class OAI_MCP {
+ private static $auth_context=array('scope'=>'');
  public static function register_routes(){
   register_rest_route('okean-ai','/mcp',array('methods'=>'POST','callback'=>array(__CLASS__,'handle'),'permission_callback'=>array(__CLASS__,'permission')));
   register_rest_route('okean-ai','/mcp',array('methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>array(__CLASS__,'permission')));
@@ -35,7 +36,7 @@ class OAI_MCP {
   }
   $parts=preg_split('/\s+/',trim($auth)); if(count($parts)!==2||strtolower($parts[0])!=='bearer')return new WP_Error('oai_mcp_auth','Bearer token or WordPress Application Password required',array('status'=>401));
   $oauth=class_exists('OAI_MCP_OAuth')?OAI_MCP_OAuth::authenticate_access_token($parts[1]):false;
-  if($oauth){ wp_set_current_user((int)$oauth['user']->ID); return OAI_Rate_Limit::check('mcp',120,60); }
+  if($oauth){ self::$auth_context=array('user_id'=>(int)$oauth['user']->ID,'client_id'=>(string)$oauth['client_id'],'scope'=>(string)$oauth['scope']); wp_set_current_user((int)$oauth['user']->ID); return OAI_Rate_Limit::check('mcp',120,60); }
   if(!self::token_hash()||!hash_equals(self::token_hash(),hash('sha256',$parts[1])))return new WP_Error('oai_mcp_auth','Invalid MCP token',array('status'=>401));
   $uid=absint(get_option('oai_mcp_token_user_id',0));
   $user=$uid?get_user_by('id',$uid):false;
@@ -45,6 +46,19 @@ class OAI_MCP {
  }
  public static function permission($req){ return true; }
  private static function unauthorized($id,$err){ $message=is_wp_error($err)?$err->get_error_message():'Authorization required'; $r=self::response($id,null,array('code'=>-32001,'message'=>$message)); $r->set_status(401); $r->header('WWW-Authenticate','Bearer resource_metadata="'.esc_url_raw(home_url('/.well-known/oauth-protected-resource')).'", scope="mcp:read mcp:write"'); return $r; }
+ private static function has_scope($scope){
+  $scope_tokens=preg_split('/\s+/',trim((string)(self::$auth_context['scope']??'')));
+  return in_array($scope,$scope_tokens,true);
+ }
+ private static function scope_error($id,$scope){
+  return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope));
+ }
+ private static function tool_requires_write($name,$args){
+  if(in_array($name,array('gutenberg.patch','content.patch','woocommerce.patch','elementor.create_draft','operation.approve','operation.apply','operation.rollback'),true)) return true;
+  if($name==='wordpress.execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
+  return false;
+ }
+
  private static function response($id,$result=null,$error=null){$r=array('jsonrpc'=>'2.0','id'=>$id);if($error!==null)$r['error']=$error;else$r['result']=$result;return new WP_REST_Response($r,200,array('Content-Type'=>'application/json; charset=utf-8','Cache-Control'=>'no-store'));}
  public static function handle($req){
   $auth=self::auth();if(is_wp_error($auth))return self::unauthorized(($req->get_json_params()['id']??null),$auth);
@@ -54,9 +68,15 @@ class OAI_MCP {
   if($method==='notifications/initialized'||$method==='ping')return self::response($id,array());
   if($method==='tools/list')return self::response($id,array('tools'=>self::tools()));
   if($method==='resources/list')return self::response($id,array('resources'=>self::resources()));
-  if($method==='resources/read')return self::resource_read($id,$params);
+  if($method==='resources/read'){ if(!self::has_scope('mcp:read')) return self::scope_error($id,'mcp:read'); return self::resource_read($id,$params); }
   if($method==='prompts/list')return self::response($id,array('prompts'=>self::prompts()));
-  if($method==='tools/call')return self::call_tool($id,$params);
+  if($method==='tools/call'){
+   $tool_name=sanitize_key(str_replace('.','_',strtolower((string)($params['name']??''))));
+   $write=self::tool_requires_write($tool_name,is_array($params['arguments']??null)?$params['arguments']:array());
+   if($write && !self::has_scope('mcp:write')) return self::scope_error($id,'mcp:write');
+   if(!$write && !self::has_scope('mcp:read')) return self::scope_error($id,'mcp:read');
+   return self::call_tool($id,$params);
+  }
   return self::response($id,null,array('code'=>-32601,'message'=>'Method not found'));
  }
  private static function resources(){
