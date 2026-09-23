@@ -41,6 +41,7 @@ class OAI_MCP {
   $uid=absint(get_option('oai_mcp_token_user_id',0));
   $user=$uid?get_user_by('id',$uid):false;
   if(!$user || !user_can($user,'manage_options')) return new WP_Error('oai_mcp_auth','MCP token owner is not a valid administrator',array('status'=>403));
+  self::$auth_context=array('user_id'=>(int)$user->ID,'client_id'=>'legacy_token','scope'=>'mcp:read mcp:write');
   wp_set_current_user($user->ID);
   return OAI_Rate_Limit::check('mcp',120,60);
  }
