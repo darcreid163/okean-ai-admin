@@ -296,7 +296,7 @@ class OAI_MCP_OAuth {
   if($_SERVER['REQUEST_METHOD']==='GET'){
    $nonce=wp_create_nonce('oai_oauth_authorize');
    ob_start(); ?>
-   <!doctype html><html><head><meta charset="utf-8"><title>Подключение AI Admin</title>
+   <!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>Подключение AI Admin</title>
    <style>body{font-family:Arial,sans-serif;background:#f5f7fb;margin:0;padding:40px}.box{max-width:620px;margin:auto;background:#fff;border:1px solid #d9dee8;border-radius:12px;padding:30px;box-shadow:0 8px 30px rgba(0,0,0,.06)}h1{margin-top:0}.muted{color:#687386}.actions{display:flex;gap:12px;margin-top:24px}.btn{padding:11px 18px;border-radius:8px;border:0;cursor:pointer;font-size:15px}.allow{background:#0b57d0;color:#fff}.deny{background:#fff;border:1px solid #c7cedb}</style></head>
    <body><div class="box"><h1>Подключение AI к Okean AI Admin</h1>
    <p class="muted">Приложение <strong><?php echo esc_html($client['client_name']);?></strong> запрашивает доступ к сайту.</p>
@@ -307,7 +307,15 @@ class OAI_MCP_OAuth {
    echo '<input type="hidden" name="_wpnonce" value="'.esc_attr($nonce).'">';
    ?><div class="actions"><button class="btn deny" name="decision" value="deny" type="submit">Отклонить</button><button class="btn allow" name="decision" value="approve" type="submit">Разрешить</button></div></form>
    </div></body></html><?php
-   echo ob_get_clean(); exit;
+   $html=ob_get_clean();
+   // REST endpoints normally serialize strings as JSON. For the OAuth consent screen
+   // we explicitly serve a real HTML document and stop REST serialization.
+   status_header(200);
+   nocache_headers();
+   header('Content-Type: text/html; charset=utf-8');
+   header('X-Robots-Tag: noindex, nofollow');
+   echo $html;
+   exit;
   }
 
   if($req->get_param('action')!=='approve' || !wp_verify_nonce((string)$req->get_param('_wpnonce'),'oai_oauth_authorize')) return self::json_error('invalid_request','Invalid authorization confirmation',400);
