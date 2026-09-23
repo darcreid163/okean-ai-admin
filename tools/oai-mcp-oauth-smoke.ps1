@@ -43,20 +43,21 @@ $clientId = [string]$client.client_id
 if($clientId -eq "") { throw "OAuth client registration returned no client_id" }
 Write-Host ("PASS  Client registration :: " + $clientId)
 
-$authUri = $asm.authorization_endpoint + "?" + (
-  @{
-    client_id=$clientId
-    redirect_uri=$redirect
-    response_type="code"
-    scope="mcp:read mcp:write"
-    state=$state
-    code_challenge=$challenge
-    code_challenge_method="S256"
-    resource=$mcp
-  }.GetEnumerator() | ForEach-Object {
-    [uri]::EscapeDataString([string]$_.Key) + "=" + [uri]::EscapeDataString([string]$_.Value)
-  }
-) -join "&"
+$query = [System.Web.HttpUtility]::ParseQueryString("")
+$query["client_id"] = $clientId
+$query["redirect_uri"] = $redirect
+$query["response_type"] = "code"
+$query["scope"] = "mcp:read mcp:write"
+$query["state"] = $state
+$query["code_challenge"] = $challenge
+$query["code_challenge_method"] = "S256"
+$query["resource"] = $mcp
+
+$authUri = $asm.authorization_endpoint + "?" + $query.ToString()
+$authUriObj = [Uri]$authUri
+Write-Host ("Authorization endpoint: " + $authUriObj.Scheme + "://" + $authUriObj.Host + $authUriObj.AbsolutePath)
+Write-Host ("Redirect URI: " + $redirect)
+
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://127.0.0.1:$port/")
