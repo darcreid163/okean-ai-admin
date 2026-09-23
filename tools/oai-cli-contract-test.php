@@ -71,6 +71,9 @@ $matcher_pos=strpos($gutenberg_source,'private static function find_raw_matches'
 $matcher_tail=$matcher_pos===false?'':substr($gutenberg_source,$matcher_pos,2500);
 check_test($matcher_pos!==false && strpos($matcher_tail,'isset($selector[\'html_contains\'])')!==false,'native Gutenberg matcher honors html_contains');
 
+$cli_source=file_get_contents(__DIR__.'/../includes/class-oai-wp-cli-execution.php');
+check_test(strpos($cli_source,"'oai_db_limit'")!==false && strpos($cli_source,"requested_limit")!==false,'DB resolver enforces maximum SQL row limit');
+
 echo "WP-CLI parser/registry contract tests: {$tests} tests, {$fail} failures\n";
 if($fail)exit(1);
 echo "RESULT: PASS\n";
