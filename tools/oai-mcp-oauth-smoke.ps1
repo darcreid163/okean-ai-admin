@@ -1,3 +1,7 @@
+# Okean AI Admin runtime smoke audit
+# Revision: 2.0.16-r2
+# Updated: 2026-09-23
+
 param(
   [string]$Site = "https://okean.market"
 )
@@ -371,12 +375,8 @@ try {
   $productProbe=$r.result.content[0].text | ConvertFrom-Json
   $productId=Get-Scalar-Int $productProbe
   if($productId -gt 0){
-    if($productId -gt 0){
-      $d=Tool-Json 141 "woocommerce.get_product" @{product_id=$productId}
-      Write-Result "MCP WooCommerce get_product" ($d.id -eq $productId) ("product_id=" + $productId)
-    } else {
-      Write-Result "MCP WooCommerce get_product" $false "Could not resolve a scalar product ID from WP-CLI output"
-    }
+    $d=Tool-Json 141 "woocommerce.get_product" @{product_id=$productId}
+    Write-Result "MCP WooCommerce get_product" ($d.id -eq $productId) ("product_id=" + $productId)
   } else {
     Write-Skip "MCP WooCommerce get_product" "No product found"
   }
