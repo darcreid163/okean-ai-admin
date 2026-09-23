@@ -23,7 +23,7 @@ class OAI_MCP {
   $auth='';
   if(isset($_SERVER['HTTP_AUTHORIZATION'])) $auth=trim((string)wp_unslash($_SERVER['HTTP_AUTHORIZATION']));
   if(!$auth && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) $auth=trim((string)wp_unslash($_SERVER['REDIRECT_HTTP_AUTHORIZATION']));
-  if(!$auth)return new WP_Error('oai_mcp_auth','Bearer token or WordPress Application Password required',array('status'=>401));
+  if(!$auth)return new WP_Error('oai_mcp_auth_required','Bearer token or WordPress Application Password required',array('status'=>401));
   if(stripos($auth,'basic ')===0 && function_exists('wp_authenticate_application_password')){
    $raw=base64_decode(trim(substr($auth,6)),true);
    if($raw!==false && strpos($raw,':')!==false){
@@ -34,6 +34,8 @@ class OAI_MCP {
    return new WP_Error('oai_mcp_auth','Invalid WordPress Application Password',array('status'=>401));
   }
   $parts=preg_split('/\s+/',trim($auth)); if(count($parts)!==2||strtolower($parts[0])!=='bearer')return new WP_Error('oai_mcp_auth','Bearer token or WordPress Application Password required',array('status'=>401));
+  $oauth=class_exists('OAI_MCP_OAuth')?OAI_MCP_OAuth::authenticate_access_token($parts[1]):false;
+  if($oauth){ wp_set_current_user((int)$oauth['user']->ID); return OAI_Rate_Limit::check('mcp',120,60); }
   if(!self::token_hash()||!hash_equals(self::token_hash(),hash('sha256',$parts[1])))return new WP_Error('oai_mcp_auth','Invalid MCP token',array('status'=>401));
   $uid=absint(get_option('oai_mcp_token_user_id',0));
   $user=$uid?get_user_by('id',$uid):false;
@@ -41,10 +43,11 @@ class OAI_MCP {
   wp_set_current_user($user->ID);
   return OAI_Rate_Limit::check('mcp',120,60);
  }
- public static function permission($req){ $x=self::auth($req); return is_wp_error($x)?$x:true; }
+ public static function permission($req){ return true; }
+ private static function unauthorized($id,$err){ $message=is_wp_error($err)?$err->get_error_message():'Authorization required'; $r=self::response($id,null,array('code'=>-32001,'message'=>$message)); $r->set_status(401); $r->header('WWW-Authenticate','Bearer resource_metadata="'.esc_url_raw(home_url('/.well-known/oauth-protected-resource')).'", scope="mcp:read mcp:write"'); return $r; }
  private static function response($id,$result=null,$error=null){$r=array('jsonrpc'=>'2.0','id'=>$id);if($error!==null)$r['error']=$error;else$r['result']=$result;return new WP_REST_Response($r,200,array('Content-Type'=>'application/json; charset=utf-8','Cache-Control'=>'no-store'));}
  public static function handle($req){
-  $auth=self::auth();if(is_wp_error($auth))return $auth;
+  $auth=self::auth();if(is_wp_error($auth))return self::unauthorized(($req->get_json_params()['id']??null),$auth);
   $body=$req->get_json_params();if(!is_array($body))return self::response(null,null,array('code'=>-32600,'message'=>'Invalid Request'));
   $id=$body['id']??null;$method=(string)($body['method']??'');$params=is_array($body['params']??null)?$body['params']:array();
   if($method==='initialize')return self::response($id,array('protocolVersion'=>OAI_MCP_VERSION,'capabilities'=>array('tools'=>array('listChanged'=>false),'resources'=>array('subscribe'=>false,'listChanged'=>false),'prompts'=>array('listChanged'=>false)),'serverInfo'=>array('name'=>'okean-ai-admin','version'=>OAI_VERSION,'vendor'=>'Андриянов Н.Г.')));
