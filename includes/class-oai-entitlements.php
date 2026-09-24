@@ -17,7 +17,7 @@ class OAI_Entitlements {
    'free'=>array('read','plan','sandbox','preview','verify'),
    'daily'=>array('read','plan','sandbox','preview','verify'),
    'pro'=>array('read','plan','sandbox','preview','verify','elementor','gutenberg','woocommerce','wp_cli'),
-   'business'=>array('read','plan','sandbox','preview','verify','elementor','gutenberg','woocommerce','wp_cli','mcp','agent'),
+   'business'=>array('read','plan','sandbox','preview','verify','elementor','gutenberg','woocommerce','wp_cli','mcp','mcp_apply','mcp_rollback','agent'),
   );
   return $map[self::plan()]??$map['free'];
  }
