@@ -1,8 +1,8 @@
-name: AI Admin 2.0.17 PHP lint
+name: AI Admin 2.0.19 PHP lint
 on:
   push:
     branches:
-      - feature/2.0.17-dashboard-licensing
+      - fix/oauth-scope-hardening-2.0.19
   pull_request:
 jobs:
   php-lint:
