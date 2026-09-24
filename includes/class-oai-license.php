@@ -69,7 +69,11 @@ class OAI_License {
   $s=self::status();
   if(!$s['active']) return new WP_Error('oai_license_required','Active Okean AI subscription/license required for this feature',array('status'=>402,'feature'=>$feature));
   if(!empty($s['expires_at']) && strtotime($s['expires_at'])<time()) return new WP_Error('oai_license_expired','Okean AI subscription has expired',array('status'=>402));
-  if(!empty($s['features']) && !in_array($feature,$s['features'],true)) return new WP_Error('oai_feature_unavailable','Feature is not included in the current plan',array('status'=>403,'feature'=>$feature));
+  // Enforce the same plan matrix used by the public entitlement layer.
+  // An active subscription with an empty/missing feature list must NOT become
+  // an accidental allow-all license.
+  if(class_exists('OAI_Entitlements') && !OAI_Entitlements::can($feature)) return new WP_Error('oai_feature_unavailable','Feature is not included in the current plan',array('status'=>403,'feature'=>$feature));
+  if(!class_exists('OAI_Entitlements') && !empty($s['features']) && !in_array($feature,$s['features'],true)) return new WP_Error('oai_feature_unavailable','Feature is not included in the current plan',array('status'=>403,'feature'=>$feature));
   return true;
  }
 
