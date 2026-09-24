@@ -202,13 +202,18 @@ class OAI_MCP_OAuth {
 
  private static function normalize_scope($scope,$default_full=false){
   $allowed=array('mcp:read','mcp:write','offline_access');
-  $tokens=preg_split('/\\s+/',trim((string)$scope));
+  $raw=trim((string)$scope);
+  if($raw==='' && $default_full) return 'mcp:read mcp:write offline_access';
+  $tokens=preg_split('/\\s+/',$raw);
   $out=array();
   foreach($tokens as $token){
    $token=strtolower(trim((string)$token));
-   if($token!=='' && in_array($token,$allowed,true) && !in_array($token,$out,true)) $out[]=$token;
+   if($token==='') continue;
+   // Never silently drop an unknown requested scope: an explicit unsupported
+   // scope must fail authorization rather than being broadened or narrowed.
+   if(!in_array($token,$allowed,true)) return '';
+   if(!in_array($token,$out,true)) $out[]=$token;
   }
-  if(empty($out) && $default_full) return 'mcp:read mcp:write offline_access';
   return implode(' ',$out);
  }
 
