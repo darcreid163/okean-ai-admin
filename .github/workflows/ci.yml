@@ -57,19 +57,19 @@ jobs:
     needs: [php-lint, powershell-syntax]
     steps:
       - uses: actions/checkout@v4
-      - name: Verify 2.0.20 release identity
+      - name: Verify 2.0.21 release identity
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "Version: 2.0.20" okean-ai-admin.php
-          grep -q "define('OAI_VERSION','2.0.20')" okean-ai-admin.php
-          grep -q "2.0.20-oauth-admin-post-callback-20260924" okean-ai-admin.php
-          grep -q "AI Admin 2.0.20" BUILD_SIGNATURE.txt
+          grep -q "Version: 2.0.21" okean-ai-admin.php
+          grep -q "define('OAI_VERSION','2.0.21')" okean-ai-admin.php
+          grep -q "2.0.21-oauth-admin-post-callback-20260924" okean-ai-admin.php
+          grep -q "AI Admin 2.0.21" BUILD_SIGNATURE.txt
       - name: Build clean plugin ZIP and smoke file
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p build/okean-ai-admin
           rsync -a ./ build/okean-ai-admin/ --exclude='.git' --exclude='.github' --exclude='tools' --exclude='build' --exclude='*.zip'
-          (cd build && zip -qr okean-ai-admin-2.0.20.zip okean-ai-admin)
+          (cd build && zip -qr okean-ai-admin-2.0.21.zip okean-ai-admin)
           cp tools/oai-mcp-oauth-smoke.ps1 build/oai-mcp-oauth-smoke.ps1
