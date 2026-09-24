@@ -213,6 +213,8 @@ class OAI_MCP_OAuth {
  }
 
  public static function register_client($req){
+  $rate=OAI_Rate_Limit::check('oauth_register',20,60);
+  if(is_wp_error($rate)) return self::json_error('temporarily_unavailable','OAuth client registration rate limit exceeded',429);
   $data=$req->get_json_params();
   if(!is_array($data)) return self::json_error('invalid_client_metadata','JSON object required');
   $name=sanitize_text_field((string)($data['client_name']??'MCP client'));
@@ -385,6 +387,8 @@ class OAI_MCP_OAuth {
  }
 
  public static function token($req){
+  $rate=OAI_Rate_Limit::check('oauth_token',60,60);
+  if(is_wp_error($rate)) return self::json_error('temporarily_unavailable','OAuth token endpoint rate limit exceeded',429);
   $grant=sanitize_key((string)$req->get_param('grant_type'));
   if($grant==='authorization_code') return self::exchange_code($req);
   if($grant==='refresh_token') return self::refresh($req);
@@ -406,7 +410,8 @@ class OAI_MCP_OAuth {
   if($row['client_id']!==$client_id || $row['redirect_uri']!==$redirect || !self::verify_pkce($verifier,$row['code_challenge'])) return self::json_error('invalid_grant','Authorization code validation failed');
   $expected_resource=rest_url('okean-ai/mcp');
   if($resource==='' || !hash_equals($expected_resource,$resource) || !hash_equals($expected_resource,(string)($row['resource']??''))) return self::json_error('invalid_target','Authorization request resource is not this MCP server');
-  $wpdb->update(self::codes_table(),array('used'=>1),array('id'=>(int)$row['id']));
+  $claimed=$wpdb->query($wpdb->prepare('UPDATE '.self::codes_table().' SET used=1 WHERE id=%d AND used=0',(int)$row['id']));
+  if($claimed!==1) return self::json_error('invalid_grant','Authorization code is expired or already used');
 
   return self::issue_tokens((int)$row['user_id'],$client_id,$row['scope'],(string)($row['resource']??rest_url('okean-ai/mcp')));
  }
@@ -452,7 +457,8 @@ class OAI_MCP_OAuth {
   $stored_resource=(string)($row['resource']??'');
   if($stored_resource==='' || !hash_equals($expected_resource,$stored_resource)) return self::json_error('invalid_grant','The refresh token is bound to an invalid MCP resource; reconnect and authorize again');
   if($resource!=='' && !hash_equals($expected_resource,$resource)) return self::json_error('invalid_target','Token resource must be this MCP server');
-  $wpdb->update(self::tokens_table(),array('revoked'=>1),array('id'=>(int)$row['id']));
+  $claimed=$wpdb->query($wpdb->prepare('UPDATE '.self::tokens_table().' SET revoked=1 WHERE id=%d AND revoked=0',(int)$row['id']));
+  if($claimed!==1) return self::json_error('invalid_grant','Refresh token has already been rotated; reconnect and authorize again');
   return self::issue_tokens((int)$row['user_id'],$client_id,$scope,(string)($row['resource']??rest_url('okean-ai/mcp')));
  }
 
