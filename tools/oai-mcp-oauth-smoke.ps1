@@ -1,5 +1,5 @@
 # Okean AI Admin runtime smoke audit
-# Revision: 2.0.19-r1
+# Revision: 2.0.19-r2
 # Updated: 2026-09-24
 
 param(
@@ -128,11 +128,24 @@ try {
     $asm.authorization_endpoint -ne $null -and
     $asm.token_endpoint -ne $null -and
     $asm.registration_endpoint -ne $null -and
-    ($asm.code_challenge_methods_supported -contains "S256") -and ($asm.scopes_supported -contains "offline_access") -and ($asm.client_id_metadata_document_supported -eq $false)
+    ($asm.code_challenge_methods_supported -contains "S256") -and ($asm.scopes_supported -contains "offline_access") -and ($asm.client_id_metadata_document_supported -eq $true) -and ($asm.token_endpoint_auth_methods_supported -contains "none")
   )
 } catch {
   Write-Result "OAuth discovery" $false $_.Exception.Message
   exit 1
+}
+
+# CIMD discovery sanity check. This does not exchange or persist any token;
+# it only verifies that ChatGPT's published public-client metadata is reachable.
+try {
+  $cimdUri = "https://chatgpt.com/oauth/client.json"
+  $cimd = Invoke-RestMethod -Uri $cimdUri -Method GET -Headers @{Accept="application/json"}
+  $cimdOk = ([string]$cimd.client_id -eq $cimdUri) -and
+            (@($cimd.redirect_uris).Count -gt 0) -and
+            ((@($cimd.token_endpoint_auth_methods_supported) -contains "none") -or ([string]$cimd.token_endpoint_auth_method -eq "none"))
+  Write-Result "ChatGPT CIMD metadata reachable" $cimdOk ("client_id=" + [string]$cimd.client_id)
+} catch {
+  Write-Result "ChatGPT CIMD metadata reachable" $false $_.Exception.Message
 }
 
 $verifier = Base64Url (1..32 | ForEach-Object { [byte](Get-Random -Minimum 0 -Maximum 256) })
