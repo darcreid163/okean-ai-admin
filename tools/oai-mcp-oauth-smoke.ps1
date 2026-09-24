@@ -1,6 +1,6 @@
 # Okean AI Admin runtime smoke audit
-# Revision: 2.0.16-r3
-# Updated: 2026-09-23
+# Revision: 2.0.19-r1
+# Updated: 2026-09-24
 
 param(
   [string]$Site = "https://okean.market"
@@ -123,12 +123,12 @@ Write-Host "Checking OAuth discovery..."
 try {
   $prm = Invoke-RestMethod -Uri ($Site.TrimEnd("/") + "/.well-known/oauth-protected-resource") -Method GET
   $asm = Invoke-RestMethod -Uri ($Site.TrimEnd("/") + "/.well-known/oauth-authorization-server") -Method GET
-  Write-Result "OAuth protected-resource metadata" ($prm.resource -eq $mcp -and $prm.authorization_servers.Count -ge 1)
+  Write-Result "OAuth protected-resource metadata" ($prm.resource -eq $mcp -and $prm.authorization_servers.Count -ge 1 -and ($prm.scopes_supported -contains "mcp:read") -and ($prm.scopes_supported -contains "mcp:write"))
   Write-Result "OAuth authorization-server metadata" (
     $asm.authorization_endpoint -ne $null -and
     $asm.token_endpoint -ne $null -and
     $asm.registration_endpoint -ne $null -and
-    ($asm.code_challenge_methods_supported -contains "S256")
+    ($asm.code_challenge_methods_supported -contains "S256") -and ($asm.scopes_supported -contains "offline_access") -and ($asm.client_id_metadata_document_supported -eq $false)
   )
 } catch {
   Write-Result "OAuth discovery" $false $_.Exception.Message
@@ -149,7 +149,7 @@ try {
     token_endpoint_auth_method = "none"
   }
   $clientId = [string]$client.client_id
-  Write-Result "OAuth dynamic client registration" ($clientId -ne "" -and $client.redirect_uris -contains $redirect) ("client=" + $clientId)
+  Write-Result "OAuth dynamic client registration" ($clientId -ne "" -and $client.redirect_uris -contains $redirect -and ($client.scopes_supported -contains "mcp:read") -and ($client.scopes_supported -contains "mcp:write")) ("client=" + $clientId)
 } catch {
   Write-Result "OAuth dynamic client registration" $false $_.Exception.Message
   exit 1
@@ -159,7 +159,7 @@ $query = [System.Web.HttpUtility]::ParseQueryString("")
 $query["client_id"] = $clientId
 $query["redirect_uri"] = $redirect
 $query["response_type"] = "code"
-$query["scope"] = "mcp:read mcp:write"
+$query["scope"] = "mcp:read mcp:write offline_access"
 $query["state"] = $state
 $query["code_challenge"] = $challenge
 $query["code_challenge_method"] = "S256"
@@ -183,6 +183,7 @@ try {
   $callbackQuery = $context.Request.Url.Query
   $q = [System.Web.HttpUtility]::ParseQueryString($callbackQuery)
   if($q["state"] -ne $state) { throw "OAuth state mismatch" }
+  if($q["iss"] -ne $Site.TrimEnd("/") ) { throw "OAuth issuer mismatch: " + [string]$q["iss"] }
   if($q["error"]) { throw ("OAuth authorization failed: " + $q["error"] + " " + $q["error_description"]) }
   $code = [string]$q["code"]
   if($code -eq "") { throw "Authorization callback returned no code" }
@@ -211,7 +212,7 @@ try {
   }
   $accessToken = [string]$token.access_token
   $refreshToken = [string]$token.refresh_token
-  Write-Result "OAuth authorization code exchange" ($accessToken -ne "" -and $refreshToken -ne "" -and $token.token_type -eq "Bearer") ("expires_in=" + $token.expires_in)
+  Write-Result "OAuth authorization code exchange" ($accessToken -ne "" -and $refreshToken -ne "" -and $token.token_type -eq "Bearer" -and ([string]$token.scope -match "mcp:read") -and ([string]$token.scope -match "mcp:write") -and ([string]$token.scope -match "offline_access") -and ([string]$token.resource -eq $mcp)) ("expires_in=" + $token.expires_in + "; scope=" + $token.scope)
 } catch {
   Write-Result "OAuth authorization code exchange" $false $_.Exception.Message
   exit 1
@@ -230,6 +231,12 @@ try {
 
 try {
   $r=Invoke-Mcp 101 "tools/list"
+  $toolMap=@{}
+  foreach($tool in @($r.result.tools)) { $toolMap[[string]$tool.name]=$tool }
+  $readSec=($toolMap["wp.get_site"].securitySchemes | Where-Object { $_.type -eq "oauth2" -and $_.scopes -contains "mcp:read" }).Count -gt 0
+  $writeSec=($toolMap["gutenberg.patch"].securitySchemes | Where-Object { $_.type -eq "oauth2" -and $_.scopes -contains "mcp:write" }).Count -gt 0
+  Write-Result "MCP tool OAuth securitySchemes" ($readSec -and $writeSec) "read=wp.get_site; write=gutenberg.patch"
+  $names=@($r.result.tools|ForEach-Object{$_.name})
   $names=@($r.result.tools|ForEach-Object{$_.name})
   $unique=(@($names|Select-Object -Unique)).Count -eq $names.Count
   $required=@("wordpress.execute","builder.catalog","builder.detect","system.capabilities","operation.get","operation.verify","operation.proof","operation.preview_link","gutenberg.get_blocks","gutenberg.locate_block","elementor.get_widget","woocommerce.get_product")
