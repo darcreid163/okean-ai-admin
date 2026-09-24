@@ -1,5 +1,5 @@
 # Okean AI Admin runtime smoke audit
-# Revision: 2.0.19-r2
+# Revision: 2.0.21-r1
 # Updated: 2026-09-24
 
 param(
