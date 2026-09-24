@@ -314,7 +314,32 @@ class OAI_MCP_OAuth {
    if(isset($_POST[$key])) $request->set_param($key,wp_unslash($_POST[$key]));
   }
   $request->set_param('action','approve');
-  return self::authorize($request);
+  // admin-post.php runs inside wp-admin. Core redirects an admin-post action
+  // back to /wp-admin/ when the callback returns normally, which masks OAuth
+  // errors and leaves the local PKCE listener waiting forever. The authorize()
+  // method exits on a successful callback redirect; if it returns here, emit
+  // the OAuth error response explicitly instead of allowing WordPress to
+  // perform its generic admin redirect.
+  $response=self::authorize($request);
+  if(is_wp_error($response)){
+   status_header(500);
+   nocache_headers();
+   header('Content-Type: application/json; charset=utf-8');
+   echo wp_json_encode(array('error'=>'server_error','error_description'=>$response->get_error_message()));
+   exit;
+  }
+  if($response instanceof WP_REST_Response){
+   status_header((int)$response->get_status());
+   nocache_headers();
+   header('Content-Type: application/json; charset=utf-8');
+   echo wp_json_encode($response->get_data(),JSON_UNESCAPED_SLASHES);
+   exit;
+  }
+  status_header(500);
+  nocache_headers();
+  header('Content-Type: application/json; charset=utf-8');
+  echo wp_json_encode(array('error'=>'server_error','error_description'=>'OAuth authorization did not produce a redirect'));
+  exit;
  }
 
  public static function login_bridge($req){
