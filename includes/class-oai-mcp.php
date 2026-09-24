@@ -253,7 +253,7 @@ class OAI_MCP {
    case 'elementor_create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_create_page($r);break;
    case 'operation_approve':return self::response($id,null,array('code'=>-32003,'message'=>'Human approval is required in wp-admin; MCP cannot approve operations'));
    case 'operation_apply':$license=OAI_License::can('mcp_apply');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));return self::response($id,null,array('code'=>-32003,'message'=>'Human approval required in wp-admin before apply'));
-   case 'operation_rollback':$license=OAI_License::can('mcp_apply');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin'));
+   case 'operation_rollback':$license=OAI_License::can('mcp_rollback');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin'));
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
   }
   if(is_wp_error($out))return self::response($id,null,array('code'=>-32000,'message'=>$out->get_error_message(),'data'=>$out->get_error_data()));
