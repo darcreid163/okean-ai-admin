@@ -64,6 +64,11 @@ class OAI_Agent {
   return true;
  }
  private static function has_scope($scope){ return in_array($scope,self::scopes(),true); }
+ private static function feature_for_action($action){
+  if($action==='elementor_create_page') return 'elementor';
+  if($action==='woocommerce_patch') return 'woocommerce';
+  return '';
+ }
  private static function scope_for($action){
   if(in_array($action,array('status','diagnostics','foundation_capabilities','intent_normalize','agent_plan','operation_catalog','read_discover','error_contract','operation_receipt','workspace_status','workspace_files','workspace_read','workspace_surfaces','surfaces_catalog','search_files','operation','proof','mcp_status','license_status'),true) || strpos($action,'read_')===0) return 'read';
   if($action==='sandbox_create' || $action==='sandbox_list' || $action==='elementor_create_page' || $action==='content_patch' || $action==='woocommerce_patch' || $action==='workspace_create' || $action==='workspace_write') return 'sandbox';
@@ -140,6 +145,11 @@ class OAI_Agent {
   if(!isset($map[$action])) return new WP_Error('oai_agent_action','Agent action is not allowed',array('status'=>403));
   $scope=self::scope_for($action);
   if($scope==='' || !self::has_scope($scope)) return new WP_Error('oai_agent_scope','Agent scope is not granted',array('status'=>403,'scope'=>$scope));
+  $feature=self::feature_for_action($action);
+  if($feature!==''){
+   $license=OAI_License::can($feature);
+   if(is_wp_error($license)) return $license;
+  }
 
   $method=$map[$action][0]; $path=$map[$action][1];
   $route_names=array();
@@ -253,6 +263,11 @@ class OAI_Agent {
   if(!isset($map[$action])) return new WP_Error('oai_agent_action','Agent action is not allowed',array('status'=>403));
   $scope=self::scope_for($action);
   if($scope==='' || !self::has_scope($scope)) return new WP_Error('oai_agent_scope','Agent scope is not granted',array('status'=>403,'scope'=>$scope));
+  $feature=self::feature_for_action($action);
+  if($feature!==''){
+   $license=OAI_License::can($feature);
+   if(is_wp_error($license)) return $license;
+  }
   if(in_array($action,array('approve','apply','rollback'),true)) return new WP_Error('oai_agent_human_approval','Approve, apply and rollback are restricted to wp-admin human confirmation',array('status'=>403));
   if(class_exists('OAI_Quota')){
    $fingerprint=wp_json_encode($params,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
