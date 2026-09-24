@@ -125,7 +125,8 @@ class OAI_MCP {
   // securitySchemes to know which tools require linking and which scope is needed.
   $normalized=sanitize_key(str_replace('.','_',strtolower((string)$name)));
   $write=self::tool_requires_write($normalized,array());
-  $tool['securitySchemes']=array(array('type'=>'oauth2','scopes'=>array($write?'mcp:write':'mcp:read')));
+  $scopes=$normalized==='wordpress_execute'?array('mcp:read','mcp:write'):array($write?'mcp:write':'mcp:read');
+  $tool['securitySchemes']=array(array('type'=>'oauth2','scopes'=>$scopes));
   if(!empty($annotations))$tool['annotations']=$annotations;
   return $tool;
  }
