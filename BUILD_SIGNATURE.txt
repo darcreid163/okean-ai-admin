@@ -1,4 +1,4 @@
 AI Admin 2.0.19
-Build: 2.0.19-chatgpt-mcp-oauth-universal-20260924
+Build: 2.0.19-chatgpt-mcp-oauth-cimd-20260924
 Author: Андриянов Н.Г.
 Copyright: Андриянов Н.Г.
