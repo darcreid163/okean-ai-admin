@@ -528,6 +528,7 @@ try {
     grant_type = "refresh_token"
     refresh_token = $refreshToken
     client_id = $clientId
+    resource = $mcp
   }
   $newAccess=[string]$refresh.access_token
   Write-Result "OAuth refresh token rotation" ($newAccess -ne "" -and $newAccess -ne $oldAccess -and [string]$refresh.refresh_token -ne "")
