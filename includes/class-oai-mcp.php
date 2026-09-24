@@ -52,7 +52,8 @@ class OAI_MCP {
   return in_array($scope,$scope_tokens,true);
  }
  private static function scope_error($id,$scope){
-  return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope));
+  $meta=array('mcp/www_authenticate'=>'Bearer resource_metadata="'.esc_url_raw(home_url('/.well-known/oauth-protected-resource')).'", scope="'.esc_attr($scope).'"');
+  return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope,'_meta'=>$meta));
  }
  private static function tool_requires_write($name,$args){
   if(in_array($name,array('gutenberg_patch','content_patch','woocommerce_patch','elementor_create_draft','operation_approve','operation_apply','operation_rollback'),true)) return true;
