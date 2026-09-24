@@ -1,0 +1,38 @@
+name: AI Admin 2.0.18 Build
+
+on:
+  push:
+    branches:
+      - feature/2.0.17-dashboard-licensing
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -e
+          find . -type f -name '*.php' -not -path './.git/*' -not -path './.github/*' -print0 | xargs -0 -n1 php -l
+
+      - name: Build plugin ZIP
+        shell: bash
+        run: |
+          set -e
+          rm -rf build
+          mkdir -p build/okean-ai-admin
+          rsync -a --exclude='.git' --exclude='.github' --exclude='build' ./ build/okean-ai-admin/
+          test -f build/okean-ai-admin/okean-ai-admin.php
+          cd build
+          zip -qr okean-ai-admin-2.0.18.zip okean-ai-admin
+
+      - name: Upload plugin ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: okean-ai-admin-2.0.18
+          path: build/okean-ai-admin-2.0.18.zip
+          if-no-files-found: error
