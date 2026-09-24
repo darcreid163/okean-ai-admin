@@ -121,7 +121,7 @@ class OAI_MCP_OAuth {
    'authorization_endpoint'=>rest_url('okean-ai/v1/oauth/authorize'),
    'token_endpoint'=>rest_url('okean-ai/v1/oauth/token'),
    'registration_endpoint'=>rest_url('okean-ai/v1/oauth/register'),
-   'client_id_metadata_document_supported'=>false,
+   'client_id_metadata_document_supported'=>true,
    'response_types_supported'=>array('code'),
    'grant_types_supported'=>array('authorization_code','refresh_token'),
    'code_challenge_methods_supported'=>array('S256'),
@@ -141,6 +141,59 @@ class OAI_MCP_OAuth {
   if(!$row) return null;
   $row['redirect_uris']=json_decode((string)$row['redirect_uris'],true);
   return $row;
+ }
+
+ private static function cimd_client($client_id){
+  $client_id=(string)$client_id;
+  if(!preg_match('#^https://chatgpt\.com/oauth/(?:client\.json|[A-Za-z0-9_-]{6,128}/client\.json)$#',$client_id)) return null;
+
+  $cached=get_transient('oai_cimd_'.hash('sha256',$client_id));
+  if(is_array($cached)) return $cached;
+
+  $response=wp_safe_remote_get($client_id,array(
+   'timeout'=>5,
+   'redirection'=>0,
+   'headers'=>array('Accept'=>'application/json'),
+  ));
+  if(is_wp_error($response) || wp_remote_retrieve_response_code($response)!==200) return null;
+  $body=wp_remote_retrieve_body($response);
+  $data=json_decode((string)$body,true);
+  if(!is_array($data)) return null;
+
+  if((string)($data['client_id']??'')!==$client_id) return null;
+  $uris=isset($data['redirect_uris']) && is_array($data['redirect_uris'])?$data['redirect_uris']:array();
+  if(empty($uris)) return null;
+
+  $clean=array();
+  foreach($uris as $uri){
+   $uri=esc_url_raw((string)$uri);
+   if(!$uri) return null;
+   $parts=wp_parse_url($uri);
+   if(!$parts || empty($parts['scheme']) || empty($parts['host']) || strtolower((string)$parts['scheme'])!=='https') return null;
+   $clean[]=$uri;
+  }
+
+  $methods=array();
+  if(isset($data['token_endpoint_auth_methods_supported']) && is_array($data['token_endpoint_auth_methods_supported'])){
+   foreach($data['token_endpoint_auth_methods_supported'] as $method){
+    $method=sanitize_key((string)$method);
+    if($method!=='') $methods[]=$method;
+   }
+  }
+  $legacy_method=sanitize_key((string)($data['token_endpoint_auth_method']??''));
+  if($legacy_method!=='' && !in_array($legacy_method,$methods,true)) $methods[]=$legacy_method;
+
+  if(!in_array('none',$methods,true)) return null;
+
+  $result=array(
+   'client_id'=>$client_id,
+   'client_name'=>sanitize_text_field((string)($data['client_name']??'ChatGPT')),
+   'redirect_uris'=>array_values(array_unique($clean)),
+   'token_endpoint_auth_method'=>'none',
+   'token_endpoint_auth_methods_supported'=>array('none'),
+  );
+  set_transient('oai_cimd_'.hash('sha256',$client_id),$result,10*MINUTE_IN_SECONDS);
+  return $result;
  }
 
  private static function exact_redirect($client,$redirect_uri){
@@ -289,7 +342,9 @@ class OAI_MCP_OAuth {
   $p=array();
   foreach(array('client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method') as $k) $p[$k]=(string)$req->get_param($k);
   $client=self::client($p['client_id']);
+  if(!$client) $client=self::cimd_client($p['client_id']);
   if(!$client || !self::exact_redirect($client,$p['redirect_uri'])) return self::json_error('invalid_request','Unknown client or redirect_uri',400);
+  if(($client['token_endpoint_auth_method']??'none')!=='none') return self::json_error('invalid_client','This authorization server accepts only public OAuth clients',400);
   if($p['response_type']!=='code') return self::json_error('unsupported_response_type','Only response_type=code is supported');
   if($p['code_challenge']==='' || $p['code_challenge_method']!=='S256') return self::json_error('invalid_request','PKCE S256 code_challenge is required');
 
@@ -381,7 +436,7 @@ class OAI_MCP_OAuth {
  private static function redirect_error($uri,$state,$error,$description=''){
   $params=array('error'=>$error);
   if($description!=='')$params['error_description']=$description;
-  $params['iss']=home_url('/');
+  $params['iss']=untrailingslashit(home_url('/'));
   if($state!=='')$params['state']=$state;
   wp_redirect(add_query_arg($params,$uri),302); exit;
  }
