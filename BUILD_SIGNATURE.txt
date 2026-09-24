@@ -1,4 +1,4 @@
-AI Admin 2.0.18
-Build: 2.0.18-entitlement-agent-quota-hardening-20260924
+AI Admin 2.0.19
+Build: 2.0.19-chatgpt-mcp-oauth-universal-20260924
 Author: Андриянов Н.Г.
 Copyright: Андриянов Н.Г.
