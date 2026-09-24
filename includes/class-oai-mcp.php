@@ -121,6 +121,11 @@ class OAI_MCP {
  }
  private static function tool($name,$description,$schema=array('type'=>'object'),$annotations=array()){
   $tool=array('name'=>$name,'description'=>$description,'inputSchema'=>$schema);
+  // Advertise the same OAuth policy that the runtime enforces. ChatGPT uses
+  // securitySchemes to know which tools require linking and which scope is needed.
+  $normalized=sanitize_key(str_replace('.','_',strtolower((string)$name)));
+  $write=self::tool_requires_write($normalized,array());
+  $tool['securitySchemes']=array(array('type'=>'oauth2','scopes'=>array($write?'mcp:write':'mcp:read')));
   if(!empty($annotations))$tool['annotations']=$annotations;
   return $tool;
  }
