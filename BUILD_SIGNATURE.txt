@@ -1,4 +1,4 @@
-AI Admin 2.0.17
-Build: 2.0.17-dashboard-licensing-engineering-quota-idempotency-20260923
+AI Admin 2.0.18
+Build: 2.0.18-entitlement-agent-quota-hardening-20260924
 Author: Андриянов Н.Г.
 Copyright: Андриянов Н.Г.
