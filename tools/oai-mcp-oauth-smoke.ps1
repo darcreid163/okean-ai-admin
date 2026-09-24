@@ -1,5 +1,5 @@
 # Okean AI Admin runtime smoke audit
-# Revision: 2.0.21-r1
+# Revision: 2.0.22-r1
 # Updated: 2026-09-24
 
 param(
@@ -145,7 +145,7 @@ try {
             ((@($cimd.token_endpoint_auth_methods_supported) -contains "none") -or ([string]$cimd.token_endpoint_auth_method -eq "none"))
   Write-Result "ChatGPT CIMD metadata reachable" $cimdOk ("client_id=" + [string]$cimd.client_id)
 } catch {
-  Write-Result "ChatGPT CIMD metadata reachable" $false $_.Exception.Message
+  Write-Skip "ChatGPT CIMD metadata reachable" ("External ChatGPT metadata probe unavailable from this workstation: " + $_.Exception.Message)
 }
 
 $verifier = Base64Url (1..32 | ForEach-Object { [byte](Get-Random -Minimum 0 -Maximum 256) })
@@ -271,9 +271,11 @@ try {
   $r=Invoke-Mcp 101 "tools/list"
   $toolMap=@{}
   foreach($tool in @($r.result.tools)) { $toolMap[[string]$tool.name]=$tool }
-  $readSec=($toolMap["wp.get_site"].securitySchemes | Where-Object { $_.type -eq "oauth2" -and $_.scopes -contains "mcp:read" }).Count -gt 0
-  $writeSec=($toolMap["gutenberg.patch"].securitySchemes | Where-Object { $_.type -eq "oauth2" -and $_.scopes -contains "mcp:write" }).Count -gt 0
-  Write-Result "MCP tool OAuth securitySchemes" ($readSec -and $writeSec) "read=wp.get_site; write=gutenberg.patch"
+  $readSec=@($toolMap["wp.get_site"].securitySchemes | Where-Object { $_.type -eq "oauth2" -and @($_.scopes) -contains "mcp:read" }).Count -gt 0
+  $writeSec=@($toolMap["gutenberg.patch"].securitySchemes | Where-Object { $_.type -eq "oauth2" -and @($_.scopes) -contains "mcp:write" }).Count -gt 0
+  $readMetaSec=@($toolMap["wp.get_site"]._meta.securitySchemes | Where-Object { $_.type -eq "oauth2" -and @($_.scopes) -contains "mcp:read" }).Count -gt 0
+  $writeMetaSec=@($toolMap["gutenberg.patch"]._meta.securitySchemes | Where-Object { $_.type -eq "oauth2" -and @($_.scopes) -contains "mcp:write" }).Count -gt 0
+  Write-Result "MCP tool OAuth securitySchemes" ($readSec -and $writeSec -and $readMetaSec -and $writeMetaSec) "top-level + _meta; read=wp.get_site; write=gutenberg.patch"
   $names=@($r.result.tools|ForEach-Object{$_.name})
   $unique=(@($names|Select-Object -Unique)).Count -eq $names.Count
   $required=@("wordpress.execute","builder.catalog","builder.detect","system.capabilities","operation.get","operation.verify","operation.proof","operation.preview_link","gutenberg.get_blocks","gutenberg.locate_block","elementor.get_widget","woocommerce.get_product")
