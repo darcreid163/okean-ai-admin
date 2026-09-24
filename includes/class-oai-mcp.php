@@ -127,7 +127,9 @@ class OAI_MCP {
   $normalized=sanitize_key(str_replace('.','_',strtolower((string)$name)));
   $write=self::tool_requires_write($normalized,array());
   $scopes=$normalized==='wordpress_execute'?array('mcp:read','mcp:write'):array($write?'mcp:write':'mcp:read');
-  $tool['securitySchemes']=array(array('type'=>'oauth2','scopes'=>$scopes));
+  $tool['securitySchemes']=array(array('type'=>'oauth2','scopes'=>array_values($scopes)));
+  // Mirror securitySchemes in _meta for clients that still inspect the legacy MCP Apps field.
+  $tool['_meta']=array('securitySchemes'=>$tool['securitySchemes']);
   // Keep MCP annotations explicit for ChatGPT/Codex safety and confirmation UX.
   // Okean tools operate only inside the authenticated WordPress workspace and
   // do not access arbitrary public internet resources.
