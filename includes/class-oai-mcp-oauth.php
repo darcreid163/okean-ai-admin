@@ -370,7 +370,7 @@ class OAI_MCP_OAuth {
 
  public static function authorize($req){
   $p=array();
-  foreach(array('client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method') as $k) $p[$k]=(string)$req->get_param($k);
+  foreach(array('client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method','resource') as $k) $p[$k]=(string)$req->get_param($k);
   $client=self::client($p['client_id']);
   if(!$client) $client=self::cimd_client($p['client_id']);
   if(!$client || !self::exact_redirect($client,$p['redirect_uri'])) return self::json_error('invalid_request','Unknown client or redirect_uri',400);
@@ -380,7 +380,7 @@ class OAI_MCP_OAuth {
 
   $scope=self::normalize_scope($p['scope'],true);
   if($scope==='') return self::json_error('invalid_scope','At least one supported MCP scope is required');
-  $resource=esc_url_raw((string)$req->get_param('resource'));
+  $resource=esc_url_raw($p['resource']);
   $expected_resource=rest_url('okean-ai/mcp');
   if($resource==='' || !hash_equals($expected_resource,$resource)) return self::json_error('invalid_target','Authorization resource must be this MCP server');
 
