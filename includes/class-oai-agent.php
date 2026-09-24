@@ -247,6 +247,13 @@ class OAI_Agent {
   $params=$req->get_json_params(); if(!is_array($params)) $params=array();
   $action=sanitize_key((string)($params['action']??''));
   if($action==='') return new WP_Error('oai_agent_action','action is required',array('status'=>400));
+  // Reject unsupported actions, missing scopes and remote approval attempts
+  // before consuming quota. A denied request must not burn a user-visible unit.
+  $map=self::allowlist();
+  if(!isset($map[$action])) return new WP_Error('oai_agent_action','Agent action is not allowed',array('status'=>403));
+  $scope=self::scope_for($action);
+  if($scope==='' || !self::has_scope($scope)) return new WP_Error('oai_agent_scope','Agent scope is not granted',array('status'=>403,'scope'=>$scope));
+  if(in_array($action,array('approve','apply','rollback'),true)) return new WP_Error('oai_agent_human_approval','Approve, apply and rollback are restricted to wp-admin human confirmation',array('status'=>403));
   if(class_exists('OAI_Quota')){
    $fingerprint=wp_json_encode($params,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
    $request_id=(string)($req->get_header('x-oai-agent-request-id')?:'');
