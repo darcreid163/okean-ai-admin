@@ -242,8 +242,8 @@ class OAI_MCP_OAuth {
    'grant_types'=>array('authorization_code','refresh_token'),
    'response_types'=>array('code'),
    'token_endpoint_auth_method'=>'none',
-   'scopes_supported'=>array('mcp:read','mcp:write'),
-   'scope'=>'mcp:read mcp:write'
+   'scopes_supported'=>array('mcp:read','mcp:write','offline_access'),
+   'scope'=>'mcp:read mcp:write offline_access'
   ),201);
  }
 
