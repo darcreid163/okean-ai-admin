@@ -407,6 +407,8 @@ class OAI_MCP_OAuth {
  }
 
  private static function issue_tokens($user_id,$client_id,$scope,$resource=''){
+  $scope=self::normalize_scope($scope,false);
+  if($scope==='') return self::json_error('invalid_scope','Access token cannot be issued without a valid MCP scope',400);
   $access='oai_access_'.wp_generate_password(72,false,false);
   $refresh='oai_refresh_'.wp_generate_password(72,false,false);
   global $wpdb;
