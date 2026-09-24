@@ -1,0 +1,59 @@
+name: Build AI Admin 2.0.19 artifacts
+
+on:
+  push:
+    branches:
+      - fix/oauth-scope-hardening-2.0.19
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "Version: 2.0.19" okean-ai-admin.php
+          grep -q "define('OAI_VERSION','2.0.19')" okean-ai-admin.php
+          grep -q "2.0.19-chatgpt-mcp-oauth-cimd-20260924" okean-ai-admin.php
+          grep -q "AI Admin 2.0.19" BUILD_SIGNATURE.txt
+          grep -q "# Revision: 2.0.19-r2" tools/oai-mcp-oauth-smoke.ps1
+
+      - name: Build clean plugin ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/okean-ai-admin
+          rsync -a ./ build/okean-ai-admin/ \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='tools' \
+            --exclude='build' \
+            --exclude='*.zip'
+          cd build
+          zip -qr okean-ai-admin-2.0.19.zip okean-ai-admin
+
+      - name: Stage OAuth smoke
+        shell: bash
+        run: |
+          cp tools/oai-mcp-oauth-smoke.ps1 build/oai-mcp-oauth-smoke-2.0.19-r2.ps1
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: okean-ai-admin-2.0.19
+          path: build/okean-ai-admin-2.0.19.zip
+          if-no-files-found: error
+
+      - name: Upload OAuth smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: oai-mcp-oauth-smoke-2.0.19-r2
+          path: build/oai-mcp-oauth-smoke-2.0.19-r2.ps1
+          if-no-files-found: error
