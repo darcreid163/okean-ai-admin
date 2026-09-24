@@ -172,6 +172,31 @@ $query = [System.Web.HttpUtility]::ParseQueryString("")
 $query["client_id"] = $clientId
 $query["redirect_uri"] = $redirect
 $query["response_type"] = "code"
+# Explicit unsupported scopes must be rejected and must never fall back to full access.
+try {
+  $badScope = [System.Web.HttpUtility]::ParseQueryString("")
+  $badScope["client_id"] = $clientId
+  $badScope["redirect_uri"] = $redirect
+  $badScope["response_type"] = "code"
+  $badScope["scope"] = "unsupported:scope"
+  $badScope["state"] = "oai-bad-scope-test"
+  $badScope["code_challenge"] = $challenge
+  $badScope["code_challenge_method"] = "S256"
+  $badScope["resource"] = $mcp
+  $badUri = $asm.authorization_endpoint + "?" + $badScope.ToString()
+  try {
+    Invoke-WebRequest -Uri $badUri -Method GET -MaximumRedirection 0 -ErrorAction Stop | Out-Null
+    Write-Result "OAuth explicit invalid scope rejection" $false "unsupported scope was accepted"
+  } catch {
+    $status = [int]$_.Exception.Response.StatusCode
+    $body = ""
+    if($_.ErrorDetails -and $_.ErrorDetails.Message) { $body = [string]$_.ErrorDetails.Message }
+    Write-Result "OAuth explicit invalid scope rejection" ($status -eq 400 -and $body -match "invalid_scope") ("HTTP " + $status)
+  }
+} catch {
+  Write-Result "OAuth explicit invalid scope rejection" $false $_.Exception.Message
+}
+
 $query["scope"] = "mcp:read mcp:write offline_access"
 $query["state"] = $state
 $query["code_challenge"] = $challenge
