@@ -1,4 +1,4 @@
-AI Admin 2.0.20
-Build: 2.0.20-oauth-admin-post-callback-20260924
+AI Admin 2.0.21
+Build: 2.0.21-oauth-resource-consent-20260924
 Author: Андриянов Н.Г.
 Copyright: Андриянов Н.Г.
