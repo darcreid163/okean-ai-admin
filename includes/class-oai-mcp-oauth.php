@@ -110,7 +110,7 @@ class OAI_MCP_OAuth {
    echo wp_json_encode(array(
     'resource'=>rest_url('okean-ai/mcp'),
     'authorization_servers'=>array(home_url('/')),
-    'scopes_supported'=>array('mcp:read','mcp:write'),
+    'scopes_supported'=>array('mcp:read','mcp:write','offline_access'),
     'bearer_methods_supported'=>array('header')
    ),JSON_UNESCAPED_SLASHES);
    exit;
@@ -120,6 +120,7 @@ class OAI_MCP_OAuth {
    'authorization_endpoint'=>rest_url('okean-ai/v1/oauth/authorize'),
    'token_endpoint'=>rest_url('okean-ai/v1/oauth/token'),
    'registration_endpoint'=>rest_url('okean-ai/v1/oauth/register'),
+   'client_id_metadata_document_supported'=>false,
    'response_types_supported'=>array('code'),
    'grant_types_supported'=>array('authorization_code','refresh_token'),
    'code_challenge_methods_supported'=>array('S256'),
@@ -146,14 +147,14 @@ class OAI_MCP_OAuth {
  }
 
  private static function normalize_scope($scope,$default_full=false){
-  $allowed=array('mcp:read','mcp:write');
+  $allowed=array('mcp:read','mcp:write','offline_access');
   $tokens=preg_split('/\\s+/',trim((string)$scope));
   $out=array();
   foreach($tokens as $token){
    $token=strtolower(trim((string)$token));
    if($token!=='' && in_array($token,$allowed,true) && !in_array($token,$out,true)) $out[]=$token;
   }
-  if(empty($out) && $default_full) return 'mcp:read mcp:write';
+  if(empty($out) && $default_full) return 'mcp:read mcp:write offline_access';
   return implode(' ',$out);
  }
 
@@ -369,12 +370,14 @@ class OAI_MCP_OAuth {
 
  private static function redirect_success($uri,$state,$code){
   $params=array('code'=>$code);
+  $params['iss']=home_url('/');
   if($state!=='')$params['state']=$state;
   wp_redirect(add_query_arg($params,$uri),302); exit;
  }
  private static function redirect_error($uri,$state,$error,$description=''){
   $params=array('error'=>$error);
   if($description!=='')$params['error_description']=$description;
+  $params['iss']=home_url('/');
   if($state!=='')$params['state']=$state;
   wp_redirect(add_query_arg($params,$uri),302); exit;
  }
@@ -458,6 +461,8 @@ class OAI_MCP_OAuth {
   }
   $scope=self::normalize_scope($row['scope'],false);
   if($scope==='') return false;
+  $expected_resource=rest_url('okean-ai/mcp');
+  if((string)($row['resource']??'')!=='' && !hash_equals($expected_resource,(string)$row['resource'])) return false;
   $user=get_user_by('id',(int)$row['user_id']);
   if(!$user || !user_can($user,'manage_options'))return false;
   return array('user'=>$user,'client_id'=>$row['client_id'],'scope'=>$scope);
