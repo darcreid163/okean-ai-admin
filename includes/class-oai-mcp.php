@@ -128,6 +128,10 @@ class OAI_MCP {
   $write=self::tool_requires_write($normalized,array());
   $scopes=$normalized==='wordpress_execute'?array('mcp:read','mcp:write'):array($write?'mcp:write':'mcp:read');
   $tool['securitySchemes']=array(array('type'=>'oauth2','scopes'=>$scopes));
+  // Keep MCP annotations explicit for ChatGPT/Codex safety and confirmation UX.
+  // Okean tools operate only inside the authenticated WordPress workspace and
+  // do not access arbitrary public internet resources.
+  if(!array_key_exists('openWorldHint',$annotations)) $annotations['openWorldHint']=false;
   if(!empty($annotations))$tool['annotations']=$annotations;
   return $tool;
  }
