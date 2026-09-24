@@ -237,7 +237,6 @@ try {
   $writeSec=($toolMap["gutenberg.patch"].securitySchemes | Where-Object { $_.type -eq "oauth2" -and $_.scopes -contains "mcp:write" }).Count -gt 0
   Write-Result "MCP tool OAuth securitySchemes" ($readSec -and $writeSec) "read=wp.get_site; write=gutenberg.patch"
   $names=@($r.result.tools|ForEach-Object{$_.name})
-  $names=@($r.result.tools|ForEach-Object{$_.name})
   $unique=(@($names|Select-Object -Unique)).Count -eq $names.Count
   $required=@("wordpress.execute","builder.catalog","builder.detect","system.capabilities","operation.get","operation.verify","operation.proof","operation.preview_link","gutenberg.get_blocks","gutenberg.locate_block","elementor.get_widget","woocommerce.get_product")
   $missing=@($required|Where-Object{$names -notcontains $_})
