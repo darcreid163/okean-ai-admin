@@ -73,15 +73,3 @@ jobs:
           rsync -a ./ build/okean-ai-admin/ --exclude='.git' --exclude='.github' --exclude='tools' --exclude='build' --exclude='*.zip'
           (cd build && zip -qr okean-ai-admin-2.0.20.zip okean-ai-admin)
           cp tools/oai-mcp-oauth-smoke.ps1 build/oai-mcp-oauth-smoke.ps1
-      - name: Upload plugin ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: okean-ai-admin-2.0.20
-          path: build/okean-ai-admin-2.0.20.zip
-          if-no-files-found: error
-      - name: Upload OAuth smoke
-        uses: actions/upload-artifact@v4
-        with:
-          name: oai-mcp-oauth-smoke
-          path: build/oai-mcp-oauth-smoke.ps1
-          if-no-files-found: error
