@@ -150,7 +150,7 @@ class OAI_MCP_OAuth {
   $tokens=preg_split('/\\s+/',trim((string)$scope));
   $out=array();
   foreach($tokens as $token){
-   $token=sanitize_key($token);
+   $token=strtolower(trim((string)$token));
    if($token!=='' && in_array($token,$allowed,true) && !in_array($token,$out,true)) $out[]=$token;
   }
   if(empty($out) && $default_full) return 'mcp:read mcp:write';
