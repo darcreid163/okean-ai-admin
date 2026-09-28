@@ -5,6 +5,7 @@
 if (!defined('ABSPATH')) exit;
 
 class OAI_MCP_OAuth {
+ const SCHEMA_VERSION=1;
  public static function clients_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_clients';}
  public static function codes_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_codes';}
  public static function tokens_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_tokens';}
@@ -62,6 +63,12 @@ class OAI_MCP_OAuth {
   dbDelta($sql1);
   dbDelta($sql2);
   dbDelta($sql3);
+  foreach(array(self::clients_table(),self::codes_table(),self::tokens_table()) as $table){
+   $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
+   if((string)$found!==$table)return new WP_Error('oai_oauth_schema','OAuth database table is missing after migration',array('status'=>503,'table'=>$table));
+  }
+  update_option('oai_oauth_schema_version',self::SCHEMA_VERSION,false);
+  return true;
  }
 
  public static function register_routes(){

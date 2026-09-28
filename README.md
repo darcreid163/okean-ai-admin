@@ -143,3 +143,8 @@
 - Uses a database-scoped MySQL named lock around create, resume, pause, retry, cancel and rollback. A competing request receives 409 before reading or changing a job; an unavailable lock fails closed with 503. The 60-second lease remains as job checkpoint metadata.
 - Adds a MySQL integration test with two independent PHP processes and CI for PHP 8.2–8.4 lint, ZIP integrity and mutex contention.
 - The MCP catalog remains 90 tools; the self-test remains 49 checks.
+
+## 2.0.57 — OAuth schema upgrade gate
+- Runs the three OAuth `dbDelta` statements only when the OAuth schema version needs migration, rather than on every WordPress request. Verifies all tables before storing the version; an incomplete migration retries on the next request.
+- The MySQL CI test checks retry after a missing table, subsequent request without `dbDelta`, and registered client retention.
+- The MCP catalog remains 90 tools. Self-test expects 50 checks, including the OAuth schema version.

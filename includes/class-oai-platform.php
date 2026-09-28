@@ -1,5 +1,5 @@
 <?php
-/** WP AI Admin 2.0.56 platform: strict batch state machine, pause/checkpoints/lease, batch receipts and proof. */
+/** WP AI Admin 2.0.57 platform: strict batch state machine, pause/checkpoints/lease, batch receipts and proof. */
 if (!defined('ABSPATH')) exit;
 class OAI_Platform {
  public static function content_navigation_state(){
@@ -64,11 +64,12 @@ class OAI_Platform {
   global $wpdb;
   $checks=array();
   $add=function($id,$ok,$details=array())use(&$checks){$checks[]=array('id'=>$id,'ok'=>(bool)$ok,'details'=>$details);};
-  $add('runtime.version',defined('OAI_VERSION')&&OAI_VERSION==='2.0.56',array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID));
+  $add('runtime.version',defined('OAI_VERSION')&&OAI_VERSION==='2.0.57',array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID));
   $add('identity.site_id',self::site_id()!=='',array('site_id'=>self::site_id()));
   $add('identity.installation_id',self::installation_id()!=='',array('installation_id'=>self::installation_id()));
   $add('database.connection',isset($wpdb)&&$wpdb->dbh,array('prefix'=>isset($wpdb)?$wpdb->prefix:null));
   $add('wordpress.rest',function_exists('register_rest_route'));
+  $add('oauth.schema_version',class_exists('OAI_MCP_OAuth')&&OAI_MCP_OAuth::SCHEMA_VERSION===1&&(int)get_option('oai_oauth_schema_version',0)===1);
   $caps=OAI_Capabilities::available();
   $execution=OAI_WP_CLI_Execution::readiness();
   $add('security.direct_live_writes_disabled',empty($caps['security']['direct_live_writes']) && empty($execution['direct_write_execution']));
@@ -189,7 +190,7 @@ class OAI_Platform {
    'test_manifest'=>array('supported'=>true,'self_test_tool'=>'system.self_test','tool_catalog_tool'=>'system.tool_catalog','test_automation_status_tool'=>'system.test_automation_status','regression_runner_tool'=>'system.regression_run','regression_matrix_tool'=>'system.regression_matrix','regression_history_tool'=>'system.regression_history','coverage_report_tool'=>'system.coverage_report','security_fuzz_tool'=>'system.security_fuzz','gutenberg_outline_tool'=>'gutenberg.get_outline','scoped_mcp_lifecycle_automation'=>true,'sequential_regression_runner'=>true,'managed_gutenberg_fixture'=>true,'reusable_gutenberg_fixture'=>true,'test_automation_max_actions'=>100000,'lifecycle'=>array('exposed','read','sandbox','approval','apply','verify','rollback','rollback_verify')),
    'tool_catalog'=>array('expected_count'=>$catalog['expected_count'],'catalog_sha256'=>$catalog['catalog_sha256'],'expected_ids'=>self::expected_tools()),
    'security'=>array('status_tool'=>'system.security_status','installation_identity'=>true,'server_private_key_embedded'=>false,'short_lived_token_contract'=>true,'replay_protection_contract'=>true,'revocation_contract'=>true),
-   'compatibility'=>array('legacy_tool_aliases'=>true,'primary_api'=>'2.0.56-atomic-batch-mutex')
+   'compatibility'=>array('legacy_tool_aliases'=>true,'primary_api'=>'2.0.57-oauth-schema-upgrade-gate')
   );
  }
  public static function batch_plan($items){

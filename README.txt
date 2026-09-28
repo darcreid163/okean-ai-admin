@@ -60,3 +60,4 @@ Execution input tokenizer replaced with a deterministic quote-aware parser; no r
 2.0.55: batch status/list/receipt reconcile terminal child-operation states on read; mutations persist reconciled states at checkpoint; strict retry regression now verifies reject, receipt, retry and cancel; 90 MCP tools.
 
 2.0.56: database-scoped MySQL named lock serializes batch mutations; two-process CI contention test; 90 MCP tools and 49 self-tests.
+2.0.57: OAuth schema migration gate skips repeated dbDelta on normal requests, retries incomplete migrations, checks table presence and preserves registered clients; 90 MCP tools and 50 self-tests.

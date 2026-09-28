@@ -65,7 +65,11 @@ class OAI_DB {
  PRIMARY KEY (id), KEY operation_id (operation_id), KEY event (event), KEY created_at (created_at)
  ) $charset;";
  dbDelta($asql); update_option('oai_db_version',OAI_DB_VERSION); if(class_exists('OAI_MCP_OAuth')) OAI_MCP_OAuth::install(); self::migrate_token(); }
- public static function maybe_upgrade(){if((int)get_option('oai_db_version',0)<OAI_DB_VERSION) self::install(); else { if(class_exists('OAI_MCP_OAuth')) OAI_MCP_OAuth::install(); self::migrate_token(); self::prune_quota_events(); }}
+ public static function maybe_upgrade(){
+  if((int)get_option('oai_db_version',0)<OAI_DB_VERSION)self::install();
+  elseif(class_exists('OAI_MCP_OAuth')&&(int)get_option('oai_oauth_schema_version',0)<OAI_MCP_OAuth::SCHEMA_VERSION)OAI_MCP_OAuth::install();
+  self::migrate_token();self::prune_quota_events();
+ }
  public static function prune_quota_events(){
   // Cleanup is throttled to at most once per day; do not run a DELETE on every request.
   $lock=(int)get_option('oai_quota_events_pruned_at',0);

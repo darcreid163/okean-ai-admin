@@ -33,7 +33,7 @@ jobs:
             php -l "$file"
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
-          test "$count" -eq 58
+          test "$count" -eq 60
       - name: Plugin ZIP integrity
         shell: bash
         run: |
@@ -72,3 +72,10 @@ jobs:
           DB_PASSWORD: test-password
           DB_NAME: wp_test
         run: php tests/batch-mutex-concurrency.php
+      - name: OAuth schema upgrade and registered client retention
+        env:
+          DB_HOST: 127.0.0.1
+          DB_USER: root
+          DB_PASSWORD: test-password
+          DB_NAME: wp_test
+        run: php tests/oauth-schema-upgrade.php
