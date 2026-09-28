@@ -1,0 +1,7 @@
+WP AI Admin Build Signature
+Version: 2.0.55
+Build ID: 2.0.55-batch-child-reconciliation-20260928
+Purpose: reconcile terminal child-operation states in batch status, list, receipt and checkpointed mutations; strengthen the cancelled-batch retry regression while preserving sandbox-only writes and 100000-action Test Automation
+Expected catalog with Content Navigation enabled: 90 tools
+Direct live writes: false
+Human approval default: true

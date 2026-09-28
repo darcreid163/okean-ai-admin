@@ -1,0 +1,229 @@
+<?php
+/** WP AI Admin 2.0.55 platform: strict batch state machine, pause/checkpoints/lease, batch receipts and proof. */
+if (!defined('ABSPATH')) exit;
+class OAI_Platform {
+ public static function content_navigation_state(){
+  $state=(string)get_option('oai_feature_content_navigation','experimental');
+  return in_array($state,array('experimental','enabled','disabled'),true)?$state:'disabled';
+ }
+ public static function content_navigation_allowed(){return self::content_navigation_state()!=='disabled';}
+ public static function site_id(){
+  $id=(string)get_option('oai_site_id','');
+  if($id===''){ $id='oai_'.wp_generate_uuid4(); update_option('oai_site_id',$id,false); }
+  return $id;
+ }
+ public static function installation_id(){
+  $id=(string)get_option('oai_installation_id','');
+  if($id===''){ $id='inst_'.wp_generate_uuid4(); update_option('oai_installation_id',$id,false); }
+  return $id;
+ }
+ public static function expected_tools(){
+  $tools=array(
+   'wp.get_site','wp.inspect_html','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link','wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','operation.get_receipt','gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities','wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.create','batch.list','batch.status','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_run','system.regression_matrix','system.regression_history','system.coverage_report','system.security_fuzz',
+   'wordpress.execute','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_settings','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'
+  );
+  if(!self::content_navigation_allowed())$tools=array_values(array_diff($tools,array('wp.file.outline')));
+  return $tools;
+ }
+ public static function write_tools(){ return array('system.regression_run','system.regression_matrix','batch.create','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_settings','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'); }
+ public static function tool_catalog(){
+  $all=self::expected_tools(); $writes=self::write_tools(); $items=array();
+  foreach($all as $name){
+   $write=in_array($name,$writes,true);
+   $lifecycle=in_array($name,array('operation.approve','operation.apply','operation.rollback','operation.reject'),true);
+   $regression=in_array($name,array('system.regression_run','system.regression_matrix'),true);
+   $items[]=array(
+    'id'=>$name,
+    'mode'=>$regression?'scoped_test_automation_runner':($write?'sandbox_or_human_lifecycle':'read_or_plan'),
+    'live_write'=>$write?false:null,
+    'human_approval'=>$lifecycle,
+    'test_automation_exception'=>($lifecycle||$regression)?true:null,
+    'temporary_live_mutations'=>$regression?true:null,
+    'sequential'=>$regression?true:null
+   );
+  }
+  return array('schema_version'=>2,'plugin_version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID,'expected_count'=>count($all),'catalog_sha256'=>hash('sha256',implode("\n",$all)),'items'=>$items,'feature_flags'=>array('content_navigation'=>self::content_navigation_state(),'test_automation'=>(class_exists('OAI_Test_Automation')?OAI_Test_Automation::status()['active']:false)),'legacy_aliases_preserved'=>true);
+ }
+ public static function security_status(){
+  $site=self::site_id(); $installation=self::installation_id();
+  $cp=(string)get_option('oai_control_plane_url','');
+  $registered=(bool)get_option('oai_control_plane_registration_id','');
+  $server_key=(string)get_option('oai_control_plane_public_key','');
+  $test_automation=class_exists('OAI_Test_Automation')?OAI_Test_Automation::status():array('supported'=>false,'active'=>false);
+  return array(
+   'schema_version'=>1,'site_id'=>$site,'installation_id'=>$installation,
+   'installation_fingerprint'=>hash('sha256',$installation.'|'.$site.'|'.home_url('/').'|'.wp_salt('auth')),
+   'control_plane'=>array('configured'=>$cp!=='','registered'=>$registered,'server_public_key_configured'=>$server_key!=='','private_server_key_present_in_plugin'=>false),
+   'guards'=>array('direct_live_writes'=>false,'local_human_approval_enforced'=>empty($test_automation['active']),'human_approval_default'=>true,'test_automation_active'=>!empty($test_automation['active']),'test_automation_scope_limited'=>true,'sandbox_before_apply'=>true,'verify_after_apply'=>true,'rollback_supported'=>true),
+   'test_automation'=>$test_automation,
+   'planned_protocol'=>array('short_lived_signed_tokens'=>true,'site_and_workspace_binding'=>true,'request_id_nonce_timestamp'=>true,'replay_protection'=>true,'token_rotation'=>true,'site_revoke'=>true,'workspace_freeze'=>true,'global_write_freeze'=>true,'signed_entitlements'=>true),
+   'note'=>'Control Plane cryptographic enforcement is a foundation contract until a remote Control Plane is configured. Human approval is the default; scoped Test Automation Mode is a short-lived admin-enabled exception for session-tagged test operations only.'
+  );
+ }
+ public static function self_test(){
+  global $wpdb;
+  $checks=array();
+  $add=function($id,$ok,$details=array())use(&$checks){$checks[]=array('id'=>$id,'ok'=>(bool)$ok,'details'=>$details);};
+  $add('runtime.version',defined('OAI_VERSION')&&OAI_VERSION==='2.0.55',array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID));
+  $add('identity.site_id',self::site_id()!=='',array('site_id'=>self::site_id()));
+  $add('identity.installation_id',self::installation_id()!=='',array('installation_id'=>self::installation_id()));
+  $add('database.connection',isset($wpdb)&&$wpdb->dbh,array('prefix'=>isset($wpdb)?$wpdb->prefix:null));
+  $add('wordpress.rest',function_exists('register_rest_route'));
+  $caps=OAI_Capabilities::available();
+  $execution=OAI_WP_CLI_Execution::readiness();
+  $add('security.direct_live_writes_disabled',empty($caps['security']['direct_live_writes']) && empty($execution['direct_write_execution']));
+  $guard_ok=true;
+  foreach(array('approve','reject','apply','rollback') as $action){
+   $probe=new WP_REST_Request('POST','/okean-ai/v1/sandbox/0/'.$action);
+   $result=OAI_REST::sandbox_action($probe);
+   if(!is_wp_error($result)||$result->get_error_code()!=='oai_human_approval_required')$guard_ok=false;
+  }
+  $add('security.human_approval_guard',$guard_ok);
+  $ta_contract=class_exists('OAI_Test_Automation')?OAI_Test_Automation::self_test_contract():array();
+  $add('test_automation.contract',!empty($ta_contract)&&!in_array(false,$ta_contract,true),$ta_contract);
+  $ta_status=class_exists('OAI_Test_Automation')?OAI_Test_Automation::status():array();
+  $add('test_automation.scoped_policy',isset($ta_status['rules'])&&!empty($ta_status['rules']['admin_enable_required'])&&!empty($ta_status['rules']['same_mcp_client_required'])&&!empty($ta_status['rules']['only_session_tagged_operations']));
+  $add('regression.runner_available',class_exists('OAI_Regression_Runner')&&method_exists('OAI_Regression_Runner','run'));
+  $add('regression.matrix_available',class_exists('OAI_Regression_Matrix')&&method_exists('OAI_Regression_Matrix','run'));
+  $add('regression.history_available',class_exists('OAI_Regression_History')&&method_exists('OAI_Regression_History','history'));
+  $hist_contract=class_exists('OAI_Regression_History')?OAI_Regression_History::self_test_contract():array();$add('regression.history_contract',!empty($hist_contract)&&!in_array(false,$hist_contract,true),$hist_contract);
+  $add('security.fuzz_available',class_exists('OAI_Security_Fuzz')&&method_exists('OAI_Security_Fuzz','run'));
+  $fuzz_contract=class_exists('OAI_Security_Fuzz')?OAI_Security_Fuzz::self_test_contract():array();$add('security.fuzz_contract',!empty($fuzz_contract)&&!in_array(false,$fuzz_contract,true),$fuzz_contract);
+  $rest_contract=class_exists('OAI_REST_Resolver')?OAI_REST_Resolver::self_test_contract():array();$add('rest.resolver_contract',!empty($rest_contract)&&!in_array(false,$rest_contract,true),$rest_contract);
+  $add('woocommerce.deep_read_contract',method_exists('OAI_WooCommerce','variations')&&method_exists('OAI_WooCommerce','orders'));
+  $batch_probe=self::batch_preflight(array(array('id'=>'a','tool'=>'wp.get_site','arguments'=>array()),array('id'=>'b','tool'=>'wp.read_content','depends_on'=>array('a'),'arguments'=>array())));
+  $batch_cycle=self::batch_preflight(array(array('id'=>'a','tool'=>'wp.get_site','depends_on'=>array('b')),array('id'=>'b','tool'=>'wp.get_site','depends_on'=>array('a'))));
+  $add('batch.preflight_contract',is_array($batch_probe)&&!empty($batch_probe['valid'])&&($batch_probe['execution_order']??array())===array('a','b')&&is_wp_error($batch_cycle)&&$batch_cycle->get_error_code()==='oai_batch_cycle');
+  $batch_contract=class_exists('OAI_Batch_Executor')?OAI_Batch_Executor::self_test_contract():array();
+  $add('batch.executor_available',class_exists('OAI_Batch_Executor')&&method_exists('OAI_Batch_Executor','create')&&method_exists('OAI_Batch_Executor','resume')&&method_exists('OAI_Batch_Executor','rollback'));
+  $add('batch.executor_contract',!empty($batch_contract)&&!in_array(false,$batch_contract,true),$batch_contract);
+  $dry_probe=class_exists('OAI_Batch_Executor')?OAI_Batch_Executor::dry_run(array(array('id'=>'a','tool'=>'wp.get_site'),array('id'=>'b','tool'=>'wp.read_post','arguments'=>array('post_id'=>1),'depends_on'=>array('a')))):array();
+  $add('batch.dry_run_contract',is_array($dry_probe)&&!empty($dry_probe['valid'])&&($dry_probe['reads']??0)===2&&($dry_probe['writes']??0)===0&&($dry_probe['max_dependency_depth']??0)===2);
+  $add('batch.pause_contract',class_exists('OAI_Batch_Executor')&&method_exists('OAI_Batch_Executor','pause')&&!empty($batch_contract['manual_pause_available']));
+  $add('batch.checkpoint_contract',!empty($batch_contract['lease_bounded'])&&!empty($batch_contract['checkpoint_events_bounded']));
+  $add('batch.receipt_proof_contract',!empty($batch_contract['receipt_and_proof_available']));
+  $add('batch.strict_retry_contract',!empty($batch_contract['strict_retry_unresolved_guard']));
+  $add('security.rest_users_blocked',!empty($rest_contract['wordpress_users_blocked']));
+  $ops_probe_req=new WP_REST_Request('GET','/okean-ai/v1/sandbox');$ops_probe_req->set_param('page',2);$ops_probe_req->set_param('per_page',1);$ops_probe=OAI_REST::sandbox_list($ops_probe_req);
+  $add('operations.mcp_pagination_contract',is_array($ops_probe)&&($ops_probe['page']??0)===2&&($ops_probe['per_page']??0)===1&&isset($ops_probe['total'],$ops_probe['total_pages'],$ops_probe['items']));
+  $add('admin.operation_pagination_contract',class_exists('OAI_Admin')&&defined('OAI_VERSION')&&OAI_Admin::ACTION_TABLE_LIMIT===50&&OAI_Admin::OPERATIONS_PER_PAGE===50&&method_exists('OAI_DB','page')&&method_exists('OAI_DB','count_all'));
+  $add('test_automation.managed_gutenberg_fixture_contract',class_exists('OAI_Test_Automation')&&method_exists('OAI_Test_Automation','managed_gutenberg_fixture_id'));
+  $absence_probe=class_exists('OAI_Verify')&&method_exists('OAI_Verify','created_page_absence')?OAI_Verify::created_page_absence(2147483647):array();
+  $add('verification.elementor_create_rollback_absence',is_array($absence_probe)&&!empty($absence_probe['verified'])&&($absence_probe['verification_source']??'')==='dual_absence',$absence_probe);
+  $fixture_content=class_exists('OAI_Test_Automation')&&method_exists('OAI_Test_Automation','gutenberg_fixture_content')?OAI_Test_Automation::gutenberg_fixture_content():'';
+  $add('test_automation.gutenberg_fixture_newlines',is_string($fixture_content)&&strpos($fixture_content,"\n\n<!-- wp:paragraph")!==false&&strpos($fixture_content,'\\n\\n')===false);
+  $write_probe=OAI_Security::resolve_path_for_write('child_theme',OAI_Test_Automation::FILE_PREFIX.'nested/probe.txt');
+  $add('security.test_file_write_path',!is_wp_error($write_probe)&&strpos(str_replace('\\','/',(string)$write_probe),'/'.trim(OAI_Test_Automation::FILE_PREFIX,'/').'/nested/probe.txt')!==false);
+  $woo_norm_ok=false;
+  if(function_exists('wc_stock_amount')&&function_exists('wc_format_decimal')&&method_exists('OAI_WooCommerce','runtime_matches_changes')){
+   $before_probe=array('id'=>1,'sku'=>'T','name'=>'T','status'=>'publish','regular_price'=>'','sale_price'=>'','price'=>'','stock'=>0,'stock_status'=>'outofstock','manage_stock'=>true);
+   $actual_probe=$before_probe;$actual_probe['stock']=1;$actual_probe['stock_status']='instock';
+   $woo_norm=OAI_WooCommerce::runtime_matches_changes($actual_probe,array('stock_quantity'=>1),$before_probe);
+   $bad_probe=$actual_probe;$bad_probe['stock_status']='onbackorder';
+   $woo_bad=OAI_WooCommerce::runtime_matches_changes($bad_probe,array('stock_quantity'=>1),$before_probe);
+   $woo_norm_ok=($woo_norm===true)&&is_wp_error($woo_bad)&&$woo_bad->get_error_code()==='oai_woo_runtime';
+  }
+  $add('woocommerce.runtime_normalization_guard',$woo_norm_ok);
+  $redacted=OAI_Read::option_value('oai_bearer_token','synthetic-secret-probe');
+  $add('security.option_redaction',!empty($redacted['redacted'])&&($redacted['value']??'')==='[REDACTED]');
+  $hash=OAI_Read::option_value('oai_agent_key_hash','synthetic-hash-probe');
+  $license=OAI_Read::option_value('oai_license',array('signature'=>'synthetic-signature-probe'));
+  $nested=OAI_Read::option_value('synthetic_public',array('label'=>'public','client_secret'=>'synthetic-secret-probe'));
+  $add('security.option_nested_redaction',!empty($hash['redacted'])&&$hash['value']==='[REDACTED]'&&!empty($license['redacted'])&&$license['value']==='[REDACTED]'&&!empty($nested['redacted'])&&($nested['value']['client_secret']??null)==='[REDACTED]'&&($nested['value']['label']??null)==='public');
+  $separator=OAI_Command_Registry::resolve('core version; plugin deactivate woocommerce');
+  $extra=OAI_Command_Registry::resolve('core version unexpected');
+  $add('security.command_shape',is_wp_error($separator)&&$separator->get_error_code()==='oai_cli_metacharacter'&&is_wp_error($extra)&&$extra->get_error_code()==='oai_cli_args');
+  $unsafe_query=OAI_Command_Registry::resolve('db query SELECT option_value FROM '.$wpdb->options);
+  $unsafe_result=is_wp_error($unsafe_query)?$unsafe_query:OAI_WP_CLI_Execution::execute($unsafe_query);
+  $add('security.db_query_scope',is_wp_error($unsafe_result)&&$unsafe_result->get_error_code()==='oai_db_scope');
+  $all=self::expected_tools();
+  $add('catalog.expected_tools',count($all)===(self::content_navigation_allowed()?90:89),array('expected_count'=>count($all),'catalog_sha256'=>hash('sha256',implode("\n",$all))));
+  $defs=class_exists('OAI_MCP')&&method_exists('OAI_MCP','tool_definitions')?OAI_MCP::tool_definitions():array();$def_names=array();foreach((array)$defs as $d)if(is_array($d)&&!empty($d['name']))$def_names[]=(string)$d['name'];
+  $add('catalog.exported_tools',count($def_names)===count($all)&&!array_diff($all,$def_names),array('exported_count'=>count($def_names),'missing'=>array_values(array_diff($all,$def_names))));
+  $add('navigation.gutenberg_outline_tool',in_array('gutenberg.get_outline',$def_names,true));
+  $add('navigation.feature_state',in_array(self::content_navigation_state(),array('experimental','enabled','disabled'),true),array('state'=>self::content_navigation_state()));
+  $add('woocommerce.runtime',class_exists('WooCommerce'),array('active'=>class_exists('WooCommerce')));
+  $add('elementor.runtime',defined('ELEMENTOR_VERSION')||did_action('elementor/loaded'),array('version'=>defined('ELEMENTOR_VERSION')?ELEMENTOR_VERSION:null));
+  $sample=get_posts(array('post_type'=>'page','post_status'=>'any','numberposts'=>1,'fields'=>'ids'));
+  if($sample){
+   $cmd=OAI_Command_Registry::resolve('post get '.absint($sample[0]));
+   $post_read=is_wp_error($cmd)?$cmd:OAI_WP_CLI_Execution::execute($cmd);
+   $cron_cmd=OAI_Command_Registry::resolve('cron event list');
+   $cron_read=is_wp_error($cron_cmd)?$cron_cmd:OAI_WP_CLI_Execution::execute($cron_cmd);
+   $add('security.command_read_projection',is_array($post_read)&&isset($post_read['meta_keys'])&&!isset($post_read['meta'])&&is_array($cron_read)&&(!isset($cron_read[0])||(!isset($cron_read[0]['args'])&&isset($cron_read[0]['args_count']))));
+   $probe=new WP_REST_Request('GET','/okean-ai/v1/read/content/'.absint($sample[0]));
+   $probe->set_url_params(array('id'=>absint($sample[0])));
+   foreach(array('include_content','include_elementor','include_css') as $field)$probe->set_param($field,false);
+   $brief=OAI_REST::content_detail($probe);
+   $item=is_array($brief)?($brief['item']??array()):array();
+   $add('navigation.post_projection',is_array($brief)&&!array_key_exists('content',$item)&&!array_key_exists('inline_css',$item)&&!array_key_exists('elementor_data',$item));
+  }
+  if(self::content_navigation_allowed()){
+   $outline=OAI_Files::outline('child_theme','style.css',5);
+   $file_ok=!is_wp_error($outline)&&isset($outline['sha256'],$outline['total_lines']);
+   $add('navigation.file_outline',$file_ok,array('total_lines'=>$file_ok?$outline['total_lines']:null));
+   $range=$file_ok&&$outline['total_lines']>0?OAI_Files::read_range('child_theme','style.css',1,min(2,$outline['total_lines']),1000,$outline['sha256']):null;
+   $add('navigation.file_range',is_array($range)&&$file_ok&&($range['sha256']??'')===$outline['sha256']);
+   if(class_exists('WooCommerce')){
+    $catalog=OAI_WooCommerce::search('','',1,1,'id,sku');
+    $add('navigation.woo_page',is_array($catalog)&&isset($catalog['total_pages'],$catalog['items'])&&(!isset($catalog['items'][0])||array_keys($catalog['items'][0])===array('id','sku')));
+    if(!empty($catalog['items'][0]['id'])){
+     $negative=OAI_WooCommerce::patch((int)$catalog['items'][0]['id'],array('regular_price'=>'-1'));
+     $old_pending=OAI_WooCommerce::validate_snapshot(array('regular_price'=>'-1'));
+     $add('security.woo_negative_price',is_wp_error($negative)&&$negative->get_error_code()==='oai_woo_price'&&is_wp_error($old_pending)&&$old_pending->get_error_code()==='oai_woo_price');
+    }
+   }
+  }
+  $passed=count(array_filter($checks,function($x){return !empty($x['ok']);}));
+  return array('schema_version'=>1,'safe_mode'=>'read_only_no_mutations','passed'=>$passed,'failed'=>count($checks)-$passed,'total'=>count($checks),'checks'=>$checks,'next_phase'=>'Compare system.tool_catalog expected IDs with client-exported MCP tools; create reversible sandbox fixtures only after read-only checks pass.');
+ }
+ public static function manifest(){
+  $catalog=self::tool_catalog();
+  return array(
+   'schema_version'=>2,'plugin_name'=>'WP AI Admin','plugin_version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID,'site_id'=>self::site_id(),'installation_id'=>self::installation_id(),
+   'control_plane'=>array('supported'=>true,'configured'=>(bool)get_option('oai_control_plane_url',''),'mode'=>'remote_identity_entitlements_catalog_quota','local_approval_enforced'=>true,'test_automation_exception_active'=>(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()),'direct_live_writes'=>false,'security_contract_version'=>1),
+   'multi_site'=>array('foundation'=>true,'site_identity'=>true,'installation_identity'=>true,'workspace_aware'=>true,'central_fanout_planned'=>true),
+   'batch'=>array('foundation'=>true,'mode'=>'resumable_sandbox_children','atomicity'=>'per_child_operation','rollback'=>'reverse_child_reconciliation','max_items'=>100,'retained_jobs'=>50,'human_approval_default'=>true,'manual_pause'=>true,'optimistic_versioning'=>true,'lease_seconds'=>60,'checkpoint_events'=>100,'batch_receipt'=>true,'batch_proof'=>true,'strict_retry_unresolved_guard'=>true),
+   'feature_flags'=>array('content_navigation'=>self::content_navigation_state()),
+   'next_stage'=>array('universal_rest_safe_get'=>true,'wordpress_users_blocked_in_universal_rest'=>true,'woocommerce_variations'=>true,'woocommerce_orders_summary'=>true,'batch_dependency_preflight'=>true,'resumable_batch_executor'=>true,'batch_state_machine_hardened'=>true,'batch_pause'=>true,'batch_checkpoint_versioning'=>true,'batch_receipt_proof'=>true,'operation_ui_pagination'=>true,'operation_mcp_pagination'=>true),
+   'test_manifest'=>array('supported'=>true,'self_test_tool'=>'system.self_test','tool_catalog_tool'=>'system.tool_catalog','test_automation_status_tool'=>'system.test_automation_status','regression_runner_tool'=>'system.regression_run','regression_matrix_tool'=>'system.regression_matrix','regression_history_tool'=>'system.regression_history','coverage_report_tool'=>'system.coverage_report','security_fuzz_tool'=>'system.security_fuzz','gutenberg_outline_tool'=>'gutenberg.get_outline','scoped_mcp_lifecycle_automation'=>true,'sequential_regression_runner'=>true,'managed_gutenberg_fixture'=>true,'reusable_gutenberg_fixture'=>true,'test_automation_max_actions'=>100000,'lifecycle'=>array('exposed','read','sandbox','approval','apply','verify','rollback','rollback_verify')),
+   'tool_catalog'=>array('expected_count'=>$catalog['expected_count'],'catalog_sha256'=>$catalog['catalog_sha256'],'expected_ids'=>self::expected_tools()),
+   'security'=>array('status_tool'=>'system.security_status','installation_identity'=>true,'server_private_key_embedded'=>false,'short_lived_token_contract'=>true,'replay_protection_contract'=>true,'revocation_contract'=>true),
+   'compatibility'=>array('legacy_tool_aliases'=>true,'primary_api'=>'2.0.55-batch-child-reconciliation')
+  );
+ }
+ public static function batch_plan($items){
+  if(!is_array($items)||!$items)return new WP_Error('oai_batch','items must be a non-empty array',array('status'=>400));
+  if(count($items)>100)return new WP_Error('oai_batch_limit','Batch plan is limited to 100 items',array('status'=>422));
+  $out=array();
+  foreach(array_values($items) as $i=>$item){
+   if(!is_array($item))return new WP_Error('oai_batch_item','Each batch item must be an object',array('status'=>400,'index'=>$i));
+   $tool=sanitize_text_field((string)($item['tool']??''));
+   if($tool==='')return new WP_Error('oai_batch_tool','Each batch item requires tool',array('status'=>400,'index'=>$i));
+   if(!in_array($tool,self::expected_tools(),true))return new WP_Error('oai_batch_unknown_tool','Batch item references an unknown tool',array('status'=>422,'index'=>$i,'tool'=>$tool));
+   $write=in_array($tool,self::write_tools(),true);
+   $out[]=array('index'=>$i,'tool'=>$tool,'arguments'=>is_array($item['arguments']??null)?$item['arguments']:array(),'mode'=>in_array($tool,array('system.regression_run','system.regression_matrix'),true)?'test_automation_runner':($write?'sandbox_child':'read'),'requires_human_approval'=>in_array($tool,array('operation.approve','operation.reject','operation.apply','operation.rollback'),true));
+  }
+  return array('site_id'=>self::site_id(),'installation_id'=>self::installation_id(),'count'=>count($out),'items'=>$out,'direct_live_writes'=>false,'execution'=>'not_executed_plan_only');
+ }
+ public static function batch_preflight($items){
+  if(!is_array($items)||!$items)return new WP_Error('oai_batch','items must be a non-empty array',array('status'=>400));
+  if(count($items)>100)return new WP_Error('oai_batch_limit','Batch preflight is limited to 100 items',array('status'=>422));
+  $nodes=array();$index=0;
+  foreach(array_values($items) as $item){
+   if(!is_array($item))return new WP_Error('oai_batch_item','Each batch item must be an object',array('status'=>400,'index'=>$index));
+   $id=sanitize_key((string)($item['id']??('step_'.($index+1))));if($id==='')$id='step_'.($index+1);if(isset($nodes[$id]))return new WP_Error('oai_batch_duplicate','Duplicate batch step id',array('status'=>422,'id'=>$id));
+   $tool=sanitize_text_field((string)($item['tool']??''));if($tool===''||!in_array($tool,self::expected_tools(),true))return new WP_Error('oai_batch_unknown_tool','Batch item references an unknown tool',array('status'=>422,'index'=>$index,'tool'=>$tool));
+   $deps=array_values(array_unique(array_filter(array_map('sanitize_key',(array)($item['depends_on']??array())))));
+   $nodes[$id]=array('id'=>$id,'index'=>$index,'tool'=>$tool,'arguments'=>is_array($item['arguments']??null)?$item['arguments']:array(),'depends_on'=>$deps,'write'=>in_array($tool,self::write_tools(),true));$index++;
+  }
+  foreach($nodes as $id=>$node)foreach($node['depends_on'] as $dep)if(!isset($nodes[$dep]))return new WP_Error('oai_batch_dependency','Batch dependency does not exist',array('status'=>422,'id'=>$id,'depends_on'=>$dep));
+  $incoming=array();$outgoing=array();foreach($nodes as $id=>$node){$incoming[$id]=count($node['depends_on']);foreach($node['depends_on'] as $dep)$outgoing[$dep][]=$id;}
+  $queue=array();foreach($incoming as $id=>$n)if($n===0)$queue[]=$id;usort($queue,function($a,$b)use($nodes){return $nodes[$a]['index']<=>$nodes[$b]['index'];});$order=array();
+  while($queue){$id=array_shift($queue);$order[]=$id;foreach((array)($outgoing[$id]??array()) as $next){$incoming[$next]--;if($incoming[$next]===0){$queue[]=$next;usort($queue,function($a,$b)use($nodes){return $nodes[$a]['index']<=>$nodes[$b]['index'];});}}}
+  if(count($order)!==count($nodes))return new WP_Error('oai_batch_cycle','Batch dependency graph contains a cycle',array('status'=>422));
+  $steps=array();foreach($order as $id){$n=$nodes[$id];$steps[]=array('id'=>$id,'tool'=>$n['tool'],'depends_on'=>$n['depends_on'],'mode'=>$n['write']?'sandbox_or_lifecycle':'read','requires_human_approval'=>in_array($n['tool'],array('operation.approve','operation.reject','operation.apply','operation.rollback'),true));}
+  return array('site_id'=>self::site_id(),'count'=>count($steps),'valid'=>true,'execution_order'=>$order,'steps'=>$steps,'writes'=>count(array_filter($nodes,function($n){return !empty($n['write']);})),'execution'=>'not_executed_preflight_only','policy'=>'dependency_validation_no_live_execution');
+ }
+
+}

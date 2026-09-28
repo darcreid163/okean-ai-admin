@@ -54,11 +54,17 @@ class OAI_Elementor {
   if(!self::available()) return new WP_Error('oai_elementor_unavailable','Elementor is not available',array('status'=>503));
   $widget_type=sanitize_key($widget_type); if($widget_type==='')return new WP_Error('oai_widget_type','widget_type is required',array('status'=>400));
   try {
-   $widgets=\Elementor\Plugin::$instance->widgets_manager->get_widget_types();
-   if(empty($widgets[$widget_type])) return new WP_Error('oai_widget_type','Elementor widget type not found',array('status'=>404));
-   $widget=$widgets[$widget_type];
+   $widget=\Elementor\Plugin::$instance->widgets_manager->get_widget_types($widget_type);
+   if(!$widget) return new WP_Error('oai_widget_type','Elementor widget type not found',array('status'=>404));
    $controls=array();
-   if(method_exists($widget,'get_controls')) $raw=$widget->get_controls(); else $raw=array();
+   if(method_exists($widget,'get_stack')){
+    $stack=$widget->get_stack(false);
+    $raw=is_array($stack)&&isset($stack['controls'])&&is_array($stack['controls'])?$stack['controls']:array();
+   } elseif(method_exists($widget,'get_controls')) {
+    $raw=$widget->get_controls();
+   } else {
+    $raw=array();
+   }
    foreach((array)$raw as $id=>$control){
     if(!is_array($control))continue;
     $controls[$id]=array(
@@ -102,6 +108,17 @@ class OAI_Elementor {
   if(!is_array($changes))return new WP_Error('oai_changes','changes must be an object',array('status'=>400));
   $ref=self::find_node($post_id,$node_id); if(is_wp_error($ref))return $ref;
   $before=is_array($ref['node']['settings']??null)?$ref['node']['settings']:array();
+  if(!$changes)return new WP_Error('oai_changes','At least one Elementor setting is required',array('status'=>400));
+  $controls=array();
+  if(($ref['node']['elType']??'')==='widget'){
+   $schema=self::widget_schema((string)($ref['node']['widgetType']??''));
+   if(is_wp_error($schema))return $schema;
+   $controls=$schema['controls']??array();
+  }
+  foreach($changes as $key=>$value){
+   if(!is_string($key) || (!array_key_exists($key,$before) && !isset($controls[$key])) || (isset($controls[$key]) && in_array($controls[$key]['type']??'',array('section','tab','tabs'),true)))
+    return new WP_Error('oai_elementor_control','Unknown or non-editable Elementor setting: '.(string)$key,array('status'=>422));
+  }
   $after=self::merge_settings($before,$changes);
   return array('post_id'=>$post_id,'node_id'=>$node_id,'node'=>$ref['node'],'before_settings'=>$before,'after_settings'=>$after,'changes'=>$changes,'path'=>$ref['path']);
  }

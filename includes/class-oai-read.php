@@ -11,6 +11,28 @@ if (!defined('ABSPATH')) exit;
  * AI can inspect the site broadly without receiving permission to mutate anything.
  */
 class OAI_Read {
+ private static function sensitive_option($key){
+  $key=strtolower((string)$key);
+  $deny=array('oai_api_token','oai_bearer_token','oai_agent_secret','oai_client_secret','oai_license_signature','oai_agent_key_hash','oai_license');
+  if(in_array($key,$deny,true))return true;
+  return (bool)preg_match('/(^|[_\-])(token|secret|password|passwd|api[_\-]?key|private[_\-]?key|auth[_\-]?key|cookie|nonce|signature|credential|hash)([_\-]|$)/i',$key);
+ }
+ private static function redact_nested($value,&$redacted,$depth=0){
+  if($depth>12){$redacted=true;return '[REDACTED]';}
+  if(!is_array($value) && !is_object($value))return $value;
+  $out=array();
+  foreach((array)$value as $key=>$item){
+   if(self::sensitive_option($key)){$out[$key]='[REDACTED]';$redacted=true;}
+   else $out[$key]=self::redact_nested($item,$redacted,$depth+1);
+  }
+  return $out;
+ }
+ public static function option_value($key,$value){
+  if(self::sensitive_option($key))return array('redacted'=>true,'value'=>'[REDACTED]');
+  $redacted=false;
+  $safe=self::redact_nested($value,$redacted);
+  return array('redacted'=>$redacted,'value'=>$safe);
+ }
  public static function post_types() {
   $types=get_post_types(array('show_ui'=>true),'objects');
   $out=array();
@@ -45,8 +67,9 @@ class OAI_Read {
 
  public static function media($req) {
   $limit=min(100,max(1,absint($req->get_param('limit')?:20)));
+  $page=min(10000,max(1,absint($req->get_param('page')?:1)));
   $search=sanitize_text_field((string)$req->get_param('search'));
-  $args=array('post_type'=>'attachment','post_status'=>'inherit','posts_per_page'=>$limit,'orderby'=>'date','order'=>'DESC');
+  $args=array('post_type'=>'attachment','post_status'=>'inherit','posts_per_page'=>$limit,'paged'=>$page,'orderby'=>'date','order'=>'DESC');
   if($search!=='') $args['s']=$search;
   $q=new WP_Query($args); $items=array();
   foreach($q->posts as $p){
@@ -59,7 +82,7 @@ class OAI_Read {
     'modified'=>$p->post_modified
    );
   }
-  return array('count'=>count($items),'items'=>$items);
+  return array('count'=>count($items),'page'=>$page,'limit'=>$limit,'total'=>(int)$q->found_posts,'total_pages'=>(int)$q->max_num_pages,'has_more'=>$page<$q->max_num_pages,'items'=>$items);
  }
 
  public static function menus() {
@@ -99,17 +122,15 @@ class OAI_Read {
     $key=sanitize_text_field($key);
     if($key==='') continue;
     $v=get_option($key,null);
-    $out[$key]=array('exists'=>($v!==null),'value'=>$v);
+    $safe=self::option_value($key,$v); $out[$key]=array('exists'=>($v!==null),'redacted'=>$safe['redacted'],'value'=>$safe['value']);
    }
   } elseif($prefix!==''){
    global $wpdb;
    $like=$wpdb->esc_like($prefix).'%';
-   $rows=$wpdb->get_results($wpdb->prepare("SELECT option_name, option_value, autoload FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_name LIMIT 300",$like),ARRAY_A);
+   $rows=$wpdb->get_results($wpdb->prepare("SELECT option_name, option_value, autoload FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_name LIMIT 100",$like),ARRAY_A);
    foreach($rows as $row){
-    $out[$row['option_name']]=array(
-     'exists'=>true,'autoload'=>$row['autoload'],
-     'value'=>maybe_unserialize($row['option_value'])
-    );
+    $safe=self::option_value($row['option_name'],maybe_unserialize($row['option_value']));
+    $out[$row['option_name']]=array('exists'=>true,'autoload'=>$row['autoload'],'redacted'=>$safe['redacted'],'value'=>$safe['value']);
    }
   } else return new WP_Error('oai_options_query','Specify prefix or keys',array('status'=>400));
   return array('count'=>count($out),'items'=>$out);
@@ -118,26 +139,32 @@ class OAI_Read {
  public static function users($req) {
   if(!current_user_can('list_users')) return new WP_Error('oai_forbidden','User list permission required',array('status'=>403));
   $limit=min(100,max(1,absint($req->get_param('limit')?:50)));
-  $users=get_users(array('number'=>$limit,'orderby'=>'ID','order'=>'DESC'));
+  $page=min(10000,max(1,absint($req->get_param('page')?:1)));
+  $query=new WP_User_Query(array('number'=>$limit,'offset'=>($page-1)*$limit,'orderby'=>'ID','order'=>'DESC','count_total'=>true));
+  $users=$query->get_results();
   $out=array();
   foreach($users as $u) $out[]=array(
    'id'=>$u->ID,'login'=>$u->user_login,'display_name'=>$u->display_name,
    'email'=>$u->user_email,'roles'=>array_values($u->roles),
    'registered'=>$u->user_registered
   );
-  return array('count'=>count($out),'items'=>$out);
+  $total=(int)$query->get_total();$pages=(int)ceil($total/$limit);
+  return array('count'=>count($out),'page'=>$page,'limit'=>$limit,'total'=>$total,'total_pages'=>$pages,'has_more'=>$page<$pages,'items'=>$out);
  }
 
  public static function comments($req) {
   $limit=min(100,max(1,absint($req->get_param('limit')?:50)));
-  $comments=get_comments(array('number'=>$limit,'status'=>'all','orderby'=>'comment_date_gmt','order'=>'DESC'));
+  $page=min(10000,max(1,absint($req->get_param('page')?:1)));
+  $args=array('number'=>$limit,'offset'=>($page-1)*$limit,'status'=>'all','orderby'=>'comment_date_gmt','order'=>'DESC');
+  $comments=get_comments($args);
   $out=array();
   foreach($comments as $c) $out[]=array(
    'id'=>$c->comment_ID,'post_id'=>$c->comment_post_ID,'author'=>$c->comment_author,
    'email'=>$c->comment_author_email,'approved'=>$c->comment_approved,
    'date'=>$c->comment_date_gmt,'content'=>$c->comment_content
   );
-  return array('count'=>count($out),'items'=>$out);
+  $total=(int)get_comments(array('count'=>true,'status'=>'all'));$pages=(int)ceil($total/$limit);
+  return array('count'=>count($out),'page'=>$page,'limit'=>$limit,'total'=>$total,'total_pages'=>$pages,'has_more'=>$page<$pages,'items'=>$out);
  }
 
  public static function widgets() {

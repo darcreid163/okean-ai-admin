@@ -3,7 +3,7 @@
 if (!defined('ABSPATH')) exit;
 class OAI_Lifecycle {
  public static function phase($status){
-  $map=array('pending'=>'awaiting_approval','approved'=>'approved','applying'=>'applying','applied'=>'applied','proved'=>'proved','rejected'=>'rejected','apply_failed'=>'apply_failed','rollback_pending'=>'rollback_pending','rolling_back'=>'rolling_back','rolled_back'=>'rolled_back','rollback_failed'=>'rollback_failed');
+  $map=array('pending'=>'awaiting_approval','approved'=>'approved','applying'=>'applying','applied'=>'applied','proved'=>'proved','rejected'=>'rejected','apply_failed'=>'apply_failed','rollback_pending'=>'rollback_pending','rolling_back'=>'rolling_back','rolled_back'=>'rolled_back','rollback_failed'=>'rollback_failed','expired'=>'expired');
   return $map[$status]??$status;
  }
  public static function descriptor($type,$target,$before,$meta=array()){

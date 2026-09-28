@@ -7,7 +7,7 @@ class OAI_Capabilities {
  public static function map() {
   return array(
    'read'=>array(
-    'site','foundation_capabilities','operation','proof','plugins','themes','content','elementor','elementor_schema','elementor_globals','builder_adapters','woocommerce','media','menus',
+    'site','foundation_capabilities','adapter_catalog','operation','proof','plugins','themes','content','elementor','elementor_schema','elementor_globals','builder_adapters','woocommerce','media','menus',
     'taxonomies','options','users','comments','widgets','files','diagnostics'
    ),
    'sandbox'=>array(
@@ -15,7 +15,7 @@ class OAI_Capabilities {
     'elementor_widget_html','elementor_widget_settings','elementor_page_create','woo_product_price','woo_product_stock','file_write'
    ),
    'approval'=>array('approve','reject','apply','rollback'),
-   'builders'=>array('elementor'=>'builder_owned_save_pipeline','future'=>array('gutenberg','woocommerce','bricks','breakdance','beaver','divi','seedprod')),
+   'builders'=>array('elementor'=>'builder_owned_save_pipeline','gutenberg'=>'native_block_resolver','woocommerce'=>'commerce_resolver','catalog'=>'okean_adapter_catalog'),
    'mcp'=>array('transport'=>'streamable_http_jsonrpc','endpoint'=>'/wp-json/okean-ai/mcp','oauth_ready'=>true,'bearer_token'=>true,'subscription_gate'=>true,'default_enabled'=>false,'writes'=>'sandbox_only'),
    'security'=>array(
     'agent_channel'=>true,
