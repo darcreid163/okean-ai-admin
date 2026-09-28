@@ -1,6 +1,6 @@
 # WP AI Admin: Control Plane contract v1 (design)
 
-Status: design for the commercial service. No remote Control Plane is configured in the tested installation. Plugin 2.0.57 contains local license, plan, quota, identity and security-status foundations; it does not implement this remote protocol.
+Status: design for the commercial service. No remote Control Plane is configured in the tested installation. Plugin 2.0.58 adds a verification-only signed entitlement parser alongside local license, plan, quota, identity and security-status foundations. It does not fetch or enforce remote entitlements.
 
 ## Responsibilities
 

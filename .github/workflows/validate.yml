@@ -33,7 +33,9 @@ jobs:
             php -l "$file"
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
-          test "$count" -eq 60
+          test "$count" -eq 62
+      - name: Signed entitlement contract
+        run: php tests/control-plane-entitlements.php
       - name: Plugin ZIP integrity
         shell: bash
         run: |

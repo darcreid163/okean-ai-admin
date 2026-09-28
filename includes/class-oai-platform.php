@@ -1,5 +1,5 @@
 <?php
-/** WP AI Admin 2.0.57 platform: strict batch state machine, pause/checkpoints/lease, batch receipts and proof. */
+/** WP AI Admin 2.0.58 platform: strict batch state machine, pause/checkpoints/lease, batch receipts and proof. */
 if (!defined('ABSPATH')) exit;
 class OAI_Platform {
  public static function content_navigation_state(){
@@ -53,7 +53,7 @@ class OAI_Platform {
   return array(
    'schema_version'=>1,'site_id'=>$site,'installation_id'=>$installation,
    'installation_fingerprint'=>hash('sha256',$installation.'|'.$site.'|'.home_url('/').'|'.wp_salt('auth')),
-   'control_plane'=>array('configured'=>$cp!=='','registered'=>$registered,'server_public_key_configured'=>$server_key!=='','private_server_key_present_in_plugin'=>false),
+   'control_plane'=>array('configured'=>$cp!=='','registered'=>$registered,'server_public_key_configured'=>$server_key!=='','private_server_key_present_in_plugin'=>false,'signed_entitlement_verifier'=>class_exists('OAI_Control_Plane'),'sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_entitlements_enforced'=>false),
    'guards'=>array('direct_live_writes'=>false,'local_human_approval_enforced'=>empty($test_automation['active']),'human_approval_default'=>true,'test_automation_active'=>!empty($test_automation['active']),'test_automation_scope_limited'=>true,'sandbox_before_apply'=>true,'verify_after_apply'=>true,'rollback_supported'=>true),
    'test_automation'=>$test_automation,
    'planned_protocol'=>array('short_lived_signed_tokens'=>true,'site_and_workspace_binding'=>true,'request_id_nonce_timestamp'=>true,'replay_protection'=>true,'token_rotation'=>true,'site_revoke'=>true,'workspace_freeze'=>true,'global_write_freeze'=>true,'signed_entitlements'=>true),
@@ -64,12 +64,13 @@ class OAI_Platform {
   global $wpdb;
   $checks=array();
   $add=function($id,$ok,$details=array())use(&$checks){$checks[]=array('id'=>$id,'ok'=>(bool)$ok,'details'=>$details);};
-  $add('runtime.version',defined('OAI_VERSION')&&OAI_VERSION==='2.0.57',array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID));
+  $add('runtime.version',defined('OAI_VERSION')&&OAI_VERSION==='2.0.58',array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID));
   $add('identity.site_id',self::site_id()!=='',array('site_id'=>self::site_id()));
   $add('identity.installation_id',self::installation_id()!=='',array('installation_id'=>self::installation_id()));
   $add('database.connection',isset($wpdb)&&$wpdb->dbh,array('prefix'=>isset($wpdb)?$wpdb->prefix:null));
   $add('wordpress.rest',function_exists('register_rest_route'));
   $add('oauth.schema_version',class_exists('OAI_MCP_OAuth')&&OAI_MCP_OAuth::SCHEMA_VERSION===1&&(int)get_option('oai_oauth_schema_version',0)===1);
+  $add('control_plane.entitlement_verifier',class_exists('OAI_Control_Plane')&&OAI_Control_Plane::CONTRACT_VERSION===1&&method_exists('OAI_Control_Plane','verify'),array('sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_enforcement'=>false));
   $caps=OAI_Capabilities::available();
   $execution=OAI_WP_CLI_Execution::readiness();
   $add('security.direct_live_writes_disabled',empty($caps['security']['direct_live_writes']) && empty($execution['direct_write_execution']));
@@ -182,7 +183,7 @@ class OAI_Platform {
   $catalog=self::tool_catalog();
   return array(
    'schema_version'=>2,'plugin_name'=>'WP AI Admin','plugin_version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID,'site_id'=>self::site_id(),'installation_id'=>self::installation_id(),
-   'control_plane'=>array('supported'=>true,'configured'=>(bool)get_option('oai_control_plane_url',''),'mode'=>'remote_identity_entitlements_catalog_quota','local_approval_enforced'=>true,'test_automation_exception_active'=>(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()),'direct_live_writes'=>false,'security_contract_version'=>1),
+   'control_plane'=>array('supported'=>true,'configured'=>(bool)get_option('oai_control_plane_url',''),'mode'=>'remote_identity_entitlements_catalog_quota','signed_entitlement_verifier'=>true,'remote_entitlements_enforced'=>false,'local_approval_enforced'=>true,'test_automation_exception_active'=>(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()),'direct_live_writes'=>false,'security_contract_version'=>1),
    'multi_site'=>array('foundation'=>true,'site_identity'=>true,'installation_identity'=>true,'workspace_aware'=>true,'central_fanout_planned'=>true),
    'batch'=>array('foundation'=>true,'mode'=>'resumable_sandbox_children','atomicity'=>'per_child_operation','rollback'=>'reverse_child_reconciliation','max_items'=>100,'retained_jobs'=>50,'human_approval_default'=>true,'manual_pause'=>true,'optimistic_versioning'=>true,'lease_seconds'=>60,'db_mutex'=>'mysql_named_lock','checkpoint_events'=>100,'batch_receipt'=>true,'batch_proof'=>true,'strict_retry_unresolved_guard'=>true),
    'feature_flags'=>array('content_navigation'=>self::content_navigation_state()),
@@ -190,7 +191,7 @@ class OAI_Platform {
    'test_manifest'=>array('supported'=>true,'self_test_tool'=>'system.self_test','tool_catalog_tool'=>'system.tool_catalog','test_automation_status_tool'=>'system.test_automation_status','regression_runner_tool'=>'system.regression_run','regression_matrix_tool'=>'system.regression_matrix','regression_history_tool'=>'system.regression_history','coverage_report_tool'=>'system.coverage_report','security_fuzz_tool'=>'system.security_fuzz','gutenberg_outline_tool'=>'gutenberg.get_outline','scoped_mcp_lifecycle_automation'=>true,'sequential_regression_runner'=>true,'managed_gutenberg_fixture'=>true,'reusable_gutenberg_fixture'=>true,'test_automation_max_actions'=>100000,'lifecycle'=>array('exposed','read','sandbox','approval','apply','verify','rollback','rollback_verify')),
    'tool_catalog'=>array('expected_count'=>$catalog['expected_count'],'catalog_sha256'=>$catalog['catalog_sha256'],'expected_ids'=>self::expected_tools()),
    'security'=>array('status_tool'=>'system.security_status','installation_identity'=>true,'server_private_key_embedded'=>false,'short_lived_token_contract'=>true,'replay_protection_contract'=>true,'revocation_contract'=>true),
-   'compatibility'=>array('legacy_tool_aliases'=>true,'primary_api'=>'2.0.57-oauth-schema-upgrade-gate')
+   'compatibility'=>array('legacy_tool_aliases'=>true,'primary_api'=>'2.0.58-signed-entitlement-verifier')
   );
  }
  public static function batch_plan($items){

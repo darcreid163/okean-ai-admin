@@ -148,3 +148,8 @@
 - Runs the three OAuth `dbDelta` statements only when the OAuth schema version needs migration, rather than on every WordPress request. Verifies all tables before storing the version; an incomplete migration retries on the next request.
 - The MySQL CI test checks retry after a missing table, subsequent request without `dbDelta`, and registered client retention.
 - The MCP catalog remains 90 tools. Self-test expects 50 checks, including the OAuth schema version.
+
+## 2.0.58 — Signed entitlement verifier foundation
+- Adds a verification-only Ed25519 envelope for a future remote Control Plane. It checks exact signed bytes, pinned public key ID, site/installation/registration binding, short validity window, policy sequence, feature allowlist and quota shape.
+- Includes cryptographic negative tests in PHP 8.2–8.4 CI. It does not fetch or activate a remote license, change existing local-owner access, or implement commercial quota reservations.
+- MCP catalog remains 90 tools; self-test expects 51 checks.
