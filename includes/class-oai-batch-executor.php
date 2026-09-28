@@ -21,9 +21,24 @@ class OAI_Batch_Executor {
  const RESULT_MAX_CHARS=2000;
  const LEASE_SECONDS=60;
  const EVENT_LIMIT=100;
+ const MUTEX_NAME='oai_batch_jobs_v1_mutex';
 
  private static function now(){return gmdate('c');}
  private static function client_hash($client_id){return hash('sha256',(string)$client_id);}
+ private static function mutex_name($wpdb){
+  return self::MUTEX_NAME.'_'.substr(hash('sha256',(string)($wpdb->dbname??'').'|'.(string)($wpdb->prefix??'')),0,16);
+ }
+ private static function with_mutex($callback){
+  global $wpdb;
+  if(!isset($wpdb)||!is_object($wpdb)||!method_exists($wpdb,'get_var')||!method_exists($wpdb,'prepare'))
+   return new WP_Error('oai_batch_mutex_unavailable','Database lock is unavailable',array('status'=>503));
+  $name=self::mutex_name($wpdb);
+  $result=$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s,0)',$name));
+  if((string)$result!=='1')
+   return new WP_Error((string)$result==='0'?'oai_batch_busy':'oai_batch_mutex_unavailable','Batch mutation is already running or database lock is unavailable',array('status'=>(string)$result==='0'?409:503));
+  try{return $callback();}
+  finally{$wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)',$name));}
+ }
  private static function all_jobs(){
   $jobs=get_option(self::OPTION,array());
   return is_array($jobs)?$jobs:array();
@@ -109,6 +124,9 @@ class OAI_Batch_Executor {
  }
 
  public static function create($items,$label,$client_id,$user_id){
+  return self::with_mutex(function()use($items,$label,$client_id,$user_id){return self::create_locked($items,$label,$client_id,$user_id);});
+ }
+ private static function create_locked($items,$label,$client_id,$user_id){
   $user_id=absint($user_id);if(!$user_id||!user_can($user_id,'manage_options'))return new WP_Error('oai_batch_admin','Administrator identity required',array('status'=>403));
   $preflight=OAI_Platform::batch_preflight($items);if(is_wp_error($preflight))return $preflight;
   if(count((array)$items)>self::MAX_ITEMS)return new WP_Error('oai_batch_limit','Batch executor is limited to 100 items',array('status'=>422));
@@ -219,12 +237,18 @@ class OAI_Batch_Executor {
  private static function busy_guard($job){return self::lease_active($job)?new WP_Error('oai_batch_lease','Batch job is currently leased by a resume execution',array('status'=>409,'lease_expires_at'=>absint($job['lease']['expires_at']??0))):true;}
 
  public static function pause($id,$reason,$client_id,$user_id,$expected_version=0){
+  return self::with_mutex(function()use($id,$reason,$client_id,$user_id,$expected_version){return self::pause_locked($id,$reason,$client_id,$user_id,$expected_version);});
+ }
+ private static function pause_locked($id,$reason,$client_id,$user_id,$expected_version){
   $job=self::auth_job($id,$client_id,$user_id);if(is_wp_error($job))return $job;$ver=self::assert_version($job,$expected_version);if(is_wp_error($ver))return $ver;$busy=self::busy_guard($job);if(is_wp_error($busy))return $busy;
   if(in_array((string)$job['status'],array('completed','cancelled','rolled_back'),true))return new WP_Error('oai_batch_terminal','Terminal batch job cannot be paused',array('status'=>409,'batch_status'=>$job['status']));
   self::reconcile_child_steps($job);$job['manual_pause']=true;$job['pause_reason']=sanitize_text_field((string)$reason);$job['status']='paused';self::checkpoint($job,'manual_pause',array('reason'=>$job['pause_reason']));self::save_job($job);return self::public_job($job,false);
  }
 
  public static function resume($id,$max_steps,$client_id,$user_id,$expected_version=0){
+  return self::with_mutex(function()use($id,$max_steps,$client_id,$user_id,$expected_version){return self::resume_locked($id,$max_steps,$client_id,$user_id,$expected_version);});
+ }
+ private static function resume_locked($id,$max_steps,$client_id,$user_id,$expected_version){
   $job=self::auth_job($id,$client_id,$user_id);if(is_wp_error($job))return $job;$ver=self::assert_version($job,$expected_version);if(is_wp_error($ver))return $ver;
   if(in_array((string)$job['status'],array('cancelled','rolled_back'),true))return new WP_Error('oai_batch_terminal','Batch job is in a terminal state',array('status'=>409,'batch_status'=>$job['status']));
   $lease_token=self::acquire_lease($job);if(is_wp_error($lease_token))return $lease_token;
@@ -255,6 +279,9 @@ class OAI_Batch_Executor {
  }
 
  public static function retry($id,$step_id,$client_id,$user_id,$expected_version=0){
+  return self::with_mutex(function()use($id,$step_id,$client_id,$user_id,$expected_version){return self::retry_locked($id,$step_id,$client_id,$user_id,$expected_version);});
+ }
+ private static function retry_locked($id,$step_id,$client_id,$user_id,$expected_version){
   $job=self::auth_job($id,$client_id,$user_id);if(is_wp_error($job))return $job;$ver=self::assert_version($job,$expected_version);if(is_wp_error($ver))return $ver;$busy=self::busy_guard($job);if(is_wp_error($busy))return $busy;$step_id=sanitize_key((string)$step_id);if(empty($job['steps'][$step_id]))return new WP_Error('oai_batch_step','Batch step not found',array('status'=>404,'step_id'=>$step_id));
   $unresolved=self::unresolved_child_operations($job);if($unresolved)return new WP_Error('oai_batch_retry_unresolved','Retry is blocked while any child operation is unresolved',array('status'=>409,'unresolved_child_operations'=>$unresolved));
   self::reconcile_child_steps($job);
@@ -265,6 +292,9 @@ class OAI_Batch_Executor {
  }
 
  public static function cancel($id,$reason,$client_id,$user_id,$expected_version=0){
+  return self::with_mutex(function()use($id,$reason,$client_id,$user_id,$expected_version){return self::cancel_locked($id,$reason,$client_id,$user_id,$expected_version);});
+ }
+ private static function cancel_locked($id,$reason,$client_id,$user_id,$expected_version){
   $job=self::auth_job($id,$client_id,$user_id);if(is_wp_error($job))return $job;$ver=self::assert_version($job,$expected_version);if(is_wp_error($ver))return $ver;$busy=self::busy_guard($job);if(is_wp_error($busy))return $busy;if(in_array((string)$job['status'],array('completed','rolled_back'),true))return new WP_Error('oai_batch_terminal','Completed/rolled-back batch cannot be cancelled',array('status'=>409));
   self::reconcile_child_steps($job);foreach($job['steps'] as &$step){if((string)$step['state']==='pending')$step['state']='cancelled';}unset($step);
   $job['status']='cancelled';$job['manual_pause']=false;$job['cancel_reason']=sanitize_text_field((string)$reason);$job['cancelled_at']=self::now();self::recalc($job);$unresolved=self::unresolved_child_operations($job);self::checkpoint($job,'cancel',array('reason'=>$job['cancel_reason'],'unresolved_count'=>count($unresolved)));self::save_job($job);
@@ -272,6 +302,9 @@ class OAI_Batch_Executor {
  }
 
  public static function rollback($id,$client_id,$user_id,$expected_version=0){
+  return self::with_mutex(function()use($id,$client_id,$user_id,$expected_version){return self::rollback_locked($id,$client_id,$user_id,$expected_version);});
+ }
+ private static function rollback_locked($id,$client_id,$user_id,$expected_version){
   $job=self::auth_job($id,$client_id,$user_id);if(is_wp_error($job))return $job;$ver=self::assert_version($job,$expected_version);if(is_wp_error($ver))return $ver;$busy=self::busy_guard($job);if(is_wp_error($busy))return $busy;$needs_human=array();$failed=array();$rolled=array();
   self::reconcile_child_steps($job);$order=array_reverse((array)$job['execution_order']);
   foreach($order as $sid){$step=&$job['steps'][$sid];if(empty($step['operation_id'])){unset($step);continue;}$opid=absint($step['operation_id']);$row=OAI_DB::get($opid);if(!$row){$failed[]=$opid;unset($step);continue;}$st=(string)$row['status'];
@@ -313,6 +346,7 @@ class OAI_Batch_Executor {
    'strict_retry_unresolved_guard'=>method_exists(__CLASS__,'unresolved_child_operations'),
    'manual_pause_available'=>method_exists(__CLASS__,'pause'),
    'lease_bounded'=>self::LEASE_SECONDS===60,
+   'db_mutex_available'=>method_exists(__CLASS__,'with_mutex')&&self::MUTEX_NAME==='oai_batch_jobs_v1_mutex',
    'checkpoint_events_bounded'=>self::EVENT_LIMIT===100,
    'receipt_and_proof_available'=>method_exists(__CLASS__,'receipt')&&method_exists(__CLASS__,'proof'),
    'dry_run_available'=>method_exists(__CLASS__,'dry_run'),

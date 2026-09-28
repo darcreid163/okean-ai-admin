@@ -138,3 +138,8 @@
 - Batch status, list and receipt now read the current child-operation state and recalculate summaries without mutating stored checkpoints during reads. A cancelled batch whose child is later rejected reports that step as failed, with no stale waiting-approval count.
 - Pause, retry, cancel and rollback persist reconciled child states in their next checkpoint. The strict retry Regression Matrix case checks rejection, current status/receipt, terminal-child retry and subsequent cancel.
 - MCP catalog remains 90 tools and self-test remains 49 checks. The direct ChatGPT `batch.proof` routing issue was observed outside the plugin; server tool export and REST invocation are present.
+
+## 2.0.56 — Atomic Batch Mutation Mutex
+- Uses a database-scoped MySQL named lock around create, resume, pause, retry, cancel and rollback. A competing request receives 409 before reading or changing a job; an unavailable lock fails closed with 503. The 60-second lease remains as job checkpoint metadata.
+- Adds a MySQL integration test with two independent PHP processes and CI for PHP 8.2–8.4 lint, ZIP integrity and mutex contention.
+- The MCP catalog remains 90 tools; the self-test remains 49 checks.

@@ -33,7 +33,7 @@ jobs:
             php -l "$file"
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
-          test "$count" -eq 57
+          test "$count" -eq 58
       - name: Plugin ZIP integrity
         shell: bash
         run: |
@@ -42,3 +42,33 @@ jobs:
           cp -a okean-ai-admin.php includes starter-themes releases README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
           (cd dist && zip -qr okean-ai-admin.zip okean-ai-admin)
           unzip -tq dist/okean-ai-admin.zip
+
+  batch-mutex-concurrency:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-password
+          MYSQL_DATABASE: wp_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+      - name: Two independent PHP requests compete for the same lock
+        env:
+          DB_HOST: 127.0.0.1
+          DB_USER: root
+          DB_PASSWORD: test-password
+          DB_NAME: wp_test
+        run: php tests/batch-mutex-concurrency.php
