@@ -1,0 +1,14 @@
+AI Admin 2.0.33 release archive record
+
+Version: 2.0.33
+Build ID: 2.0.33-theme-mods-20260925
+Source archive: okean-ai-admin-2.0.33.zip
+Archive SHA-256: 3716f6109f2a3cca29711b64422f51cf1021b390e617f604676798a494e1556b
+Files: 68
+PHP files: 49
+PHP lint: 49/49 passed on 2026-09-28
+ZIP integrity: passed on 2026-09-28
+
+Important: the uploaded 2.0.33 ZIP contained a stale BUILD_SIGNATURE.txt saying 2.0.31, while the plugin header/runtime constants correctly say 2.0.33 / 2.0.33-theme-mods-20260925. This is recorded as a packaging defect and is corrected in the next build.
+
+This branch is the release record created from the exact user-supplied 2.0.33 archive audit.
