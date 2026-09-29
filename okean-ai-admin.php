@@ -2,18 +2,19 @@
 /**
  * Plugin Name: WP AI Admin
  * Description: Universal AI Admin for WordPress with sandbox, diff, preview, approval, verification, rollback, Elementor, WooCommerce, Gutenberg, files and MCP.
- * Version: 2.0.68
+ * Version: 2.0.69
  * Author: Андриянов Н.Г.
  * Copyright: Андриянов Н.Г.
  */
 if (!defined('ABSPATH')) exit;
-define('OAI_VERSION','2.0.68');
-define('OAI_BUILD_ID','2.0.68-unified-page-qa-20260929');
+define('OAI_VERSION','2.0.69');
+define('OAI_BUILD_ID','2.0.69-operations-cleanup-20260929');
 define('OAI_DB_VERSION',23);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
 define('OAI_DIR',plugin_dir_path(__FILE__));
 require_once OAI_DIR.'includes/class-oai-db.php';
+require_once OAI_DIR.'includes/class-oai-operations-cleanup.php';
 require_once OAI_DIR.'includes/class-oai-errors.php';
 require_once OAI_DIR.'includes/class-oai-operation-schema.php';
 require_once OAI_DIR.'includes/class-oai-intent.php';
