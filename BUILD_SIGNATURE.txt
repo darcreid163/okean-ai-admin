@@ -1,12 +1,12 @@
 WP AI Admin Build Signature
-Version: 2.0.66
-Build ID: 2.0.66-tabbed-visual-qa-20260929
-Purpose: single tabbed Visual QA preview with responsive fit and no viewport upscaling
+Version: 2.0.67
+Build ID: 2.0.67-scroll-aware-visual-qa-20260929
+Purpose: distinguish real viewport offscreen defects from intentional local horizontal scroll containers
 Expected catalog with Content Navigation enabled: 93 tools
 Expected self-test checks: 58
 Direct live writes: false
 Human approval default: true
 Visual QA viewports: 1440 / 768 / 390 exact internal widths
-UI: one visible preview at a time; Desktop / Tablet / Mobile tabs
+UI: one visible tabbed preview at a time
 Scaling: shrink-to-fit only; never upscale above 100%
-Noise filter: Elementor service helpers ignored
+Offscreen logic: descendants of overflow-x:auto/scroll containers are not reported as viewport defects
