@@ -10,7 +10,7 @@ class OAI_MCP {
   register_rest_route('okean-ai','/mcp',array('methods'=>'POST','callback'=>array(__CLASS__,'handle'),'permission_callback'=>array(__CLASS__,'permission')));
   register_rest_route('okean-ai','/mcp',array('methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>array(__CLASS__,'permission')));
  }
- public static function info(){return array('name'=>'Okean AI Admin MCP','version'=>OAI_VERSION,'protocol'=>'MCP Streamable HTTP / JSON-RPC 2.0','enabled'=>(bool)get_option('oai_mcp_enabled',false),'license'=>OAI_License::user_status(),'auth'=>'Bearer access token','write_model'=>'sandbox + human approval; optional short-lived scoped test automation');}
+ public static function info(){return array('name'=>'Okean AI Admin MCP','version'=>OAI_VERSION,'protocol'=>'MCP Streamable HTTP / JSON-RPC 2.0','enabled'=>(bool)get_option('oai_mcp_enabled',false),'license'=>OAI_License::user_status(),'auth'=>'Bearer access token','write_model'=>'sandbox + human approval; optional admin-enabled AI lifecycle control; optional short-lived scoped test automation');}
  private static function token_hash(){return (string)get_option('oai_mcp_token_hash','');}
  public static function generate_token($user_id=0){ $token='oai_mcp_'.wp_generate_password(56,false,false); update_option('oai_mcp_token_hash',hash('sha256',$token),false); if($user_id) update_option('oai_mcp_token_user_id',absint($user_id),false); else delete_option('oai_mcp_token_user_id'); update_option('oai_mcp_enabled',true,false); return $token; }
  public static function admin_generate_token(){
@@ -446,24 +446,28 @@ class OAI_MCP {
    case 'elementor_patch_settings':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch');$r->set_param('target',absint($a['post_id']??0).':'.sanitize_text_field((string)($a['widget_id']??'')));$r->set_param('changes',$a['changes']??array());$out=OAI_REST::elementor_patch($r);break;
    case 'file_write_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/files/write');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::files_write($r);break;
    case 'operation_reject':
+    if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'reject',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
     if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'reject',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    return self::response($id,null,array('code'=>-32003,'message'=>'Human rejection is required in wp-admin unless scoped Test Automation Mode is active for this operation'));
+    return self::response($id,null,array('code'=>-32003,'message'=>'Human rejection is required in wp-admin unless AI Lifecycle Control or scoped Test Automation Mode is active'));
    case 'woocommerce_update_product_sandbox':
    case 'woocommerce_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_patch($r);break;
    case 'elementor_create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_create_page($r);break;
    case 'elementor_patch_widget':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-widget');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_patch_widget($r);break;
    case 'elementor_patch_fragment':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-fragment');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_patch_fragment($r);break;
    case 'operation_approve':
+    if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'approve',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
     if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'approve',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    return self::response($id,null,array('code'=>-32003,'message'=>'Human approval is required in wp-admin unless scoped Test Automation Mode is active for this operation'));
+    return self::response($id,null,array('code'=>-32003,'message'=>'Human approval is required in wp-admin unless AI Lifecycle Control or scoped Test Automation Mode is active'));
    case 'operation_apply':
     $license=OAI_License::can('mcp_apply');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));
+    if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'apply',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
     if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'apply',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    return self::response($id,null,array('code'=>-32003,'message'=>'Human approval required in wp-admin before apply'));
+    return self::response($id,null,array('code'=>-32003,'message'=>'Human approval required in wp-admin before apply unless AI Lifecycle Control is active'));
    case 'operation_rollback':
     $license=OAI_License::can('mcp_rollback');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));
+    if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'rollback',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
     if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'rollback',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin'));
+    return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin unless AI Lifecycle Control is active'));
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
   }
   $sandbox_tools=array('gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox');
