@@ -27,7 +27,7 @@ namespace {
  function wp_cache_delete($id,$group){}
  function do_action($hook){}
  \Elementor\Plugin::$instance=new \Elementor\Plugin();
- $GLOBALS['test_posts']=array(42=>array('post_content'=>'Original page duplicated in WordPress and Elementor'),43=>array('post_content'=>'Independent WordPress content'));
+ $GLOBALS['test_posts']=array(42=>array('post_content'=>'Original page duplicated in WordPress and Elementor','post_status'=>'draft','post_title'=>'WP AI Admin Test Draft'),43=>array('post_content'=>'Independent WordPress content','post_status'=>'draft','post_title'=>'Independent WordPress content'));
  $GLOBALS['test_meta']=array();
  require dirname(__DIR__).'/includes/class-oai-elementor.php';
  function expect($value,$message){if(!$value)throw new \RuntimeException($message);}
