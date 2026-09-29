@@ -159,3 +159,13 @@
 - `elementor.create_draft` accepts `source_post_id`. With no `data`, it clones the source Elementor tree, page template and allowlisted page layout metadata; supplied `data` remains authoritative while template/layout settings inherit. A front-page-only theme layout may still require visual adjustment on a different URL.
 - `elementor.patch_fragment` replaces exactly one literal text/image/HTML fragment in an existing HTML widget, guarded by the widget SHA-256. It uses the usual sandbox approval/apply/rollback lifecycle.
 - Regression Runner includes fragment patch/rollback and CI tests image/text edits, stale/ambiguous fragments, single-source saves and manual-content conflicts. Expected catalog: 91; self-test: 53.
+
+
+## 2.0.61 — AI Lifecycle Control + Preview actions
+- Adds an administrator-controlled **AI Lifecycle Control** switch. It is disabled by default.
+- When enabled, the first authenticated administrator MCP client is bound to the mode and may call `operation.approve`, `operation.reject`, `operation.apply`, and `operation.rollback` for normal sandbox operations.
+- Manual WP Admin controls remain available in parallel; enabling AI control does not remove or bypass human control.
+- AI lifecycle calls still enter the same `OAI_REST::sandbox_action` path, preserving sandbox expiry, snapshot conflict detection, validation, Verify, receipts/proofs, and rollback conflict checks.
+- The Okean AI Preview top bar now exposes status-aware manual controls for logged-in WordPress administrators: **Подтвердить / Отклонить / Применить / Откатить**.
+- Preview actions use the authenticated WordPress session plus a REST nonce. A signed preview URL alone is not sufficient to mutate the site.
+- Existing Test Automation Mode remains separate and unchanged for scoped regression fixtures.
