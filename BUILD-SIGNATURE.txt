@@ -1,7 +1,7 @@
 WP AI Admin Build Signature
-Version: 2.0.59
-Build ID: 2.0.59-elementor-single-source-fragment-20260929
-Purpose: create Elementor drafts with one content source, clone source layout settings and edit exact widget fragments without duplicating pages
+Version: 2.0.60
+Build ID: 2.0.60-test-created-draft-scope-20260929
+Purpose: preserve 2.0.59 Elementor single-source/fragment editing and automatically keep in-session created Elementor drafts inside Test Automation scope for follow-up edits
 Expected catalog with Content Navigation enabled: 91 tools
 Direct live writes: false
 Human approval default: true
