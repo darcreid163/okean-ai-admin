@@ -1,13 +1,14 @@
 WP AI Admin Build Signature
-Version: 2.0.68
-Build ID: 2.0.68-unified-page-qa-20260929
-Purpose: unified read-only page QA orchestrator combining static DOM/accessibility/link analysis with Browser Visual QA
-Expected catalog with Content Navigation enabled: 94 tools
-Expected self-test checks: 59
+Version: 2.0.69
+Build ID: 2.0.69-operations-cleanup-20260929
+Purpose: safe terminal operation-ledger cleanup before new User Journey QA cycle
+Expected catalog with Content Navigation enabled: 95 tools
+Expected self-test checks: 60
 Direct live writes: false
 Human approval default: true
-New tool: system.page_qa_run
-Workflow: first call post_id -> static QA + signed browser probe; second call post_id + probe_id -> unified PASS/WARN report
-Static checks: H1 count, heading order, image alt presence, accessible form controls, empty/unsafe links, broken in-page anchors, duplicate IDs
-Visual QA: exact 1440 / 768 / 390 viewports, tabbed preview, shrink-to-fit, scroll-container-aware
-Content mutation: none
+New tool: system.operations_cleanup
+Dry-run default: true
+Protected active statuses: pending / approved / applying / rolling_back
+Terminal default cleanup: rolled_back / rejected / expired / cancelled / failed
+Applied cleanup: explicit include_applied=true only
+Audit log: preserved
