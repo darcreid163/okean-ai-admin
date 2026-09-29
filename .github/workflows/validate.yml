@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/okean-ai-admin
-          cp -a okean-ai-admin.php includes starter-themes releases README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
+          cp -a okean-ai-admin.php includes starter-themes README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
           (cd dist && zip -qr okean-ai-admin.zip okean-ai-admin)
           unzip -tq dist/okean-ai-admin.zip
       - name: Publish installable ZIP to branch
