@@ -169,3 +169,11 @@
 - The Okean AI Preview top bar now exposes status-aware manual controls for logged-in WordPress administrators: **Подтвердить / Отклонить / Применить / Откатить**.
 - Preview actions use the authenticated WordPress session plus a REST nonce. A signed preview URL alone is not sufficient to mutate the site.
 - Existing Test Automation Mode remains separate and unchanged for scoped regression fixtures.
+
+
+## 2.0.62 — Runtime self-test + security status alignment
+- `runtime.version` self-test now validates a semantic version plus a matching build-id prefix instead of hard-coding an older release number.
+- `system.security_status` now exposes `ai_lifecycle_control` and guard flags for active AI lifecycle control, explicit opt-in, and preservation of manual lifecycle controls.
+- Adds `security.ai_lifecycle_status_contract` to the read-only self-test suite.
+- Expected MCP catalog: 91 tools. Expected self-test checks: 54.
+- Direct live writes remain disabled. Human lifecycle remains the default; AI Lifecycle Control remains administrator opt-in and MCP-client-bound.
