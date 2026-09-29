@@ -147,6 +147,7 @@ class OAI_MCP {
    'wp.inspect_html'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('url'=>array('type'=>'string'),'post_id'=>array('type'=>'integer','minimum'=>1),'allow_draft'=>array('type'=>'boolean','description'=>'Render draft/private/pending content internally for an authenticated WordPress administrator without publishing it.'),'selector'=>array('type'=>'string'),'mode'=>array('type'=>'string','enum'=>array('inspect','outline')),'max_results'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'max_chars'=>array('type'=>'integer','minimum'=>100,'maximum'=>10000),'include_attributes'=>array('type'=>'boolean'),'include_text'=>array('type'=>'boolean'),'include_html'=>array('type'=>'boolean'),'max_length'=>array('type'=>'integer','minimum'=>1000,'maximum'=>30000))),
    'wp.visual_qa_start'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
    'wp.visual_qa_result'=>array('type'=>'object','required'=>array('probe_id'),'additionalProperties'=>false,'properties'=>array('probe_id'=>array('type'=>'string','minLength'=>8))),
+   'system.page_qa_run'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'probe_id'=>array('type'=>'string','minLength'=>8,'description'=>'Optional probe_id returned by the first call. Supply it after opening the browser_url to collect the unified final report.'))),
    'wp.get_theme_mods'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('name'=>array('type'=>'string'))),
    'wp.list_media'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'page'=>array('type'=>'integer','minimum'=>1,'maximum'=>10000),'search'=>array('type'=>'string'))),
    'wp.list_users'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'page'=>array('type'=>'integer','minimum'=>1,'maximum'=>10000))),
@@ -283,6 +284,7 @@ class OAI_MCP {
    $tools[]=self::tool($name,$description,$schemas[$name]??array('type'=>'object'),array('readOnlyHint'=>true,'destructiveHint'=>false));
   }
   $tools[]=self::tool('wp.visual_qa_start','Create a short-lived signed browser Visual QA probe for one editable WordPress post. It does not publish or modify content; opening the returned URL executes viewport measurements and stores a bounded report.',$schemas['wp.visual_qa_start'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('system.page_qa_run','Run unified page QA. First call with post_id performs static DOM/accessibility/link checks and creates a browser Visual QA probe. After opening browser_url, call the same tool again with post_id and probe_id to receive one combined PASS/WARN report. It never publishes or changes page content.',$schemas['system.page_qa_run'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool(
    'system.regression_run',
    'Run a strictly sequential reversible regression suite inside an active scoped Test Automation session. Each mutation uses the normal sandbox lifecycle and must be rolled back and verified before the next scenario starts.',
@@ -371,6 +373,7 @@ class OAI_MCP {
    case 'wp_inspect_html':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/html');foreach(array('url','post_id','allow_draft','selector','mode','max_results','max_chars','include_attributes','include_text','include_html','max_length') as $k){if(array_key_exists($k,$a))$rr->set_param($k,$a[$k]);}$out=OAI_HTML_Inspector::inspect($rr);break;
    case 'wp_visual_qa_start':$out=OAI_Visual_QA::start(absint($a['post_id']??0));break;
    case 'wp_visual_qa_result':$out=OAI_Visual_QA::result((string)($a['probe_id']??''));break;
+   case 'system_page_qa_run':$out=OAI_Page_QA::run(absint($a['post_id']??0),(string)($a['probe_id']??''));break;
    case 'wp_get_theme_mods':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/theme-mods');if(array_key_exists('name',$a))$rr->set_param('name',$a['name']);$out=OAI_Theme_Mods::get($rr);break;
    case 'wp_get_site':$out=OAI_REST::site();break;
    case 'wp_list_plugins':$out=OAI_REST::plugins();break;
