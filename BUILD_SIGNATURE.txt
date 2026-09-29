@@ -1,7 +1,7 @@
 WP AI Admin Build Signature
-Version: 2.0.58
-Build ID: 2.0.58-signed-entitlement-verifier-20260928
-Purpose: verify domain-separated Ed25519 entitlement envelopes against site/install/registration, expiration and policy sequence without activating remote billing
-Expected catalog with Content Navigation enabled: 90 tools
+Version: 2.0.59
+Build ID: 2.0.59-elementor-single-source-fragment-20260929
+Purpose: create Elementor drafts with one content source, clone source layout settings and edit exact widget fragments without duplicating pages
+Expected catalog with Content Navigation enabled: 91 tools
 Direct live writes: false
 Human approval default: true

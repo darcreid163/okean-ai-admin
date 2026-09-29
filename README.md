@@ -153,3 +153,9 @@
 - Adds a verification-only Ed25519 envelope for a future remote Control Plane. It checks exact signed bytes, pinned public key ID, site/installation/registration binding, short validity window, policy sequence, feature allowlist and quota shape.
 - Includes cryptographic negative tests in PHP 8.2–8.4 CI. It does not fetch or activate a remote license, change existing local-owner access, or implement commercial quota reservations.
 - MCP catalog remains 90 tools; self-test expects 51 checks.
+
+## 2.0.59 — Elementor single source and in-place fragment edits
+- Newly created Elementor drafts use `_elementor_data` as the only content source. The builder-generated `post_content` mirror is cleared and remains empty on future builder saves. A manual edit to `post_content` fails closed instead of being erased. Existing pages are not migrated automatically.
+- `elementor.create_draft` accepts `source_post_id`. With no `data`, it clones the source Elementor tree, page template and allowlisted page layout metadata; supplied `data` remains authoritative while template/layout settings inherit. A front-page-only theme layout may still require visual adjustment on a different URL.
+- `elementor.patch_fragment` replaces exactly one literal text/image/HTML fragment in an existing HTML widget, guarded by the widget SHA-256. It uses the usual sandbox approval/apply/rollback lifecycle.
+- Regression Runner includes fragment patch/rollback and CI tests image/text edits, stale/ambiguous fragments, single-source saves and manual-content conflicts. Expected catalog: 91; self-test: 53.

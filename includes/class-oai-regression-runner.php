@@ -196,6 +196,27 @@ class OAI_Regression_Runner {
   }
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
 
+  // Edit one existing HTML widget through the bounded fragment contract.
+  if(!$report['stopped_early']){
+   $p=self::require_test_draft($elementor_id,'Elementor fragment fixture');
+   $allowed=self::fixture_allowed('elementor_widget_html',$elementor_id.':'.$widget);
+   $ref=OAI_Elementor::find_node($elementor_id,$widget);
+   if(is_wp_error($p)||is_wp_error($allowed)||is_wp_error($ref)||($ref['node']['widgetType']??'')!=='html')$report['scenarios'][]=array('name'=>'elementor_fragment','status'=>'SKIP','baseline_restored'=>true,'reason'=>'HTML widget test fixture unavailable');
+   else{
+    $old=(string)($ref['node']['settings']['html']??'');
+    if($old==='')$report['scenarios'][]=array('name'=>'elementor_fragment','status'=>'SKIP','baseline_restored'=>true,'reason'=>'HTML widget is empty');
+    else{
+     $fragment=substr($old,-min(96,strlen($old)));
+     if(substr_count($old,$fragment)!==1)$report['scenarios'][]=array('name'=>'elementor_fragment','status'=>'SKIP','baseline_restored'=>true,'reason'=>'No unique trailing HTML fragment');
+     else{
+      $req=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-fragment');$req->set_param('post_id',$elementor_id);$req->set_param('widget_id',$widget);$req->set_param('expected_sha256',hash('sha256',$old));$req->set_param('old_fragment',$fragment);$req->set_param('new_fragment',$fragment."\n<!-- wp-ai-admin-fragment ".$run_id." -->");
+      $report['scenarios'][]=self::lifecycle('elementor_fragment',OAI_REST::elementor_patch_fragment($req),'elementor.patch_fragment',$client_id,$user_id);
+     }
+    }
+   }
+  }
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+
   if(!$report['stopped_early']&&$include_elementor_settings)$report['scenarios'][]=self::elementor_settings_scenario($elementor_id,$run_id,$client_id,$user_id);
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
 

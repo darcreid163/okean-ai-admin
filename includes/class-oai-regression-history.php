@@ -12,7 +12,7 @@ class OAI_Regression_History {
  private static function now(){return gmdate('c');}
  private static function rows(){ $v=get_option(self::OPTION,array()); return is_array($v)?array_values($v):array(); }
  private static function scenario_map(){return array(
-  'content'=>'content.patch','woocommerce'=>'woocommerce.update_product_sandbox','elementor'=>'elementor.patch_widget',
+  'content'=>'content.patch','woocommerce'=>'woocommerce.update_product_sandbox','elementor'=>'elementor.patch_widget','elementor_fragment'=>'elementor.patch_fragment',
   'elementor_settings'=>'elementor.patch_settings','elementor_create'=>'elementor.create_draft','file'=>'file.write_sandbox',
   'gutenberg'=>'gutenberg.patch','reject_guard'=>'operation.reject'
  );}

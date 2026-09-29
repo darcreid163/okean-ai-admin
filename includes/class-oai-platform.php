@@ -1,5 +1,5 @@
 <?php
-/** WP AI Admin 2.0.58 platform: strict batch state machine, pause/checkpoints/lease, batch receipts and proof. */
+/** WP AI Admin 2.0.59 platform: strict batch state machine, pause/checkpoints/lease, batch receipts and proof. */
 if (!defined('ABSPATH')) exit;
 class OAI_Platform {
  public static function content_navigation_state(){
@@ -20,12 +20,12 @@ class OAI_Platform {
  public static function expected_tools(){
   $tools=array(
    'wp.get_site','wp.inspect_html','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link','wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','operation.get_receipt','gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities','wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.create','batch.list','batch.status','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_run','system.regression_matrix','system.regression_history','system.coverage_report','system.security_fuzz',
-   'wordpress.execute','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_settings','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'
+   'wordpress.execute','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'
   );
   if(!self::content_navigation_allowed())$tools=array_values(array_diff($tools,array('wp.file.outline')));
   return $tools;
  }
- public static function write_tools(){ return array('system.regression_run','system.regression_matrix','batch.create','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_settings','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'); }
+ public static function write_tools(){ return array('system.regression_run','system.regression_matrix','batch.create','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'); }
  public static function tool_catalog(){
   $all=self::expected_tools(); $writes=self::write_tools(); $items=array();
   foreach($all as $name){
@@ -64,7 +64,7 @@ class OAI_Platform {
   global $wpdb;
   $checks=array();
   $add=function($id,$ok,$details=array())use(&$checks){$checks[]=array('id'=>$id,'ok'=>(bool)$ok,'details'=>$details);};
-  $add('runtime.version',defined('OAI_VERSION')&&OAI_VERSION==='2.0.58',array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID));
+  $add('runtime.version',defined('OAI_VERSION')&&OAI_VERSION==='2.0.59',array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID));
   $add('identity.site_id',self::site_id()!=='',array('site_id'=>self::site_id()));
   $add('identity.installation_id',self::installation_id()!=='',array('installation_id'=>self::installation_id()));
   $add('database.connection',isset($wpdb)&&$wpdb->dbh,array('prefix'=>isset($wpdb)?$wpdb->prefix:null));
@@ -139,7 +139,13 @@ class OAI_Platform {
   $unsafe_result=is_wp_error($unsafe_query)?$unsafe_query:OAI_WP_CLI_Execution::execute($unsafe_query);
   $add('security.db_query_scope',is_wp_error($unsafe_result)&&$unsafe_result->get_error_code()==='oai_db_scope');
   $all=self::expected_tools();
-  $add('catalog.expected_tools',count($all)===(self::content_navigation_allowed()?90:89),array('expected_count'=>count($all),'catalog_sha256'=>hash('sha256',implode("\n",$all))));
+  $fragment='<h1>Карта</h1><p>Маршрут</p>';
+  $patched=OAI_Elementor::replace_html_fragment($fragment,'Карта','Картa',hash('sha256',$fragment));
+  $stale=OAI_Elementor::replace_html_fragment($fragment,'Карта','Картa',str_repeat('0',64));
+  $ambiguous=OAI_Elementor::replace_html_fragment('AA','A','B',hash('sha256','AA'));
+  $add('elementor.fragment_patch_contract',$patched==='<h1>Картa</h1><p>Маршрут</p>'&&is_wp_error($stale)&&is_wp_error($ambiguous));
+  $add('elementor.single_source_contract',method_exists('OAI_Elementor','activate_single_source')&&method_exists('OAI_REST','elementor_patch_fragment'));
+  $add('catalog.expected_tools',count($all)===(self::content_navigation_allowed()?91:90),array('expected_count'=>count($all),'catalog_sha256'=>hash('sha256',implode("\n",$all))));
   $defs=class_exists('OAI_MCP')&&method_exists('OAI_MCP','tool_definitions')?OAI_MCP::tool_definitions():array();$def_names=array();foreach((array)$defs as $d)if(is_array($d)&&!empty($d['name']))$def_names[]=(string)$d['name'];
   $add('catalog.exported_tools',count($def_names)===count($all)&&!array_diff($all,$def_names),array('exported_count'=>count($def_names),'missing'=>array_values(array_diff($all,$def_names))));
   $add('navigation.gutenberg_outline_tool',in_array('gutenberg.get_outline',$def_names,true));
@@ -191,7 +197,7 @@ class OAI_Platform {
    'test_manifest'=>array('supported'=>true,'self_test_tool'=>'system.self_test','tool_catalog_tool'=>'system.tool_catalog','test_automation_status_tool'=>'system.test_automation_status','regression_runner_tool'=>'system.regression_run','regression_matrix_tool'=>'system.regression_matrix','regression_history_tool'=>'system.regression_history','coverage_report_tool'=>'system.coverage_report','security_fuzz_tool'=>'system.security_fuzz','gutenberg_outline_tool'=>'gutenberg.get_outline','scoped_mcp_lifecycle_automation'=>true,'sequential_regression_runner'=>true,'managed_gutenberg_fixture'=>true,'reusable_gutenberg_fixture'=>true,'test_automation_max_actions'=>100000,'lifecycle'=>array('exposed','read','sandbox','approval','apply','verify','rollback','rollback_verify')),
    'tool_catalog'=>array('expected_count'=>$catalog['expected_count'],'catalog_sha256'=>$catalog['catalog_sha256'],'expected_ids'=>self::expected_tools()),
    'security'=>array('status_tool'=>'system.security_status','installation_identity'=>true,'server_private_key_embedded'=>false,'short_lived_token_contract'=>true,'replay_protection_contract'=>true,'revocation_contract'=>true),
-   'compatibility'=>array('legacy_tool_aliases'=>true,'primary_api'=>'2.0.58-signed-entitlement-verifier')
+   'compatibility'=>array('legacy_tool_aliases'=>true,'primary_api'=>'2.0.59-elementor-single-source-fragment')
   );
  }
  public static function batch_plan($items){

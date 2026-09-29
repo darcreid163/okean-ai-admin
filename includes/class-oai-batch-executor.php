@@ -101,10 +101,10 @@ class OAI_Batch_Executor {
    'gutenberg.get_outline','builder.detect','file.read',
    // Write steps create sandbox operations only; never direct live writes.
    'content.patch','gutenberg.patch','woocommerce.patch','woocommerce.update_product_sandbox',
-   'elementor.create_draft','elementor.patch_widget','elementor.patch_settings','file.write_sandbox'
+   'elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','file.write_sandbox'
   );
  }
- private static function sandbox_tools(){return array('content.patch','gutenberg.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_settings','file.write_sandbox');}
+ private static function sandbox_tools(){return array('content.patch','gutenberg.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','file.write_sandbox');}
  private static function is_sandbox_tool($tool){return in_array((string)$tool,self::sandbox_tools(),true);}
 
  private static function compact_result($value){
@@ -202,6 +202,7 @@ class OAI_Batch_Executor {
    case 'woocommerce.patch':case 'woocommerce.update_product_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::woocommerce_patch($r);
    case 'elementor.create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::elementor_create_page($r);
    case 'elementor.patch_widget':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-widget');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::elementor_patch_widget($r);
+   case 'elementor.patch_fragment':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-fragment');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::elementor_patch_fragment($r);
    case 'elementor.patch_settings':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch');$r->set_param('target',absint($a['post_id']??0).':'.sanitize_text_field((string)($a['widget_id']??'')));$r->set_param('changes',$a['changes']??array());return OAI_REST::elementor_patch($r);
    case 'file.write_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/files/write');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::files_write($r);
   }

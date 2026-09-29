@@ -62,3 +62,4 @@ Execution input tokenizer replaced with a deterministic quote-aware parser; no r
 2.0.56: database-scoped MySQL named lock serializes batch mutations; two-process CI contention test; 90 MCP tools and 49 self-tests.
 2.0.57: OAuth schema migration gate skips repeated dbDelta on normal requests, retries incomplete migrations, checks table presence and preserves registered clients; 90 MCP tools and 50 self-tests.
 2.0.58: verification-only signed Control Plane entitlement contract and cryptographic negative tests; no remote license enforcement yet; 90 MCP tools, 51 self-tests.
+2.0.59: Elementor drafts use one authoritative source, source-page layout cloning and exact SHA-guarded fragment edits; 91 MCP tools and 53 self-tests.
