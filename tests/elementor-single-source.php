@@ -53,5 +53,40 @@ namespace {
  $GLOBALS['test_posts'][42]['post_content']='Human edit';
  $conflict=\OAI_Elementor::save_document(42,$tree);
  expect(is_wp_error($conflict)&&$conflict->get_error_code()==='oai_content_conflict','Human WordPress edit overwritten');
- echo "PASS: one source, in-place image/text edits, stale/ambiguous rejection, layout preservation and manual-content conflict\n";
+
+ // Test Automation must keep an Elementor draft created in-session eligible
+ // for later exact widget/fragment revisions in the same session.
+ define('OAI_BUILD_ID','2.0.60-test-created-draft-scope-20260929');
+ $GLOBALS['test_options']=array(
+  'oai_test_automation'=>array(
+   'enabled'=>true,'session_id'=>'tas_fixture','enabled_at'=>time()-10,'expires_at'=>time()+3600,
+   'owner_user_id'=>7,'bound_client_id_hash'=>'','allowed_post_ids'=>array(),
+   'allowed_product_ids'=>array(),'session_created_post_ids'=>array(),'action_count'=>0,'max_actions'=>100000,
+   'build_id'=>OAI_BUILD_ID
+  )
+ );
+ if(!function_exists('get_option')){function get_option($key,$default=false){return $GLOBALS['test_options'][$key]??$default;}}
+ if(!function_exists('update_option')){function update_option($key,$value,$autoload=false){$GLOBALS['test_options'][$key]=$value;return true;}}
+ if(!function_exists('user_can')){function user_can($id,$cap){return (int)$id===7 && $cap==='manage_options';}}
+ if(!function_exists('sanitize_text_field')){function sanitize_text_field($v){return trim((string)$v);}}
+ if(!function_exists('sanitize_key')){function sanitize_key($v){return strtolower(preg_replace('/[^a-z0-9_\-]/i','',(string)$v));}}
+ if(!function_exists('wp_strip_all_tags')){function wp_strip_all_tags($v){return strip_tags((string)$v);}}
+ if(!class_exists('OAI_DB')){class OAI_DB {
+  public static $rows=array();
+  public static function get($id){return self::$rows[(int)$id]??null;}
+  public static function update($id,$data){foreach($data as $k=>$v)self::$rows[(int)$id][$k]=$v;return true;}
+ }}
+ if(!class_exists('OAI_Audit')){class OAI_Audit {public static function log($event,$row,$context=array()){return true;}}}
+ require dirname(__DIR__).'/includes/class-oai-test-automation.php';
+ $create_meta=array('preview_page_id'=>42,'final_status'=>'draft');
+ OAI_DB::$rows[901]=array('id'=>901,'type'=>'elementor_page_create','target'=>'elementor_page:42','meta_data'=>json_encode($create_meta));
+ $tag_create=\OAI_Test_Automation::tag_operation(901,'elementor.create_draft','fixture-client',7);
+ expect(!empty($tag_create['tagged']) && !empty($tag_create['eligible']),'Created Elementor draft was not tagged');
+ $scope=\OAI_Test_Automation::status();
+ expect(in_array(42,$scope['allowed_post_ids'],true),'Created Elementor draft was not added to allowed_post_ids');
+ expect(in_array(42,$scope['session_created_post_ids'],true),'Created Elementor draft was not tracked as session-created');
+ OAI_DB::$rows[902]=array('id'=>902,'type'=>'elementor_widget_html','target'=>'42:widget','meta_data'=>json_encode(array()));
+ $tag_patch=\OAI_Test_Automation::tag_operation(902,'elementor.patch_widget','fixture-client',7);
+ expect(!empty($tag_patch['tagged']) && !empty($tag_patch['eligible']),'Follow-up Elementor patch did not inherit test-session scope');
+ echo "PASS: one source, in-place image/text edits, stale/ambiguous rejection, layout preservation, manual-content conflict and created-draft test scope\n";
 }
