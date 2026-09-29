@@ -60,7 +60,7 @@ class OAI_MCP {
   return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope,'_meta'=>$meta));
  }
  private static function tool_requires_write($name,$args){
-  if(in_array($name,array('system_regression_run','system_regression_matrix','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
+  if(in_array($name,array('system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
   if($name==='wordpress.execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
   return false;
  }
@@ -235,6 +235,7 @@ class OAI_MCP {
     )
    ,'system.regression_history'=>array('type'=>'object','properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>50),'kind'=>array('type'=>'string','enum'=>array('all','regression_run','regression_matrix')),'include_tools'=>array('type'=>'boolean')),'additionalProperties'=>false)
    ,'system.coverage_report'=>array('type'=>'object','properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>50)),'additionalProperties'=>false)
+   ,'system.operations_cleanup'=>array('type'=>'object','properties'=>array('dry_run'=>array('type'=>'boolean','description'=>'Defaults to true.'),'include_applied'=>array('type'=>'boolean','description'=>'Explicit opt-in required to delete applied operations and give up their rollback records.'),'max_id'=>array('type'=>'integer','minimum'=>1,'description'=>'Optional upper operation id bound.')),'additionalProperties'=>false)
    ,'system.security_fuzz'=>array('type'=>'object','properties'=>array('iterations'=>array('type'=>'integer','minimum'=>1,'maximum'=>10)),'additionalProperties'=>false)
    ,'batch.plan'=>array('type'=>'object','required'=>array('items'),'properties'=>array('items'=>array('type'=>'array','minItems'=>1,'maxItems'=>100,'items'=>array('type'=>'object','required'=>array('tool'),'properties'=>array('tool'=>array('type'=>'string','minLength'=>1),'arguments'=>array('type'=>'object')),'additionalProperties'=>false))),'additionalProperties'=>false)
    ,'batch.preflight'=>array('type'=>'object','required'=>array('items'),'properties'=>array('items'=>array('type'=>'array','minItems'=>1,'maxItems'=>100,'items'=>array('type'=>'object','required'=>array('tool'),'properties'=>array('id'=>array('type'=>'string','minLength'=>1),'tool'=>array('type'=>'string','minLength'=>1),'arguments'=>array('type'=>'object'),'depends_on'=>array('type'=>'array','items'=>array('type'=>'string'))),'additionalProperties'=>false))),'additionalProperties'=>false)
@@ -316,6 +317,7 @@ class OAI_MCP {
   $tools[]=self::tool('operation.reject','Reject requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations.', $schemas['operation.reject'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.approve','Approval requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.apply','Apply requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations and still runs conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('system.operations_cleanup','Safely inspect or delete terminal operation ledger rows. Dry-run is default. Active pending/approved/applying/rolling_back operations are always protected. Applied rows require explicit include_applied=true. Audit log is preserved.',$schemas['system.operations_cleanup'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.rollback','Rollback requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations and still runs rollback conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
   return $tools;
  }
@@ -330,6 +332,7 @@ class OAI_MCP {
    case 'system_test_automation_status':$out=OAI_Test_Automation::status();break;
    case 'system_regression_history':$out=OAI_Regression_History::history(absint($a['limit']??20),(string)($a['kind']??'all'),!empty($a['include_tools']));break;
    case 'system_coverage_report':$out=OAI_Regression_History::coverage(absint($a['limit']??50));break;
+   case 'system_operations_cleanup':$out=OAI_Operations_Cleanup::run($a);break;
    case 'system_security_fuzz':$out=OAI_Security_Fuzz::run(absint($a['iterations']??1));break;
    case 'system_regression_run':
     if(!class_exists('OAI_Regression_Runner')){$out=new WP_Error('oai_regression_unavailable','Regression runner is unavailable',array('status'=>503));break;}
