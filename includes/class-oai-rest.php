@@ -73,6 +73,11 @@ class OAI_REST {
   register_rest_route($n,'/operations/catalog',array('methods'=>'GET','callback'=>array(__CLASS__,'operation_catalog'))+$args);
   register_rest_route($n,'/read/discover',array('methods'=>'POST','callback'=>array(__CLASS__,'read_discover'))+$args);
   register_rest_route($n,'/read/html',array('methods'=>'GET','callback'=>array('OAI_HTML_Inspector','inspect'))+$args);
+  register_rest_route($n,'/visual-qa/start',array('methods'=>'POST','callback'=>array('OAI_Visual_QA','rest_start'))+$args);
+  register_rest_route($n,'/visual-qa/result/(?P<probe>[A-Za-z0-9_-]+)',array('methods'=>'GET','callback'=>array('OAI_Visual_QA','rest_result'))+$args);
+  register_rest_route($n,'/visual-qa/run/(?P<probe>[A-Za-z0-9_-]+)',array('methods'=>'GET','callback'=>array('OAI_Visual_QA','page'),'permission_callback'=>array('OAI_Visual_QA','signed_perm')));
+  register_rest_route($n,'/visual-qa/frame/(?P<probe>[A-Za-z0-9_-]+)',array('methods'=>'GET','callback'=>array('OAI_Visual_QA','frame'),'permission_callback'=>array('OAI_Visual_QA','signed_perm')));
+  register_rest_route($n,'/visual-qa/report/(?P<probe>[A-Za-z0-9_-]+)',array('methods'=>'POST','callback'=>array('OAI_Visual_QA','report'),'permission_callback'=>array('OAI_Visual_QA','signed_perm')));
   register_rest_route($n,'/read/theme-mods',array('methods'=>'GET','callback'=>array('OAI_Theme_Mods','get'))+$args);
   register_rest_route($n,'/errors/contract',array('methods'=>'GET','callback'=>array(__CLASS__,'error_contract'))+$args);
   register_rest_route($n,'/agent/manifest',array('methods'=>'GET','callback'=>array('OAI_Agent','manifest'),'permission_callback'=>array('OAI_Agent','perm')));
