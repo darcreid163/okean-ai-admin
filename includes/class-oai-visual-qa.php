@@ -19,6 +19,8 @@ class OAI_Visual_QA {
    'no_external_browser_service'=>true,
    'responsive_fit_preview'=>true,
    'service_noise_filter'=>true,
+   'tabbed_single_preview'=>true,
+   'never_upscale_preview'=>true,
   );
  }
  public static function viewports(){return array('desktop'=>1440,'tablet'=>768,'mobile'=>390);}
@@ -134,30 +136,41 @@ html,body{margin:0;min-height:100%;font:14px/1.45 system-ui,-apple-system,BlinkM
 .wrap{width:100%;padding:clamp(10px,1.6vw,24px);display:grid;gap:clamp(12px,1.5vw,20px)}
 .card{width:100%;min-width:0;background:#fff;border:1px solid #dfe8f3;border-radius:16px;padding:clamp(10px,1.25vw,16px);box-shadow:0 8px 28px rgba(28,63,105,.05)}
 .status{font-weight:700}.ok{color:#137a49}.wait{color:#a06d00}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.tab{appearance:none;border:1px solid #ccd9ea;background:#fff;color:#30445f;border-radius:10px;padding:9px 14px;font:inherit;font-weight:750;cursor:pointer}.tab.active{background:#1769ff;border-color:#1769ff;color:#fff}
+.previewstage{position:relative;width:100%;min-height:430px}
+.qa-card{position:absolute!important;left:-100000px;top:0;width:100%;pointer-events:none}
+.qa-card.active{position:relative!important;left:auto;top:auto;pointer-events:auto}
 .vphead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 10px;font-weight:750}
 .vpmeta{font-size:12px;color:#6c7d92;font-weight:600}
 .framewrap{position:relative;width:100%;overflow:hidden;border:1px solid #dfe8f3;border-radius:12px;background:#fff}
-.framecanvas{position:relative;width:100%;overflow:hidden;background:#fff}
+.framecanvas{position:relative;margin:0 auto;overflow:hidden;background:#fff}
 .framecanvas iframe{position:absolute;left:0;top:0;display:block;border:0;background:#fff;height:900px;max-width:none;transform-origin:0 0}
-@media(max-width:640px){.bar{font-size:13px}.vphead{align-items:flex-start;flex-direction:column;gap:2px}.card{border-radius:12px}}
-</style></head><body><div class="bar"><b>WP AI Admin Visual QA</b> · <?php echo esc_html($meta['title']); ?> · draft-safe browser probe</div><div class="wrap"><div class="card"><div id="state" class="status wait">Запуск трёх viewport-проверок…</div><div id="summary"></div></div>
-<?php foreach(self::viewports() as $name=>$width): ?><div class="card qa-card" data-target-width="<?php echo (int)$width; ?>"><div class="vphead"><span><?php echo esc_html(ucfirst($name).' · '.$width.'px'); ?></span><span class="vpmeta" data-scale-label>Fit · 100%</span></div><div class="framewrap"><div class="framecanvas"><iframe data-vp="<?php echo esc_attr($name); ?>" data-target-width="<?php echo (int)$width; ?>" src="<?php echo esc_url($frames[$name]); ?>" style="width:<?php echo (int)$width; ?>px"></iframe></div></div></div><?php endforeach; ?></div>
+@media(max-width:640px){.bar{font-size:13px}.vphead{align-items:flex-start;flex-direction:column;gap:2px}.card{border-radius:12px}.tab{flex:1 1 30%;padding:8px 10px}}
+</style></head><body><div class="bar"><b>WP AI Admin Visual QA</b> · <?php echo esc_html($meta['title']); ?> · draft-safe browser probe</div><div class="wrap"><div class="card"><div id="state" class="status wait">Запуск трёх viewport-проверок…</div><div id="summary"></div><div class="tabs" role="tablist" aria-label="Visual QA viewports"><button class="tab active" data-show="desktop" type="button">Desktop · 1440</button><button class="tab" data-show="tablet" type="button">Tablet · 768</button><button class="tab" data-show="mobile" type="button">Mobile · 390</button></div></div>
+<div class="previewstage"><?php foreach(self::viewports() as $name=>$width): ?><div class="card qa-card<?php echo $name==='desktop'?' active':''; ?>" data-vp-card="<?php echo esc_attr($name); ?>" data-target-width="<?php echo (int)$width; ?>"><div class="vphead"><span><?php echo esc_html(ucfirst($name).' · '.$width.'px'); ?></span><span class="vpmeta" data-scale-label>Fit · 100%</span></div><div class="framewrap"><div class="framecanvas"><iframe data-vp="<?php echo esc_attr($name); ?>" data-target-width="<?php echo (int)$width; ?>" src="<?php echo esc_url($frames[$name]); ?>" style="width:<?php echo (int)$width; ?>px"></iframe></div></div></div><?php endforeach; ?></div></div>
 <script>
 (function(){
  const expected=['desktop','tablet','mobile'],reports={};const state=document.getElementById('state'),summary=document.getElementById('summary');
- function fitFrames(){
-  document.querySelectorAll('.qa-card').forEach(card=>{
+ function fitCard(card){
    const iframe=card.querySelector('iframe'),canvas=card.querySelector('.framecanvas'),wrap=card.querySelector('.framewrap'),label=card.querySelector('[data-scale-label]');
    if(!iframe||!canvas||!wrap)return;
    const target=parseInt(iframe.dataset.targetWidth||'0',10)||iframe.offsetWidth||1;
    const available=Math.max(1,wrap.clientWidth);
-   const scale=available/target;
+   const scale=Math.min(1,available/target);
+   const displayWidth=Math.round(target*scale);
    iframe.style.width=target+'px';
    iframe.style.transform='scale('+scale+')';
+   canvas.style.width=displayWidth+'px';
    canvas.style.height=Math.max(360,Math.round(900*scale))+'px';
    if(label)label.textContent='Fit · '+Math.round(scale*100)+'% · test '+target+'px';
-  });
  }
+ function fitFrames(){document.querySelectorAll('.qa-card').forEach(fitCard);}
+ function showViewport(name){
+   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.show===name));
+   document.querySelectorAll('.qa-card').forEach(card=>card.classList.toggle('active',card.dataset.vpCard===name));
+   const active=document.querySelector('.qa-card.active');if(active)setTimeout(()=>fitCard(active),0);
+ }
+ document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>showViewport(b.dataset.show)));
  let resizeTimer=null;
  addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(fitFrames,80);});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fitFrames,{once:true});else fitFrames();
