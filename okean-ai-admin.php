@@ -40,6 +40,7 @@ require_once OAI_DIR.'includes/class-oai-license.php';
 require_once OAI_DIR.'includes/class-oai-control-plane.php';
 require_once OAI_DIR.'includes/class-oai-html-inspector.php';
 require_once OAI_DIR.'includes/class-oai-visual-qa.php';
+require_once OAI_DIR.'includes/class-oai-page-qa.php';
 require_once OAI_DIR.'includes/class-oai-theme-mods.php';
 require_once OAI_DIR.'includes/class-oai-rest-resolver.php';
 require_once OAI_DIR.'includes/class-oai-batch-executor.php';
