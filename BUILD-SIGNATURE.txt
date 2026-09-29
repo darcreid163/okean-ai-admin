@@ -1,9 +1,11 @@
 WP AI Admin Build Signature
-Version: 2.0.62
-Build ID: 2.0.62-selftest-security-status-20260929
-Purpose: retain 2.0.61 AI Lifecycle Control and Preview actions, make runtime.version self-test release-safe, and expose AI Lifecycle Control explicitly in system.security_status
+Version: 2.0.63
+Build ID: 2.0.63-draft-render-patch-many-20260929
+Purpose: authenticated draft HTML server-render inspection plus create-once patch-many Elementor regression protection
 Expected catalog with Content Navigation enabled: 91 tools
-Expected self-test checks: 54
+Expected self-test checks: 56
 Direct live writes: false
 Human approval default: true
 AI Lifecycle Control: opt-in, administrator-owned, MCP-client-bound, manual controls preserved
+Draft HTML inspection: administrator-only, explicit allow_draft=true, no publication required
+Regression: create Elementor draft once, patch same widget three times, assert one widget/no duplicate, rollback all
