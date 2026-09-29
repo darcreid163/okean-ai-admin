@@ -1,12 +1,13 @@
 WP AI Admin Build Signature
-Version: 2.0.67
-Build ID: 2.0.67-scroll-aware-visual-qa-20260929
-Purpose: distinguish real viewport offscreen defects from intentional local horizontal scroll containers
-Expected catalog with Content Navigation enabled: 93 tools
-Expected self-test checks: 58
+Version: 2.0.68
+Build ID: 2.0.68-unified-page-qa-20260929
+Purpose: unified read-only page QA orchestrator combining static DOM/accessibility/link analysis with Browser Visual QA
+Expected catalog with Content Navigation enabled: 94 tools
+Expected self-test checks: 59
 Direct live writes: false
 Human approval default: true
-Visual QA viewports: 1440 / 768 / 390 exact internal widths
-UI: one visible tabbed preview at a time
-Scaling: shrink-to-fit only; never upscale above 100%
-Offscreen logic: descendants of overflow-x:auto/scroll containers are not reported as viewport defects
+New tool: system.page_qa_run
+Workflow: first call post_id -> static QA + signed browser probe; second call post_id + probe_id -> unified PASS/WARN report
+Static checks: H1 count, heading order, image alt presence, accessible form controls, empty/unsafe links, broken in-page anchors, duplicate IDs
+Visual QA: exact 1440 / 768 / 390 viewports, tabbed preview, shrink-to-fit, scroll-container-aware
+Content mutation: none
