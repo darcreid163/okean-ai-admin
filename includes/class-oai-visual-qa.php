@@ -56,6 +56,8 @@ class OAI_Visual_QA {
   return hash_equals(self::token($probe,absint($meta['post_id']??0),$expires),$token);
  }
 
+ public static function render_for_qa($post_id){ return self::render_post(absint($post_id)); }
+
  private static function render_post($post_id){
   $post=get_post(absint($post_id));if(!$post)return new WP_Error('oai_visual_post','Post not found',array('status'=>404));
   $body='';$previous_post=$GLOBALS['post']??null;
