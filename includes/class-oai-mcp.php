@@ -213,7 +213,8 @@ class OAI_MCP {
       'include_file'=>array('type'=>'boolean'),
       'include_reject'=>array('type'=>'boolean'),
       'include_elementor_settings'=>array('type'=>'boolean'),
-      'include_elementor_create'=>array('type'=>'boolean')
+      'include_elementor_create'=>array('type'=>'boolean'),
+      'include_elementor_create_patch_many'=>array('type'=>'boolean')
      ),
      'additionalProperties'=>false
     )
