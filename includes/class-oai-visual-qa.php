@@ -21,6 +21,7 @@ class OAI_Visual_QA {
    'service_noise_filter'=>true,
    'tabbed_single_preview'=>true,
    'never_upscale_preview'=>true,
+   'scroll_container_aware'=>true,
   );
  }
  public static function viewports(){return array('desktop'=>1440,'tablet'=>768,'mobile'=>390);}
@@ -94,13 +95,22 @@ class OAI_Visual_QA {
  function visible(el){if(ignored(el))return false;const s=getComputedStyle(el),r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&parseFloat(s.opacity||'1')>0&&r.width>0&&r.height>0;}
  function label(el){let x=(el.id?'#'+el.id:'');if(!x&&el.classList&&el.classList.length)x='.'+Array.from(el.classList).slice(0,2).join('.');if(!x)x=el.tagName.toLowerCase();return x.slice(0,120);}
  function rect(el){const r=el.getBoundingClientRect();return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height),right:Math.round(r.right),bottom:Math.round(r.bottom)};}
+ function scrollableXAncestor(el){
+  let p=el.parentElement;
+  while(p&&p!==document.body&&p!==document.documentElement){
+   const s=getComputedStyle(p),ox=s.overflowX;
+   if((ox==='auto'||ox==='scroll')&&p.scrollWidth>p.clientWidth+2)return p;
+   p=p.parentElement;
+  }
+  return null;
+ }
  function run(){
   const w=window.innerWidth,h=window.innerHeight,de=document.documentElement,body=document.body;
   const all=Array.from(document.querySelectorAll('body *')).filter(visible).slice(0,1200);
   const offscreen=[],clipped=[],smallTargets=[],smallText=[];
   for(const el of all){
    const r=el.getBoundingClientRect(),s=getComputedStyle(el);
-   if((r.left<-2||r.right>w+2)&&r.width>1&&offscreen.length<30)offscreen.push({element:label(el),rect:rect(el)});
+   if((r.left<-2||r.right>w+2)&&r.width>1&&!scrollableXAncestor(el)&&offscreen.length<30)offscreen.push({element:label(el),rect:rect(el)});
    const ox=s.overflowX,oy=s.overflowY;
    if(((ox==='hidden'||ox==='clip')&&el.scrollWidth>el.clientWidth+2)||((oy==='hidden'||oy==='clip')&&el.scrollHeight>el.clientHeight+2)){
     if(clipped.length<30)clipped.push({element:label(el),client:[el.clientWidth,el.clientHeight],scroll:[el.scrollWidth,el.scrollHeight],overflow:[ox,oy]});
