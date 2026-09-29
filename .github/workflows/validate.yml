@@ -46,6 +46,13 @@ jobs:
           cp -a okean-ai-admin.php includes starter-themes releases README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
           (cd dist && zip -qr okean-ai-admin.zip okean-ai-admin)
           unzip -tq dist/okean-ai-admin.zip
+      - name: Upload installable ZIP
+        if: matrix.php == '8.3'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-ai-admin-2.0.60
+          path: dist/okean-ai-admin.zip
+          if-no-files-found: error
 
   batch-mutex-concurrency:
     runs-on: ubuntu-latest
