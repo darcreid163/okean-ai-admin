@@ -63,3 +63,5 @@ Execution input tokenizer replaced with a deterministic quote-aware parser; no r
 2.0.57: OAuth schema migration gate skips repeated dbDelta on normal requests, retries incomplete migrations, checks table presence and preserves registered clients; 90 MCP tools and 50 self-tests.
 2.0.58: verification-only signed Control Plane entitlement contract and cryptographic negative tests; no remote license enforcement yet; 90 MCP tools, 51 self-tests.
 2.0.59: Elementor drafts use one authoritative source, source-page layout cloning and exact SHA-guarded fragment edits; 91 MCP tools and 53 self-tests.
+
+2.0.60: preserves all 2.0.59 Elementor single-source/source_post_id/SHA-fragment protections and fixes Test Automation scope inheritance: an Elementor draft created and tagged in the active test session is automatically added to the session allowlist, so later widget/settings/fragment patches on that same draft can be tagged and lifecycle-tested without recreating the page.
