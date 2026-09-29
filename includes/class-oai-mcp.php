@@ -145,6 +145,8 @@ class OAI_MCP {
  private static function tools(){
   $schemas=array(
    'wp.inspect_html'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('url'=>array('type'=>'string'),'post_id'=>array('type'=>'integer','minimum'=>1),'allow_draft'=>array('type'=>'boolean','description'=>'Render draft/private/pending content internally for an authenticated WordPress administrator without publishing it.'),'selector'=>array('type'=>'string'),'mode'=>array('type'=>'string','enum'=>array('inspect','outline')),'max_results'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'max_chars'=>array('type'=>'integer','minimum'=>100,'maximum'=>10000),'include_attributes'=>array('type'=>'boolean'),'include_text'=>array('type'=>'boolean'),'include_html'=>array('type'=>'boolean'),'max_length'=>array('type'=>'integer','minimum'=>1000,'maximum'=>30000))),
+   'wp.visual_qa_start'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
+   'wp.visual_qa_result'=>array('type'=>'object','required'=>array('probe_id'),'additionalProperties'=>false,'properties'=>array('probe_id'=>array('type'=>'string','minLength'=>8))),
    'wp.get_theme_mods'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('name'=>array('type'=>'string'))),
    'wp.list_media'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'page'=>array('type'=>'integer','minimum'=>1,'maximum'=>10000),'search'=>array('type'=>'string'))),
    'wp.list_users'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'page'=>array('type'=>'integer','minimum'=>1,'maximum'=>10000))),
@@ -252,14 +254,15 @@ class OAI_MCP {
    ,'operation.reject'=>array('type'=>'object','required'=>array('id'),'properties'=>array('id'=>array('type'=>'integer','minimum'=>1)),'additionalProperties'=>false)
   );
   $read=array(
-   'wp.get_site','wp.inspect_html','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
+   'wp.get_site','wp.inspect_html','wp.visual_qa_result','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
    'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','operation.get_receipt',
    'gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
    'wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.list','batch.status','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_history','system.coverage_report','system.security_fuzz'
   );
   $tools=array();
   $descriptions=array(
-   'wp.inspect_html'=>'Inspect public HTML. Use mode=outline first, then a bounded selector; JavaScript is not executed.',
+   'wp.inspect_html'=>'Inspect public or authenticated draft server-rendered HTML. JavaScript is not executed.',
+   'wp.visual_qa_result'=>'Read a completed browser Visual QA report for desktop, tablet and mobile viewports.',
    'wp.file.outline'=>'List file landmarks and line numbers without returning the full file; use file.read with a line range next.',
    'file.read'=>'Read a scoped theme file; start_line and end_line return a bounded excerpt with snapshot hash.',
    'wp.get_theme_mods'=>'Read one or up to 100 saved settings of the active WordPress theme; values retain their types.',
@@ -279,6 +282,7 @@ class OAI_MCP {
    $description=$descriptions[$name]??('WP AI Admin read tool: '.$name);
    $tools[]=self::tool($name,$description,$schemas[$name]??array('type'=>'object'),array('readOnlyHint'=>true,'destructiveHint'=>false));
   }
+  $tools[]=self::tool('wp.visual_qa_start','Create a short-lived signed browser Visual QA probe for one editable WordPress post. It does not publish or modify content; opening the returned URL executes viewport measurements and stores a bounded report.',$schemas['wp.visual_qa_start'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool(
    'system.regression_run',
    'Run a strictly sequential reversible regression suite inside an active scoped Test Automation session. Each mutation uses the normal sandbox lifecycle and must be rolled back and verified before the next scenario starts.',
@@ -365,6 +369,8 @@ class OAI_MCP {
    case 'elementor_inspect_widget':$post_id=absint($a['post_id']??0);$widget_id=sanitize_text_field((string)($a['widget_id']??''));$r=new WP_REST_Request('GET','/okean-ai/v1/read/content/'.$post_id.'/elementor/'.$widget_id);$r->set_url_params(array('id'=>$post_id,'widget_id'=>$widget_id));foreach(array('view','start_line','end_line','max_chars','expected_sha256') as $k)if(array_key_exists($k,$a))$r->set_param($k,$a[$k]);$out=OAI_REST::elementor_node($r);break;
    case 'file_diff':$cur=OAI_Files::read((string)($a['scope']??''),(string)($a['path']??''));if(is_wp_error($cur)){$out=$cur;}else{$before=(string)($cur['content']??'');$after=(string)($a['proposed_content']??'');$out=array('scope'=>$a['scope']??'','path'=>$a['path']??'','diff'=>OAI_Operations::diff($before,$after),'before_sha256'=>hash('sha256',$before),'after_sha256'=>hash('sha256',$after));}break;
    case 'wp_inspect_html':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/html');foreach(array('url','post_id','allow_draft','selector','mode','max_results','max_chars','include_attributes','include_text','include_html','max_length') as $k){if(array_key_exists($k,$a))$rr->set_param($k,$a[$k]);}$out=OAI_HTML_Inspector::inspect($rr);break;
+   case 'wp_visual_qa_start':$out=OAI_Visual_QA::start(absint($a['post_id']??0));break;
+   case 'wp_visual_qa_result':$out=OAI_Visual_QA::result((string)($a['probe_id']??''));break;
    case 'wp_get_theme_mods':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/theme-mods');if(array_key_exists('name',$a))$rr->set_param('name',$a['name']);$out=OAI_Theme_Mods::get($rr);break;
    case 'wp_get_site':$out=OAI_REST::site();break;
    case 'wp_list_plugins':$out=OAI_REST::plugins();break;
