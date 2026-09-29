@@ -1,7 +1,9 @@
 WP AI Admin Build Signature
-Version: 2.0.60
-Build ID: 2.0.60-test-created-draft-scope-20260929
-Purpose: preserve 2.0.59 Elementor single-source/fragment editing and automatically keep in-session created Elementor drafts inside Test Automation scope for follow-up edits
+Version: 2.0.62
+Build ID: 2.0.62-selftest-security-status-20260929
+Purpose: retain 2.0.61 AI Lifecycle Control and Preview actions, make runtime.version self-test release-safe, and expose AI Lifecycle Control explicitly in system.security_status
 Expected catalog with Content Navigation enabled: 91 tools
+Expected self-test checks: 54
 Direct live writes: false
 Human approval default: true
+AI Lifecycle Control: opt-in, administrator-owned, MCP-client-bound, manual controls preserved
