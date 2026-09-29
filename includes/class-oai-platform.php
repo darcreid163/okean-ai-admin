@@ -50,21 +50,24 @@ class OAI_Platform {
   $registered=(bool)get_option('oai_control_plane_registration_id','');
   $server_key=(string)get_option('oai_control_plane_public_key','');
   $test_automation=class_exists('OAI_Test_Automation')?OAI_Test_Automation::status():array('supported'=>false,'active'=>false);
+  $ai_lifecycle=class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('supported'=>false,'active'=>false,'mode'=>'human_lifecycle_only');
   return array(
    'schema_version'=>1,'site_id'=>$site,'installation_id'=>$installation,
    'installation_fingerprint'=>hash('sha256',$installation.'|'.$site.'|'.home_url('/').'|'.wp_salt('auth')),
    'control_plane'=>array('configured'=>$cp!=='','registered'=>$registered,'server_public_key_configured'=>$server_key!=='','private_server_key_present_in_plugin'=>false,'signed_entitlement_verifier'=>class_exists('OAI_Control_Plane'),'sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_entitlements_enforced'=>false),
-   'guards'=>array('direct_live_writes'=>false,'local_human_approval_enforced'=>empty($test_automation['active']),'human_approval_default'=>true,'test_automation_active'=>!empty($test_automation['active']),'test_automation_scope_limited'=>true,'sandbox_before_apply'=>true,'verify_after_apply'=>true,'rollback_supported'=>true),
+   'guards'=>array('direct_live_writes'=>false,'local_human_approval_enforced'=>empty($test_automation['active'])&&empty($ai_lifecycle['active']),'human_approval_default'=>true,'ai_lifecycle_active'=>!empty($ai_lifecycle['active']),'ai_lifecycle_opt_in'=>true,'manual_lifecycle_controls_preserved'=>true,'test_automation_active'=>!empty($test_automation['active']),'test_automation_scope_limited'=>true,'sandbox_before_apply'=>true,'verify_after_apply'=>true,'rollback_supported'=>true),
+   'ai_lifecycle_control'=>$ai_lifecycle,
    'test_automation'=>$test_automation,
    'planned_protocol'=>array('short_lived_signed_tokens'=>true,'site_and_workspace_binding'=>true,'request_id_nonce_timestamp'=>true,'replay_protection'=>true,'token_rotation'=>true,'site_revoke'=>true,'workspace_freeze'=>true,'global_write_freeze'=>true,'signed_entitlements'=>true),
-   'note'=>'Control Plane cryptographic enforcement is a foundation contract until a remote Control Plane is configured. Human approval is the default; scoped Test Automation Mode is a short-lived admin-enabled exception for session-tagged test operations only.'
+   'note'=>'Control Plane cryptographic enforcement is a foundation contract until a remote Control Plane is configured. Human lifecycle control is the default. AI Lifecycle Control is an explicit administrator-enabled, client-bound parallel control path that preserves sandbox/conflict/verify/rollback guards; scoped Test Automation remains a separate short-lived regression exception.'
   );
  }
  public static function self_test(){
   global $wpdb;
   $checks=array();
   $add=function($id,$ok,$details=array())use(&$checks){$checks[]=array('id'=>$id,'ok'=>(bool)$ok,'details'=>$details);};
-  $add('runtime.version',defined('OAI_VERSION')&&OAI_VERSION==='2.0.59',array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID));
+  $runtime_version_ok=defined('OAI_VERSION')&&defined('OAI_BUILD_ID')&&preg_match('/^\d+\.\d+\.\d+$/',(string)OAI_VERSION)===1&&strpos((string)OAI_BUILD_ID,(string)OAI_VERSION.'-')===0;
+  $add('runtime.version',$runtime_version_ok,array('version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID,'contract'=>'semantic_version_and_build_prefix'));
   $add('identity.site_id',self::site_id()!=='',array('site_id'=>self::site_id()));
   $add('identity.installation_id',self::installation_id()!=='',array('installation_id'=>self::installation_id()));
   $add('database.connection',isset($wpdb)&&$wpdb->dbh,array('prefix'=>isset($wpdb)?$wpdb->prefix:null));
@@ -81,6 +84,18 @@ class OAI_Platform {
    if(!is_wp_error($result)||$result->get_error_code()!=='oai_human_approval_required')$guard_ok=false;
   }
   $add('security.human_approval_guard',$guard_ok);
+  $ai_lifecycle_status=class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array();
+  $add('security.ai_lifecycle_status_contract',
+   !empty($ai_lifecycle_status['supported'])
+   && isset($ai_lifecycle_status['active'],$ai_lifecycle_status['mode'],$ai_lifecycle_status['rules'])
+   && !empty($ai_lifecycle_status['rules']['administrator_enable_required'])
+   && !empty($ai_lifecycle_status['rules']['administrator_mcp_identity_required'])
+   && !empty($ai_lifecycle_status['rules']['manual_controls_preserved'])
+   && !empty($ai_lifecycle_status['rules']['conflict_guards_preserved'])
+   && !empty($ai_lifecycle_status['rules']['verify_guards_preserved'])
+   && !empty($ai_lifecycle_status['rules']['rollback_guards_preserved']),
+   $ai_lifecycle_status
+  );
   $ta_contract=class_exists('OAI_Test_Automation')?OAI_Test_Automation::self_test_contract():array();
   $add('test_automation.contract',!empty($ta_contract)&&!in_array(false,$ta_contract,true),$ta_contract);
   $ta_status=class_exists('OAI_Test_Automation')?OAI_Test_Automation::status():array();
