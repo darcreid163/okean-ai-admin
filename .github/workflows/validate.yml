@@ -47,7 +47,7 @@ jobs:
           (cd dist && zip -qr okean-ai-admin.zip okean-ai-admin)
           unzip -tq dist/okean-ai-admin.zip
       - name: Publish installable ZIP to branch
-        if: matrix.php == '8.3'
+        if: matrix.php == '8.3' && github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
