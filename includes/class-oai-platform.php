@@ -101,6 +101,18 @@ class OAI_Platform {
   $ta_status=class_exists('OAI_Test_Automation')?OAI_Test_Automation::status():array();
   $add('test_automation.scoped_policy',isset($ta_status['rules'])&&!empty($ta_status['rules']['admin_enable_required'])&&!empty($ta_status['rules']['same_mcp_client_required'])&&!empty($ta_status['rules']['only_session_tagged_operations']));
   $add('regression.runner_available',class_exists('OAI_Regression_Runner')&&method_exists('OAI_Regression_Runner','run'));
+  $add('regression.elementor_create_patch_many_contract',class_exists('OAI_Regression_Runner')&&method_exists('OAI_Regression_Runner','run')&&strpos((string)@file_get_contents(OAI_DIR.'includes/class-oai-regression-runner.php'),'elementor_create_patch_many')!==false);
+  $draft_schema_ok=false;
+  if(class_exists('OAI_MCP')&&method_exists('OAI_MCP','tool_definitions')){
+   foreach((array)OAI_MCP::tool_definitions() as $tool){
+    if(($tool['name']??'')==='wp.inspect_html'){
+     $props=$tool['inputSchema']['properties']??array();
+     $draft_schema_ok=isset($props['allow_draft'])&&(($props['allow_draft']['type']??'')==='boolean');
+     break;
+    }
+   }
+  }
+  $add('html_inspector.draft_render_contract',$draft_schema_ok&&class_exists('OAI_HTML_Inspector'));
   $add('regression.matrix_available',class_exists('OAI_Regression_Matrix')&&method_exists('OAI_Regression_Matrix','run'));
   $add('regression.history_available',class_exists('OAI_Regression_History')&&method_exists('OAI_Regression_History','history'));
   $hist_contract=class_exists('OAI_Regression_History')?OAI_Regression_History::self_test_contract():array();$add('regression.history_contract',!empty($hist_contract)&&!in_array(false,$hist_contract,true),$hist_contract);
