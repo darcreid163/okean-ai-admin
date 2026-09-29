@@ -118,6 +118,51 @@ class OAI_Regression_Runner {
   return self::lifecycle('elementor_create',OAI_REST::elementor_create_page($req),'elementor.create_draft',$client_id,$user_id);
  }
 
+ private static function elementor_create_patch_many_scenario($run_id,$client_id,$user_id){
+  $scenario=array('name'=>'elementor_create_patch_many','status'=>'FAIL','baseline_restored'=>false,'stages'=>array(),'patch_operations'=>array());
+  $container='multi'.substr(md5($run_id),0,3);$widget='html'.substr(md5($run_id.'widget'),0,3);
+  $baseline='<section data-wpai-multi="'.esc_attr($run_id).'"><h2>Create once</h2><p>Baseline fragment</p></section>';
+  $data=array(array('id'=>$container,'elType'=>'container','settings'=>array(),'elements'=>array(array('id'=>$widget,'elType'=>'widget','widgetType'=>'html','settings'=>array('html'=>$baseline),'elements'=>array()))));
+  $req=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');$req->set_param('title','WP AI Admin MULTI — '.$run_id);$req->set_param('data',$data);$req->set_param('page_template','elementor_canvas');$req->set_param('final_status','draft');
+  $op=OAI_REST::elementor_create_page($req);
+  if(is_wp_error($op)){$scenario['error']=self::err($op);self::stage($scenario,'create','FAIL');return $scenario;}
+  $create_id=self::tag($op,'elementor.create_draft',$client_id,$user_id);
+  if(is_wp_error($create_id)){$scenario['error']=self::err($create_id);return $scenario;}
+  $page_id=absint($op['preview_page_id']??0);$scenario['operation_id']=$create_id;$scenario['page_id']=$page_id;$scenario['widget_id']=$widget;
+  self::stage($scenario,'create','PASS');self::stage($scenario,'tag','PASS');
+  $approve=OAI_Test_Automation::perform($create_id,'approve',$client_id,$user_id);if(is_wp_error($approve)){$scenario['error']=self::err($approve);return $scenario;}self::stage($scenario,'approve','PASS');
+  $apply=OAI_Test_Automation::perform($create_id,'apply',$client_id,$user_id);if(is_wp_error($apply)){$scenario['error']=self::err($apply);return $scenario;}self::stage($scenario,'apply','PASS');
+  $verify=OAI_Verify::operation($create_id);if(is_wp_error($verify)||empty($verify['verified'])){$scenario['error']=self::err(is_wp_error($verify)?$verify:'Create verification failed');return $scenario;}self::stage($scenario,'verify','PASS');
+
+  $applied=array();$current=$baseline;$labels=array('Patch one','Patch two','Patch three');
+  foreach($labels as $index=>$label){
+   $ref=OAI_Elementor::find_node($page_id,$widget);
+   if(is_wp_error($ref)){$scenario['error']=self::err($ref);break;}
+   $stored=(string)($ref['node']['settings']['html']??'');
+   if($stored!==$current){$scenario['error']=self::err('Stored HTML diverged before patch '.($index+1));break;}
+   $next=str_replace($index===0?'Baseline fragment':$labels[$index-1],$label,$current);
+   $pr=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-fragment');$pr->set_param('post_id',$page_id);$pr->set_param('widget_id',$widget);$pr->set_param('expected_sha256',hash('sha256',$stored));$pr->set_param('old_fragment',$index===0?'Baseline fragment':$labels[$index-1]);$pr->set_param('new_fragment',$label);
+   $patch=OAI_REST::elementor_patch_fragment($pr);
+   if(is_wp_error($patch)){$scenario['error']=self::err($patch);break;}
+   $pid=self::tag($patch,'elementor.patch_fragment',$client_id,$user_id);if(is_wp_error($pid)){$scenario['error']=self::err($pid);break;}
+   $scenario['patch_operations'][]=$pid;
+   $a=OAI_Test_Automation::perform($pid,'approve',$client_id,$user_id);if(is_wp_error($a)){$scenario['error']=self::err($a);break;}
+   $ap=OAI_Test_Automation::perform($pid,'apply',$client_id,$user_id);if(is_wp_error($ap)){$scenario['error']=self::err($ap);break;}
+   $vv=OAI_Verify::operation($pid);if(is_wp_error($vv)||empty($vv['verified'])){$scenario['error']=self::err(is_wp_error($vv)?$vv:'Patch verification failed');break;}
+   $tree=OAI_Elementor::get_data($page_id);$node=OAI_Elementor::find_node($page_id,$widget);$html=is_wp_error($node)?'':(string)($node['node']['settings']['html']??'');
+   $count=0;$walk=function($nodes)use(&$walk,&$count,$widget){foreach((array)$nodes as $n){if(!is_array($n))continue;if(($n['id']??'')===$widget)$count++;if(!empty($n['elements']))$walk($n['elements']);}};$walk($tree);
+   if($count!==1 || substr_count($html,$label)!==1){$scenario['error']=self::err('Duplicate or missing Elementor widget/content after patch '.($index+1));break;}
+   self::stage($scenario,'patch_'.($index+1),'PASS');$applied[]=$pid;$current=$next;
+  }
+
+  $cleanup_ok=true;
+  foreach(array_reverse($applied) as $pid){$rb=OAI_Test_Automation::perform($pid,'rollback',$client_id,$user_id);if(is_wp_error($rb)){$cleanup_ok=false;break;}$rv=OAI_Verify::operation($pid,null,'rollback');if(is_wp_error($rv)||empty($rv['verified'])){$cleanup_ok=false;break;}}
+  if($cleanup_ok){$rb=OAI_Test_Automation::perform($create_id,'rollback',$client_id,$user_id);if(is_wp_error($rb))$cleanup_ok=false;else{$rv=OAI_Verify::operation($create_id,null,'rollback');if(is_wp_error($rv)||empty($rv['verified']))$cleanup_ok=false;}}
+  $scenario['baseline_restored']=$cleanup_ok;self::stage($scenario,'cleanup',$cleanup_ok?'PASS':'FAIL');
+  if(empty($scenario['error']) && count($applied)===3 && $cleanup_ok){$scenario['status']='PASS';$scenario['terminal_status']='rolled_back';}
+  return $scenario;
+ }
+
  private static function first_gutenberg_leaf($nodes){
   foreach((array)$nodes as $node){
    $name=(string)($node['blockName']??'');$children=$node['innerBlocks']??array();
@@ -142,7 +187,7 @@ class OAI_Regression_Runner {
   $args=is_array($args)?$args:array();
   $content_id=absint($args['content_post_id']??0);$elementor_id=absint($args['elementor_post_id']??0);$widget=sanitize_text_field((string)($args['elementor_widget_id']??''));$product_id=absint($args['product_id']??0);$gutenberg_id=absint($args['gutenberg_post_id']??0);if(!$gutenberg_id&&class_exists('OAI_Test_Automation'))$gutenberg_id=OAI_Test_Automation::managed_gutenberg_fixture_id();
   if(!$content_id||!$elementor_id||$widget===''||!$product_id)return new WP_Error('oai_regression_args','content_post_id, elementor_post_id, elementor_widget_id and product_id are required',array('status'=>400));
-  $include_file=!array_key_exists('include_file',$args)||!empty($args['include_file']);$include_reject=!array_key_exists('include_reject',$args)||!empty($args['include_reject']);$include_elementor_settings=!array_key_exists('include_elementor_settings',$args)||!empty($args['include_elementor_settings']);$include_elementor_create=!array_key_exists('include_elementor_create',$args)||!empty($args['include_elementor_create']);
+  $include_file=!array_key_exists('include_file',$args)||!empty($args['include_file']);$include_reject=!array_key_exists('include_reject',$args)||!empty($args['include_reject']);$include_elementor_settings=!array_key_exists('include_elementor_settings',$args)||!empty($args['include_elementor_settings']);$include_elementor_create=!array_key_exists('include_elementor_create',$args)||!empty($args['include_elementor_create']);$include_elementor_create_patch_many=!array_key_exists('include_elementor_create_patch_many',$args)||!empty($args['include_elementor_create_patch_many']);
   $run_id='rr_'.gmdate('Ymd_His').'_'.substr(wp_generate_uuid4(),0,8);$started=microtime(true);
   $report=array('schema_version'=>1,'run_id'=>$run_id,'plugin_version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID,'mode'=>'sequential_stop_on_cleanup_failure','started_at'=>gmdate('c'),'session_id'=>(string)(OAI_Test_Automation::status()['session_id']??''),'scenarios'=>array(),'baseline_restored'=>true,'stopped_early'=>false);
 
@@ -221,6 +266,9 @@ class OAI_Regression_Runner {
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
 
   if(!$report['stopped_early']&&$include_elementor_create)$report['scenarios'][]=self::elementor_create_scenario($run_id,$client_id,$user_id);
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+
+  if(!$report['stopped_early']&&$include_elementor_create_patch_many)$report['scenarios'][]=self::elementor_create_patch_many_scenario($run_id,$client_id,$user_id);
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
 
   // File lifecycle inside the fixed Test Automation prefix. The write path may
