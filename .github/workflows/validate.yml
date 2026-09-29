@@ -33,7 +33,7 @@ jobs:
             php -l "$file"
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
-          test "$count" -eq 65
+          test "$count" -eq 66
       - name: Signed entitlement contract
         run: php tests/control-plane-entitlements.php
       - name: Elementor single source and fragment edits
