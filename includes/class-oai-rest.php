@@ -264,7 +264,7 @@ class OAI_REST {
  public static function preview_page($req){
   $op_id=absint($req['id']); $r=OAI_DB::get($op_id);
   if(!$r || $r['type']!=='elementor_page_create')return new WP_Error('oai_not_found','Elementor page sandbox operation not found',array('status'=>404));
-  if(!in_array($r['status'],array('pending','approved'),true))return new WP_Error('oai_preview_state','Preview is available only for pending or approved operations',array('status'=>409));
+  if(!in_array($r['status'],array('pending','approved','applied','rollback_failed'),true))return new WP_Error('oai_preview_state','Preview is available for pending, approved or applied operations with rollback context',array('status'=>409));
   $meta=json_decode($r['meta_data'],true); $page_id=absint($meta['preview_page_id']??0); $p=$page_id?get_post($page_id):null;
   if(!$p)return new WP_Error('oai_preview_page','Sandbox preview page not found',array('status'=>404));
   // REST callbacks normally return JSON. This endpoint is deliberately a raw HTML preview,
@@ -335,7 +335,7 @@ class OAI_REST {
  private static function is_elementor_available_for_preview(){return defined('ELEMENTOR_VERSION') && class_exists('Elementor\\Plugin') && isset(\Elementor\Plugin::$instance->frontend);}
  public static function plan($req){return OAI_Planner::plan($req);}
 
- public static function status(){return array('ok'=>true,'plugin_version'=>OAI_VERSION,'sandbox'=>true,'direct_live_writes'=>false,'database'=>OAI_DB::table(),'api_auth'=>'bearer_or_wp_admin','allowed_types'=>OAI_Capabilities::available()['sandbox'],'capabilities'=>OAI_Capabilities::available(),'site_url'=>home_url('/'),'builders'=>OAI_Builder_Manager::info(),'mcp'=>OAI_MCP::info(),'license'=>OAI_License::status(),'preview'=>array('signed'=>true,'renderer'=>'elementor_frontend','draft_fallback'=>true,'ascii_safe_payloads'=>true,'ascii_safe_payloads_mode'=>'title_excerpt_slug_data_b64','build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:'unknown','plugin_file'=>plugin_basename(OAI_DIR.'okean-ai-admin.php'),'plugin_dir'=>OAI_DIR));}
+ public static function status(){return array('ok'=>true,'plugin_version'=>OAI_VERSION,'sandbox'=>true,'direct_live_writes'=>false,'database'=>OAI_DB::table(),'api_auth'=>'bearer_or_wp_admin','allowed_types'=>OAI_Capabilities::available()['sandbox'],'capabilities'=>OAI_Capabilities::available(),'site_url'=>home_url('/'),'builders'=>OAI_Builder_Manager::info(),'mcp'=>OAI_MCP::info(),'license'=>OAI_License::status(),'ai_lifecycle_control'=>class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('supported'=>false),'preview'=>array('signed'=>true,'renderer'=>'elementor_frontend','draft_fallback'=>true,'ascii_safe_payloads'=>true,'ascii_safe_payloads_mode'=>'title_excerpt_slug_data_b64','build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:'unknown','plugin_file'=>plugin_basename(OAI_DIR.'okean-ai-admin.php'),'plugin_dir'=>OAI_DIR));}
  public static function preview_link($req){
   $id=absint($req['id']);
   $r=OAI_DB::get($id);
@@ -614,9 +614,9 @@ class OAI_REST {
 <title><?php echo esc_html($title); ?></title>
 <style>
 html,body{height:100%;margin:0;background:#111;color:#fff;font-family:Arial,sans-serif}
-.oai-bar{height:54px;box-sizing:border-box;padding:10px 16px;background:#181818;border-bottom:1px solid #333;display:flex;align-items:center;gap:14px;position:relative;z-index:2147483647}
+.oai-bar{min-height:54px;box-sizing:border-box;padding:9px 14px;background:#181818;border-bottom:1px solid #333;display:flex;align-items:center;gap:10px;position:relative;z-index:2147483647;flex-wrap:wrap}
 .oai-bar strong{font-size:14px}.oai-bar span{font-size:12px;color:#aaa}.oai-frame{width:100%;height:calc(100% - 54px);border:0;background:#fff}
-.oai-ok{color:#8be28b}.oai-warn{color:#ffd166}
+.oai-ok{color:#8be28b}.oai-warn{color:#ffd166}.oai-preview-actions{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}.oai-preview-action{appearance:none;border:1px solid #666;background:#292929;color:#fff;border-radius:7px;padding:7px 11px;font:600 12px Arial,sans-serif;cursor:pointer}.oai-preview-action.primary{background:#1769ff;border-color:#1769ff}.oai-preview-action.danger{border-color:#c84b4b;color:#ffd9d9}.oai-preview-action:disabled{opacity:.55;cursor:wait}.oai-preview-msg{font-size:12px;color:#8be28b}
 </style>
 </head>
 <body>
@@ -632,10 +632,20 @@ html,body{height:100%;margin:0;background:#111;color:#fff;font-family:Arial,sans
 <span class="oai-ok">Предложенный анонс: <?php echo esc_html(wp_trim_words($after,15)); ?> · изменения ещё не применены</span>
 <?php else: ?><span class="oai-warn">Предпросмотр не определил HTML-виджет. Укажите ?widget_id=...</span><?php endif; ?>
 <?php endif; ?>
+<?php if(current_user_can('manage_options')): ?>
+<div class="oai-preview-actions" id="oai-preview-actions">
+<?php if($r['status']==='pending'): ?><button class="oai-preview-action primary" data-action="approve">Подтвердить</button><button class="oai-preview-action danger" data-action="reject">Отклонить</button><?php endif; ?>
+<?php if($r['status']==='approved'): ?><button class="oai-preview-action primary" data-action="apply">Применить</button><button class="oai-preview-action danger" data-action="reject">Отклонить</button><?php endif; ?>
+<?php if($r['status']==='applied'||$r['status']==='rollback_failed'): ?><button class="oai-preview-action danger" data-action="rollback">Откатить</button><?php endif; ?>
+<span class="oai-preview-msg" id="oai-preview-msg"></span>
+</div>
+<?php endif; ?>
 </div>
 <iframe id="oai-frame" class="oai-frame" title="Okean AI sandbox preview" src="<?php echo esc_url($url); ?>"></iframe>
 <script>
 const OAI_PREVIEW=<?php echo wp_json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
+const OAI_REST_NONCE=<?php echo wp_json_encode(current_user_can('manage_options')?wp_create_nonce('wp_rest'):''); ?>;
+const OAI_ACTION_BASE=<?php echo wp_json_encode(rest_url('okean-ai/v1/sandbox/'.$id.'/')); ?>;
 const OAI_STYLES=<?php echo wp_json_encode($styles,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
 const OAI_HTML=<?php echo wp_json_encode($html,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
 const OAI_ELEMENTOR_PREVIEW=<?php echo wp_json_encode($elementor_preview,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
@@ -646,6 +656,28 @@ const OAI_BEFORE=<?php echo wp_json_encode($before,JSON_HEX_TAG|JSON_HEX_AMP|JSO
 const OAI_TYPE=<?php echo wp_json_encode($r['type']); ?>;
 const OAI_SETTINGS_AFTER=<?php echo wp_json_encode($settings_after,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_UNICODE); ?>;
 const frame=document.getElementById('oai-frame');
+
+document.querySelectorAll('.oai-preview-action').forEach(function(btn){
+  btn.addEventListener('click',async function(){
+    const action=String(btn.getAttribute('data-action')||'');
+    if(!action||!OAI_REST_NONCE)return;
+    const labels={approve:'Подтвердить операцию?',reject:'Отклонить операцию?',apply:'Применить изменение на сайте?',rollback:'Откатить применённое изменение?'};
+    if(labels[action] && !window.confirm(labels[action]))return;
+    const all=[...document.querySelectorAll('.oai-preview-action')];
+    all.forEach(function(x){x.disabled=true;});
+    const msg=document.getElementById('oai-preview-msg'); if(msg)msg.textContent='Выполняется…';
+    try{
+      const res=await fetch(OAI_ACTION_BASE+action,{method:'POST',credentials:'same-origin',headers:{'X-WP-Nonce':OAI_REST_NONCE,'Content-Type':'application/json'},body:'{}'});
+      const data=await res.json();
+      if(!res.ok || (data && data.code)){throw new Error((data&&data.message)||('HTTP '+res.status));}
+      if(msg)msg.textContent='Готово';
+      window.setTimeout(function(){window.location.reload();},350);
+    }catch(e){
+      if(msg){msg.textContent='Ошибка: '+(e&&e.message?e.message:String(e));msg.style.color='#ff9b9b';}
+      all.forEach(function(x){x.disabled=false;});
+    }
+  });
+});
 
 function oaiFindWidget(doc, widgetId){
   const safe=String(widgetId||'').replace(/[^A-Za-z0-9_-]/g,'');
@@ -954,9 +986,10 @@ frame.addEventListener('load',function(){
   if(!preg_match('#/sandbox/\d+/(approve|reject|apply|rollback)$#',$path,$m))return new WP_Error('oai_action','Unknown action',array('status'=>400));
   $action=$m[1];
   $test_automation_authorized=class_exists('OAI_Test_Automation') && OAI_Test_Automation::request_authorized($id,$action);
-  if(in_array($action,array('approve','reject','apply','rollback'),true) && !defined('OAI_ADMIN_HUMAN_APPROVAL') && !$test_automation_authorized){
+  $ai_lifecycle_authorized=class_exists('OAI_AI_Lifecycle_Control') && OAI_AI_Lifecycle_Control::request_authorized($id,$action);
+  if(in_array($action,array('approve','reject','apply','rollback'),true) && !defined('OAI_ADMIN_HUMAN_APPROVAL') && !$test_automation_authorized && !$ai_lifecycle_authorized){
    $nonce=(string)$req->get_header('X-WP-Nonce');
-   if($nonce==='' || !wp_verify_nonce($nonce,'wp_rest'))return new WP_Error('oai_human_approval_required','Approve, Apply and Rollback require an authenticated WP-admin human approval context or an active scoped Test Automation session',array('status'=>403));
+   if($nonce==='' || !wp_verify_nonce($nonce,'wp_rest'))return new WP_Error('oai_human_approval_required','Approve, Apply and Rollback require an authenticated WP-admin human approval context, AI Lifecycle Control, or an active scoped Test Automation session',array('status'=>403));
   }
   $r=OAI_DB::get($id);
   if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
