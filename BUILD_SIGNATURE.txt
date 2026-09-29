@@ -1,11 +1,11 @@
 WP AI Admin Build Signature
-Version: 2.0.64
-Build ID: 2.0.64-browser-visual-qa-20260929
-Purpose: browser-executed visual QA for desktop/tablet/mobile with signed draft-safe probes and MCP-readable reports
+Version: 2.0.65
+Build ID: 2.0.65-responsive-visual-qa-20260929
+Purpose: responsive full-width Visual QA shell while preserving exact 1440/768/390 test viewports
 Expected catalog with Content Navigation enabled: 93 tools
 Expected self-test checks: 58
 Direct live writes: false
 Human approval default: true
-Visual QA: signed one-hour probe; does not publish content; browser measures 1440/768/390 viewports
-Checks: horizontal overflow, offscreen elements, clipping, small targets, small text, sticky/fixed overlap
-Report retention: bounded to 24 hours
+Visual QA: signed one-hour probe; no publication; responsive Fit preview on any screen
+Viewport fidelity: iframe inner width remains exact while outer preview scales dynamically
+Noise filtering: Elementor #elementor-device-mode helpers are ignored
