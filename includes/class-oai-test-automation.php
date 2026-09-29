@@ -137,6 +137,7 @@ class OAI_Test_Automation {
    'bound_client_id_hash'=>'',
    'allowed_post_ids'=>$allowed_posts,
    'allowed_product_ids'=>self::parse_ids($product_ids),
+   'session_created_post_ids'=>array(),
    'managed_gutenberg_fixture_id'=>$fixture,
    'file_prefix'=>self::FILE_PREFIX,
    'action_count'=>0,
@@ -189,6 +190,7 @@ class OAI_Test_Automation {
    'client_bound'=>!empty($cfg['bound_client_id_hash']),
    'allowed_post_ids'=>self::parse_ids($cfg['allowed_post_ids']??array()),
    'allowed_product_ids'=>self::parse_ids($cfg['allowed_product_ids']??array()),
+   'session_created_post_ids'=>self::parse_ids($cfg['session_created_post_ids']??array()),
    'managed_gutenberg_fixture_id'=>self::managed_gutenberg_fixture_id(),
    'file_prefix'=>(string)($cfg['file_prefix']??self::FILE_PREFIX),
    'action_count'=>absint($cfg['action_count']??0),
@@ -222,6 +224,17 @@ class OAI_Test_Automation {
   if(in_array($post_id,$allowed,true))return true;
   $post=get_post($post_id);if(!$post)return false;
   return in_array((string)$post->post_status,array('draft','private'),true) && self::title_is_test($post);
+ }
+ private static function allow_created_post($post_id,$session_id){
+  $post_id=absint($post_id);if(!$post_id)return false;
+  $cfg=self::raw();
+  if(empty($cfg['enabled'])||empty($cfg['session_id'])||!hash_equals((string)$cfg['session_id'],(string)$session_id))return false;
+  $post=get_post($post_id);if(!$post||!in_array((string)$post->post_status,array('draft','private'),true))return false;
+  $allowed=self::parse_ids($cfg['allowed_post_ids']??array());$allowed[]=$post_id;$cfg['allowed_post_ids']=self::parse_ids($allowed);
+  $created=self::parse_ids($cfg['session_created_post_ids']??array());$created[]=$post_id;$cfg['session_created_post_ids']=self::parse_ids($created);
+  self::save($cfg);
+  update_post_meta($post_id,'_wpai_test_created_draft_session',(string)$session_id);
+  return true;
  }
  private static function product_allowed($product_id,$cfg){$product_id=absint($product_id);return $product_id>0&&in_array($product_id,self::parse_ids($cfg['allowed_product_ids']??array()),true);}
  private static function file_allowed($target,$cfg){
@@ -271,6 +284,14 @@ class OAI_Test_Automation {
    $meta['test_automation']=array('session_id'=>$status['session_id'],'tagged'=>false,'reason'=>$elig['reason'],'tool'=>sanitize_text_field((string)$tool),'at'=>time());
    OAI_DB::update((int)$row['id'],array('meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)));
    return array('active'=>true,'tagged'=>false,'eligible'=>false,'reason'=>$elig['reason']);
+  }
+  if($elig['reason']==='allowed_created_test_draft'){
+   $preview=absint($meta['preview_page_id']??0);
+   if(!self::allow_created_post($preview,(string)$status['session_id'])){
+    $meta['test_automation']=array('session_id'=>$status['session_id'],'tagged'=>false,'reason'=>'created_draft_scope_registration_failed','tool'=>sanitize_text_field((string)$tool),'at'=>time());
+    OAI_DB::update((int)$row['id'],array('meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)));
+    return array('active'=>true,'tagged'=>false,'eligible'=>false,'reason'=>'created_draft_scope_registration_failed');
+   }
   }
   $meta['test_automation']=array(
    'session_id'=>$status['session_id'],'tagged'=>true,'tool'=>sanitize_text_field((string)$tool),'client_id_hash'=>$client_hash,'user_id'=>$user_id,'tagged_at'=>time(),'eligibility'=>$elig['reason']
@@ -343,6 +364,7 @@ class OAI_Test_Automation {
    'managed_gutenberg_fixture_contract'=>method_exists(__CLASS__,'managed_gutenberg_fixture_id'),
    'max_actions_100000'=>self::MAX_ACTIONS===100000,
    'reusable_gutenberg_fixture_contract'=>method_exists(__CLASS__,'ensure_gutenberg_fixture')&&method_exists(__CLASS__,'find_reusable_gutenberg_fixture')&&method_exists(__CLASS__,'release_gutenberg_fixture'),
+   'created_draft_scope_contract'=>method_exists(__CLASS__,'allow_created_post'),
   );
  }
 }
