@@ -65,13 +65,13 @@ class OAI_MCP {
   return false;
  }
  public static function write_scope_contract(){
-  $cases=array(
-   'elementor_patch_container_settings'=>true,
-   'elementor_patch_page_layout'=>true,
-   'wp_option_update_sandbox'=>true,
-   'wp_get_site'=>false
-  );
-  $out=array();foreach($cases as $tool=>$expected)$out[$tool]=(self::tool_requires_write($tool,array())===$expected);
+  $out=array();
+  $writes=class_exists('OAI_Platform')?OAI_Platform::write_tools():array();
+  foreach((array)$writes as $tool){
+   $normalized=str_replace('.','_',(string)$tool);
+   $out[$normalized]=self::tool_requires_write($normalized,array());
+  }
+  $out['wp_get_site_read_control']=!self::tool_requires_write('wp_get_site',array());
   return $out;
  }
 
