@@ -1,5 +1,34 @@
 # WP AI Admin
 
+## 2.2.0 — Cloud Control Plane Foundation (development)
+
+The next commercial stage implements **one ChatGPT connection for all customer WordPress sites** while preserving the validated 2.1.3 local safety lifecycle.
+
+Product contract:
+- customer installs the WordPress plugin;
+- clicks **Connect**;
+- signs in on the WP AI Admin account website;
+- authorizes the site;
+- connects WP AI Admin once in ChatGPT;
+- asks **“Show my sites”**;
+- selects a site by name/domain;
+- mutations still use sandbox → preview/diff → approval → apply → verify → rollback.
+
+Foundation added in this branch:
+- frozen customer-flow document: `docs/COMMERCIAL-CUSTOMER-FLOW.md`;
+- architecture: `docs/CLOUD-ARCHITECTURE-2.2.0.md`;
+- separate central WordPress plugin under `cloud/wp-ai-admin-cloud/`;
+- Control Plane tables for workspaces, sites and pairings;
+- one-time pairing start/claim/exchange;
+- independent site credential per installation;
+- authenticated site heartbeat;
+- account site listing and revoke;
+- site-authenticated self-revoke;
+- local `OAI_Cloud_Client`;
+- WP Admin Cloud states: Not connected → Awaiting confirmation → Connected.
+
+The stable local runtime baseline remains **2.1.3** until the Cloud branch passes its own integration/security gate.
+
 ## 2.1.3 — Disable State Sanitization
 
 - When AI Lifecycle Control is switched off manually, owner and client-binding metadata are cleared.
