@@ -2,13 +2,13 @@
 /**
  * Plugin Name: WP AI Admin
  * Description: Universal AI Admin for WordPress with sandbox, diff, preview, approval, verification, rollback, Elementor, WooCommerce, Gutenberg, files and MCP.
- * Version: 2.1.0
+ * Version: 2.1.1
  * Author: Андриянов Н.Г.
  * Copyright: Андриянов Н.Г.
  */
 if (!defined('ABSPATH')) exit;
-define('OAI_VERSION','2.1.0');
-define('OAI_BUILD_ID','2.1.0-commercial-beta-candidate-20260930');
+define('OAI_VERSION','2.1.1');
+define('OAI_BUILD_ID','2.1.1-commercial-beta-ui-hardening-20260930');
 define('OAI_DB_VERSION',23);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
@@ -81,6 +81,10 @@ require_once OAI_DIR.'includes/class-oai-security-fuzz.php';
 require_once OAI_DIR.'includes/class-oai-admin.php';
 register_activation_hook(__FILE__, array('OAI_DB','install'));
 add_action('plugins_loaded', array('OAI_DB','maybe_upgrade'));
+add_action('plugins_loaded', function(){
+ if(class_exists('OAI_AI_Lifecycle_Control'))OAI_AI_Lifecycle_Control::reset_stale_build();
+ if(class_exists('OAI_Test_Automation'))OAI_Test_Automation::reset_stale_build();
+}, 20);
 add_action('plugins_loaded', function(){ OAI_Builder_Manager::register(new OAI_Elementor_Adapter()); });
 add_action('wp_abilities_api_init', array('OAI_Abilities','register'));
 add_action('rest_api_init', array('OAI_REST','register_routes'));
