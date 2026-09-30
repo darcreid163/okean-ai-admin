@@ -138,6 +138,11 @@ class OAI_P0 {
   return self::op('menu_assign_location',$location,$before,$menu_id,array('location'=>$location),$exists);
  }
 
+ public static function op_for_created_product($snapshot){
+  if(!is_array($snapshot)||empty($snapshot['id']))return new WP_Error('oai_product_snapshot','Invalid created product snapshot',array('status'=>500));
+  $id=absint($snapshot['id']);
+  return self::op('woocommerce_product_create',(string)$id,null,$snapshot,array('product_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);
+ }
  public static function current($type,$target){
   if($type==='media_alt'){ $s=self::media_snapshot($target);return is_wp_error($s)?array(false,null):array(true,$s['alt']);}
   if($type==='media_title'){ $s=self::media_snapshot($target);return is_wp_error($s)?array(false,null):array(true,$s['title']);}
