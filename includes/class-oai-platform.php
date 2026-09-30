@@ -44,6 +44,48 @@ class OAI_Platform {
   }
   return array('schema_version'=>2,'plugin_version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID,'expected_count'=>count($all),'catalog_sha256'=>hash('sha256',implode("\n",$all)),'items'=>$items,'feature_flags'=>array('content_navigation'=>self::content_navigation_state(),'test_automation'=>(class_exists('OAI_Test_Automation')?OAI_Test_Automation::status()['active']:false)),'legacy_aliases_preserved'=>true);
  }
+ public static function release_profile(){
+  $ta=class_exists('OAI_Test_Automation')?OAI_Test_Automation::status():array('active'=>false);
+  $ai=class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('active'=>false);
+  return array(
+   'channel'=>defined('OAI_RELEASE_CHANNEL')?OAI_RELEASE_CHANNEL:'development',
+   'profile'=>defined('OAI_RELEASE_PROFILE')?OAI_RELEASE_PROFILE:'development',
+   'candidate'=>defined('OAI_RELEASE_CANDIDATE')?(bool)OAI_RELEASE_CANDIDATE:false,
+   'production_defaults'=>array(
+    'direct_live_writes'=>false,
+    'human_approval_default'=>true,
+    'test_automation_default'=>false,
+    'ai_lifecycle_default'=>false,
+    'manual_controls_preserved'=>true,
+    'sandbox_before_apply'=>true,
+    'verify_after_apply'=>true,
+    'rollback_supported'=>true
+   ),
+   'effective_state'=>array(
+    'test_automation_active'=>!empty($ta['active']),
+    'ai_lifecycle_active'=>!empty($ai['active']),
+    'mode'=>!empty($ta['active'])?'scoped_test_automation':(!empty($ai['active'])?'explicit_ai_lifecycle_opt_in':'human_approval_only')
+   ),
+   'upgrade_contract'=>array(
+    'site_identity_persistent'=>true,
+    'installation_identity_persistent'=>true,
+    'oauth_schema_in_place'=>true,
+    'oauth_tokens_not_reset_by_plugin_upgrade'=>true,
+    'test_automation_build_bound'=>true,
+    'ai_lifecycle_build_bound'=>true
+   ),
+   'control_plane'=>array(
+    'required_for_beta'=>false,
+    'foundation_available'=>class_exists('OAI_Control_Plane'),
+    'remote_entitlements_enforced'=>false
+   ),
+   'known_beta_limits'=>array(
+    'visual_qa_result_requires_browser'=>true,
+    'menu_location_assignment_not_auto_regression'=>true,
+    'remote_control_plane_not_required_for_local_beta'=>true
+   )
+  );
+ }
  public static function security_status(){
   $site=self::site_id(); $installation=self::installation_id();
   $cp=(string)get_option('oai_control_plane_url','');
@@ -73,6 +115,44 @@ class OAI_Platform {
   $add('database.connection',isset($wpdb)&&$wpdb->dbh,array('prefix'=>isset($wpdb)?$wpdb->prefix:null));
   $add('wordpress.rest',function_exists('register_rest_route'));
   $add('oauth.schema_version',class_exists('OAI_MCP_OAuth')&&OAI_MCP_OAuth::SCHEMA_VERSION===1&&(int)get_option('oai_oauth_schema_version',0)===1);
+  $release=self::release_profile();
+  $add('commercial.release_profile',
+   defined('OAI_VERSION')&&OAI_VERSION==='2.1.0'
+   &&($release['channel']??'')==='commercial_beta'
+   &&($release['profile']??'')==='commercial_beta_candidate'
+   &&!empty($release['candidate']),
+   $release
+  );
+  $ta_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-test-automation.php');
+  $ai_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-ai-lifecycle-control.php');
+  $prod=$release['production_defaults']??array();
+  $add('commercial.production_default_contract',
+   empty($prod['direct_live_writes'])
+   &&!empty($prod['human_approval_default'])
+   &&empty($prod['test_automation_default'])
+   &&empty($prod['ai_lifecycle_default'])
+   &&strpos($ta_source,"'build_id'")!==false
+   &&strpos($ta_source,'hash_equals')!==false
+   &&strpos($ai_source,"'build_id'")!==false
+   &&strpos($ai_source,'hash_equals')!==false,
+   array('production_defaults'=>$prod,'upgrade_contract'=>$release['upgrade_contract']??array())
+  );
+  $oauth_tables_ok=true;
+  if(class_exists('OAI_MCP_OAuth')){
+   foreach(array(OAI_MCP_OAuth::clients_table(),OAI_MCP_OAuth::codes_table(),OAI_MCP_OAuth::tokens_table()) as $table){
+    $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$table));
+    if((string)$found!==$table)$oauth_tables_ok=false;
+   }
+  }else $oauth_tables_ok=false;
+  $add('commercial.oauth_schema_ready',$oauth_tables_ok&&(int)get_option('oai_oauth_schema_version',0)===1,array('schema_version'=>(int)get_option('oai_oauth_schema_version',0)));
+  $admin_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-admin.php');
+  $generic_test_defaults=class_exists('OAI_Test_Automation')
+   &&OAI_Test_Automation::FILE_PREFIX==='wp-ai-admin-tests/'
+   &&strpos($admin_source,'30153')===false
+   &&strpos($admin_source,'35404')===false
+   &&strpos($admin_source,'35127')===false
+   &&strpos($admin_source,'okean-core/wp-ai-admin-tests/')===false;
+  $add('commercial.generic_test_defaults',$generic_test_defaults,array('file_prefix'=>class_exists('OAI_Test_Automation')?OAI_Test_Automation::FILE_PREFIX:null));
   $add('control_plane.entitlement_verifier',class_exists('OAI_Control_Plane')&&OAI_Control_Plane::CONTRACT_VERSION===1&&method_exists('OAI_Control_Plane','verify'),array('sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_enforcement'=>false));
   $caps=OAI_Capabilities::available();
   $execution=OAI_WP_CLI_Execution::readiness();
@@ -306,6 +386,7 @@ class OAI_Platform {
   $catalog=self::tool_catalog();
   return array(
    'schema_version'=>2,'plugin_name'=>'WP AI Admin','plugin_version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID,'site_id'=>self::site_id(),'installation_id'=>self::installation_id(),
+   'release'=>self::release_profile(),
    'control_plane'=>array('supported'=>true,'configured'=>(bool)get_option('oai_control_plane_url',''),'mode'=>'remote_identity_entitlements_catalog_quota','signed_entitlement_verifier'=>true,'remote_entitlements_enforced'=>false,'local_approval_enforced'=>true,'test_automation_exception_active'=>(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()),'direct_live_writes'=>false,'security_contract_version'=>1),
    'multi_site'=>array('foundation'=>true,'site_identity'=>true,'installation_identity'=>true,'workspace_aware'=>true,'central_fanout_planned'=>true),
    'batch'=>array('foundation'=>true,'mode'=>'resumable_sandbox_children','atomicity'=>'per_child_operation','rollback'=>'reverse_child_reconciliation','max_items'=>100,'retained_jobs'=>50,'human_approval_default'=>true,'manual_pause'=>true,'optimistic_versioning'=>true,'lease_seconds'=>60,'db_mutex'=>'mysql_named_lock','checkpoint_events'=>100,'batch_receipt'=>true,'batch_proof'=>true,'strict_retry_unresolved_guard'=>true),
