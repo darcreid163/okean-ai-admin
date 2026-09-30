@@ -19,7 +19,7 @@ class OAI_Lifecycle {
  }
  public static function looks_like_filesystem_path($value){
   if(!is_string($value)||$value==='')return false;
-  $v=str_replace('\\\\','/',$value);
+  $v=str_replace('\\','/',$value);
   if(preg_match('/^[A-Za-z]:\\//',$v))return true;
   return (bool)preg_match('#^/(?:home|var|srv|opt|usr|mnt|private|Users|www)(?:/|$)#',$v);
  }
@@ -32,10 +32,12 @@ class OAI_Lifecycle {
   if(is_string($value)){
    $sensitive_keys=array('file','absolute_path','filesystem_path','plugin_dir','uploads_path','stylesheet_directory');
    if(in_array($key,$sensitive_keys,true)&&self::looks_like_filesystem_path($value))return '[redacted filesystem path]';
-   $decoded=json_decode($value,true);
-   if(json_last_error()===JSON_ERROR_NONE&&is_array($decoded)){
-    $redacted=self::redact_public($decoded);
-    return wp_json_encode($redacted);
+   if(in_array($key,array('receipt','proof'),true)){
+    $decoded=json_decode($value,true);
+    if(json_last_error()===JSON_ERROR_NONE&&is_array($decoded)){
+     $redacted=self::redact_public($decoded);
+     return wp_json_encode($redacted);
+    }
    }
   }
   return $value;
