@@ -7,6 +7,14 @@ class OAI_Admin {
  const ACTION_TABLE_LIMIT=50;
  const OPERATIONS_PER_PAGE=25;
  public static function ensure_token(){
+  $current_build=defined('OAI_BUILD_ID')?(string)OAI_BUILD_ID:'';
+  $previous_build=(string)get_option('oai_runtime_build_id','');
+  if($current_build!==''&&($previous_build===''||!hash_equals($previous_build,$current_build))){
+   if(class_exists('OAI_AI_Lifecycle_Control')&&method_exists('OAI_AI_Lifecycle_Control','reset_for_build_change'))OAI_AI_Lifecycle_Control::reset_for_build_change();
+   if(class_exists('OAI_Test_Automation')&&method_exists('OAI_Test_Automation','reset_for_build_change'))OAI_Test_Automation::reset_for_build_change();
+   update_option('oai_runtime_build_id',$current_build,false);
+   if(!defined('OAI_BUILD_CHANGED_THIS_REQUEST'))define('OAI_BUILD_CHANGED_THIS_REQUEST',true);
+  }
   if(!get_option('oai_bearer_token','')){
    $old=get_option('oai_api_token','');
    update_option('oai_bearer_token',$old?:wp_generate_password(48,false,false),false);
@@ -57,7 +65,9 @@ class OAI_Admin {
    else echo '<div class="notice notice-error"><p>Неверный режим выборочного чтения.</p></div>';
   }
   if(isset($_POST['oai_ai_lifecycle_enable']) && check_admin_referer('oai_ai_lifecycle_toggle')){
-   if(empty($_POST['oai_ai_lifecycle_ack'])){
+   if(defined('OAI_BUILD_CHANGED_THIS_REQUEST')&&OAI_BUILD_CHANGED_THIS_REQUEST){
+    echo '<div class="notice notice-warning"><p>WP AI Admin только что обновлён. Автономные режимы сброшены; обновите эту страницу и включите AI Lifecycle Control отдельным действием.</p></div>';
+   }elseif(empty($_POST['oai_ai_lifecycle_ack'])){
     echo '<div class="notice notice-error"><p>Подтвердите, что разрешаете AI управлять lifecycle sandbox-операций.</p></div>';
    }else{
     $result=OAI_AI_Lifecycle_Control::enable(get_current_user_id());
@@ -69,7 +79,9 @@ class OAI_Admin {
    echo '<div class="notice notice-success"><p>AI Lifecycle Control выключен. Ручное управление операциями сохранено.</p></div>';
   }
   if(isset($_POST['oai_test_automation_enable']) && check_admin_referer('oai_test_automation_toggle')){
-   if(empty($_POST['oai_test_automation_ack'])){
+   if(defined('OAI_BUILD_CHANGED_THIS_REQUEST')&&OAI_BUILD_CHANGED_THIS_REQUEST){
+    echo '<div class="notice notice-warning"><p>WP AI Admin только что обновлён. Test Automation оставлен выключенным; обновите страницу и включите QA-режим отдельным действием.</p></div>';
+   }elseif(empty($_POST['oai_test_automation_ack'])){
     echo '<div class="notice notice-error"><p>Для включения автоматизации тестов подтвердите ограниченный тестовый режим.</p></div>';
    }else{
     $ttl=absint($_POST['oai_test_automation_ttl']??60);
