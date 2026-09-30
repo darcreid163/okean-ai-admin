@@ -1124,7 +1124,11 @@ frame.addEventListener('load',function(){
   elseif($action==='rollback'){
    // A failed rollback may be retried only for an operation that was applied.
    // The live-state conflict check below still runs before any write.
-   if($r['status']!=='applied' && !($r['status']==='rollback_failed' && !empty($r['applied_at'])))return new WP_Error('oai_state','Operation must be applied',array('status'=>409));
+   $retry_owned_created=($r['status']==='rollback_failed'
+    && class_exists('OAI_P0')
+    && OAI_P0::is_created_artifact((string)$r['type'])
+    && !empty($meta['created_by_ai_admin']));
+   if($r['status']!=='applied' && !($r['status']==='rollback_failed' && (!empty($r['applied_at'])||$retry_owned_created)))return new WP_Error('oai_state','Operation must be applied',array('status'=>409));
    $before=json_decode((string)$r['before_data'],true);
    $applied=json_decode((string)$r['applied_data'],true);
    if($r['applied_data']===null || $r['applied_data']==='')$applied=json_decode((string)$r['after_data'],true);
