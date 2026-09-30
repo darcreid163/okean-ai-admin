@@ -37,11 +37,16 @@ class OAI_AI_Lifecycle_Control {
  }
 
  public static function disable($actor_user_id=0){
-  $cfg=self::raw();
-  $cfg['enabled']=false;
-  $cfg['disabled_at']=time();
-  $cfg['disabled_by']=absint($actor_user_id);
-  self::save($cfg);
+  self::save(array(
+   'enabled'=>false,
+   'owner_user_id'=>0,
+   'enabled_at'=>0,
+   'bound_client_id_hash'=>'',
+   'build_id'=>defined('OAI_BUILD_ID')?(string)OAI_BUILD_ID:'',
+   'disabled_at'=>time(),
+   'disabled_by'=>absint($actor_user_id),
+   'disabled_reason'=>'manual',
+  ));
   self::$request_context=null;
   return self::status();
  }
