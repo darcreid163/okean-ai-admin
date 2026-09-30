@@ -25,7 +25,7 @@ class OAI_Platform {
   if(!self::content_navigation_allowed())$tools=array_values(array_diff($tools,array('wp.file.outline')));
   return $tools;
  }
- public static function write_tools(){ return array('system.regression_run','system.regression_matrix','system.operations_cleanup','batch.create','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','woocommerce.create_product_sandbox','media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox','menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','wp.option_update_sandbox','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'); }
+ public static function write_tools(){ return array('system.regression_run','system.regression_matrix','system.operations_cleanup','batch.create','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','woocommerce.create_product_sandbox','media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox','menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox','elementor.patch_container_settings','elementor.patch_page_layout','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','wp.option_update_sandbox','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'); }
  public static function tool_catalog(){
   $all=self::expected_tools(); $writes=self::write_tools(); $items=array();
   foreach($all as $name){
@@ -101,6 +101,16 @@ class OAI_Platform {
   $p0_tools=array('woocommerce.get_product_full','woocommerce.create_product_sandbox','media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox','menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox','elementor.get_container','elementor.get_page_layout','elementor.patch_container_settings','elementor.patch_page_layout');
   $expected_now=self::expected_tools();
   $add('p0.tool_contract',count(array_diff($p0_tools,$expected_now))===0,array('required'=>$p0_tools,'missing'=>array_values(array_diff($p0_tools,$expected_now))));
+  $mutation_policy_tools=array(
+   'gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','woocommerce.create_product_sandbox',
+   'media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox',
+   'menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox',
+   'elementor.patch_container_settings','elementor.patch_page_layout','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings',
+   'wp.option_update_sandbox','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'
+  );
+  $write_now=self::write_tools();
+  $missing_write_policy=array_values(array_diff($mutation_policy_tools,$write_now));
+  $add('commercial.mutation_policy_complete',empty($missing_write_policy),array('required'=>$mutation_policy_tools,'missing'=>$missing_write_policy));
   $add('p0.runtime_contract',class_exists('OAI_P0')&&method_exists('OAI_P0','media_upload')&&method_exists('OAI_P0','menu_create')&&method_exists('OAI_P0','op_for_created_product')&&method_exists('OAI_P0','elementor_page_layout')&&method_exists('OAI_WooCommerce','get_full')&&method_exists('OAI_WooCommerce','create_draft')&&method_exists('OAI_Elementor','container')&&method_exists('OAI_Elementor','page_layout'));
   $media_desc=OAI_Lifecycle::descriptor('media_upload','123',null,array('before_exists'=>false,'attachment_id'=>123));
   $menu_desc=OAI_Lifecycle::descriptor('menu_create','456',null,array('before_exists'=>false,'menu_id'=>456));
