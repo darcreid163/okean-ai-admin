@@ -25,7 +25,7 @@ class OAI_Platform {
   if(!self::content_navigation_allowed())$tools=array_values(array_diff($tools,array('wp.file.outline')));
   return $tools;
  }
- public static function write_tools(){ return array('system.regression_run','system.regression_matrix','system.operations_cleanup','batch.create','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','woocommerce.create_product_sandbox','media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox','menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','wp.option_update_sandbox','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'); }
+ public static function write_tools(){ return array('system.regression_run','system.regression_matrix','system.operations_cleanup','batch.create','batch.resume','batch.pause','batch.retry','batch.cancel','batch.rollback','gutenberg.patch','content.patch','woocommerce.patch','woocommerce.update_product_sandbox','woocommerce.create_product_sandbox','media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox','menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox','elementor.patch_container_settings','elementor.patch_page_layout','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','wp.option_update_sandbox','file.write_sandbox','operation.reject','operation.approve','operation.apply','operation.rollback'); }
  public static function tool_catalog(){
   $all=self::expected_tools(); $writes=self::write_tools(); $items=array();
   foreach($all as $name){
@@ -240,6 +240,11 @@ class OAI_Platform {
   $add('catalog.expected_tools',count($all)===count(array_unique($all))&&count($all)>=100,array('expected_count'=>count($all),'unique_count'=>count(array_unique($all)),'catalog_sha256'=>hash('sha256',implode("\n",$all))));
   $defs=class_exists('OAI_MCP')&&method_exists('OAI_MCP','tool_definitions')?OAI_MCP::tool_definitions():array();$def_names=array();foreach((array)$defs as $d)if(is_array($d)&&!empty($d['name']))$def_names[]=(string)$d['name'];
   $add('catalog.exported_tools',count($def_names)===count($all)&&!array_diff($all,$def_names),array('exported_count'=>count($def_names),'missing'=>array_values(array_diff($all,$def_names))));
+  $critical_write_tools=array('elementor.patch_container_settings','elementor.patch_page_layout','wp.option_update_sandbox');
+  $platform_write_ok=true;foreach($critical_write_tools as $critical_tool)if(!in_array($critical_tool,self::write_tools(),true))$platform_write_ok=false;
+  $mcp_write_contract=class_exists('OAI_MCP')&&method_exists('OAI_MCP','write_scope_contract')?OAI_MCP::write_scope_contract():array();
+  $mcp_write_ok=!empty($mcp_write_contract)&&!in_array(false,$mcp_write_contract,true);
+  $add('security.write_tool_classification',$platform_write_ok&&$mcp_write_ok,array('platform'=>$critical_write_tools,'mcp'=>$mcp_write_contract));
   $add('navigation.gutenberg_outline_tool',in_array('gutenberg.get_outline',$def_names,true));
   $add('navigation.feature_state',in_array(self::content_navigation_state(),array('experimental','enabled','disabled'),true),array('state'=>self::content_navigation_state()));
   $add('woocommerce.runtime',class_exists('WooCommerce'),array('active'=>class_exists('WooCommerce')));
