@@ -117,7 +117,7 @@ class OAI_Platform {
   $add('oauth.schema_version',class_exists('OAI_MCP_OAuth')&&OAI_MCP_OAuth::SCHEMA_VERSION===1&&(int)get_option('oai_oauth_schema_version',0)===1);
   $release=self::release_profile();
   $add('commercial.release_profile',
-   defined('OAI_VERSION')&&OAI_VERSION==='2.1.0'
+   defined('OAI_VERSION')&&version_compare(OAI_VERSION,'2.1.0','>=')
    &&($release['channel']??'')==='commercial_beta'
    &&($release['profile']??'')==='commercial_beta_candidate'
    &&!empty($release['candidate']),
@@ -137,6 +137,13 @@ class OAI_Platform {
    &&strpos($ai_source,'hash_equals')!==false,
    array('production_defaults'=>$prod,'upgrade_contract'=>$release['upgrade_contract']??array())
   );
+  $main_source=(string)@file_get_contents(OAI_DIR.'okean-ai-admin.php');
+  $add('commercial.build_bound_reset_contract',
+   method_exists('OAI_AI_Lifecycle_Control','reset_stale_build')
+   &&method_exists('OAI_Test_Automation','reset_stale_build')
+   &&strpos($main_source,'OAI_AI_Lifecycle_Control::reset_stale_build')!==false
+   &&strpos($main_source,'OAI_Test_Automation::reset_stale_build')!==false
+  );
   $oauth_tables_ok=true;
   if(class_exists('OAI_MCP_OAuth')){
    foreach(array(OAI_MCP_OAuth::clients_table(),OAI_MCP_OAuth::codes_table(),OAI_MCP_OAuth::tokens_table()) as $table){
@@ -153,6 +160,13 @@ class OAI_Platform {
    &&strpos($admin_source,'35127')===false
    &&strpos($admin_source,'okean-core/wp-ai-admin-tests/')===false;
   $add('commercial.generic_test_defaults',$generic_test_defaults,array('file_prefix'=>class_exists('OAI_Test_Automation')?OAI_Test_Automation::FILE_PREFIX:null));
+  $admin_ui_ok=class_exists('OAI_Admin')
+   &&OAI_Admin::OPERATIONS_PER_PAGE===25
+   &&strpos($admin_source,'oai_disconnect_all')!==false
+   &&strpos($admin_source,'Подключённые клиенты · отключение')===false
+   &&strpos($admin_source,'name="oai_test_automation_posts[]"')!==false
+   &&strpos($admin_source,"'post_status'=>array('draft','private')")!==false;
+  $add('commercial.admin_ui_contract',$admin_ui_ok,array('operations_per_page'=>class_exists('OAI_Admin')?OAI_Admin::OPERATIONS_PER_PAGE:null));
   $add('control_plane.entitlement_verifier',class_exists('OAI_Control_Plane')&&OAI_Control_Plane::CONTRACT_VERSION===1&&method_exists('OAI_Control_Plane','verify'),array('sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_enforcement'=>false));
   $caps=OAI_Capabilities::available();
   $execution=OAI_WP_CLI_Execution::readiness();
