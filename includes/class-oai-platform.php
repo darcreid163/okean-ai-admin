@@ -186,6 +186,45 @@ class OAI_Platform {
   $license=OAI_Read::option_value('oai_license',array('signature'=>'synthetic-signature-probe'));
   $nested=OAI_Read::option_value('synthetic_public',array('label'=>'public','client_secret'=>'synthetic-secret-probe'));
   $add('security.option_nested_redaction',!empty($hash['redacted'])&&$hash['value']==='[REDACTED]'&&!empty($license['redacted'])&&$license['value']==='[REDACTED]'&&!empty($nested['redacted'])&&($nested['value']['client_secret']??null)==='[REDACTED]'&&($nested['value']['label']??null)==='public');
+
+  $health_probe=OAI_Read::health();
+  $health_path=(string)($health_probe['uploads']['path']??'');
+  $add('security.health_path_redaction',$health_path==='wp-content/uploads'&&strpos($health_path,'/')!==0&&strpos($health_path,'\\')!==0,array('uploads_path'=>$health_path));
+
+  $diag_probe=OAI_Diagnostics::run();
+  $diag_fs=is_array($diag_probe)?($diag_probe['checks']['filesystem']??array()):array();
+  $diag_uploads=(string)($diag_fs['uploads_path']??'');
+  $diag_theme=(string)($diag_fs['stylesheet_directory']??'');
+  $add('security.diagnostics_path_redaction',
+   $diag_uploads==='wp-content/uploads'
+   && strpos($diag_theme,'wp-content/themes/')===0
+   && strpos($diag_uploads,'/')!==0
+   && strpos($diag_theme,'/')!==0
+   && strpos($diag_uploads,'\\')!==0
+   && strpos($diag_theme,'\\')!==0,
+   array('uploads_path'=>$diag_uploads,'stylesheet_directory'=>$diag_theme)
+  );
+
+  $protected_req=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+  $protected_req->set_param('type','option_update');$protected_req->set_param('target','siteurl');$protected_req->set_param('value','https://example.invalid');
+  $protected_result=OAI_REST::sandbox_create($protected_req);
+  $secret_req=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+  $secret_req->set_param('type','option_update');$secret_req->set_param('target','synthetic_api_key');$secret_req->set_param('value','secret');
+  $secret_result=OAI_REST::sandbox_create($secret_req);
+  $add('security.protected_option_guard',
+   is_wp_error($protected_result)&&$protected_result->get_error_code()==='oai_option_protected'
+   &&is_wp_error($secret_result)&&$secret_result->get_error_code()==='oai_option_sensitive'
+  );
+
+  $users_req=new WP_REST_Request('GET','/okean-ai/v1/read/users');$users_req->set_param('limit',1);$users_req->set_param('page',1);
+  $users_probe=OAI_Read::users($users_req);
+  $users_items=is_array($users_probe)?($users_probe['items']??array()):array();
+  $add('privacy.user_list_projection',!is_wp_error($users_probe)&&(!isset($users_items[0])||!array_key_exists('email',$users_items[0])));
+
+  $comments_req=new WP_REST_Request('GET','/okean-ai/v1/read/comments');$comments_req->set_param('limit',1);$comments_req->set_param('page',1);
+  $comments_probe=OAI_Read::comments($comments_req);
+  $comments_items=is_array($comments_probe)?($comments_probe['items']??array()):array();
+  $add('privacy.comment_list_projection',!is_wp_error($comments_probe)&&(!isset($comments_items[0])||!array_key_exists('email',$comments_items[0])));
   $separator=OAI_Command_Registry::resolve('core version; plugin deactivate woocommerce');
   $extra=OAI_Command_Registry::resolve('core version unexpected');
   $add('security.command_shape',is_wp_error($separator)&&$separator->get_error_code()==='oai_cli_metacharacter'&&is_wp_error($extra)&&$extra->get_error_code()==='oai_cli_args');
