@@ -1,9 +1,9 @@
 WP AI Admin Build Signature
-Version: 2.1.2
-Build ID: 2.1.2-upgrade-session-guard-20260930
+Version: 2.1.3
+Build ID: 2.1.3-disable-state-sanitization-20260930
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
-Purpose: Commercial Beta upgrade/session replay hardening
+Purpose: Commercial Beta manual-disable state sanitization
 Expected catalog: 111 tools
 Expected self-test checks: 78
 Expected security-fuzz checks at 10 iterations: 220
@@ -14,8 +14,8 @@ Direct live writes: false
 Operations history page size: 25
 Connected-client UI: single Disconnect action; no OAuth client/token table
 Test Automation page selector: draft/private pages only
-Build upgrade guard: first admin request after build change clears AI/Test session state, records the new runtime build, and blocks lifecycle/Test Automation enable form replay during that same request
-AI Lifecycle reset clears owner/client binding and disabled state is stored against current build
-Test Automation reset clears session/client binding/allowlists/test IDs and restores generic wp-ai-admin-tests/ prefix
+Build upgrade guard: first admin request after build change clears AI/Test session state and blocks stale enable-form replay on that request
+Manual disable sanitization: AI Lifecycle and Test Automation clear owner/client/session/allowlist/action state when switched OFF
+Test Automation file prefix: wp-ai-admin-tests/
 OAuth/site/installation identity: preserved across normal plugin upgrade
 Control Plane: verification foundation available; remote enforcement not required for local commercial beta
