@@ -161,6 +161,15 @@ class OAI_Test_Automation {
   return self::status();
  }
 
+ public static function reset_stale_build(){
+  $cfg=self::raw();
+  if(empty($cfg['enabled'])||!defined('OAI_BUILD_ID'))return false;
+  $stored=(string)($cfg['build_id']??'');
+  if($stored!==''&&hash_equals($stored,(string)OAI_BUILD_ID))return false;
+  self::disable('build_changed',0);
+  return true;
+ }
+
  public static function is_active(){
   $cfg=self::raw();
   if(empty($cfg['enabled']))return false;
