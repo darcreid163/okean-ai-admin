@@ -1,3 +1,7 @@
+WP AI Admin 2.1.0 — Commercial Beta Candidate
+Commercial beta release profile: human approval default, direct live writes disabled, generic QA defaults, build-bound AI/Test automation, upgrade-safe OAuth/site/installation identity.
+Release gates and limitations: COMMERCIAL-BETA-CANDIDATE.md
+
 2.0.35 lifecycle verification fix (2026-09-28): internal post-write verification is allowed during applying/rolling_back while external pending/applying verification remains preflight; authoritative post scalar NULL is normalized to empty string for WordPress-equivalent verification.
 AI Admin 2.0.13
 Universal Execution Core + WP-CLI CommandRegistry + Gutenberg Resolver + MCP.
