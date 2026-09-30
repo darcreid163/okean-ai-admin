@@ -66,6 +66,8 @@ jobs:
         run: php tests/media-security-contract.php
       - name: Security output projection contract
         run: php tests/security-output-contract.php
+      - name: Write classification contract
+        run: php tests/write-classification-contract.php
       - name: Plugin ZIP integrity
         shell: bash
         run: |
