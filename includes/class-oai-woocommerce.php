@@ -176,6 +176,17 @@ class OAI_WooCommerce {
   foreach(array('type','id') as $field)if(isset($before[$field])&&!OAI_Verify::same($actual[$field]??null,$before[$field]))return new WP_Error('oai_woo_runtime','WooCommerce changed invariant field: '.$field,array('status'=>409));
   return true;
  }
+ public static function created_snapshot_matches($actual,$expected){
+  if(!is_array($actual)||!is_array($expected))return false;
+  $a=$actual;$e=$expected;
+  // Variable-product parent price and stock status are derived by WooCommerce
+  // from child variations after save/sync. They are not stable create inputs
+  // and must not turn a successful create into a false verification failure.
+  if(($e['type']??'')==='variable'){
+   unset($a['price'],$a['stock_status'],$e['price'],$e['stock_status']);
+  }
+  return OAI_Verify::same($a,$e);
+ }
  public static function apply($id,$data){
   $valid=self::validate_snapshot($data);if(is_wp_error($valid))return $valid;
   $p=wc_get_product((int)$id);if(!$p)return new WP_Error('oai_not_found','Product not found',array('status'=>404));
