@@ -280,7 +280,7 @@ class OAI_Platform {
   $add('security.rest_users_blocked',!empty($rest_contract['wordpress_users_blocked']));
   $ops_probe_req=new WP_REST_Request('GET','/okean-ai/v1/sandbox');$ops_probe_req->set_param('page',2);$ops_probe_req->set_param('per_page',1);$ops_probe=OAI_REST::sandbox_list($ops_probe_req);
   $add('operations.mcp_pagination_contract',is_array($ops_probe)&&($ops_probe['page']??0)===2&&($ops_probe['per_page']??0)===1&&isset($ops_probe['total'],$ops_probe['total_pages'],$ops_probe['items']));
-  $add('admin.operation_pagination_contract',class_exists('OAI_Admin')&&defined('OAI_VERSION')&&OAI_Admin::ACTION_TABLE_LIMIT===50&&OAI_Admin::OPERATIONS_PER_PAGE===50&&method_exists('OAI_DB','page')&&method_exists('OAI_DB','count_all'));
+  $add('admin.operation_pagination_contract',class_exists('OAI_Admin')&&defined('OAI_VERSION')&&OAI_Admin::ACTION_TABLE_LIMIT===50&&OAI_Admin::OPERATIONS_PER_PAGE===25&&method_exists('OAI_DB','page')&&method_exists('OAI_DB','count_all'));
   $add('test_automation.managed_gutenberg_fixture_contract',class_exists('OAI_Test_Automation')&&method_exists('OAI_Test_Automation','managed_gutenberg_fixture_id'));
   $absence_probe=class_exists('OAI_Verify')&&method_exists('OAI_Verify','created_page_absence')?OAI_Verify::created_page_absence(2147483647):array();
   $add('verification.elementor_create_rollback_absence',is_array($absence_probe)&&!empty($absence_probe['verified'])&&($absence_probe['verification_source']??'')==='dual_absence',$absence_probe);
