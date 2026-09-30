@@ -28,10 +28,19 @@ class OAI_Regression_Matrix {
   foreach((array)$runs as $run)foreach((array)($run['scenarios']??array()) as $s)if(!empty($s['operation_id']))return absint($s['operation_id']);
   return 0;
  }
+ private static function first_elementor_container_id($nodes){
+  foreach((array)$nodes as $node){
+   if(!is_array($node))continue;
+   if(($node['elType']??'')==='container'&&!empty($node['id']))return (string)$node['id'];
+   if(!empty($node['elements'])){$id=self::first_elementor_container_id($node['elements']);if($id!=='')return $id;}
+  }
+  return '';
+ }
  public static function run($args,$client_id,$user_id){
   $auth=OAI_Test_Automation::runner_authorized($client_id,$user_id);if(is_wp_error($auth))return $auth;
   $args=is_array($args)?$args:array();
   $content_id=absint($args['content_post_id']??0);$elementor_id=absint($args['elementor_post_id']??0);$widget=sanitize_text_field((string)($args['elementor_widget_id']??''));$container_id=sanitize_text_field((string)($args['elementor_container_id']??''));$product_id=absint($args['product_id']??0);
+  if($container_id===''&&$elementor_id){$container_data=OAI_Elementor::get_data($elementor_id);if(!is_wp_error($container_data))$container_id=self::first_elementor_container_id($container_data);}
   $iterations=min(3,max(1,absint($args['iterations']??1)));
   if(!$content_id||!$elementor_id||$widget===''||!$product_id)return new WP_Error('oai_matrix_args','content_post_id, elementor_post_id, elementor_widget_id and product_id are required',array('status'=>400));
   $started=microtime(true);$run_id='mx_'.gmdate('Ymd_His').'_'.substr(wp_generate_uuid4(),0,8);
