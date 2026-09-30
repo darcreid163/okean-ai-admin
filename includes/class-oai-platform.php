@@ -98,10 +98,10 @@ class OAI_Platform {
   );
   $ta_contract=class_exists('OAI_Test_Automation')?OAI_Test_Automation::self_test_contract():array();
   $add('test_automation.contract',!empty($ta_contract)&&!in_array(false,$ta_contract,true),$ta_contract);
-  $p0_tools=array('woocommerce.get_product_full','woocommerce.create_product_sandbox','media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox','menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox');
+  $p0_tools=array('woocommerce.get_product_full','woocommerce.create_product_sandbox','media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox','menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox','elementor.get_container','elementor.get_page_layout','elementor.patch_container_settings','elementor.patch_page_layout');
   $expected_now=self::expected_tools();
   $add('p0.tool_contract',count(array_diff($p0_tools,$expected_now))===0,array('required'=>$p0_tools,'missing'=>array_values(array_diff($p0_tools,$expected_now))));
-  $add('p0.runtime_contract',class_exists('OAI_P0')&&method_exists('OAI_P0','media_upload')&&method_exists('OAI_P0','menu_create')&&method_exists('OAI_P0','op_for_created_product')&&method_exists('OAI_WooCommerce','get_full')&&method_exists('OAI_WooCommerce','create_draft'));
+  $add('p0.runtime_contract',class_exists('OAI_P0')&&method_exists('OAI_P0','media_upload')&&method_exists('OAI_P0','menu_create')&&method_exists('OAI_P0','op_for_created_product')&&method_exists('OAI_P0','elementor_page_layout')&&method_exists('OAI_WooCommerce','get_full')&&method_exists('OAI_WooCommerce','create_draft')&&method_exists('OAI_Elementor','container')&&method_exists('OAI_Elementor','page_layout'));
   $media_desc=OAI_Lifecycle::descriptor('media_upload','123',null,array('before_exists'=>false,'attachment_id'=>123));
   $menu_desc=OAI_Lifecycle::descriptor('menu_create','456',null,array('before_exists'=>false,'menu_id'=>456));
   $product_desc=OAI_Lifecycle::descriptor('woocommerce_product_create','789',null,array('before_exists'=>false,'product_id'=>789));
