@@ -60,7 +60,7 @@ class OAI_MCP {
   return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope,'_meta'=>$meta));
  }
  private static function tool_requires_write($name,$args){
-  if(in_array($name,array('system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
+  if(in_array($name,array('system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
   if($name==='wordpress.execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
   return false;
  }
@@ -259,6 +259,10 @@ class OAI_MCP {
    ,'file.diff'=>array('type'=>'object','required'=>array('scope','path','proposed_content'),'properties'=>array('scope'=>array('type'=>'string'),'path'=>array('type'=>'string','minLength'=>1),'proposed_content'=>array('type'=>'string')),'additionalProperties'=>false)
    ,'operation.reject'=>array('type'=>'object','required'=>array('id'),'properties'=>array('id'=>array('type'=>'integer','minimum'=>1)),'additionalProperties'=>false)
   );
+  $schemas['elementor.get_container']=array('type'=>'object','required'=>array('post_id','container_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'container_id'=>array('type'=>'string','minLength'=>1)));
+  $schemas['elementor.get_page_layout']=array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1)));
+  $schemas['elementor.patch_container_settings']=array('type'=>'object','required'=>array('post_id','container_id','changes'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'container_id'=>array('type'=>'string','minLength'=>1),'changes'=>array('type'=>'object','minProperties'=>1)));
+  $schemas['elementor.patch_page_layout']=array('type'=>'object','required'=>array('post_id','page_template'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'page_template'=>array('type'=>'string','enum'=>array('default','elementor_canvas','elementor_header_footer'))));
   $schemas['woocommerce.get_product_full']=array('type'=>'object','required'=>array('product_id'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1)));
   $product_changes=array(
    'type'=>'object','additionalProperties'=>false,'properties'=>array(
@@ -285,7 +289,7 @@ class OAI_MCP {
   $schemas['menu.assign_location_sandbox']=array('type'=>'object','required'=>array('location','menu_id'),'additionalProperties'=>false,'properties'=>array('location'=>array('type'=>'string','minLength'=>1),'menu_id'=>array('type'=>'integer','minimum'=>0)));
   $read=array(
    'wp.get_site','wp.inspect_html','wp.visual_qa_result','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
-   'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','woocommerce.get_product_full','operation.get_receipt',
+   'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','elementor.get_container','elementor.get_page_layout','woocommerce.get_product','woocommerce.get_product_full','operation.get_receipt',
    'gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
    'wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.list','batch.status','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_history','system.coverage_report','system.security_fuzz'
   );
@@ -296,6 +300,8 @@ class OAI_MCP {
    'wp.file.outline'=>'List file landmarks and line numbers without returning the full file; use file.read with a line range next.',
    'file.read'=>'Read a scoped theme file; start_line and end_line return a bounded excerpt with snapshot hash.',
    'wp.get_theme_mods'=>'Read one or up to 100 saved settings of the active WordPress theme; values retain their types.',
+   'elementor.get_container'=>'Read one Elementor container/e-flexbox settings snapshot and supported layout keys.',
+   'elementor.get_page_layout'=>'Read the current page template used by an Elementor page.',
    'wp.rest_routes'=>'Discover registered same-site REST GET routes without invoking them.',
    'wp.rest_read'=>'Call a registered same-site WordPress REST GET route through a redacted, bounded resolver; external URLs, WordPress user endpoints and sensitive/internal routes are blocked.',
    'woocommerce.get_variations'=>'Read paginated WooCommerce product variations without customer data.',
@@ -347,6 +353,8 @@ class OAI_MCP {
   $tools[]=self::tool('menu.remove_item_sandbox','Sandbox removal of a menu item by changing visibility while preserving rollback.',$schemas['menu.remove_item_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('menu.move_item_sandbox','Sandbox a menu item parent/order change.',$schemas['menu.move_item_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('menu.assign_location_sandbox','Sandbox assignment or clearing of a registered theme menu location.',$schemas['menu.assign_location_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('elementor.patch_container_settings','Create a sandbox patch for Elementor container/e-flexbox layout settings including full-width and responsive layout properties.',$schemas['elementor.patch_container_settings'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('elementor.patch_page_layout','Create a sandbox patch for the WordPress/Elementor page template.',$schemas['elementor.patch_page_layout'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('elementor.create_draft','Create an Elementor draft from data, or clone layout and widget tree from source_post_id when data is omitted. Newly created pages use Elementor as the sole content source.', $schemas['elementor.create_draft'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('elementor.patch_widget','Create a sandbox patch for an existing Elementor HTML widget. Requires an exact old_html snapshot; live content is not written until human approval and apply.',array('type'=>'object','required'=>array('post_id','widget_id','old_html','new_html'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'widget_id'=>array('type'=>'string','minLength'=>1),'old_html'=>array('type'=>'string'),'new_html'=>array('type'=>'string'))),array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('elementor.patch_fragment','Replace one exact text, image tag or HTML block within an existing Elementor HTML widget. Supply the current SHA-256 from elementor.get_widget; rejects stale or ambiguous fragments. Creates a sandbox operation.', $schemas['elementor.patch_fragment'],array('readOnlyHint'=>false,'destructiveHint'=>false));
@@ -448,6 +456,9 @@ class OAI_MCP {
     $out=OAI_REST::elementor_node($r);
     break;
    case 'elementor_get_schema':$out=OAI_Elementor::widget_schema((string)($a['widget_type']??''));break;
+   case 'elementor_get_container':$out=OAI_Elementor::container(absint($a['post_id']??0),sanitize_text_field((string)($a['container_id']??'')));break;
+   case 'elementor_get_page_layout':$out=OAI_Elementor::page_layout(absint($a['post_id']??0));break;
+
    case 'elementor_get_globals':$out=OAI_Elementor::globals();break;
    case 'woocommerce_get_product_full':
    case 'woocommerce_get_product':
@@ -518,6 +529,9 @@ class OAI_MCP {
    case 'menu_assign_location_sandbox':$out=OAI_P0::menu_assign_location($a);break;
    case 'woocommerce_update_product_sandbox':
    case 'woocommerce_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_patch($r);break;
+   case 'elementor_patch_container_settings':
+    $r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch');$r->set_param('target',absint($a['post_id']??0).':'.sanitize_text_field((string)($a['container_id']??'')));$r->set_param('changes',is_array($a['changes']??null)?$a['changes']:array());$out=OAI_REST::elementor_patch($r);break;
+   case 'elementor_patch_page_layout':$out=OAI_P0::elementor_page_layout($a);break;
    case 'elementor_create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_create_page($r);break;
    case 'elementor_patch_widget':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-widget');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_patch_widget($r);break;
    case 'elementor_patch_fragment':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-fragment');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_patch_fragment($r);break;
@@ -544,7 +558,7 @@ class OAI_MCP {
     return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin unless AI Lifecycle Control is active'));
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
   }
-  $sandbox_tools=array('gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox');
+  $sandbox_tools=array('gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox');
   if(!is_wp_error($out) && in_array($name,$sandbox_tools,true) && is_array($out) && !empty($out['id']) && class_exists('OAI_Test_Automation')){
    $tag=OAI_Test_Automation::tag_operation(absint($out['id']),$raw_name,(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));
    if(is_array($tag))$out['test_automation']=$tag;
