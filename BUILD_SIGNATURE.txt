@@ -9,3 +9,4 @@ Human approval default: true
 Proof contract: execution proof attests applied_data when runtime normalization differs from requested after_data
 WooCommerce variable products: derived parent price/stock_status remain semantic-normalization aware
 Media responses: absolute server filesystem paths are not exposed
+Recovery contract: rollback_failed AI-owned created artifacts may retry rollback; conflict verification remains mandatory
