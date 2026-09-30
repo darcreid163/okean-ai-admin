@@ -1,12 +1,12 @@
 WP AI Admin Build Signature
-Version: 2.0.70
-Build ID: 2.0.70-cleanup-failed-statuses-20260930
-Purpose: include failed lifecycle terminal statuses in safe operations cleanup
-Expected catalog with Content Navigation enabled: 95 tools
-Expected self-test checks: 60
+Version: 2.0.71
+Build ID: 2.0.71-lifecycle-options-20260930
+Purpose: fix conflict replay error reporting and expose WordPress option updates through the standard sandbox lifecycle
+Expected catalog with Content Navigation enabled: 96 tools
+Expected self-test checks: 61
 Direct live writes: false
 Human approval default: true
-Cleanup terminal statuses: rolled_back / rejected / expired / cancelled / failed / apply_failed / rollback_failed / verification_failed
-Applied cleanup: explicit include_applied=true only
-Active statuses protected: pending / approved / applying / rolling_back
-Audit log preserved: true
+New tool: wp.option_update_sandbox
+Option workflow: sandbox -> approval -> apply -> verify -> rollback
+Conflict replay: repeated apply after apply_failed/conflict returns oai_conflict, not generic approval-state error
+Test option scope: Test Automation allows only oai_test_* or wp_ai_admin_test_* options
