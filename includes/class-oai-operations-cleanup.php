@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) exit;
 
 class OAI_Operations_Cleanup {
  const ACTIVE_STATUSES=array('pending','approved','applying','rolling_back');
- const TERMINAL_STATUSES=array('rolled_back','rejected','expired','cancelled','failed');
+ const TERMINAL_STATUSES=array('rolled_back','rejected','expired','cancelled','failed','apply_failed','rollback_failed','verification_failed');
 
  public static function self_test_contract(){
   return array(
@@ -12,6 +12,7 @@ class OAI_Operations_Cleanup {
    'active_statuses_protected'=>true,
    'applied_requires_explicit_opt_in'=>true,
    'audit_log_preserved'=>true,
+   'failed_terminal_statuses_supported'=>true,
    'admin_required'=>true,
   );
  }
