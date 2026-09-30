@@ -89,7 +89,7 @@ class OAI_P0 {
  public static function menu_item_snapshot($item_id){
   $p=get_post(absint($item_id));if(!$p||$p->post_type!=='nav_menu_item')return new WP_Error('oai_menu_item_not_found','Menu item not found',array('status'=>404));
   return array(
-   'id'=>(int)$p->ID,'status'=>(string)$p->post_status,'title'=>(string)get_post_meta($p->ID,'_menu_item_title',true),
+   'id'=>(int)$p->ID,'status'=>(string)$p->post_status,'title'=>(string)(wp_setup_nav_menu_item($p)->title??$p->post_title),
    'url'=>(string)get_post_meta($p->ID,'_menu_item_url',true),'type'=>(string)get_post_meta($p->ID,'_menu_item_type',true),
    'object'=>(string)get_post_meta($p->ID,'_menu_item_object',true),'object_id'=>(int)get_post_meta($p->ID,'_menu_item_object_id',true),
    'parent'=>(int)get_post_meta($p->ID,'_menu_item_menu_item_parent',true),'order'=>(int)$p->menu_order,
