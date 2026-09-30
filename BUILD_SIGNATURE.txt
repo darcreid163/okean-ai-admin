@@ -1,14 +1,12 @@
 WP AI Admin Build Signature
-Version: 2.0.69
-Build ID: 2.0.69-operations-cleanup-20260929
-Purpose: safe terminal operation-ledger cleanup before new User Journey QA cycle
+Version: 2.0.70
+Build ID: 2.0.70-cleanup-failed-statuses-20260930
+Purpose: include failed lifecycle terminal statuses in safe operations cleanup
 Expected catalog with Content Navigation enabled: 95 tools
 Expected self-test checks: 60
 Direct live writes: false
 Human approval default: true
-New tool: system.operations_cleanup
-Dry-run default: true
-Protected active statuses: pending / approved / applying / rolling_back
-Terminal default cleanup: rolled_back / rejected / expired / cancelled / failed
+Cleanup terminal statuses: rolled_back / rejected / expired / cancelled / failed / apply_failed / rollback_failed / verification_failed
 Applied cleanup: explicit include_applied=true only
-Audit log: preserved
+Active statuses protected: pending / approved / applying / rolling_back
+Audit log preserved: true
