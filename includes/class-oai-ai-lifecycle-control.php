@@ -46,13 +46,9 @@ class OAI_AI_Lifecycle_Control {
   return self::status();
  }
 
- public static function reset_stale_build(){
-  $cfg=self::raw();
+ public static function reset_for_build_change(){
   if(!defined('OAI_BUILD_ID'))return false;
-  $stored=(string)($cfg['build_id']??'');
-  if($stored!==''&&hash_equals($stored,(string)OAI_BUILD_ID)&&empty($cfg['enabled']))return false;
-  if($stored!==''&&hash_equals($stored,(string)OAI_BUILD_ID)&&!empty($cfg['enabled']))return false;
-  $cfg=array(
+  self::save(array(
    'enabled'=>false,
    'owner_user_id'=>0,
    'enabled_at'=>0,
@@ -61,10 +57,17 @@ class OAI_AI_Lifecycle_Control {
    'disabled_at'=>time(),
    'disabled_by'=>0,
    'disabled_reason'=>'build_changed',
-  );
-  self::save($cfg);
+  ));
   self::$request_context=null;
   return true;
+ }
+
+ public static function reset_stale_build(){
+  $cfg=self::raw();
+  if(!defined('OAI_BUILD_ID'))return false;
+  $stored=(string)($cfg['build_id']??'');
+  if($stored!==''&&hash_equals($stored,(string)OAI_BUILD_ID))return false;
+  return self::reset_for_build_change();
  }
 
  public static function is_active(){
