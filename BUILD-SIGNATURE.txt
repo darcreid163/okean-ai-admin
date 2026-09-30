@@ -1,15 +1,15 @@
 WP AI Admin Build Signature
-Version: 2.0.75
-Build ID: 2.0.75-proof-integrity-20260930
-Purpose: Commercial Beta proof and receipt integrity hardening
+Version: 2.0.76
+Build ID: 2.0.76-read-surface-hardening-20260930
+Purpose: Commercial Beta read-surface privacy and filesystem-path hardening
 Expected catalog: 111 tools
-Expected self-test checks: 64
+Expected self-test checks: 69
+Expected security-fuzz checks at 10 iterations: 220
 Direct live writes: false
 Human approval default: true
-Proof contract: execution proof attests applied_data when runtime normalization differs from requested after_data
-WooCommerce variable products: derived parent price/stock_status remain semantic-normalization aware
-Media responses: absolute server filesystem paths are not exposed
-Recovery contract: rollback_failed AI-owned created artifacts may retry rollback; conflict verification remains mandatory
-Option safety: generic option sandbox denies critical core and credential/security option keys before operation creation
-User privacy: wp.list_users omits email by default and returns only account identity/role metadata
-Comment privacy: wp.list_comments omits comment author email from the default list projection
+Filesystem privacy: wp.health and wp.diagnostics expose only WordPress-relative paths, never absolute server paths
+Option safety: protected core and credential/security option writes are denied before operation creation
+User privacy: wp.list_users omits email by default
+Comment privacy: wp.list_comments omits author email by default
+Proof integrity: execution proof attests canonical applied_data after runtime normalization
+Recovery contract: rollback_failed AI-owned created artifacts may retry rollback with conflict verification preserved
