@@ -177,6 +177,21 @@ class OAI_Platform {
    &&strpos($admin_source,'name="oai_test_automation_posts[]"')!==false
    &&strpos($admin_source,"'post_status'=>array('draft','private')")!==false;
   $add('commercial.admin_ui_contract',$admin_ui_ok,array('operations_per_page'=>class_exists('OAI_Admin')?OAI_Admin::OPERATIONS_PER_PAGE:null));
+  $cloud_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-cloud-client.php');
+  $add('cloud.foundation_contract',
+   class_exists('OAI_Cloud_Client')
+   &&method_exists('OAI_Cloud_Client','start_pairing')
+   &&method_exists('OAI_Cloud_Client','complete_pairing')
+   &&method_exists('OAI_Cloud_Client','ping')
+   &&method_exists('OAI_Cloud_Client','disconnect')
+   &&strpos($cloud_source,'oai_control_plane_site_token')!==false
+   &&strpos($cloud_source,'pairings/start')!==false
+   &&strpos($cloud_source,'pairings/exchange')!==false
+   &&strpos($cloud_source,'sites/ping')!==false
+   &&strpos($cloud_source,'sites/self-revoke')!==false
+   &&strpos($admin_source,'oai_cloud_start')!==false
+   &&strpos($admin_source,'Авторизоваться и подтвердить сайт')!==false
+  );
   $add('control_plane.entitlement_verifier',class_exists('OAI_Control_Plane')&&OAI_Control_Plane::CONTRACT_VERSION===1&&method_exists('OAI_Control_Plane','verify'),array('sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_enforcement'=>false));
   $caps=OAI_Capabilities::available();
   $execution=OAI_WP_CLI_Execution::readiness();
