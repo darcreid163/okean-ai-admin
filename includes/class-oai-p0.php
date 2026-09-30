@@ -143,7 +143,14 @@ class OAI_P0 {
   $id=absint($snapshot['id']);
   $op=self::op('woocommerce_product_create',(string)$id,null,$snapshot,array('product_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){$p=wc_get_product($id);if($p)$p->delete(true);return $op;}return $op;
  }
+ public static function elementor_page_layout($a){
+  $post_id=absint($a['post_id']??0);$before=OAI_Elementor::page_layout($post_id);if(is_wp_error($before))return $before;
+  $template=OAI_Elementor::validate_page_template($a['page_template']??'');if(is_wp_error($template))return $template;
+  $after=$before;$after['page_template']=$template;
+  return self::op('elementor_page_layout',(string)$post_id,$before,$after,array('post_id'=>$post_id),true);
+ }
  public static function current($type,$target){
+  if($type==='elementor_page_layout'){ $v=OAI_Elementor::page_layout(absint($target));return is_wp_error($v)?array(false,null):array(true,$v);}
   if($type==='media_alt'){ $s=self::media_snapshot($target);return is_wp_error($s)?array(false,null):array(true,$s['alt']);}
   if($type==='media_title'){ $s=self::media_snapshot($target);return is_wp_error($s)?array(false,null):array(true,$s['title']);}
   if($type==='media_featured'){ $p=get_post(absint($target));return $p?array(true,(int)get_post_thumbnail_id($p)):array(false,null);}
@@ -168,6 +175,7 @@ class OAI_P0 {
   $r=wp_update_nav_menu_item($menu_id,$id,$args);return is_wp_error($r)?$r:true;
  }
  public static function write($type,$target,$v,$meta=array()){
+  if($type==='elementor_page_layout'){if(!is_array($v))return new WP_Error('oai_page_layout','Invalid page layout snapshot',array('status'=>422));$template=OAI_Elementor::validate_page_template($v['page_template']??'');if(is_wp_error($template))return $template;if($template==='default')delete_post_meta(absint($target),'_wp_page_template');else update_post_meta(absint($target),'_wp_page_template',$template);clean_post_cache(absint($target));return true;}
   if($type==='media_alt'){update_post_meta(absint($target),'_wp_attachment_image_alt',sanitize_text_field((string)$v));return true;}
   if($type==='media_title')return wp_update_post(array('ID'=>absint($target),'post_title'=>sanitize_text_field((string)$v)),true);
   if($type==='media_featured'){if(absint($v))return set_post_thumbnail(absint($target),absint($v));delete_post_thumbnail(absint($target));return true;}
