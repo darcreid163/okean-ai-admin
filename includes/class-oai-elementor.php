@@ -144,6 +144,28 @@ class OAI_Elementor {
   return $out;
  }
 
+ public static function container_layout_keys(){
+  $base=array('content_width','width','max_width','min_height','flex_direction','flex_wrap','justify_content','align_items','align_content','gap','padding','margin','overflow','html_tag','css_classes');
+  $out=$base;foreach(array('tablet','mobile') as $bp)foreach($base as $key)$out[]=$key.'_'.$bp;
+  return array_values(array_unique($out));
+ }
+ public static function container($post_id,$node_id){
+  $ref=self::find_node(absint($post_id),sanitize_text_field((string)$node_id));if(is_wp_error($ref))return $ref;
+  $el=(string)($ref['node']['elType']??'');
+  if(!in_array($el,array('container','e-flexbox'),true))return new WP_Error('oai_elementor_container','Elementor container/e-flexbox node required',array('status'=>422,'elType'=>$el));
+  return array('post_id'=>absint($post_id),'node_id'=>(string)$node_id,'elType'=>$el,'path'=>$ref['path'],'settings'=>is_array($ref['node']['settings']??null)?$ref['node']['settings']:array(),'allowed_layout_settings'=>self::container_layout_keys());
+ }
+ public static function page_layout($post_id){
+  $post_id=absint($post_id);$p=get_post($post_id);if(!$p||$p->post_type!=='page')return new WP_Error('oai_page','Page not found',array('status'=>404));
+  $template=(string)get_post_meta($post_id,'_wp_page_template',true);if($template==='')$template='default';
+  return array('post_id'=>$post_id,'page_template'=>$template);
+ }
+ public static function validate_page_template($template){
+  $template=sanitize_key((string)$template);
+  $allowed=array('default','elementor_canvas','elementor_header_footer');
+  if(!in_array($template,$allowed,true))return new WP_Error('oai_page_template','Unsupported Elementor page template',array('status'=>422,'allowed'=>$allowed));
+  return $template;
+ }
  public static function patch_settings($target,$changes){
   $parts=explode(':',(string)$target,2); $post_id=absint($parts[0]??0); $node_id=sanitize_text_field($parts[1]??'');
   if(!$post_id||$node_id==='')return new WP_Error('oai_target','Elementor target must be POST_ID:NODE_ID',array('status'=>400));
@@ -157,9 +179,12 @@ class OAI_Elementor {
    if(is_wp_error($schema))return $schema;
    $controls=$schema['controls']??array();
   }
+  $is_container=in_array((string)($ref['node']['elType']??''),array('container','e-flexbox'),true);
+  $container_keys=$is_container?self::container_layout_keys():array();
   foreach($changes as $key=>$value){
-   if(!is_string($key) || (!array_key_exists($key,$before) && !isset($controls[$key])) || (isset($controls[$key]) && in_array($controls[$key]['type']??'',array('section','tab','tabs'),true)))
-    return new WP_Error('oai_elementor_control','Unknown or non-editable Elementor setting: '.(string)$key,array('status'=>422));
+   $known=$is_container?in_array((string)$key,$container_keys,true):(array_key_exists($key,$before)||isset($controls[$key]));
+   if(!is_string($key) || !$known || (isset($controls[$key]) && in_array($controls[$key]['type']??'',array('section','tab','tabs'),true)))
+    return new WP_Error('oai_elementor_control','Unknown or non-editable Elementor setting: '.(string)$key,array('status'=>422,'container'=>$is_container,'allowed'=>$is_container?$container_keys:null));
   }
   $after=self::merge_settings($before,$changes);
   return array('post_id'=>$post_id,'node_id'=>$node_id,'node'=>$ref['node'],'before_settings'=>$before,'after_settings'=>$after,'changes'=>$changes,'path'=>$ref['path']);
