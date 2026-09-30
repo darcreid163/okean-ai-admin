@@ -183,7 +183,8 @@ class OAI_Read {
   global $wpdb;
   $checks=array();
   $checks['database']=array('ok'=>(bool)$wpdb->get_var("SELECT 1"),'error'=>$wpdb->last_error?:null);
-  $checks['uploads']=array('ok'=>wp_is_writable(wp_upload_dir()['basedir']),'path'=>wp_upload_dir()['basedir']);
+  $uploads=wp_upload_dir();
+  $checks['uploads']=array('ok'=>wp_is_writable($uploads['basedir']),'path'=>'wp-content/uploads');
   $checks['wp_debug']=array('enabled'=>defined('WP_DEBUG')?(bool)WP_DEBUG:false);
   $checks['memory_limit']=ini_get('memory_limit');
   $checks['max_execution_time']=ini_get('max_execution_time');
