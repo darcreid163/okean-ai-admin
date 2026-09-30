@@ -144,9 +144,8 @@ class OAI_Read {
   $users=$query->get_results();
   $out=array();
   foreach($users as $u) $out[]=array(
-   'id'=>$u->ID,'login'=>$u->user_login,'display_name'=>$u->display_name,
-   'email'=>$u->user_email,'roles'=>array_values($u->roles),
-   'registered'=>$u->user_registered
+   'id'=>$u->ID,'display_name'=>$u->display_name,
+   'roles'=>array_values($u->roles),'registered'=>$u->user_registered
   );
   $total=(int)$query->get_total();$pages=(int)ceil($total/$limit);
   return array('count'=>count($out),'page'=>$page,'limit'=>$limit,'total'=>$total,'total_pages'=>$pages,'has_more'=>$page<$pages,'items'=>$out);
