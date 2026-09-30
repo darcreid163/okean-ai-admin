@@ -77,7 +77,7 @@ class OAI_P0 {
   update_post_meta($id,'_oai_sandbox_artifact','1');
   $after=self::media_snapshot($id);if(is_wp_error($after)){wp_delete_attachment($id,true);return $after;}
   $after['status']='inherit';
-  return self::op('media_upload',(string)$id,null,$after,array('attachment_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);
+  $op=self::op('media_upload',(string)$id,null,$after,array('attachment_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_attachment($id,true);return $op;}return $op;
  }
 
  public static function menu_snapshot($menu_id){
@@ -101,7 +101,7 @@ class OAI_P0 {
   $name=sanitize_text_field((string)($a['name']??''));if($name==='')return new WP_Error('oai_menu_name','Menu name is required',array('status'=>400));
   $id=wp_create_nav_menu($name);if(is_wp_error($id))return $id;update_term_meta($id,'_oai_sandbox_artifact','1');
   $after=self::menu_snapshot($id);if(is_wp_error($after)){wp_delete_nav_menu($id);return $after;}
-  return self::op('menu_create',(string)$id,null,$after,array('menu_id'=>(int)$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);
+  $op=self::op('menu_create',(string)$id,null,$after,array('menu_id'=>(int)$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_nav_menu($id);return $op;}return $op;
  }
  private static function menu_item_args($a){
   $type=sanitize_key((string)($a['type']??'custom'));if(!in_array($type,array('custom','post_type','taxonomy'),true))$type='custom';
@@ -119,7 +119,7 @@ class OAI_P0 {
   $item_id=wp_update_nav_menu_item($menu_id,0,$args);if(is_wp_error($item_id))return $item_id;
   wp_update_post(array('ID'=>$item_id,'post_status'=>'draft'));update_post_meta($item_id,'_oai_sandbox_artifact','1');
   $after=self::menu_item_snapshot($item_id);if(is_wp_error($after)){wp_delete_post($item_id,true);return $after;}$after['status']='publish';
-  return self::op('menu_add_item',(string)$item_id,null,$after,array('menu_id'=>$menu_id,'item_id'=>(int)$item_id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);
+  $op=self::op('menu_add_item',(string)$item_id,null,$after,array('menu_id'=>$menu_id,'item_id'=>(int)$item_id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_post($item_id,true);return $op;}return $op;
  }
  public static function menu_remove_item($a){
   $item_id=absint($a['item_id']??0);$before=self::menu_item_snapshot($item_id);if(is_wp_error($before))return $before;
@@ -141,7 +141,7 @@ class OAI_P0 {
  public static function op_for_created_product($snapshot){
   if(!is_array($snapshot)||empty($snapshot['id']))return new WP_Error('oai_product_snapshot','Invalid created product snapshot',array('status'=>500));
   $id=absint($snapshot['id']);
-  return self::op('woocommerce_product_create',(string)$id,null,$snapshot,array('product_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);
+  $op=self::op('woocommerce_product_create',(string)$id,null,$snapshot,array('product_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){$p=wc_get_product($id);if($p)$p->delete(true);return $op;}return $op;
  }
  public static function current($type,$target){
   if($type==='media_alt'){ $s=self::media_snapshot($target);return is_wp_error($s)?array(false,null):array(true,$s['alt']);}
@@ -183,14 +183,14 @@ class OAI_P0 {
   if($type==='media_upload'){return wp_delete_attachment(absint($target),true)?true:new WP_Error('oai_media_delete','Failed to delete sandbox attachment',array('status'=>500));}
   if($type==='menu_create'){return wp_delete_nav_menu(absint($target))?true:new WP_Error('oai_menu_delete','Failed to delete sandbox menu',array('status'=>500));}
   if($type==='menu_add_item'){return wp_delete_post(absint($target),true)?true:new WP_Error('oai_menu_item_delete','Failed to delete sandbox menu item',array('status'=>500));}
-  if($type==='woocommerce_product_create'){return wp_delete_post(absint($target),true)?true:new WP_Error('oai_product_delete','Failed to delete sandbox product',array('status'=>500));}
+  if($type==='woocommerce_product_create'){ $p=wc_get_product(absint($target));if(!$p)return true;$r=$p->delete(true);return $r?true:new WP_Error('oai_product_delete','Failed to delete sandbox product',array('status'=>500));}
   return self::write($type,$target,$before,$meta);
  }
  public static function cleanup_artifact($type,$target,$meta=array()){
   if($type==='media_upload'){if(get_post(absint($target)))wp_delete_attachment(absint($target),true);return true;}
   if($type==='menu_create'){if(wp_get_nav_menu_object(absint($target)))wp_delete_nav_menu(absint($target));return true;}
   if($type==='menu_add_item'){if(get_post(absint($target)))wp_delete_post(absint($target),true);return true;}
-  if($type==='woocommerce_product_create'){if(get_post(absint($target)))wp_delete_post(absint($target),true);return true;}
+  if($type==='woocommerce_product_create'){ $p=wc_get_product(absint($target));if($p)$p->delete(true);return true;}
   return false;
  }
  public static function is_created_artifact($type){return in_array($type,array('media_upload','menu_create','menu_add_item','woocommerce_product_create'),true);}
