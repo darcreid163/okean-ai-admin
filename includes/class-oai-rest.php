@@ -1196,6 +1196,16 @@ frame.addEventListener('load',function(){
    return true;
   }
 
+  if($type==='woocommerce_product_create'){
+   list($exists,$current)=self::current($type,$target);
+   // Idempotent cleanup: an already-absent object has reached rollback state.
+   if(!$exists)return true;
+   if(!class_exists('OAI_WooCommerce')||!OAI_WooCommerce::created_snapshot_matches($current,$applied)){
+    return new WP_Error('oai_rollback_conflict','Created WooCommerce product changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+   }
+   return true;
+  }
+
   list($exists,$current)=self::current($type,$target);
   $expected_exists=array_key_exists('after_exists',$meta)?(bool)$meta['after_exists']:true;
   if($exists!==$expected_exists)return new WP_Error('oai_rollback_conflict','Target existence changed after Apply; rollback was blocked',array('status'=>409,'current_exists'=>$exists,'expected_exists'=>$expected_exists,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
