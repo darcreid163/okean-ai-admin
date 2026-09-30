@@ -89,6 +89,7 @@ A candidate build must pass all of the following before distribution:
 10. direct live writes remain disabled.
 11. human approval remains the default lifecycle.
 12. no site-specific IDs, paths, customer PII or absolute server filesystem paths in default commercial responses/UI.
+13. a CI job is valid only if its workflow steps actually execute; a GitHub Actions job that terminates with an empty step list is classified as infrastructure failure and must be re-run, not treated as a product regression.
 
 ## Known beta limitations
 
