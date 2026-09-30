@@ -1,12 +1,20 @@
 WP AI Admin Build Signature
-Version: 2.0.71
-Build ID: 2.0.71-lifecycle-options-20260930
-Purpose: fix conflict replay error reporting and expose WordPress option updates through the standard sandbox lifecycle
-Expected catalog with Content Navigation enabled: 96 tools
-Expected self-test checks: 61
+Version: 2.0.74
+Build ID: 2.0.74-commercial-beta-security-hardening-20260930
+Purpose: pre-2.1.0 Commercial Beta security hardening
+Expected catalog: 111 tools
 Direct live writes: false
 Human approval default: true
-New tool: wp.option_update_sandbox
-Option workflow: sandbox -> approval -> apply -> verify -> rollback
-Conflict replay: repeated apply after apply_failed/conflict returns oai_conflict, not generic approval-state error
-Test option scope: Test Automation allows only oai_test_* or wp_ai_admin_test_* options
+
+Release-gate fixes:
+1. Block protected WordPress option targets before sandbox creation and before AI Lifecycle approve/apply.
+2. Centralize operation risk classification.
+3. Remove absolute server filesystem paths from Media, Diagnostics, Health, operation/receipt/proof public projections.
+4. Validate actual image bytes + extension + MIME before creating media sandbox artifacts.
+5. Add duplicate-pending/idempotency protection for retried identical intents.
+
+Validation required:
+FIX -> RETEST -> REGRESSION
+
+Tracking:
+GitHub issue #20
