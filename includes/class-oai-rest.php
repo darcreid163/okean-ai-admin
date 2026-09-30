@@ -1135,6 +1135,10 @@ frame.addEventListener('load',function(){
     return self::recover_after_apply_failure($r,$before,$meta,$verification2);
    }
 
+   if($r['type']==='woocommerce_product_create'&&class_exists('OAI_P0')){
+    $finalized=OAI_P0::finalize_created_product($r['target']);
+    if(is_wp_error($finalized))return self::recover_after_apply_failure($r,$before,$meta,$finalized);
+   }
    OAI_DB::update($id,array('status'=>'applied','phase'=>'applied','applied_data'=>wp_json_encode($verification_expected,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'applied_at'=>current_time('mysql',true)));
    OAI_Audit::log('applied',array_merge($r,array('status'=>'applied')),array('verified'=>true,'verification'=>$verification2));
    OAI_Receipts::store($id,array('event'=>'apply','status'=>'applied','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
@@ -1142,7 +1146,8 @@ frame.addEventListener('load',function(){
   elseif($action==='rollback'){
    // A failed rollback may be retried only for an operation that was applied.
    // The live-state conflict check below still runs before any write.
-   if($r['status']!=='applied' && !($r['status']==='rollback_failed' && !empty($r['applied_at'])))return new WP_Error('oai_state','Operation must be applied',array('status'=>409));
+   $failed_created_recovery=$r['status']==='rollback_failed'&&empty($r['applied_at'])&&empty($r['before_data'])&&class_exists('OAI_P0')&&OAI_P0::is_created_artifact($r['type'])&&!empty($meta['created_by_ai_admin']);
+   if($r['status']!=='applied' && !($r['status']==='rollback_failed' && (!empty($r['applied_at'])||$failed_created_recovery)))return new WP_Error('oai_state','Operation must be applied',array('status'=>409));
    $before=json_decode((string)$r['before_data'],true);
    $applied=json_decode((string)$r['applied_data'],true);
    if($r['applied_data']===null || $r['applied_data']==='')$applied=json_decode((string)$r['after_data'],true);
@@ -1150,7 +1155,7 @@ frame.addEventListener('load',function(){
 
    // Rollback is destructive too: never overwrite a change made after Apply.
    // The live target must still equal the state AI Admin itself verified after Apply.
-   $rollback_conflict=self::rollback_conflict_check($r,$applied,$meta);
+   $rollback_conflict=$failed_created_recovery?true:self::rollback_conflict_check($r,$applied,$meta);
    if(is_wp_error($rollback_conflict)){
     OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
     $details=$rollback_conflict->get_error_data();
@@ -1244,7 +1249,7 @@ frame.addEventListener('load',function(){
    else{$parts=explode(':',(string)$target,2);$post_id=absint($parts[0]??0);}
    if($post_id)clean_post_cache($post_id);
   }
-  if(in_array($type,array('woo_product_price','woo_product_stock','woocommerce_product'),true)){
+  if(in_array($type,array('woo_product_price','woo_product_stock','woocommerce_product','woocommerce_product_create'),true)){
    $parts=explode(':',(string)$target,2); $product_id=absint($parts[0]??0); if($product_id && function_exists('wc_delete_product_transients')) wc_delete_product_transients($product_id);
    if($product_id) clean_post_cache($product_id);
   }
@@ -1268,7 +1273,8 @@ frame.addEventListener('load',function(){
   if(in_array($r['type'],array('file_write','theme_file_write'),true)){
    $meta['applied_sha256']=hash('sha256',(string)$expected_after);
   }
-  $recovery_conflict=self::rollback_conflict_check($r,$expected_after,$meta);
+  $owned_created_artifact=class_exists('OAI_P0')&&OAI_P0::is_created_artifact($r['type'])&&empty($r['before_data'])&&!empty($meta['created_by_ai_admin']);
+  $recovery_conflict=$owned_created_artifact?true:self::rollback_conflict_check($r,$expected_after,$meta);
   if(is_wp_error($recovery_conflict)){
    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
    $details=$recovery_conflict->get_error_data();
