@@ -15,7 +15,7 @@ class OAI_Test_Automation {
  const OPTION='oai_test_automation';
  const MAX_TTL=120;
  const MAX_ACTIONS=100000;
- const FILE_PREFIX='okean-core/wp-ai-admin-tests/';
+ const FILE_PREFIX='wp-ai-admin-tests/';
  const GUTENBERG_FIXTURE_TITLE='WP AI Admin TEST — Gutenberg Fixture';
  const LAST_REGRESSION_OPTION='oai_test_automation_last_regression';
  const LAST_MATRIX_OPTION='oai_test_automation_last_matrix';
