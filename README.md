@@ -1,5 +1,14 @@
 # WP AI Admin
 
+## 2.1.1 — Commercial Beta UI & Session Hardening
+
+- Connected OAuth clients are no longer listed individually in wp-admin; the Connection card exposes one Disconnect action.
+- Disconnect revokes all active OAuth tokens and disables AI Lifecycle Control/Test Automation.
+- Full operation history is paginated at 25 rows per page.
+- Test Automation uses a multi-select list of draft/private test pages instead of exposing a raw ID field by default.
+- AI Lifecycle Control and Test Automation now explicitly clear stale enabled state when the plugin build changes.
+- Production safety defaults remain unchanged: direct live writes OFF and human approval ON.
+
 ## 2.1.0 — Commercial Beta Candidate
 
 WP AI Admin 2.1.0 freezes the validated 2.0.78 runtime baseline and switches the project into commercial-beta hardening.
