@@ -215,13 +215,15 @@ class OAI_MCP {
       'content_post_id'=>array('type'=>'integer','minimum'=>1),
       'elementor_post_id'=>array('type'=>'integer','minimum'=>1),
       'elementor_widget_id'=>array('type'=>'string','minLength'=>1),
+      'elementor_container_id'=>array('type'=>'string','minLength'=>1),
       'product_id'=>array('type'=>'integer','minimum'=>1),
       'gutenberg_post_id'=>array('type'=>'integer','minimum'=>1),
       'include_file'=>array('type'=>'boolean'),
       'include_reject'=>array('type'=>'boolean'),
       'include_elementor_settings'=>array('type'=>'boolean'),
       'include_elementor_create'=>array('type'=>'boolean'),
-      'include_elementor_create_patch_many'=>array('type'=>'boolean')
+      'include_elementor_create_patch_many'=>array('type'=>'boolean'),
+      'include_p0'=>array('type'=>'boolean')
      ),
      'additionalProperties'=>false
     )
@@ -232,6 +234,7 @@ class OAI_MCP {
       'content_post_id'=>array('type'=>'integer','minimum'=>1),
       'elementor_post_id'=>array('type'=>'integer','minimum'=>1),
       'elementor_widget_id'=>array('type'=>'string','minLength'=>1),
+      'elementor_container_id'=>array('type'=>'string','minLength'=>1),
       'product_id'=>array('type'=>'integer','minimum'=>1),
       'iterations'=>array('type'=>'integer','minimum'=>1,'maximum'=>3)
      ),
