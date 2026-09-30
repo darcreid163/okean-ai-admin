@@ -12,7 +12,7 @@ class OAI_Lifecycle {
   if($type==='media_upload')return array('action'=>'delete_created_attachment','attachment_id'=>absint($meta['attachment_id']??$target),'created_by_ai_admin'=>true);
   if($type==='menu_create')return array('action'=>'delete_created_menu','menu_id'=>absint($meta['menu_id']??$target),'created_by_ai_admin'=>true);
   if($type==='menu_add_item')return array('action'=>'delete_created_menu_item','item_id'=>absint($meta['item_id']??$target),'created_by_ai_admin'=>true);
-  if($type==='woocommerce_product_create')return array('action'=>'delete_created_product','product_id'=>absint($meta['product_id']??$target),'created_by_ai_admin'=>true);
+  if($type==='woocommerce_product_create')return array('action'=>'delete_created_product','product_id'=>absint($meta['product_id']??$target),'variation_ids'=>array_values(array_filter(array_map('absint',(array)($meta['variation_ids']??array())))),'created_by_ai_admin'=>true);
   if($type==='file_write'||$type==='theme_file_write'||$type==='workspace_file_write')return array('action'=>$exists?'restore_file':'delete_created_file','target'=>$target,'before_exists'=>$exists,'before_sha256'=>hash('sha256',(string)$before));
   if($type==='option_update'&&!$exists)return array('action'=>'delete_option','target'=>$target);
   return array('action'=>'restore_snapshot','type'=>$type,'target'=>$target);
