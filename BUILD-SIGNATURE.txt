@@ -1,9 +1,9 @@
 WP AI Admin Build Signature
-Version: 2.1.1
-Build ID: 2.1.1-commercial-beta-ui-hardening-20260930
+Version: 2.1.2
+Build ID: 2.1.2-upgrade-session-guard-20260930
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
-Purpose: Commercial Beta admin UI and build-bound session hardening
+Purpose: Commercial Beta upgrade/session replay hardening
 Expected catalog: 111 tools
 Expected self-test checks: 78
 Expected security-fuzz checks at 10 iterations: 220
@@ -11,13 +11,11 @@ Expected extended matrix: 109 PASS / 0 FAIL / 2 intentional SKIP / 0 BLOCKED
 Intentional matrix SKIP: wp.visual_qa_result requires real browser execution; menu.assign_location_sandbox is not auto-applied to production menu locations
 Production default: human approval only
 Direct live writes: false
-AI Lifecycle Control default: disabled; stale enabled state is explicitly disabled on build change
-Test Automation default: disabled; stale enabled state is explicitly disabled on build change
-Connected-client UI: no client/token table; one Disconnect button revokes all active OAuth tokens and disables AI/Test lifecycle modes
 Operations history page size: 25
-Test Automation page selector: draft/private pages only; multi-select; managed Gutenberg fixture remains separate
-Test Automation file prefix: wp-ai-admin-tests/
+Connected-client UI: single Disconnect action; no OAuth client/token table
+Test Automation page selector: draft/private pages only
+Build upgrade guard: first admin request after build change clears AI/Test session state, records the new runtime build, and blocks lifecycle/Test Automation enable form replay during that same request
+AI Lifecycle reset clears owner/client binding and disabled state is stored against current build
+Test Automation reset clears session/client binding/allowlists/test IDs and restores generic wp-ai-admin-tests/ prefix
 OAuth/site/installation identity: preserved across normal plugin upgrade
 Control Plane: verification foundation available; remote enforcement not required for local commercial beta
-Filesystem privacy: health/diagnostics expose WordPress-relative paths only
-PII minimization: list users/comments omit email by default
