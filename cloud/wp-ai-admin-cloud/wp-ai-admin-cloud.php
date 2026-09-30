@@ -13,7 +13,9 @@ define('WPAIC_DIR',plugin_dir_path(__FILE__));
 
 require_once WPAIC_DIR.'includes/class-wpaic-db.php';
 require_once WPAIC_DIR.'includes/class-wpaic-rest.php';
+require_once WPAIC_DIR.'includes/class-wpaic-admin.php';
 
 register_activation_hook(__FILE__,array('WPAIC_DB','install'));
 add_action('plugins_loaded',array('WPAIC_DB','maybe_upgrade'));
 add_action('rest_api_init',array('WPAIC_REST','register_routes'));
+add_action('admin_menu',array('WPAIC_Admin','menu'));
