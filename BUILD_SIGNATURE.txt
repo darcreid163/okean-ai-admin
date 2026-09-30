@@ -11,3 +11,4 @@ WooCommerce variable products: derived parent price/stock_status remain semantic
 Media responses: absolute server filesystem paths are not exposed
 Recovery contract: rollback_failed AI-owned created artifacts may retry rollback; conflict verification remains mandatory
 Option safety: generic option sandbox denies critical core and credential/security option keys before operation creation
+User privacy: wp.list_users omits email by default and returns only account identity/role metadata
