@@ -20,6 +20,7 @@ class OAI_Operations {
   if(strpos($type,'user')!==false||strpos($type,'option')!==false)return 'high';
   if(strpos($type,'file')!==false)return 'high';
   if(strpos($type,'woocommerce')!==false)return 'medium';
+  if(strpos($type,'media')!==false||strpos($type,'menu')!==false)return 'medium';
   if(strpos($type,'elementor')!==false||strpos($type,'gutenberg')!==false)return 'medium';
   return 'low';
  }
