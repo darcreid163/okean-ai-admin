@@ -119,7 +119,7 @@ class OAI_Platform {
   $runner_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-regression-runner.php');
   $matrix_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-regression-matrix.php');
   $add('regression.p0_suite_contract',
-   strpos($runner_source,'woocommerce_create_scenario')!==false
+   strpos($runner_source,'woo_create_scenario')!==false
    &&strpos($runner_source,'media_suite_scenario')!==false
    &&strpos($runner_source,'menu_suite_scenario')!==false
    &&strpos($runner_source,'include_p0')!==false
