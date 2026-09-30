@@ -110,6 +110,19 @@ class OAI_Platform {
   $add('p0.runtime_contract',class_exists('OAI_P0')&&method_exists('OAI_P0','media_upload')&&method_exists('OAI_P0','menu_create')&&method_exists('OAI_P0','op_for_created_product')&&method_exists('OAI_P0','elementor_page_layout')&&method_exists('OAI_WooCommerce','get_full')&&method_exists('OAI_WooCommerce','create_draft')&&method_exists('OAI_Elementor','container')&&method_exists('OAI_Elementor','page_layout'));
   $media_projection=method_exists('OAI_P0','redact_media_snapshot')?OAI_P0::redact_media_snapshot(array('id'=>1,'url'=>'https://example.invalid/test.png','file'=>'/srv/www/private/test.png','absolute_path'=>'/srv/www/private/test.png')):array('file'=>'unsafe');
   $add('security.media_snapshot_no_filesystem_path',!isset($media_projection['file'])&&!isset($media_projection['absolute_path'])&&isset($media_projection['id'],$media_projection['url']),$media_projection);
+  $legacy_path='/home/example/private/wp-content/uploads/test.png';
+  $legacy_row=array(
+   'status'=>'rolled_back',
+   'meta_data'=>array('rollback_descriptor'=>array('action'=>'restore_snapshot')),
+   'after_data'=>array('id'=>1,'file'=>$legacy_path,'url'=>'https://example.invalid/test.png'),
+   'receipt'=>wp_json_encode(array('verification'=>array('current'=>array('file'=>$legacy_path)))),
+   'proof'=>wp_json_encode(array('hash'=>'legacy-proof-hash','verification'=>array('current'=>array('file'=>$legacy_path))))
+  );
+  $legacy_public=OAI_Lifecycle::decorate($legacy_row);$legacy_json=wp_json_encode($legacy_public);
+  $legacy_redaction_ok=strpos($legacy_json,$legacy_path)===false&&strpos($legacy_json,'[redacted filesystem path]')!==false&&($legacy_public['proof_hash']??'')==='legacy-proof-hash';
+  $add('security.legacy_operation_path_redaction',$legacy_redaction_ok,array('proof_hash_preserved'=>($legacy_public['proof_hash']??'')==='legacy-proof-hash'));
+  $status_probe=OAI_REST::status();$status_preview=is_array($status_probe)&&isset($status_probe['preview'])&&is_array($status_probe['preview'])?$status_probe['preview']:array();
+  $add('security.status_no_plugin_path',!array_key_exists('plugin_dir',$status_preview),array('preview_keys'=>array_keys($status_preview)));
   $media_desc=OAI_Lifecycle::descriptor('media_upload','123',null,array('before_exists'=>false,'attachment_id'=>123));
   $menu_desc=OAI_Lifecycle::descriptor('menu_create','456',null,array('before_exists'=>false,'menu_id'=>456));
   $product_desc=OAI_Lifecycle::descriptor('woocommerce_product_create','789',null,array('before_exists'=>false,'product_id'=>789));
