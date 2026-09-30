@@ -78,6 +78,106 @@ class OAI_Regression_Runner {
   if(is_array($verify2)&&!empty($verify2['verification_source']))$scenario['cleanup_verification_source']=$verify2['verification_source'];
   return $scenario;
  }
+ private static function apply_step(&$scenario,$label,$op,$tool,$client_id,$user_id){
+  if(is_wp_error($op)){$scenario['error']=self::err($op);self::stage($scenario,$label,'FAIL');return 0;}
+  $id=self::tag($op,$tool,$client_id,$user_id);
+  if(is_wp_error($id)){$scenario['error']=self::err($id);self::stage($scenario,$label,'FAIL');return 0;}
+  if(!isset($scenario['operation_ids'])||!is_array($scenario['operation_ids']))$scenario['operation_ids']=array();
+  $scenario['operation_ids'][$label]=$id;
+  $approve=OAI_Test_Automation::perform($id,'approve',$client_id,$user_id);
+  if(is_wp_error($approve)){$scenario['error']=self::err($approve);self::stage($scenario,$label,'FAIL');return 0;}
+  $apply=OAI_Test_Automation::perform($id,'apply',$client_id,$user_id);
+  if(is_wp_error($apply)){$scenario['error']=self::err($apply);self::stage($scenario,$label,'FAIL');return 0;}
+  $verify=OAI_Verify::operation($id);
+  if(is_wp_error($verify)||empty($verify['verified'])){$scenario['error']=self::err(is_wp_error($verify)?$verify:'Apply verification failed');self::stage($scenario,$label,'FAIL');return 0;}
+  self::stage($scenario,$label,'PASS');
+  return $id;
+ }
+ private static function cleanup_steps(&$scenario,$ids,$client_id,$user_id){
+  $ok=true;$seen=array();
+  foreach(array_reverse((array)$ids) as $id){
+   $id=absint($id);if(!$id||isset($seen[$id]))continue;$seen[$id]=true;
+   $row=OAI_DB::get($id);if(!$row)continue;
+   $status=(string)($row['status']??'');$type=(string)($row['type']??'');$target=(string)($row['target']??'');
+   $meta=json_decode((string)($row['meta_data']??''),true);if(!is_array($meta))$meta=array();
+   if(in_array($status,array('applied','rollback_failed'),true)){
+    $rb=OAI_Test_Automation::perform($id,'rollback',$client_id,$user_id);
+    if(is_wp_error($rb)){
+     if(class_exists('OAI_P0')&&OAI_P0::is_created_artifact($type))OAI_P0::cleanup_artifact($type,$target,$meta);
+     $ok=false;continue;
+    }
+    $rv=OAI_Verify::operation($id,null,'rollback');
+    if(is_wp_error($rv)||empty($rv['verified']))$ok=false;
+   }elseif(in_array($status,array('pending','approved'),true)){
+    $reject=OAI_Test_Automation::perform($id,'reject',$client_id,$user_id);
+    if(is_wp_error($reject))$ok=false;
+    if(class_exists('OAI_P0')&&OAI_P0::is_created_artifact($type))OAI_P0::cleanup_artifact($type,$target,$meta);
+   }elseif(in_array($status,array('rolled_back','rejected','expired'),true)){
+    if(class_exists('OAI_P0')&&OAI_P0::is_created_artifact($type))OAI_P0::cleanup_artifact($type,$target,$meta);
+   }else{
+    if(class_exists('OAI_P0')&&OAI_P0::is_created_artifact($type))OAI_P0::cleanup_artifact($type,$target,$meta);
+    $ok=false;
+   }
+  }
+  $scenario['baseline_restored']=$ok;self::stage($scenario,'cleanup',$ok?'PASS':'FAIL');
+  return $ok;
+ }
+ private static function woo_create_scenario($run_id,$client_id,$user_id){
+  $snapshot=OAI_WooCommerce::create_draft(array(
+   'type'=>'variable','name'=>'WP AI Admin TEST — '.$run_id,'catalog_visibility'=>'hidden',
+   'variations'=>array(
+    array('regular_price'=>'13.00','manage_stock'=>true,'stock_quantity'=>2,'stock_status'=>'instock'),
+    array('regular_price'=>'27.00','manage_stock'=>true,'stock_quantity'=>4,'stock_status'=>'instock')
+   )
+  ));
+  if(is_wp_error($snapshot))return array('name'=>'woocommerce_create','status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($snapshot),'stages'=>array('create'=>'FAIL'));
+  return self::lifecycle('woocommerce_create',OAI_P0::op_for_created_product($snapshot),'woocommerce.create_product_sandbox',$client_id,$user_id);
+ }
+ private static function elementor_container_scenario($post_id,$container_id,$run_id,$client_id,$user_id){
+  if($container_id==='')return array('name'=>'elementor_container','status'=>'SKIP','baseline_restored'=>true,'reason'=>'elementor_container_id not supplied');
+  $p=self::require_test_draft($post_id,'Elementor container fixture');if(is_wp_error($p))return array('name'=>'elementor_container','status'=>'SKIP','baseline_restored'=>true,'reason'=>$p->get_error_message());
+  $container=OAI_Elementor::container($post_id,$container_id);if(is_wp_error($container))return array('name'=>'elementor_container','status'=>'SKIP','baseline_restored'=>true,'reason'=>$container->get_error_message());
+  $settings=is_array($container['settings']??null)?$container['settings']:array();$current=(string)($settings['content_width']??'');$next=$current==='full'?'boxed':'full';
+  $req=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch');$req->set_param('target',$post_id.':'.$container_id);$req->set_param('changes',array('content_width'=>$next));
+  return self::lifecycle('elementor_container',OAI_REST::elementor_patch($req),'elementor.patch_container_settings',$client_id,$user_id);
+ }
+ private static function elementor_page_layout_scenario($post_id,$run_id,$client_id,$user_id){
+  $p=self::require_test_draft($post_id,'Elementor page-layout fixture');if(is_wp_error($p))return array('name'=>'elementor_page_layout','status'=>'SKIP','baseline_restored'=>true,'reason'=>$p->get_error_message());
+  $before=OAI_Elementor::page_layout($post_id);if(is_wp_error($before))return array('name'=>'elementor_page_layout','status'=>'SKIP','baseline_restored'=>true,'reason'=>$before->get_error_message());
+  $current=(string)($before['page_template']??'default');$next=$current==='elementor_header_footer'?'elementor_canvas':'elementor_header_footer';
+  return self::lifecycle('elementor_page_layout',OAI_P0::elementor_page_layout(array('post_id'=>$post_id,'page_template'=>$next)),'elementor.patch_page_layout',$client_id,$user_id);
+ }
+ private static function option_scenario($run_id,$client_id,$user_id){
+  $key='oai_test_matrix_'.substr(md5($run_id),0,10);
+  $req=new WP_REST_Request('POST','/okean-ai/v1/sandbox');$req->set_param('type','option_update');$req->set_param('target',$key);$req->set_param('value','WP AI Admin '.$run_id);
+  return self::lifecycle('option_update',OAI_REST::sandbox_create($req),'wp.option_update_sandbox',$client_id,$user_id);
+ }
+ private static function media_suite_scenario($post_id,$run_id,$client_id,$user_id){
+  $scenario=array('name'=>'media_suite','status'=>'FAIL','baseline_restored'=>false,'stages'=>array(),'operation_ids'=>array());
+  $png='iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR4nGP8//8/AwMDAwMTAxQAADAGAwG63ES+AAAAAElFTkSuQmCC';
+  $upload=OAI_P0::media_upload(array('filename'=>'wp-ai-admin-'.sanitize_file_name($run_id).'.png','content_base64'=>$png,'mime_type'=>'image/png','title'=>'WP AI Admin '.$run_id,'alt'=>'baseline'));
+  $uid=self::apply_step($scenario,'media_upload',$upload,'media.upload_sandbox',$client_id,$user_id);
+  $aid=$uid&&is_array($upload)?absint($upload['target']??0):0;
+  if($uid&&$aid)self::apply_step($scenario,'media_alt',OAI_P0::media_update_alt(array('attachment_id'=>$aid,'alt'=>'WP AI Admin alt '.$run_id)),'media.update_alt_sandbox',$client_id,$user_id);
+  if(empty($scenario['error'])&&$aid)self::apply_step($scenario,'media_title',OAI_P0::media_update_title(array('attachment_id'=>$aid,'title'=>'WP AI Admin title '.$run_id)),'media.update_title_sandbox',$client_id,$user_id);
+  if(empty($scenario['error'])&&$aid)self::apply_step($scenario,'media_featured',OAI_P0::media_set_featured(array('post_id'=>$post_id,'attachment_id'=>$aid)),'media.set_featured_sandbox',$client_id,$user_id);
+  $clean=self::cleanup_steps($scenario,array_values($scenario['operation_ids']),$client_id,$user_id);
+  if(empty($scenario['error'])&&$clean&&($scenario['stages']['media_upload']??'')==='PASS'&&($scenario['stages']['media_alt']??'')==='PASS'&&($scenario['stages']['media_title']??'')==='PASS'&&($scenario['stages']['media_featured']??'')==='PASS'){$scenario['status']='PASS';$scenario['terminal_status']='rolled_back';}
+  return $scenario;
+ }
+ private static function menu_suite_scenario($run_id,$client_id,$user_id){
+  $scenario=array('name'=>'menu_suite','status'=>'FAIL','baseline_restored'=>false,'stages'=>array(),'operation_ids'=>array());
+  $create=OAI_P0::menu_create(array('name'=>'WP AI Admin TEST '.$run_id));
+  $cid=self::apply_step($scenario,'menu_create',$create,'menu.create_sandbox',$client_id,$user_id);$menu_id=$cid&&is_array($create)?absint($create['target']??0):0;
+  $a1=0;$a2=0;$item1=0;$item2=0;
+  if($cid&&$menu_id){$op1=OAI_P0::menu_add_item(array('menu_id'=>$menu_id,'title'=>'Test Home','url'=>home_url('/')));$a1=self::apply_step($scenario,'menu_add_item_1',$op1,'menu.add_item_sandbox',$client_id,$user_id);$item1=$a1&&is_array($op1)?absint($op1['target']??0):0;}
+  if(empty($scenario['error'])&&$menu_id){$op2=OAI_P0::menu_add_item(array('menu_id'=>$menu_id,'title'=>'Test Contact','url'=>home_url('/kontakty/')));$a2=self::apply_step($scenario,'menu_add_item_2',$op2,'menu.add_item_sandbox',$client_id,$user_id);$item2=$a2&&is_array($op2)?absint($op2['target']??0):0;}
+  if(empty($scenario['error'])&&$item1&&$item2)self::apply_step($scenario,'menu_move_item',OAI_P0::menu_move_item(array('item_id'=>$item2,'parent'=>$item1,'position'=>1)),'menu.move_item_sandbox',$client_id,$user_id);
+  if(empty($scenario['error'])&&$item2)self::apply_step($scenario,'menu_remove_item',OAI_P0::menu_remove_item(array('item_id'=>$item2)),'menu.remove_item_sandbox',$client_id,$user_id);
+  $clean=self::cleanup_steps($scenario,array_values($scenario['operation_ids']),$client_id,$user_id);
+  if(empty($scenario['error'])&&$clean&&($scenario['stages']['menu_create']??'')==='PASS'&&($scenario['stages']['menu_add_item_1']??'')==='PASS'&&($scenario['stages']['menu_add_item_2']??'')==='PASS'&&($scenario['stages']['menu_move_item']??'')==='PASS'&&($scenario['stages']['menu_remove_item']??'')==='PASS'){$scenario['status']='PASS';$scenario['terminal_status']='rolled_back';}
+  return $scenario;
+ }
  private static function reject_cycle($post_id,$run_id,$client_id,$user_id){
   $scenario=array('name'=>'reject_guard','status'=>'FAIL','operation_id'=>null,'baseline_restored'=>true,'stages'=>array());
   $p=self::require_test_draft($post_id,'Reject fixture');if(is_wp_error($p)){$scenario['status']='SKIP';$scenario['reason']=$p->get_error_message();return $scenario;}
@@ -185,9 +285,9 @@ class OAI_Regression_Runner {
  public static function run($args,$client_id,$user_id){
   $auth=OAI_Test_Automation::runner_authorized($client_id,$user_id);if(is_wp_error($auth))return $auth;
   $args=is_array($args)?$args:array();
-  $content_id=absint($args['content_post_id']??0);$elementor_id=absint($args['elementor_post_id']??0);$widget=sanitize_text_field((string)($args['elementor_widget_id']??''));$product_id=absint($args['product_id']??0);$gutenberg_id=absint($args['gutenberg_post_id']??0);if(!$gutenberg_id&&class_exists('OAI_Test_Automation'))$gutenberg_id=OAI_Test_Automation::managed_gutenberg_fixture_id();
+  $content_id=absint($args['content_post_id']??0);$elementor_id=absint($args['elementor_post_id']??0);$widget=sanitize_text_field((string)($args['elementor_widget_id']??''));$container_id=sanitize_text_field((string)($args['elementor_container_id']??''));$product_id=absint($args['product_id']??0);$gutenberg_id=absint($args['gutenberg_post_id']??0);if(!$gutenberg_id&&class_exists('OAI_Test_Automation'))$gutenberg_id=OAI_Test_Automation::managed_gutenberg_fixture_id();
   if(!$content_id||!$elementor_id||$widget===''||!$product_id)return new WP_Error('oai_regression_args','content_post_id, elementor_post_id, elementor_widget_id and product_id are required',array('status'=>400));
-  $include_file=!array_key_exists('include_file',$args)||!empty($args['include_file']);$include_reject=!array_key_exists('include_reject',$args)||!empty($args['include_reject']);$include_elementor_settings=!array_key_exists('include_elementor_settings',$args)||!empty($args['include_elementor_settings']);$include_elementor_create=!array_key_exists('include_elementor_create',$args)||!empty($args['include_elementor_create']);$include_elementor_create_patch_many=!array_key_exists('include_elementor_create_patch_many',$args)||!empty($args['include_elementor_create_patch_many']);
+  $include_file=!array_key_exists('include_file',$args)||!empty($args['include_file']);$include_reject=!array_key_exists('include_reject',$args)||!empty($args['include_reject']);$include_elementor_settings=!array_key_exists('include_elementor_settings',$args)||!empty($args['include_elementor_settings']);$include_elementor_create=!array_key_exists('include_elementor_create',$args)||!empty($args['include_elementor_create']);$include_elementor_create_patch_many=!array_key_exists('include_elementor_create_patch_many',$args)||!empty($args['include_elementor_create_patch_many']);$include_p0=!empty($args['include_p0']);
   $run_id='rr_'.gmdate('Ymd_His').'_'.substr(wp_generate_uuid4(),0,8);$started=microtime(true);
   $report=array('schema_version'=>1,'run_id'=>$run_id,'plugin_version'=>OAI_VERSION,'build_id'=>OAI_BUILD_ID,'mode'=>'sequential_stop_on_cleanup_failure','started_at'=>gmdate('c'),'session_id'=>(string)(OAI_Test_Automation::status()['session_id']??''),'scenarios'=>array(),'baseline_restored'=>true,'stopped_early'=>false);
 
@@ -284,6 +384,19 @@ class OAI_Regression_Runner {
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
 
   if(!$report['stopped_early']&&$gutenberg_id)$report['scenarios'][]=self::gutenberg_scenario($gutenberg_id,$run_id,$client_id,$user_id);
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::woo_create_scenario($run_id,$client_id,$user_id);
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::elementor_container_scenario($elementor_id,$container_id,$run_id,$client_id,$user_id);
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::elementor_page_layout_scenario($elementor_id,$run_id,$client_id,$user_id);
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::option_scenario($run_id,$client_id,$user_id);
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::media_suite_scenario($content_id,$run_id,$client_id,$user_id);
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::menu_suite_scenario($run_id,$client_id,$user_id);
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
 
   if(!$report['stopped_early']&&$include_reject)$report['scenarios'][]=self::reject_cycle($content_id,$run_id,$client_id,$user_id);
