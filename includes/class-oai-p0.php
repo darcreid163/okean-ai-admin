@@ -31,15 +31,20 @@ class OAI_P0 {
   return OAI_Lifecycle::decorate($r);
  }
 
+ public static function redact_media_snapshot($snapshot){
+  if(!is_array($snapshot))return array();
+  foreach(array('file','path','absolute_path','filesystem_path') as $key)unset($snapshot[$key]);
+  return $snapshot;
+ }
  public static function media_snapshot($id){
   $p=get_post(absint($id));
   if(!$p||$p->post_type!=='attachment')return new WP_Error('oai_media_not_found','Attachment not found',array('status'=>404));
-  return array(
+  return self::redact_media_snapshot(array(
    'id'=>(int)$p->ID,'status'=>(string)$p->post_status,'title'=>(string)$p->post_title,
    'alt'=>(string)get_post_meta($p->ID,'_wp_attachment_image_alt',true),
    'caption'=>(string)$p->post_excerpt,'description'=>(string)$p->post_content,
    'mime'=>(string)$p->post_mime_type,'url'=>(string)wp_get_attachment_url($p->ID)
-  );
+  ));
  }
  public static function media_update_alt($a){
   $id=absint($a['attachment_id']??0);$snap=self::media_snapshot($id);if(is_wp_error($snap))return $snap;
