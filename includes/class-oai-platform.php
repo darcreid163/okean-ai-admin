@@ -148,6 +148,11 @@ class OAI_Platform {
    &&strpos($main_source,'OAI_Test_Automation::reset_stale_build')!==false
    &&strpos($admin_guard_source,'oai_runtime_build_id')!==false
    &&strpos($admin_guard_source,'OAI_BUILD_CHANGED_THIS_REQUEST')!==false
+   &&strpos($ai_source,"'disabled_reason'=>'manual'")!==false
+   &&strpos($ai_source,"'owner_user_id'=>0")!==false
+   &&strpos($ta_source,"'disabled_reason'=>sanitize_key")!==false
+   &&strpos($ta_source,"'allowed_post_ids'=>array()")!==false
+   &&strpos($ta_source,"'action_count'=>0")!==false
   );
   $oauth_tables_ok=true;
   if(class_exists('OAI_MCP_OAuth')){
