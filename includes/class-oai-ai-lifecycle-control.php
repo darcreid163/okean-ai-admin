@@ -46,6 +46,21 @@ class OAI_AI_Lifecycle_Control {
   return self::status();
  }
 
+ public static function reset_stale_build(){
+  $cfg=self::raw();
+  if(empty($cfg['enabled'])||!defined('OAI_BUILD_ID'))return false;
+  $stored=(string)($cfg['build_id']??'');
+  if($stored!==''&&hash_equals($stored,(string)OAI_BUILD_ID))return false;
+  $cfg['enabled']=false;
+  $cfg['bound_client_id_hash']='';
+  $cfg['disabled_at']=time();
+  $cfg['disabled_by']=0;
+  $cfg['disabled_reason']='build_changed';
+  self::save($cfg);
+  self::$request_context=null;
+  return true;
+ }
+
  public static function is_active(){
   $cfg=self::raw();
   if(empty($cfg['enabled']))return false;
