@@ -60,7 +60,7 @@ class OAI_MCP {
   return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope,'_meta'=>$meta));
  }
  private static function tool_requires_write($name,$args){
-  if(in_array($name,array('system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
+  if(in_array($name,array('system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
   if($name==='wordpress.execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
   return false;
  }
@@ -259,9 +259,33 @@ class OAI_MCP {
    ,'file.diff'=>array('type'=>'object','required'=>array('scope','path','proposed_content'),'properties'=>array('scope'=>array('type'=>'string'),'path'=>array('type'=>'string','minLength'=>1),'proposed_content'=>array('type'=>'string')),'additionalProperties'=>false)
    ,'operation.reject'=>array('type'=>'object','required'=>array('id'),'properties'=>array('id'=>array('type'=>'integer','minimum'=>1)),'additionalProperties'=>false)
   );
+  $schemas['woocommerce.get_product_full']=array('type'=>'object','required'=>array('product_id'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1)));
+  $product_changes=array(
+   'type'=>'object','additionalProperties'=>false,'properties'=>array(
+    'name'=>array('type'=>'string'),'slug'=>array('type'=>'string'),'description'=>array('type'=>'string'),'short_description'=>array('type'=>'string'),'sku'=>array('type'=>'string'),
+    'regular_price'=>array('type'=>array('string','number')),'sale_price'=>array('type'=>array('string','number')),'stock_quantity'=>array('type'=>array('integer','number','null')),
+    'stock_status'=>array('type'=>'string','enum'=>array('instock','outofstock','onbackorder')),'manage_stock'=>array('type'=>'boolean'),
+    'categories'=>array('type'=>'array','items'=>array('type'=>array('integer','string'))),'tags'=>array('type'=>'array','items'=>array('type'=>array('integer','string'))),
+    'images'=>array('type'=>'array','items'=>array('type'=>'integer','minimum'=>1)),'attributes'=>array('type'=>'array','items'=>array('type'=>'object')),
+    'variations'=>array('type'=>'array','items'=>array('type'=>'object')),'status'=>array('type'=>'string','enum'=>array('draft','publish','private','pending')),
+    'featured'=>array('type'=>'boolean'),'catalog_visibility'=>array('type'=>'string','enum'=>array('visible','catalog','search','hidden')),'seo'=>array('type'=>'object')
+   )
+  );
+  $schemas['woocommerce.update_product_sandbox']=array('type'=>'object','required'=>array('product_id','changes'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1),'changes'=>$product_changes));
+  $create_product_changes=$product_changes;$create_product_changes['properties']['type']=array('type'=>'string','enum'=>array('simple','variable'));
+  $schemas['woocommerce.create_product_sandbox']=array('type'=>'object','required'=>array('product'),'additionalProperties'=>false,'properties'=>array('product'=>$create_product_changes));
+  $schemas['media.upload_sandbox']=array('type'=>'object','required'=>array('filename','content_base64'),'additionalProperties'=>false,'properties'=>array('filename'=>array('type'=>'string','minLength'=>1),'content_base64'=>array('type'=>'string','minLength'=>4),'mime_type'=>array('type'=>'string'),'title'=>array('type'=>'string'),'alt'=>array('type'=>'string')));
+  $schemas['media.update_alt_sandbox']=array('type'=>'object','required'=>array('attachment_id','alt'),'additionalProperties'=>false,'properties'=>array('attachment_id'=>array('type'=>'integer','minimum'=>1),'alt'=>array('type'=>'string')));
+  $schemas['media.update_title_sandbox']=array('type'=>'object','required'=>array('attachment_id','title'),'additionalProperties'=>false,'properties'=>array('attachment_id'=>array('type'=>'integer','minimum'=>1),'title'=>array('type'=>'string','minLength'=>1)));
+  $schemas['media.set_featured_sandbox']=array('type'=>'object','required'=>array('post_id','attachment_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'attachment_id'=>array('type'=>'integer','minimum'=>0)));
+  $schemas['menu.create_sandbox']=array('type'=>'object','required'=>array('name'),'additionalProperties'=>false,'properties'=>array('name'=>array('type'=>'string','minLength'=>1)));
+  $schemas['menu.add_item_sandbox']=array('type'=>'object','required'=>array('menu_id'),'additionalProperties'=>false,'properties'=>array('menu_id'=>array('type'=>'integer','minimum'=>1),'title'=>array('type'=>'string'),'url'=>array('type'=>'string'),'type'=>array('type'=>'string','enum'=>array('custom','post_type','taxonomy')),'object'=>array('type'=>'string'),'object_id'=>array('type'=>'integer','minimum'=>0),'parent'=>array('type'=>'integer','minimum'=>0),'position'=>array('type'=>'integer','minimum'=>0)));
+  $schemas['menu.remove_item_sandbox']=array('type'=>'object','required'=>array('item_id'),'additionalProperties'=>false,'properties'=>array('item_id'=>array('type'=>'integer','minimum'=>1)));
+  $schemas['menu.move_item_sandbox']=array('type'=>'object','required'=>array('item_id'),'additionalProperties'=>false,'properties'=>array('item_id'=>array('type'=>'integer','minimum'=>1),'parent'=>array('type'=>'integer','minimum'=>0),'position'=>array('type'=>'integer','minimum'=>0)));
+  $schemas['menu.assign_location_sandbox']=array('type'=>'object','required'=>array('location','menu_id'),'additionalProperties'=>false,'properties'=>array('location'=>array('type'=>'string','minLength'=>1),'menu_id'=>array('type'=>'integer','minimum'=>0)));
   $read=array(
    'wp.get_site','wp.inspect_html','wp.visual_qa_result','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
-   'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','operation.get_receipt',
+   'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','woocommerce.get_product','woocommerce.get_product_full','operation.get_receipt',
    'gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
    'wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.list','batch.status','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_history','system.coverage_report','system.security_fuzz'
   );
@@ -313,6 +337,16 @@ class OAI_MCP {
   $tools[]=self::tool('content.patch','Create a sandbox content patch; live content is not written.',array('type'=>'object','required'=>array('post_id','field','old_content','new_content'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'field'=>array('type'=>'string'),'old_content'=>array('type'=>'string'),'new_content'=>array('type'=>'string'),'replace_all'=>array('type'=>'boolean'))),array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.patch','Create a sandbox WooCommerce product patch; live data is not written.',array('type'=>'object','required'=>array('product_id','changes'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1),'changes'=>array('type'=>'object'))),array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.update_product_sandbox','Modernized WooCommerce sandbox update. Strict product fields only; live data is not written until human approval.', $schemas['woocommerce.update_product_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('woocommerce.create_product_sandbox','Create a WooCommerce product as a draft sandbox artifact. Apply commits the draft to the normal lifecycle; rollback deletes only the product created by this operation.',$schemas['woocommerce.create_product_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('media.upload_sandbox','Upload an image as a private sandbox attachment. Apply activates the attachment; rollback removes only the attachment created by this operation.',$schemas['media.upload_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('media.update_alt_sandbox','Create a sandbox change for attachment alt text.',$schemas['media.update_alt_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('media.update_title_sandbox','Create a sandbox change for attachment title.',$schemas['media.update_title_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('media.set_featured_sandbox','Create a sandbox change for a post or product featured image. Pass attachment_id=0 to clear it.',$schemas['media.set_featured_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('menu.create_sandbox','Create an unassigned navigation menu as a sandbox artifact.',$schemas['menu.create_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('menu.add_item_sandbox','Create a hidden draft menu item and expose it only after Apply.',$schemas['menu.add_item_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('menu.remove_item_sandbox','Sandbox removal of a menu item by changing visibility while preserving rollback.',$schemas['menu.remove_item_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('menu.move_item_sandbox','Sandbox a menu item parent/order change.',$schemas['menu.move_item_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('menu.assign_location_sandbox','Sandbox assignment or clearing of a registered theme menu location.',$schemas['menu.assign_location_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('elementor.create_draft','Create an Elementor draft from data, or clone layout and widget tree from source_post_id when data is omitted. Newly created pages use Elementor as the sole content source.', $schemas['elementor.create_draft'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('elementor.patch_widget','Create a sandbox patch for an existing Elementor HTML widget. Requires an exact old_html snapshot; live content is not written until human approval and apply.',array('type'=>'object','required'=>array('post_id','widget_id','old_html','new_html'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'widget_id'=>array('type'=>'string','minLength'=>1),'old_html'=>array('type'=>'string'),'new_html'=>array('type'=>'string'))),array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('elementor.patch_fragment','Replace one exact text, image tag or HTML block within an existing Elementor HTML widget. Supply the current SHA-256 from elementor.get_widget; rejects stale or ambiguous fragments. Creates a sandbox operation.', $schemas['elementor.patch_fragment'],array('readOnlyHint'=>false,'destructiveHint'=>false));
@@ -415,6 +449,7 @@ class OAI_MCP {
     break;
    case 'elementor_get_schema':$out=OAI_Elementor::widget_schema((string)($a['widget_type']??''));break;
    case 'elementor_get_globals':$out=OAI_Elementor::globals();break;
+   case 'woocommerce_get_product_full':
    case 'woocommerce_get_product':
     $pid=absint($a['product_id']??0);
     $rr=new WP_REST_Request('GET','/okean-ai/v1/read/woocommerce/'.$pid);
@@ -467,6 +502,20 @@ class OAI_MCP {
     if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'reject',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
     if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'reject',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
     return self::response($id,null,array('code'=>-32003,'message'=>'Human rejection is required in wp-admin unless AI Lifecycle Control or scoped Test Automation Mode is active'));
+   case 'woocommerce_create_product_sandbox':
+    $data=is_array($a['product']??null)?$a['product']:array();$snap=OAI_WooCommerce::create_draft($data);
+    if(is_wp_error($snap)){$out=$snap;break;}
+    $out=OAI_P0::op_for_created_product($snap);
+    break;
+   case 'media_upload_sandbox':$out=OAI_P0::media_upload($a);break;
+   case 'media_update_alt_sandbox':$out=OAI_P0::media_update_alt($a);break;
+   case 'media_update_title_sandbox':$out=OAI_P0::media_update_title($a);break;
+   case 'media_set_featured_sandbox':$out=OAI_P0::media_set_featured($a);break;
+   case 'menu_create_sandbox':$out=OAI_P0::menu_create($a);break;
+   case 'menu_add_item_sandbox':$out=OAI_P0::menu_add_item($a);break;
+   case 'menu_remove_item_sandbox':$out=OAI_P0::menu_remove_item($a);break;
+   case 'menu_move_item_sandbox':$out=OAI_P0::menu_move_item($a);break;
+   case 'menu_assign_location_sandbox':$out=OAI_P0::menu_assign_location($a);break;
    case 'woocommerce_update_product_sandbox':
    case 'woocommerce_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_patch($r);break;
    case 'elementor_create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_create_page($r);break;
