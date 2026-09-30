@@ -42,6 +42,7 @@ require_once OAI_DIR.'includes/class-oai-elementor-adapter.php';
 require_once OAI_DIR.'includes/class-oai-rate-limit.php';
 require_once OAI_DIR.'includes/class-oai-license.php';
 require_once OAI_DIR.'includes/class-oai-control-plane.php';
+require_once OAI_DIR.'includes/class-oai-cloud-client.php';
 require_once OAI_DIR.'includes/class-oai-html-inspector.php';
 require_once OAI_DIR.'includes/class-oai-visual-qa.php';
 require_once OAI_DIR.'includes/class-oai-page-qa.php';
