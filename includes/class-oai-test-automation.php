@@ -261,6 +261,8 @@ class OAI_Test_Automation {
    $reason=$allowed?'allowed_created_test_draft':'elementor_create_must_remain_draft_or_private';
   }elseif(in_array($type,array('woocommerce_product','woo_product_price','woo_product_stock'),true)){
    $parts=explode(':',$target,2);$allowed=self::product_allowed(absint($parts[0]??0),$cfg);$reason=$allowed?'allowed_test_product':'product_not_allowlisted';
+  }elseif($type==='elementor_page_layout'){
+   $allowed=self::post_allowed(absint($target),$cfg);$reason=$allowed?'allowed_test_elementor_page_layout':'elementor_page_not_allowlisted_or_test_draft';
   }elseif($type==='woocommerce_product_create'){
    $pid=absint($target);$post=$pid?get_post($pid):false;
    $session=(string)($cfg['session_id']??'');$owned=(string)get_post_meta($pid,'_oai_test_session_id',true);$allowed=$post && $post->post_type==='product' && (string)$post->post_status==='draft' && ((string)get_post_meta($pid,'_oai_sandbox_artifact',true)==='1'||($session!==''&&$owned!==''&&hash_equals($session,$owned)));
