@@ -159,8 +159,7 @@ class OAI_Read {
   $out=array();
   foreach($comments as $c) $out[]=array(
    'id'=>$c->comment_ID,'post_id'=>$c->comment_post_ID,'author'=>$c->comment_author,
-   'email'=>$c->comment_author_email,'approved'=>$c->comment_approved,
-   'date'=>$c->comment_date_gmt,'content'=>$c->comment_content
+   'approved'=>$c->comment_approved,'date'=>$c->comment_date_gmt,'content'=>$c->comment_content
   );
   $total=(int)get_comments(array('count'=>true,'status'=>'all'));$pages=(int)ceil($total/$limit);
   return array('count'=>count($out),'page'=>$page,'limit'=>$limit,'total'=>$total,'total_pages'=>$pages,'has_more'=>$page<$pages,'items'=>$out);
