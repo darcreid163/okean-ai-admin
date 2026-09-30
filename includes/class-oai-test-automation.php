@@ -261,6 +261,25 @@ class OAI_Test_Automation {
    $reason=$allowed?'allowed_created_test_draft':'elementor_create_must_remain_draft_or_private';
   }elseif(in_array($type,array('woocommerce_product','woo_product_price','woo_product_stock'),true)){
    $parts=explode(':',$target,2);$allowed=self::product_allowed(absint($parts[0]??0),$cfg);$reason=$allowed?'allowed_test_product':'product_not_allowlisted';
+  }elseif($type==='woocommerce_product_create'){
+   $pid=absint($target);$post=$pid?get_post($pid):false;
+   $allowed=$post && $post->post_type==='product' && (string)$post->post_status==='draft' && (string)get_post_meta($pid,'_oai_sandbox_artifact',true)==='1';
+   $reason=$allowed?'allowed_created_test_product':'created_product_not_sandbox_draft';
+  }elseif(in_array($type,array('media_upload','media_alt','media_title'),true)){
+   $aid=absint($target);$post=$aid?get_post($aid):false;
+   $allowed=$post && $post->post_type==='attachment' && (string)get_post_meta($aid,'_oai_sandbox_artifact',true)==='1';
+   $reason=$allowed?'allowed_created_test_media':'media_not_session_sandbox_artifact';
+  }elseif($type==='media_featured'){
+   $post_id=absint($target);$allowed=self::post_allowed($post_id,$cfg);$reason=$allowed?'allowed_test_featured_post':'featured_post_not_allowlisted';
+  }elseif(in_array($type,array('menu_create','menu_add_item','menu_remove_item','menu_move_item'),true)){
+   $menu_id=absint($meta['menu_id']??0);
+   if(!$menu_id && $type==='menu_create')$menu_id=absint($target);
+   if(!$menu_id && $type!=='menu_create'){$terms=wp_get_object_terms(absint($target),'nav_menu',array('fields'=>'ids'));if(!is_wp_error($terms)&&$terms)$menu_id=absint($terms[0]);}
+   $allowed=$menu_id && (string)get_term_meta($menu_id,'_oai_sandbox_artifact',true)==='1';
+   $reason=$allowed?'allowed_created_test_menu':'menu_not_session_sandbox_artifact';
+  }elseif($type==='menu_assign_location'){
+   $menu_id=absint(json_decode((string)($row['after_data']??''),true));$allowed=$menu_id && (string)get_term_meta($menu_id,'_oai_sandbox_artifact',true)==='1';
+   $reason=$allowed?'allowed_created_test_menu_location':'menu_location_target_not_sandbox_menu';
   }elseif(in_array($type,array('file_write','theme_file_write'),true)){
    $allowed=self::file_allowed($target,$cfg);$reason=$allowed?'allowed_test_file_prefix':'file_outside_test_prefix';
   }elseif($type==='option_update'){
