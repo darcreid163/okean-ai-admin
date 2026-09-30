@@ -161,11 +161,9 @@ class OAI_Test_Automation {
   return self::status();
  }
 
- public static function reset_stale_build(){
-  $cfg=self::raw();
+ public static function reset_for_build_change(){
   if(!defined('OAI_BUILD_ID'))return false;
-  $stored=(string)($cfg['build_id']??'');
-  if($stored!==''&&hash_equals($stored,(string)OAI_BUILD_ID))return false;
+  $cfg=self::raw();
   self::release_gutenberg_fixture($cfg);
   self::save(array(
    'enabled'=>false,
@@ -188,6 +186,14 @@ class OAI_Test_Automation {
   ));
   self::$request_context=null;
   return true;
+ }
+
+ public static function reset_stale_build(){
+  $cfg=self::raw();
+  if(!defined('OAI_BUILD_ID'))return false;
+  $stored=(string)($cfg['build_id']??'');
+  if($stored!==''&&hash_equals($stored,(string)OAI_BUILD_ID))return false;
+  return self::reset_for_build_change();
  }
 
  public static function is_active(){
