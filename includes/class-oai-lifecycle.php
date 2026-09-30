@@ -17,12 +17,37 @@ class OAI_Lifecycle {
   if($type==='option_update'&&!$exists)return array('action'=>'delete_option','target'=>$target);
   return array('action'=>'restore_snapshot','type'=>$type,'target'=>$target);
  }
+ public static function looks_like_filesystem_path($value){
+  if(!is_string($value)||$value==='')return false;
+  $v=str_replace('\\\\','/',$value);
+  if(preg_match('/^[A-Za-z]:\\//',$v))return true;
+  return (bool)preg_match('#^/(?:home|var|srv|opt|usr|mnt|private|Users|www)(?:/|$)#',$v);
+ }
+ public static function redact_public($value,$key=''){
+  if(is_array($value)){
+   $out=array();
+   foreach($value as $k=>$v)$out[$k]=self::redact_public($v,(string)$k);
+   return $out;
+  }
+  if(is_string($value)){
+   $sensitive_keys=array('file','absolute_path','filesystem_path','plugin_dir','uploads_path','stylesheet_directory');
+   if(in_array($key,$sensitive_keys,true)&&self::looks_like_filesystem_path($value))return '[redacted filesystem path]';
+   $decoded=json_decode($value,true);
+   if(json_last_error()===JSON_ERROR_NONE&&is_array($decoded)){
+    $redacted=self::redact_public($decoded);
+    return wp_json_encode($redacted);
+   }
+  }
+  return $value;
+ }
  public static function decorate($row){
   if(!$row)return $row; $meta=$row['meta_data']??array(); if(is_string($meta)){ $meta=json_decode($meta,true); } if(!is_array($meta))$meta=array();
   $row['phase']=self::phase((string)$row['status']);
   $row['rollback_available']=!empty($meta['rollback_descriptor']);
   $row['rollback_descriptor']=$meta['rollback_descriptor']??null;
-  $row['proof_hash']=null; $proof=json_decode((string)($row['proof']??''),true); if(is_array($proof))$row['proof_hash']=$proof['hash']??null;
+  $proof_hash=null; $proof=json_decode((string)($row['proof']??''),true); if(is_array($proof))$proof_hash=$proof['hash']??null;
+  $row=self::redact_public($row);
+  $row['proof_hash']=$proof_hash;
   return $row;
  }
 }
