@@ -174,6 +174,11 @@ class OAI_Platform {
    if($user_item)$user_projection_ok=!array_key_exists('email',$user_item)&&!array_key_exists('login',$user_item)&&!array_key_exists('user_email',$user_item)&&!array_key_exists('user_login',$user_item);
   }
   $add('security.user_projection_no_pii',$user_projection_ok,array('fields_checked'=>array('email','login','user_email','user_login')));
+  $comment_projection_ok=true;
+  $comment_req=new WP_REST_Request('GET','/okean-ai/v1/read/comments');$comment_req->set_param('limit',1);$comment_req->set_param('page',1);
+  $comment_probe=OAI_Read::comments($comment_req);$comment_item=is_array($comment_probe)&&!empty($comment_probe['items'][0])?$comment_probe['items'][0]:array();
+  if($comment_item)$comment_projection_ok=!array_key_exists('email',$comment_item)&&!array_key_exists('comment_author_email',$comment_item)&&!array_key_exists('comment_author_IP',$comment_item)&&!array_key_exists('comment_agent',$comment_item);
+  $add('security.comment_projection_no_pii',$comment_projection_ok,array('fields_checked'=>array('email','comment_author_email','comment_author_IP','comment_agent')));
   $ops_probe_req=new WP_REST_Request('GET','/okean-ai/v1/sandbox');$ops_probe_req->set_param('page',2);$ops_probe_req->set_param('per_page',1);$ops_probe=OAI_REST::sandbox_list($ops_probe_req);
   $add('operations.mcp_pagination_contract',is_array($ops_probe)&&($ops_probe['page']??0)===2&&($ops_probe['per_page']??0)===1&&isset($ops_probe['total'],$ops_probe['total_pages'],$ops_probe['items']));
   $add('admin.operation_pagination_contract',class_exists('OAI_Admin')&&defined('OAI_VERSION')&&OAI_Admin::ACTION_TABLE_LIMIT===50&&OAI_Admin::OPERATIONS_PER_PAGE===50&&method_exists('OAI_DB','page')&&method_exists('OAI_DB','count_all'));
