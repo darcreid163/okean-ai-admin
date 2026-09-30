@@ -70,6 +70,25 @@ class OAI_Verify {
    return $result;
   }
 
+  if($row['type']==='woocommerce_product_create'){
+   list($exists,$current)=OAI_REST::snapshot_for_verify($row['type'],$row['target']);
+   if(is_wp_error($current)){$result['checks'][]=array('name'=>'read_current','ok'=>false,'message'=>$current->get_error_message());return $result;}
+   $result['current']=$current;
+   if($phase==='rollback'){
+    $result['checks'][]=array('name'=>'exists','ok'=>!$exists,'expected'=>false,'actual'=>$exists);
+    $result['checks'][]=array('name'=>'created_product_absent','ok'=>!$exists);
+    $result['verified']=self::all_checks_ok($result['checks']);
+    $result['expected_deleted_object']=true;
+    $result['cleanup_effective']=$result['verified'];
+    return $result;
+   }
+   $result['checks'][]=array('name'=>'exists','ok'=>$exists,'expected'=>true,'actual'=>$exists);
+   $semantic=$exists&&class_exists('OAI_WooCommerce')?OAI_WooCommerce::created_snapshot_matches($current,$expected):false;
+   $result['checks'][]=array('name'=>'created_product_semantic_match','ok'=>$semantic);
+   $result['verified']=self::all_checks_ok($result['checks']);
+   return $result;
+  }
+
   list($exists,$current)=OAI_REST::snapshot_for_verify($row['type'],$row['target']);
   if(is_wp_error($current)){$result['checks'][]=array('name'=>'read_current','ok'=>false,'message'=>$current->get_error_message());return $result;}
   $result['current']=$current;
