@@ -1,3 +1,21 @@
+# WP AI Admin
+
+## 2.1.0 — Commercial Beta Candidate
+
+WP AI Admin 2.1.0 freezes the validated 2.0.78 runtime baseline and switches the project into commercial-beta hardening.
+
+- 111 MCP tools remain the canonical catalog.
+- Direct live writes remain disabled.
+- Human approval remains the default lifecycle.
+- AI Lifecycle Control and Test Automation are explicit administrator opt-ins and are build/client-bound.
+- Test Automation defaults are generic; no Okean-specific post/product IDs or test paths are shipped.
+- Elementor container/page-layout mutators are centrally classified as write tools.
+- OAuth/site/installation identity is preserved across normal plugin upgrades.
+- Control Plane signed-entitlement verification exists as a foundation; remote enforcement is not required for the local beta.
+- Commercial release gates and known beta limitations are documented in `COMMERCIAL-BETA-CANDIDATE.md`.
+
+Validated pre-candidate baseline (2.0.78): 71/71 self-tests, 220/220 security fuzz, 109 PASS / 0 FAIL / 2 intentional SKIP / 0 BLOCKED extended matrix, plus three consecutive 16/16 mutation runs with baseline restored.
+
 
 
 ## 2.0.38 — Self-Test + Security/Control Plane foundation
