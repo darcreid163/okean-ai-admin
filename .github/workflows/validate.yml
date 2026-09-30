@@ -64,6 +64,8 @@ jobs:
         run: php tests/elementor-single-source.php
       - name: Media upload security contract
         run: php tests/media-security-contract.php
+      - name: Security output projection contract
+        run: php tests/security-output-contract.php
       - name: Plugin ZIP integrity
         shell: bash
         run: |
