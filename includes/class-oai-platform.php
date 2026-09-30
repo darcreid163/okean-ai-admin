@@ -138,11 +138,16 @@ class OAI_Platform {
    array('production_defaults'=>$prod,'upgrade_contract'=>$release['upgrade_contract']??array())
   );
   $main_source=(string)@file_get_contents(OAI_DIR.'okean-ai-admin.php');
+  $admin_guard_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-admin.php');
   $add('commercial.build_bound_reset_contract',
    method_exists('OAI_AI_Lifecycle_Control','reset_stale_build')
    &&method_exists('OAI_Test_Automation','reset_stale_build')
+   &&method_exists('OAI_AI_Lifecycle_Control','reset_for_build_change')
+   &&method_exists('OAI_Test_Automation','reset_for_build_change')
    &&strpos($main_source,'OAI_AI_Lifecycle_Control::reset_stale_build')!==false
    &&strpos($main_source,'OAI_Test_Automation::reset_stale_build')!==false
+   &&strpos($admin_guard_source,'oai_runtime_build_id')!==false
+   &&strpos($admin_guard_source,'OAI_BUILD_CHANGED_THIS_REQUEST')!==false
   );
   $oauth_tables_ok=true;
   if(class_exists('OAI_MCP_OAuth')){
