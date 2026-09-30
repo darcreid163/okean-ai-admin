@@ -192,6 +192,12 @@ class OAI_Platform {
    &&strpos($admin_source,'oai_cloud_start')!==false
    &&strpos($admin_source,'Авторизоваться и подтвердить сайт')!==false
   );
+  $read_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-read.php');
+  $add('cloud.secret_redaction_contract',
+   strpos($read_source,'oai_control_plane_site_token')!==false
+   &&strpos($read_source,'oai_control_plane_pairing')!==false
+   &&strpos($read_source,'token|secret|password')!==false
+  );
   $add('control_plane.entitlement_verifier',class_exists('OAI_Control_Plane')&&OAI_Control_Plane::CONTRACT_VERSION===1&&method_exists('OAI_Control_Plane','verify'),array('sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_enforcement'=>false));
   $caps=OAI_Capabilities::available();
   $execution=OAI_WP_CLI_Execution::readiness();
