@@ -49,6 +49,11 @@ jobs:
             if (!preg_match("/define\\(\\x27OAI_BUILD_ID\\x27,\\x27([^\\x27]+)\\x27\\)/", $s, $b)) { fwrite(STDERR, "OAI_BUILD_ID missing\\n"); exit(1); }
             if ($h[1] !== $v[1]) { fwrite(STDERR, "Header/OAI_VERSION mismatch\\n"); exit(1); }
             if (strpos($b[1], $v[1]."-") !== 0) { fwrite(STDERR, "Build ID/version mismatch\\n"); exit(1); }
+            foreach (array("BUILD-SIGNATURE.txt","BUILD_SIGNATURE.txt") as $signatureFile) {
+              $sig=file_get_contents($signatureFile);
+              if (!preg_match("/^Version:\\s*(.+)$/m", $sig, $sv) || trim($sv[1]) !== $v[1]) { fwrite(STDERR, $signatureFile." version mismatch\\n"); exit(1); }
+              if (!preg_match("/^Build ID:\\s*(.+)$/m", $sig, $sb) || trim($sb[1]) !== $b[1]) { fwrite(STDERR, $signatureFile." build ID mismatch\\n"); exit(1); }
+            }
             file_put_contents(getenv("GITHUB_ENV"), "PLUGIN_VERSION=".$v[1]."\\n", FILE_APPEND);
             echo "Validated version ".$v[1]." build ".$b[1]."\\n";
           '
