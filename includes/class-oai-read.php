@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) exit;
 class OAI_Read {
  private static function sensitive_option($key){
   $key=strtolower((string)$key);
-  $deny=array('oai_api_token','oai_bearer_token','oai_agent_secret','oai_client_secret','oai_license_signature','oai_agent_key_hash','oai_license');
+  $deny=array('oai_api_token','oai_bearer_token','oai_agent_secret','oai_client_secret','oai_license_signature','oai_agent_key_hash','oai_license','oai_control_plane_site_token','oai_control_plane_pairing');
   if(in_array($key,$deny,true))return true;
   return (bool)preg_match('/(^|[_\-])(token|secret|password|passwd|api[_\-]?key|private[_\-]?key|auth[_\-]?key|cookie|nonce|signature|credential|hash)([_\-]|$)/i',$key);
  }
