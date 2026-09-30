@@ -12,7 +12,7 @@ class OAI_Capabilities {
    ),
    'sandbox'=>array(
     'option_update','post_title','post_excerpt','post_content',
-    'elementor_widget_html','elementor_widget_settings','elementor_page_create','woo_product_price','woo_product_stock','file_write'
+    'elementor_widget_html','elementor_widget_settings','elementor_page_create','woo_product_price','woo_product_stock','woocommerce_product_full','woocommerce_product_create','media_upload','media_alt','media_title','media_featured','menu_create','menu_add_item','menu_remove_item','menu_move_item','menu_assign_location','file_write'
    ),
    'approval'=>array('approve','reject','apply','rollback'),
    'builders'=>array('elementor'=>'builder_owned_save_pipeline','gutenberg'=>'native_block_resolver','woocommerce'=>'commerce_resolver','catalog'=>'okean_adapter_catalog'),
@@ -22,7 +22,7 @@ class OAI_Capabilities {
     'agent_auth'=>'hmac_sha256',
     'agent_replay_protection'=>true,
     'direct_live_writes'=>false,
-    'sandbox_artifacts'=>array('elementor_page_create'=>'private_draft_preview_only'),
+    'sandbox_artifacts'=>array('elementor_page_create'=>'private_draft_preview_only','media_upload'=>'private_attachment_until_apply','menu_create'=>'unassigned_until_apply','menu_add_item'=>'draft_until_apply','woocommerce_product_create'=>'draft_until_apply'),
     'bearer_or_wp_admin'=>true,
     'file_scopes'=>array('child_theme','theme')
    )
