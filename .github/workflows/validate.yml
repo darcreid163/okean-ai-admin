@@ -38,6 +38,20 @@ jobs:
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
           test "$count" -eq 68
+      - name: Version consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -r '
+            $s=file_get_contents("okean-ai-admin.php");
+            if (!preg_match("/\\* Version:\\s*([0-9]+\\.[0-9]+\\.[0-9]+)/", $s, $h)) { fwrite(STDERR, "Plugin header version missing\\n"); exit(1); }
+            if (!preg_match("/define\\(\\x27OAI_VERSION\\x27,\\x27([^\\x27]+)\\x27\\)/", $s, $v)) { fwrite(STDERR, "OAI_VERSION missing\\n"); exit(1); }
+            if (!preg_match("/define\\(\\x27OAI_BUILD_ID\\x27,\\x27([^\\x27]+)\\x27\\)/", $s, $b)) { fwrite(STDERR, "OAI_BUILD_ID missing\\n"); exit(1); }
+            if ($h[1] !== $v[1]) { fwrite(STDERR, "Header/OAI_VERSION mismatch\\n"); exit(1); }
+            if (strpos($b[1], $v[1]."-") !== 0) { fwrite(STDERR, "Build ID/version mismatch\\n"); exit(1); }
+            file_put_contents(getenv("GITHUB_ENV"), "PLUGIN_VERSION=".$v[1]."\\n", FILE_APPEND);
+            echo "Validated version ".$v[1]." build ".$b[1]."\\n";
+          '
       - name: Signed entitlement contract
         run: php tests/control-plane-entitlements.php
       - name: Elementor single source and fragment edits
@@ -55,16 +69,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p releases/2.0.73
-          cp dist/okean-ai-admin.zip releases/2.0.73/wp-ai-admin-2.0.73.zip
+          : "${PLUGIN_VERSION:?PLUGIN_VERSION is required}"
+          git fetch origin "${GITHUB_REF_NAME}"
+          local_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git rev-parse "origin/${GITHUB_REF_NAME}")"
+          if [ "$local_sha" != "$remote_sha" ]; then
+            echo "Branch advanced during validation; skipping stale ZIP publication. A newer run will publish its matching artifact."
+            exit 0
+          fi
+
+          release_dir="releases/${PLUGIN_VERSION}"
+          release_zip="${release_dir}/wp-ai-admin-${PLUGIN_VERSION}.zip"
+          mkdir -p "$release_dir"
+          cp dist/okean-ai-admin.zip "$release_zip"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add releases/2.0.73/wp-ai-admin-2.0.73.zip
+          git add "$release_zip"
+
           if git diff --cached --quiet; then
-            echo "ZIP already published"
-          else
-            git commit -m "Publish WP AI Admin 2.0.73 ZIP [skip ci]"
-            git push origin HEAD:${{ github.ref_name }}
+            echo "ZIP already published for ${PLUGIN_VERSION}"
+            exit 0
+          fi
+
+          git commit -m "Publish WP AI Admin ${PLUGIN_VERSION} ZIP [skip ci]"
+          if ! git push origin "HEAD:${GITHUB_REF_NAME}"; then
+            echo "Branch advanced after validation; skipping stale ZIP publication instead of rebasing an older artifact."
+            exit 0
           fi
 
   batch-mutex-concurrency:
