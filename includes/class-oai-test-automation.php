@@ -151,12 +151,25 @@ class OAI_Test_Automation {
  public static function disable($reason='manual',$actor_user_id=0){
   $cfg=self::raw();
   self::release_gutenberg_fixture($cfg);
-  $cfg['enabled']=false;
-  $cfg['managed_gutenberg_fixture_id']=0;
-  $cfg['disabled_at']=time();
-  $cfg['disabled_reason']=sanitize_key((string)$reason);
-  $cfg['disabled_by']=absint($actor_user_id);
-  self::save($cfg);
+  self::save(array(
+   'enabled'=>false,
+   'session_id'=>'',
+   'enabled_at'=>0,
+   'expires_at'=>0,
+   'owner_user_id'=>0,
+   'bound_client_id_hash'=>'',
+   'allowed_post_ids'=>array(),
+   'allowed_product_ids'=>array(),
+   'session_created_post_ids'=>array(),
+   'managed_gutenberg_fixture_id'=>0,
+   'file_prefix'=>self::FILE_PREFIX,
+   'action_count'=>0,
+   'max_actions'=>self::MAX_ACTIONS,
+   'build_id'=>defined('OAI_BUILD_ID')?(string)OAI_BUILD_ID:'',
+   'disabled_at'=>time(),
+   'disabled_reason'=>sanitize_key((string)$reason),
+   'disabled_by'=>absint($actor_user_id),
+  ));
   self::$request_context=null;
   return self::status();
  }
