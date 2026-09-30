@@ -150,15 +150,28 @@ class OAI_WooCommerce {
   if(array_key_exists('stock_quantity',$changes)&&!array_key_exists('stock_status',$changes)&&$after['manage_stock']&&$after['stock']!==null)$after['stock_status']=(float)$after['stock']>0?'instock':($p->backorders_allowed()?'onbackorder':'outofstock');
   return array('before'=>$before,'after'=>$after,'changes'=>$changes,'id'=>(int)$id);
  }
- public static function runtime_matches_changes($actual,$changes,$before=array()){
+ public static function runtime_matches_changes($actual,$changes,$before=array(),$expected_after=array()){
   if(!is_array($actual)||!is_array($changes)||!is_array($before))return new WP_Error('oai_woo_runtime','Invalid WooCommerce runtime snapshot',array('status'=>500));
-  $patched=self::patch((int)($actual['id']??0),$changes);if(is_wp_error($patched))return $patched;$expected=$patched['after'];
+  $expected=is_array($expected_after)&&$expected_after?$expected_after:$before;
+  if(!$expected_after){
+   foreach($changes as $change=>$value){
+    if($change==='stock_quantity'){$expected['stock']=$value===null?null:wc_stock_amount($value);if(!array_key_exists('stock_status',$changes)&&!empty($expected['manage_stock'])&&$expected['stock']!==null)$expected['stock_status']=(float)$expected['stock']>0?'instock':'outofstock';continue;}
+    if($change==='images'){$ids=is_array($value)?array_values(array_filter(array_map('absint',$value))):array();$expected['image_id']=$ids?(int)$ids[0]:0;$expected['gallery_ids']=$ids?array_slice($ids,1):array();continue;}
+    if($change==='regular_price'||$change==='sale_price'){$expected[$change]=wc_format_decimal($value);continue;}
+    if($change==='manage_stock'||$change==='featured'){$expected[$change]=(bool)$value;continue;}
+    if($change==='slug'){$expected[$change]=sanitize_title((string)$value);continue;}
+    if($change==='sku'){$expected[$change]=wc_clean((string)$value);continue;}
+    if($change==='status'||$change==='stock_status'||$change==='catalog_visibility'){$expected[$change]=sanitize_key((string)$value);continue;}
+    $expected[$change]=$value;
+   }
+  }
   foreach($changes as $change=>$unused){
-   if($change==='stock_quantity'){$field='stock';}
-   elseif($change==='images'){foreach(array('image_id','gallery_ids') as $field)if(!OAI_Verify::same($actual[$field]??null,$expected[$field]??null))return new WP_Error('oai_woo_runtime','WooCommerce runtime did not persist requested images',array('status'=>409,'field'=>$field));continue;}
-   else $field=$change;
-   if(!array_key_exists($field,$expected))continue;
-   if(!OAI_Verify::same($actual[$field]??null,$expected[$field]))return new WP_Error('oai_woo_runtime','WooCommerce runtime did not persist requested field: '.$change,array('status'=>409,'field'=>$change,'expected'=>$expected[$field],'actual'=>$actual[$field]??null));
+   $fields=$change==='stock_quantity'?array('stock'):($change==='images'?array('image_id','gallery_ids'):array($change));
+   if($change==='stock_quantity'&&!array_key_exists('stock_status',$changes)&&array_key_exists('stock_status',$expected))$fields[]='stock_status';
+   foreach($fields as $field){
+    if(!array_key_exists($field,$expected))continue;
+    if(!OAI_Verify::same($actual[$field]??null,$expected[$field]))return new WP_Error('oai_woo_runtime','WooCommerce runtime did not persist requested field: '.$change,array('status'=>409,'field'=>$field,'expected'=>$expected[$field],'actual'=>$actual[$field]??null));
+   }
   }
   foreach(array('type','id') as $field)if(isset($before[$field])&&!OAI_Verify::same($actual[$field]??null,$before[$field]))return new WP_Error('oai_woo_runtime','WooCommerce changed invariant field: '.$field,array('status'=>409));
   return true;
