@@ -71,6 +71,12 @@ class OAI_Platform {
   $add('identity.site_id',self::site_id()!=='',array('site_id'=>self::site_id()));
   $add('identity.installation_id',self::installation_id()!=='',array('installation_id'=>self::installation_id()));
   $add('database.connection',isset($wpdb)&&$wpdb->dbh,array('prefix'=>isset($wpdb)?$wpdb->prefix:null));
+  $diag_probe=OAI_Diagnostics::run();
+  $health_probe=OAI_Read::health();
+  $diag_fs=is_array($diag_probe)&&isset($diag_probe['checks']['filesystem'])?$diag_probe['checks']['filesystem']:array();
+  $health_uploads=is_array($health_probe)&&isset($health_probe['uploads'])?$health_probe['uploads']:array();
+  $no_fs_paths=!array_key_exists('uploads_path',$diag_fs)&&!array_key_exists('stylesheet_directory',$diag_fs)&&!array_key_exists('path',$health_uploads);
+  $add('security.diagnostics_no_filesystem_paths',$no_fs_paths,array('diagnostics_keys'=>array_keys($diag_fs),'health_upload_keys'=>array_keys($health_uploads)));
   $add('wordpress.rest',function_exists('register_rest_route'));
   $add('oauth.schema_version',class_exists('OAI_MCP_OAuth')&&OAI_MCP_OAuth::SCHEMA_VERSION===1&&(int)get_option('oai_oauth_schema_version',0)===1);
   $add('control_plane.entitlement_verifier',class_exists('OAI_Control_Plane')&&OAI_Control_Plane::CONTRACT_VERSION===1&&method_exists('OAI_Control_Plane','verify'),array('sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_enforcement'=>false));
