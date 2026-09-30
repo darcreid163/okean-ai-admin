@@ -13,7 +13,7 @@ class OAI_Diagnostics {
   $checks['theme']=array('name'=>$theme->get('Name'),'version'=>$theme->get('Version'),'stylesheet'=>$theme->get_stylesheet(),'template'=>$theme->get_template());
   $checks['database']=array('ok'=>(bool)$wpdb->get_var('SELECT 1'),'prefix'=>$wpdb->prefix,'last_error'=>$wpdb->last_error?:null);
   $uploads=wp_upload_dir();
-  $checks['filesystem']=array('uploads_path'=>$uploads['basedir'],'uploads_writable'=>is_writable($uploads['basedir']),'stylesheet_directory'=>get_stylesheet_directory());
+  $checks['filesystem']=array('uploads_writable'=>is_writable($uploads['basedir']));
   $checks['rest']=array('rest_url'=>rest_url(),'home_url'=>home_url('/'));
   $checks['woocommerce']=array('active'=>class_exists('WooCommerce'),'version'=>defined('WC_VERSION')?WC_VERSION:null);
   $checks['elementor']=array('active'=>defined('ELEMENTOR_VERSION'),'version'=>defined('ELEMENTOR_VERSION')?ELEMENTOR_VERSION:null);
