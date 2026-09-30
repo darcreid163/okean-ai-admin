@@ -22,11 +22,12 @@ class WPAIC_Admin {
 
   if(isset($_POST['wpaic_claim_pairing']) && check_admin_referer('wpaic_claim_pairing')){
    $request=new WP_REST_Request('POST','/'.WPAIC_REST::NS.'/pairings/claim');
-   $request->set_json_params(array(
+   $request->set_header('content-type','application/json');
+   $request->set_body(wp_json_encode(array(
     'pairing_id'=>sanitize_text_field(wp_unslash((string)($_POST['pairing_id']??''))),
     'claim_code'=>sanitize_text_field(wp_unslash((string)($_POST['claim_code']??''))),
     'workspace_id'=>sanitize_text_field(wp_unslash((string)($_POST['workspace_id']??''))),
-   ));
+   )));
    $result=WPAIC_REST::pairing_claim($request);
    if($result instanceof WP_REST_Response){
     $data=$result->get_data();
