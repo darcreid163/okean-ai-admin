@@ -68,10 +68,16 @@ class OAI_P0 {
   if($filename===''||$encoded==='')return new WP_Error('oai_media_payload','filename and content_base64 are required',array('status'=>400));
   $bytes=base64_decode($encoded,true);if($bytes===false||$bytes==='')return new WP_Error('oai_media_base64','Invalid base64 media payload',array('status'=>422));
   if(strlen($bytes)>10*1024*1024)return new WP_Error('oai_media_size','Media payload exceeds 10 MB',array('status'=>413));
-  $check=wp_check_filetype($filename);$mime=(string)($a['mime_type']??($check['type']??''));
-  $allowed=array('image/jpeg','image/png','image/webp','image/gif');
-  if(!in_array($mime,$allowed,true))return new WP_Error('oai_media_mime','Only JPEG, PNG, WEBP and GIF images are supported in P0',array('status'=>422,'allowed'=>$allowed));
+  $allowed_mimes=array('jpg|jpeg|jpe'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp','gif'=>'image/gif');
+  $allowed=array_values($allowed_mimes);
+  $check=wp_check_filetype($filename,$allowed_mimes);$expected_mime=(string)($check['type']??'');
+  if($expected_mime===''||!in_array($expected_mime,$allowed,true))return new WP_Error('oai_media_mime','Only JPEG, PNG, WEBP and GIF images are supported in P0',array('status'=>422,'allowed'=>$allowed));
+  $declared_mime=sanitize_mime_type((string)($a['mime_type']??$expected_mime));
+  if($declared_mime!==$expected_mime)return new WP_Error('oai_media_mime_mismatch','Declared MIME type does not match the filename extension',array('status'=>422,'expected'=>$expected_mime,'declared'=>$declared_mime));
   $up=wp_upload_bits($filename,null,$bytes);if(!empty($up['error']))return new WP_Error('oai_media_upload',$up['error'],array('status'=>500));
+  $actual_mime=function_exists('wp_get_image_mime')?wp_get_image_mime($up['file']):false;
+  if(!$actual_mime||$actual_mime!==$expected_mime){@unlink($up['file']);return new WP_Error('oai_media_content_type','Uploaded bytes are not a valid image of the declared type',array('status'=>422,'expected'=>$expected_mime));}
+  $mime=$expected_mime;
   $title=sanitize_text_field((string)($a['title']??pathinfo($filename,PATHINFO_FILENAME)));
   $id=wp_insert_attachment(array('post_mime_type'=>$mime,'post_title'=>$title,'post_status'=>'private'),$up['file'],0,true);
   if(is_wp_error($id)){@unlink($up['file']);return $id;}
