@@ -131,7 +131,9 @@ class OAI_Regression_Runner {
    )
   ));
   if(is_wp_error($snapshot))return array('name'=>'woocommerce_create','status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($snapshot),'stages'=>array('create'=>'FAIL'));
-  return self::lifecycle('woocommerce_create',OAI_P0::op_for_created_product($snapshot),'woocommerce.create_product_sandbox',$client_id,$user_id);
+  $op=OAI_P0::op_for_created_product($snapshot);
+  if(is_wp_error($op))return array('name'=>'woocommerce_create','status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($op),'stages'=>array('create'=>'FAIL','cleanup'=>'PASS'));
+  return self::lifecycle('woocommerce_create',$op,'woocommerce.create_product_sandbox',$client_id,$user_id);
  }
  private static function elementor_container_scenario($post_id,$container_id,$run_id,$client_id,$user_id){
   if($container_id==='')return array('name'=>'elementor_container','status'=>'SKIP','baseline_restored'=>true,'reason'=>'elementor_container_id not supplied');
