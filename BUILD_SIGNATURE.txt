@@ -1,12 +1,12 @@
 WP AI Admin Build Signature
-Version: 2.0.71
-Build ID: 2.0.71-lifecycle-options-20260930
-Purpose: fix conflict replay error reporting and expose WordPress option updates through the standard sandbox lifecycle
-Expected catalog with Content Navigation enabled: 96 tools
-Expected self-test checks: 61
+Version: 2.0.74
+Build ID: 2.0.74-commercial-beta-hardening-20260930
+Purpose: Commercial Beta hardening for WooCommerce created-product verification/rollback and media response path redaction
+Expected catalog: 111 tools
+Expected self-test checks: 64
 Direct live writes: false
 Human approval default: true
-New tool: wp.option_update_sandbox
-Option workflow: sandbox -> approval -> apply -> verify -> rollback
-Conflict replay: repeated apply after apply_failed/conflict returns oai_conflict, not generic approval-state error
-Test option scope: Test Automation allows only oai_test_* or wp_ai_admin_test_* options
+AI Lifecycle Control: sandbox -> approval -> apply -> verify -> rollback
+WooCommerce create verification: derived variable-product parent price/stock_status do not cause false verification failures
+Created-product rollback: preserves conflict protection while allowing cleanup when only WooCommerce-derived fields changed
+Media responses: absolute server filesystem paths are not exposed
