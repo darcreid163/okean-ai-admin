@@ -1028,6 +1028,20 @@ frame.addEventListener('load',function(){
    OAI_Audit::log('rejected',array_merge($r,array('status'=>'rejected')));
   }
   elseif($action==='apply'){
+   // Preserve the real conflict on retries/replays. A first conflict intentionally
+   // transitions the operation to apply_failed; a transport/client replay must not
+   // downgrade that into the misleading generic "must be approved" state error.
+   if($r['status']==='apply_failed'){
+    $stored_receipt=json_decode((string)($r['receipt']??''),true);
+    if(is_array($stored_receipt) && ($stored_receipt['reason']??'')==='conflict'){
+     return new WP_Error('oai_conflict','Target changed since sandbox snapshot',array(
+      'status'=>409,
+      'current'=>$stored_receipt['current']??null,
+      'expected_before'=>$stored_receipt['expected_before']??null,
+      'replayed'=>true,
+     ));
+    }
+   }
    if($r['status']!=='approved')return new WP_Error('oai_state','Operation must be approved',array('status'=>409));
    $after=json_decode((string)$r['after_data'],true); $before=json_decode((string)$r['before_data'],true);
    $woo_guard=self::validate_woo_payload($r['type'],$after);if(is_wp_error($woo_guard))return $woo_guard;
