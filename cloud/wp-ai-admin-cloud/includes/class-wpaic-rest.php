@@ -24,6 +24,9 @@ class WPAIC_REST {
   register_rest_route(self::NS,'/sites/ping',array(
    'methods'=>'POST','callback'=>array(__CLASS__,'site_ping'),'permission_callback'=>'__return_true'
   ));
+  register_rest_route(self::NS,'/sites/self-revoke',array(
+   'methods'=>'POST','callback'=>array(__CLASS__,'site_self_revoke'),'permission_callback'=>'__return_true'
+  ));
   register_rest_route(self::NS,'/sites/(?P<site_id>[A-Za-z0-9_-]{8,64})/revoke',array(
    'methods'=>'POST','callback'=>array(__CLASS__,'site_revoke'),'permission_callback'=>function(){return is_user_logged_in();}
   ));
@@ -221,6 +224,26 @@ class WPAIC_REST {
    'workspace_id'=>$site['workspace_id'],'status'=>'active','server_time'=>$now,
    'writes_frozen'=>false
   );
+ }
+
+ public static function site_self_revoke($req){
+  if(!self::rate_limit('site_self_revoke',30,60))return self::json_error('rate_limited','Too many site requests',429);
+  $data=$req->get_json_params();if(!is_array($data))return self::json_error('invalid_json','JSON object required');
+  $site_id=sanitize_text_field((string)($data['site_id']??''));
+  $installation_id=sanitize_text_field((string)($data['installation_id']??''));
+  $token=self::bearer_token($req);
+  if($site_id===''||$installation_id===''||$token==='')return self::json_error('authentication','Site identity and bearer token required',401);
+
+  global $wpdb;
+  $site=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.WPAIC_DB::sites_table().' WHERE site_id=%s AND installation_id=%s',$site_id,$installation_id),ARRAY_A);
+  if(!$site||empty($site['credential_hash']))return self::json_error('authentication','Unknown site credential',401);
+  if(!hash_equals((string)$site['credential_hash'],self::secret_hash($token)))return self::json_error('authentication','Invalid site credential',401);
+
+  $now=self::now();
+  $wpdb->update(WPAIC_DB::sites_table(),array(
+   'status'=>'revoked','credential_hash'=>null,'revoked_at'=>$now,'updated_at'=>$now
+  ),array('id'=>(int)$site['id']));
+  return array('ok'=>true,'site_id'=>$site_id,'status'=>'revoked');
  }
 
  public static function sites_list(){
