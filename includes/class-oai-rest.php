@@ -881,6 +881,20 @@ frame.addEventListener('load',function(){
   return array('page'=>$page,'per_page'=>$per_page,'total'=>$total,'total_pages'=>max(1,(int)ceil($total/$per_page)),'statuses'=>$statuses,'items'=>$rows);
  }
  private static function validate_sandbox_target($type,$target){
+  if($type==='option_update'){
+   global $wpdb;
+   $key=(string)$target;
+   $protected=array(
+    'siteurl','home','admin_email','new_admin_email','active_plugins',
+    'recently_activated','uninstall_plugins','rewrite_rules','cron',
+    'users_can_register','default_role','stylesheet','template'
+   );
+   if(isset($wpdb) && is_object($wpdb) && !empty($wpdb->prefix))$protected[]=$wpdb->prefix.'user_roles';
+   if(in_array($key,$protected,true))return new WP_Error('oai_option_protected','Protected WordPress option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   if(preg_match('/(?:^|_)(?:password|passwd|secret|auth|token|private_key|api_key|apikey|client_secret)(?:_|$)/i',$key)){
+    return new WP_Error('oai_option_sensitive','Sensitive credential/security option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   }
+  }
   if(in_array($type,array('post_title','post_excerpt','post_content'),true)){
    $id=absint($target); if(!$id || !get_post($id))return new WP_Error('oai_target','Post not found',array('status'=>404));
    if($type==='post_content'){$allowed=OAI_Elementor::content_write_allowed($id);if(is_wp_error($allowed))return $allowed;}
@@ -981,7 +995,7 @@ frame.addEventListener('load',function(){
   if(empty($diff['changed']))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409));
   $meta=array('before_exists'=>$exists,'after_exists'=>true);
   if($type==='elementor_widget_settings'){$parts=explode(':',$target,2);$meta['post_id']=absint($parts[0]??0);$meta['widget_id']=sanitize_text_field($parts[1]??'');$meta['save_pipeline']='elementor_document';}
-  $data=array('operation_id'=>$op,'status'=>'pending','type'=>$type,'target'=>$target,'before_data'=>wp_json_encode($exists?$before:null),'after_data'=>wp_json_encode($after),'meta_data'=>wp_json_encode(array_merge($meta,array('rollback_descriptor'=>OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists))))),'diff_data'=>wp_json_encode($diff),'phase'=>'awaiting_approval','workspace_id'=>isset($meta['workspace_id'])?$meta['workspace_id']:null,'rollback_data'=>wp_json_encode(OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists))),'risk'=>in_array($type,array('post_content','woo_product_price','woo_product_stock','elementor_widget_html','elementor_widget_settings','elementor_page_create','file_write'),true)?'medium':'low','created_at'=>$now,'expires_at'=>$expiry);
+  $data=array('operation_id'=>$op,'status'=>'pending','type'=>$type,'target'=>$target,'before_data'=>wp_json_encode($exists?$before:null),'after_data'=>wp_json_encode($after),'meta_data'=>wp_json_encode(array_merge($meta,array('rollback_descriptor'=>OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists))))),'diff_data'=>wp_json_encode($diff),'phase'=>'awaiting_approval','workspace_id'=>isset($meta['workspace_id'])?$meta['workspace_id']:null,'rollback_data'=>wp_json_encode(OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists))),'risk'=>in_array($type,array('option_update','post_content','woo_product_price','woo_product_stock','elementor_widget_html','elementor_widget_settings','elementor_page_create','file_write'),true)?'medium':'low','created_at'=>$now,'expires_at'=>$expiry);
   $id=OAI_DB::insert($data); if(is_wp_error($id))return $id; $row=OAI_DB::get($id); OAI_Audit::log('created',$row); return self::row($id);
  }
  private static function row($id){$r=OAI_DB::get($id); if(!$r)return null; foreach(array('before_data','after_data','applied_data','meta_data','diff_data','rollback_data') as $k){if(array_key_exists($k,$r))$r[$k]=json_decode($r[$k],true);} return OAI_Lifecycle::decorate($r);}
