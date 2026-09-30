@@ -116,6 +116,20 @@ class OAI_Platform {
   $add('test_automation.scoped_policy',isset($ta_status['rules'])&&!empty($ta_status['rules']['admin_enable_required'])&&!empty($ta_status['rules']['same_mcp_client_required'])&&!empty($ta_status['rules']['only_session_tagged_operations']));
   $add('regression.runner_available',class_exists('OAI_Regression_Runner')&&method_exists('OAI_Regression_Runner','run'));
   $add('regression.elementor_create_patch_many_contract',class_exists('OAI_Regression_Runner')&&method_exists('OAI_Regression_Runner','run')&&strpos((string)@file_get_contents(OAI_DIR.'includes/class-oai-regression-runner.php'),'elementor_create_patch_many')!==false);
+  $runner_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-regression-runner.php');
+  $matrix_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-regression-matrix.php');
+  $add('regression.p0_suite_contract',
+   strpos($runner_source,'woocommerce_create_scenario')!==false
+   &&strpos($runner_source,'media_suite_scenario')!==false
+   &&strpos($runner_source,'menu_suite_scenario')!==false
+   &&strpos($runner_source,'include_p0')!==false
+  );
+  $add('regression.matrix_p0_contract',
+   strpos($matrix_source,"'include_p0'=>true")!==false
+   &&strpos($matrix_source,"'menu.assign_location_sandbox','SKIP'")!==false
+   &&strpos($matrix_source,"'wp.visual_qa_start'")!==false
+   &&strpos($matrix_source,"'system.operations_cleanup'")!==false
+  );
   $draft_schema_ok=false;
   if(class_exists('OAI_MCP')&&method_exists('OAI_MCP','tool_definitions')){
    foreach((array)OAI_MCP::tool_definitions() as $tool){
