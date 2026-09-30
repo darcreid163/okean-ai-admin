@@ -38,8 +38,7 @@ class OAI_P0 {
    'id'=>(int)$p->ID,'status'=>(string)$p->post_status,'title'=>(string)$p->post_title,
    'alt'=>(string)get_post_meta($p->ID,'_wp_attachment_image_alt',true),
    'caption'=>(string)$p->post_excerpt,'description'=>(string)$p->post_content,
-   'mime'=>(string)$p->post_mime_type,'url'=>(string)wp_get_attachment_url($p->ID),
-   'file'=>(string)get_attached_file($p->ID)
+   'mime'=>(string)$p->post_mime_type,'url'=>(string)wp_get_attachment_url($p->ID)
   );
  }
  public static function media_update_alt($a){
