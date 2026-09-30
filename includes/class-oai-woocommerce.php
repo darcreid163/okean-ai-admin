@@ -230,6 +230,9 @@ class OAI_WooCommerce {
   $x=self::patch($id,$changes);if(is_wp_error($x)){wp_delete_post($id,true);return $x;}$applied=self::apply($id,$x['after']);if(is_wp_error($applied)){wp_delete_post($id,true);return $applied;}
   if($type==='variable'&&is_array($variations)){
    foreach($variations as $row){if(!is_array($row))continue;$v=new WC_Product_Variation();$v->set_parent_id($id);$v->set_status('publish');if(isset($row['sku']))$v->set_sku(wc_clean((string)$row['sku']));if(isset($row['regular_price']))$v->set_regular_price(wc_format_decimal($row['regular_price']));if(isset($row['sale_price']))$v->set_sale_price(wc_format_decimal($row['sale_price']));if(isset($row['manage_stock']))$v->set_manage_stock((bool)$row['manage_stock']);if(array_key_exists('stock_quantity',$row))$v->set_stock_quantity($row['stock_quantity']===null?null:wc_stock_amount($row['stock_quantity']));if(isset($row['stock_status']))$v->set_stock_status(sanitize_key((string)$row['stock_status']));if(isset($row['attributes']))$v->set_attributes((array)$row['attributes']);$v->save();}
+   if(method_exists('WC_Product_Variable','sync'))WC_Product_Variable::sync($id);
+   if(function_exists('wc_delete_product_transients'))wc_delete_product_transients($id);
+   clean_post_cache($id);
   }
   return self::get_full($id);
  }
