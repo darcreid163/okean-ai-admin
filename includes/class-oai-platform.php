@@ -137,6 +137,11 @@ class OAI_Platform {
   $cleanup_contract=class_exists('OAI_Operations_Cleanup')?OAI_Operations_Cleanup::self_test_contract():array();
   $add('operations_cleanup.contract',!empty($cleanup_contract)&&!in_array(false,$cleanup_contract,true),$cleanup_contract);
   $add('options.sandbox_contract',
+  $option_safe=OAI_REST::validate_option_write_key('blogdescription');
+  $option_blocked=array('siteurl','home','active_plugins','admin_email','cron','sushi_user_roles','security_plugin_secret');
+  $option_guard_ok=($option_safe===true);
+  foreach($option_blocked as $option_key){$guard=OAI_REST::validate_option_write_key($option_key);if(!is_wp_error($guard)||$guard->get_error_code()!=='oai_option_protected')$option_guard_ok=false;}
+  $add('security.option_write_allowlist',$option_guard_ok,array('safe'=>'blogdescription','blocked'=>$option_blocked));
    in_array('wp.option_update_sandbox',self::expected_tools(),true)
    && in_array('wp.option_update_sandbox',self::write_tools(),true)
    && class_exists('OAI_Lifecycle'),
