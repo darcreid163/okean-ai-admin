@@ -150,8 +150,10 @@ class OAI_P0 {
 
  public static function op_for_created_product($snapshot){
   if(!is_array($snapshot)||empty($snapshot['id']))return new WP_Error('oai_product_snapshot','Invalid created product snapshot',array('status'=>500));
-  $id=absint($snapshot['id']);
-  $op=self::op('woocommerce_product_create',(string)$id,null,$snapshot,array('product_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){$p=wc_get_product($id);if($p)$p->delete(true);return $op;}return $op;
+  $id=absint($snapshot['id']);$variation_ids=array();
+  foreach((array)($snapshot['variations']??array()) as $variation){$vid=absint(is_array($variation)?($variation['id']??0):0);if($vid)$variation_ids[]=$vid;}
+  $meta=array('product_id'=>$id,'variation_ids'=>array_values(array_unique($variation_ids)),'sandbox_artifact'=>true,'created_by_ai_admin'=>true);
+  $op=self::op('woocommerce_product_create',(string)$id,null,$snapshot,$meta,false);if(is_wp_error($op)){self::delete_created_product_artifact($id,$meta);return $op;}return $op;
  }
  public static function elementor_page_layout($a){
   $post_id=absint($a['post_id']??0);$before=OAI_Elementor::page_layout($post_id);if(is_wp_error($before))return $before;
@@ -194,21 +196,42 @@ class OAI_P0 {
   if($type==='menu_add_item'){delete_post_meta(absint($target),'_oai_sandbox_artifact');return self::apply_menu_item_snapshot($target,$v);}
   if(in_array($type,array('menu_remove_item','menu_move_item'),true))return self::apply_menu_item_snapshot($target,$v);
   if($type==='menu_assign_location'){ $locations=(array)get_theme_mod('nav_menu_locations',array());if(absint($v))$locations[(string)$target]=absint($v);else unset($locations[(string)$target]);set_theme_mod('nav_menu_locations',$locations);return true;}
-  if($type==='woocommerce_product_create'){delete_post_meta(absint($target),'_oai_sandbox_artifact');return true;}
+  if($type==='woocommerce_product_create'){return true;}
   return new WP_Error('oai_p0_type','Unsupported P0 operation type',array('status'=>400));
+ }
+ private static function delete_created_product_artifact($target,$meta=array()){
+  $id=absint($target);if(!$id)return true;
+  if(empty($meta['created_by_ai_admin']))return new WP_Error('oai_product_ownership','Refusing to delete a product without AI Admin ownership metadata',array('status'=>409));
+  $variation_ids=array_values(array_unique(array_filter(array_map('absint',(array)($meta['variation_ids']??array())))));
+  $p=wc_get_product($id);
+  if($p&&$p->is_type('variable'))$variation_ids=array_values(array_unique(array_merge($variation_ids,array_map('absint',(array)$p->get_children()))));
+  foreach($variation_ids as $vid){
+   $vp=wc_get_product($vid);
+   if($vp&&$vp->is_type('variation')&&(int)$vp->get_parent_id()===$id)$vp->delete(true);
+   elseif(get_post($vid)&&(int)wp_get_post_parent_id($vid)===$id)wp_delete_post($vid,true);
+  }
+  $p=wc_get_product($id);if($p){$r=$p->delete(true);if(!$r)return new WP_Error('oai_product_delete','Failed to delete sandbox product',array('status'=>500));}
+  clean_post_cache($id);if(function_exists('wc_delete_product_transients'))wc_delete_product_transients($id);
+  if(get_post($id))return new WP_Error('oai_product_delete_verify','Sandbox product still exists after delete',array('status'=>500,'product_id'=>$id));
+  foreach($variation_ids as $vid)if(get_post($vid))return new WP_Error('oai_variation_delete_verify','Sandbox variation still exists after delete',array('status'=>500,'variation_id'=>$vid));
+  return true;
+ }
+ public static function finalize_created_product($target){
+  $id=absint($target);if(!$id)return new WP_Error('oai_product_target','Invalid product target',array('status'=>400));
+  delete_post_meta($id,'_oai_sandbox_artifact');return true;
  }
  public static function rollback($type,$target,$before,$meta=array()){
   if($type==='media_upload'){return wp_delete_attachment(absint($target),true)?true:new WP_Error('oai_media_delete','Failed to delete sandbox attachment',array('status'=>500));}
   if($type==='menu_create'){return wp_delete_nav_menu(absint($target))?true:new WP_Error('oai_menu_delete','Failed to delete sandbox menu',array('status'=>500));}
   if($type==='menu_add_item'){return wp_delete_post(absint($target),true)?true:new WP_Error('oai_menu_item_delete','Failed to delete sandbox menu item',array('status'=>500));}
-  if($type==='woocommerce_product_create'){ $p=wc_get_product(absint($target));if(!$p)return true;$r=$p->delete(true);return $r?true:new WP_Error('oai_product_delete','Failed to delete sandbox product',array('status'=>500));}
+  if($type==='woocommerce_product_create')return self::delete_created_product_artifact($target,$meta);
   return self::write($type,$target,$before,$meta);
  }
  public static function cleanup_artifact($type,$target,$meta=array()){
   if($type==='media_upload'){if(get_post(absint($target)))wp_delete_attachment(absint($target),true);return true;}
   if($type==='menu_create'){if(wp_get_nav_menu_object(absint($target)))wp_delete_nav_menu(absint($target));return true;}
   if($type==='menu_add_item'){if(get_post(absint($target)))wp_delete_post(absint($target),true);return true;}
-  if($type==='woocommerce_product_create'){ $p=wc_get_product(absint($target));if($p)$p->delete(true);return true;}
+  if($type==='woocommerce_product_create')return self::delete_created_product_artifact($target,$meta);
   return false;
  }
  public static function is_created_artifact($type){return in_array($type,array('media_upload','menu_create','menu_add_item','woocommerce_product_create'),true);}
