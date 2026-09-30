@@ -167,6 +167,13 @@ class OAI_Platform {
   $add('batch.receipt_proof_contract',!empty($batch_contract['receipt_and_proof_available']));
   $add('batch.strict_retry_contract',!empty($batch_contract['strict_retry_unresolved_guard']));
   $add('security.rest_users_blocked',!empty($rest_contract['wordpress_users_blocked']));
+  $user_projection_ok=true;
+  if(current_user_can('list_users')){
+   $user_req=new WP_REST_Request('GET','/okean-ai/v1/read/users');$user_req->set_param('limit',1);$user_req->set_param('page',1);
+   $user_probe=OAI_Read::users($user_req);$user_item=is_array($user_probe)&&!empty($user_probe['items'][0])?$user_probe['items'][0]:array();
+   if($user_item)$user_projection_ok=!array_key_exists('email',$user_item)&&!array_key_exists('login',$user_item)&&!array_key_exists('user_email',$user_item)&&!array_key_exists('user_login',$user_item);
+  }
+  $add('security.user_projection_no_pii',$user_projection_ok,array('fields_checked'=>array('email','login','user_email','user_login')));
   $ops_probe_req=new WP_REST_Request('GET','/okean-ai/v1/sandbox');$ops_probe_req->set_param('page',2);$ops_probe_req->set_param('per_page',1);$ops_probe=OAI_REST::sandbox_list($ops_probe_req);
   $add('operations.mcp_pagination_contract',is_array($ops_probe)&&($ops_probe['page']??0)===2&&($ops_probe['per_page']??0)===1&&isset($ops_probe['total'],$ops_probe['total_pages'],$ops_probe['items']));
   $add('admin.operation_pagination_contract',class_exists('OAI_Admin')&&defined('OAI_VERSION')&&OAI_Admin::ACTION_TABLE_LIMIT===50&&OAI_Admin::OPERATIONS_PER_PAGE===50&&method_exists('OAI_DB','page')&&method_exists('OAI_DB','count_all'));
