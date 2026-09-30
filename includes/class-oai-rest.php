@@ -1095,7 +1095,7 @@ frame.addEventListener('load',function(){
    $verification_expected=$after;
    if($r['type']==='woocommerce_product' && is_array($err)){
     $changes=is_array($meta['changes']??null)?$meta['changes']:array();
-    $runtime_guard=OAI_WooCommerce::runtime_matches_changes($err,$changes,is_array($before)?$before:array());
+    $runtime_guard=OAI_WooCommerce::runtime_matches_changes($err,$changes,is_array($before)?$before:array(),is_array($after)?$after:array());
     if(is_wp_error($runtime_guard))return self::recover_after_apply_failure($r,$before,$meta,$runtime_guard);
     $verification_expected=$err;
     if(!OAI_Verify::same($after,$err)){
