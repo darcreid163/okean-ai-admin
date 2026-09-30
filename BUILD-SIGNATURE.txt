@@ -1,12 +1,11 @@
 WP AI Admin Build Signature
-Version: 2.0.74
-Build ID: 2.0.74-commercial-beta-hardening-20260930
-Purpose: Commercial Beta hardening for WooCommerce created-product verification/rollback and media response path redaction
+Version: 2.0.75
+Build ID: 2.0.75-proof-integrity-20260930
+Purpose: Commercial Beta proof and receipt integrity hardening
 Expected catalog: 111 tools
 Expected self-test checks: 64
 Direct live writes: false
 Human approval default: true
-AI Lifecycle Control: sandbox -> approval -> apply -> verify -> rollback
-WooCommerce create verification: derived variable-product parent price/stock_status do not cause false verification failures
-Created-product rollback: preserves conflict protection while allowing cleanup when only WooCommerce-derived fields changed
+Proof contract: execution proof attests applied_data when runtime normalization differs from requested after_data
+WooCommerce variable products: derived parent price/stock_status remain semantic-normalization aware
 Media responses: absolute server filesystem paths are not exposed
