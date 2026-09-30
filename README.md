@@ -1,5 +1,14 @@
 # WP AI Admin
 
+## 2.1.2 — Upgrade Session Guard
+
+- Fix the 25-row operation-history self-test contract.
+- On the first wp-admin request after a build change, force AI Lifecycle Control and Test Automation into human-approval-only state.
+- Clear stale test session IDs, client bindings, page/product allowlists and site-specific test paths on build change.
+- Prevent a stale/replayed enable form POST from re-enabling AI Lifecycle or Test Automation during that same first post-upgrade request.
+- Preserve OAuth registration, site identity and installation identity across normal plugin updates.
+- Commercial Beta UI from 2.1.1 remains: one Disconnect action, 25 operation rows per page, draft/private test-page selector.
+
 ## 2.1.1 — Commercial Beta UI & Session Hardening
 
 - Connected OAuth clients are no longer listed individually in wp-admin; the Connection card exposes one Disconnect action.
