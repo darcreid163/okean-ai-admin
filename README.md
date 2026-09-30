@@ -1,5 +1,13 @@
 # WP AI Admin
 
+## 2.1.3 — Disable State Sanitization
+
+- When AI Lifecycle Control is switched off manually, owner and client-binding metadata are cleared.
+- When Test Automation is switched off manually, session ID, client binding, page/product allowlists, session-created IDs and action counter are cleared.
+- The generic `wp-ai-admin-tests/` file prefix is restored on disable.
+- Production defaults remain human-approval-only with direct live writes disabled.
+- All 2.1.2 Commercial Beta UI and upgrade-session guards are preserved.
+
 ## 2.1.2 — Upgrade Session Guard
 
 - Fix the 25-row operation-history self-test contract.
