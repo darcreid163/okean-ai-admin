@@ -98,6 +98,20 @@ class OAI_Platform {
   );
   $ta_contract=class_exists('OAI_Test_Automation')?OAI_Test_Automation::self_test_contract():array();
   $add('test_automation.contract',!empty($ta_contract)&&!in_array(false,$ta_contract,true),$ta_contract);
+  $p0_tools=array('woocommerce.get_product_full','woocommerce.create_product_sandbox','media.upload_sandbox','media.update_alt_sandbox','media.update_title_sandbox','media.set_featured_sandbox','menu.create_sandbox','menu.add_item_sandbox','menu.remove_item_sandbox','menu.move_item_sandbox','menu.assign_location_sandbox');
+  $expected_now=self::expected_tools();
+  $add('p0.tool_contract',count(array_diff($p0_tools,$expected_now))===0,array('required'=>$p0_tools,'missing'=>array_values(array_diff($p0_tools,$expected_now))));
+  $add('p0.runtime_contract',class_exists('OAI_P0')&&method_exists('OAI_P0','media_upload')&&method_exists('OAI_P0','menu_create')&&method_exists('OAI_P0','op_for_created_product')&&method_exists('OAI_WooCommerce','get_full')&&method_exists('OAI_WooCommerce','create_draft'));
+  $media_desc=OAI_Lifecycle::descriptor('media_upload','123',null,array('before_exists'=>false,'attachment_id'=>123));
+  $menu_desc=OAI_Lifecycle::descriptor('menu_create','456',null,array('before_exists'=>false,'menu_id'=>456));
+  $product_desc=OAI_Lifecycle::descriptor('woocommerce_product_create','789',null,array('before_exists'=>false,'product_id'=>789));
+  $add('p0.rollback_descriptor_contract',
+   ($media_desc['action']??'')==='delete_created_attachment'
+   &&($menu_desc['action']??'')==='delete_created_menu'
+   &&($product_desc['action']??'')==='delete_created_product',
+   array('media'=>$media_desc,'menu'=>$menu_desc,'product'=>$product_desc)
+  );
+
   $ta_status=class_exists('OAI_Test_Automation')?OAI_Test_Automation::status():array();
   $add('test_automation.scoped_policy',isset($ta_status['rules'])&&!empty($ta_status['rules']['admin_enable_required'])&&!empty($ta_status['rules']['same_mcp_client_required'])&&!empty($ta_status['rules']['only_session_tagged_operations']));
   $add('regression.runner_available',class_exists('OAI_Regression_Runner')&&method_exists('OAI_Regression_Runner','run'));
