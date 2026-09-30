@@ -21,6 +21,9 @@ class WPAIC_REST {
   register_rest_route(self::NS,'/sites',array(
    'methods'=>'GET','callback'=>array(__CLASS__,'sites_list'),'permission_callback'=>function(){return is_user_logged_in();}
   ));
+  register_rest_route(self::NS,'/sites/ping',array(
+   'methods'=>'POST','callback'=>array(__CLASS__,'site_ping'),'permission_callback'=>'__return_true'
+  ));
   register_rest_route(self::NS,'/sites/(?P<site_id>[A-Za-z0-9_-]{8,64})/revoke',array(
    'methods'=>'POST','callback'=>array(__CLASS__,'site_revoke'),'permission_callback'=>function(){return is_user_logged_in();}
   ));
@@ -89,7 +92,10 @@ class WPAIC_REST {
   $site=self::clean_site_identity($data);if(is_wp_error($site))return self::json_error($site->get_error_code(),$site->get_error_message(),400);
   global $wpdb;
   $existing=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.WPAIC_DB::sites_table().' WHERE site_id=%s OR installation_id=%s',$site['site_id'],$site['installation_id']),ARRAY_A);
-  if($existing && !hash_equals((string)$existing['site_id'],$site['site_id']))return self::json_error('installation_conflict','Installation is already bound to another site identity',409);
+  if($existing && (
+   !hash_equals((string)$existing['site_id'],$site['site_id'])
+   || !hash_equals((string)$existing['installation_id'],$site['installation_id'])
+  ))return self::json_error('identity_conflict','Site or installation identity is already bound differently',409);
   if($existing && in_array((string)$existing['status'],array('active','frozen'),true))return self::json_error('already_registered','Site is already registered',409);
 
   $pairing_id=self::random_id('pair_',18);
@@ -175,6 +181,45 @@ class WPAIC_REST {
    'ok'=>true,'site_id'=>$row['site_id'],'installation_id'=>$row['installation_id'],
    'registration_id'=>$site['registration_id'],'workspace_id'=>$row['workspace_id'],
    'site_token'=>$site_token,'status'=>'active'
+  );
+ }
+
+ private static function bearer_token($req){
+  $header=(string)$req->get_header('authorization');
+  if(!preg_match('/^Bearer\s+([^\s]+)$/i',$header,$m))return '';
+  return trim((string)$m[1]);
+ }
+
+ public static function site_ping($req){
+  if(!self::rate_limit('site_ping',120,60))return self::json_error('rate_limited','Too many site requests',429);
+  $data=$req->get_json_params();if(!is_array($data))return self::json_error('invalid_json','JSON object required');
+  $site_id=sanitize_text_field((string)($data['site_id']??''));
+  $installation_id=sanitize_text_field((string)($data['installation_id']??''));
+  $token=self::bearer_token($req);
+  if($site_id===''||$installation_id===''||$token==='')return self::json_error('authentication','Site identity and bearer token required',401);
+
+  global $wpdb;
+  $site=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.WPAIC_DB::sites_table().' WHERE site_id=%s AND installation_id=%s',$site_id,$installation_id),ARRAY_A);
+  if(!$site||empty($site['credential_hash']))return self::json_error('authentication','Unknown site credential',401);
+  if(!hash_equals((string)$site['credential_hash'],self::secret_hash($token)))return self::json_error('authentication','Invalid site credential',401);
+  if((string)$site['status']==='revoked')return self::json_error('revoked','Site is revoked',403);
+  if((string)$site['status']==='frozen')return self::json_error('frozen','Site is frozen',423);
+  if((string)$site['status']!=='active')return self::json_error('site_state','Site is not active',409);
+
+  $plugin_version=sanitize_text_field((string)($data['plugin_version']??''));
+  $catalog=sanitize_text_field((string)($data['catalog_sha256']??''));
+  if($catalog!==''&&!preg_match('/^[a-f0-9]{64}$/i',$catalog))return self::json_error('invalid_catalog','Invalid catalog hash',400);
+  $now=self::now();
+  $wpdb->update(WPAIC_DB::sites_table(),array(
+   'plugin_version'=>$plugin_version?:$site['plugin_version'],
+   'catalog_sha256'=>$catalog!==''?strtolower($catalog):$site['catalog_sha256'],
+   'last_seen_at'=>$now,'updated_at'=>$now
+  ),array('id'=>(int)$site['id']));
+
+  return array(
+   'ok'=>true,'site_id'=>$site_id,'registration_id'=>$site['registration_id'],
+   'workspace_id'=>$site['workspace_id'],'status'=>'active','server_time'=>$now,
+   'writes_frozen'=>false
   );
  }
 
