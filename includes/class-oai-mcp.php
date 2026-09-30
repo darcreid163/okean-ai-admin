@@ -148,7 +148,9 @@ class OAI_MCP {
    'wp.visual_qa_start'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
    'wp.visual_qa_result'=>array('type'=>'object','required'=>array('probe_id'),'additionalProperties'=>false,'properties'=>array('probe_id'=>array('type'=>'string','minLength'=>8))),
    'wp.option_update_sandbox'=>array('type'=>'object','required'=>array('key','value'),'additionalProperties'=>false,'properties'=>array(
-    'key'=>array('type'=>'string','minLength'=>1,'maxLength'=>191,'pattern'=>'^[A-Za-z0-9_.:-]+
+    'key'=>array('type'=>'string','minLength'=>1,'maxLength'=>191),
+    'value'=>array('description'=>'New JSON-compatible WordPress option value.')
+   )),
    'system.page_qa_run'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'probe_id'=>array('type'=>'string','minLength'=>8,'description'=>'Optional probe_id returned by the first call. Supply it after opening the browser_url to collect the unified final report.'))),
    'wp.get_theme_mods'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('name'=>array('type'=>'string'))),
    'wp.list_media'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'page'=>array('type'=>'integer','minimum'=>1,'maximum'=>10000),'search'=>array('type'=>'string'))),
