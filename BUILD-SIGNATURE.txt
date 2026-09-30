@@ -1,15 +1,16 @@
 WP AI Admin Build Signature
-Version: 2.0.77
-Build ID: 2.0.77-extended-regression-matrix-20260930
-Purpose: Commercial Beta QA expansion with reversible P0 lifecycle coverage
+Version: 2.0.78
+Build ID: 2.0.78-regression-gate-polish-20260930
+Purpose: Commercial Beta regression-gate polish
 Expected catalog: 111 tools
 Expected self-test checks: 71
 Expected security-fuzz checks at 10 iterations: 220
-Expected extended matrix with elementor_container_id: target 109 PASS / 0 FAIL / 2 intentional SKIP
+Expected extended matrix: 109 PASS / 0 FAIL / 2 intentional SKIP / 0 BLOCKED
 Intentional matrix SKIP: wp.visual_qa_result requires real browser execution; menu.assign_location_sandbox is not auto-applied to production menu locations
+Regression matrix auto-resolves a safe Elementor container from the test fixture when elementor_container_id is unavailable through a cached MCP client schema
+Extended P0 regression: variable Woo create, Media lifecycle, Menu create/add/move/remove, Elementor container/layout, safe option lifecycle
+All P0 fixtures use sandbox -> approval -> apply -> verify -> reverse cleanup/rollback
 Direct live writes: false
 Human approval default: true
-Extended P0 regression: variable Woo create, Media lifecycle, Menu create/add/move/remove, Elementor container/layout, safe option lifecycle
-All P0 regression fixtures use sandbox -> approval -> apply -> verify -> reverse cleanup/rollback
 Filesystem privacy: health/diagnostics expose WordPress-relative paths only
 PII minimization: list users/comments omit email by default
