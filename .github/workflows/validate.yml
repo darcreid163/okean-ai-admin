@@ -33,7 +33,7 @@ jobs:
             php -l "$file"
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
-          test "$count" -eq 67
+          test "$count" -eq 68
       - name: Signed entitlement contract
         run: php tests/control-plane-entitlements.php
       - name: Elementor single source and fragment edits
@@ -51,15 +51,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p releases/2.0.71
-          cp dist/okean-ai-admin.zip releases/2.0.71/wp-ai-admin-2.0.71.zip
+          mkdir -p releases/2.0.72
+          cp dist/okean-ai-admin.zip releases/2.0.72/wp-ai-admin-2.0.72.zip
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add releases/2.0.71/wp-ai-admin-2.0.71.zip
+          git add releases/2.0.72/wp-ai-admin-2.0.72.zip
           if git diff --cached --quiet; then
             echo "ZIP already published"
           else
-            git commit -m "Publish WP AI Admin 2.0.71 ZIP [skip ci]"
+            git commit -m "Publish WP AI Admin 2.0.72 ZIP [skip ci]"
             git push origin HEAD:${{ github.ref_name }}
           fi
 
