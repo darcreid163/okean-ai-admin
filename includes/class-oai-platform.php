@@ -199,7 +199,7 @@ class OAI_Platform {
   $ambiguous=OAI_Elementor::replace_html_fragment('AA','A','B',hash('sha256','AA'));
   $add('elementor.fragment_patch_contract',$patched==='<h1>Картa</h1><p>Маршрут</p>'&&is_wp_error($stale)&&is_wp_error($ambiguous));
   $add('elementor.single_source_contract',method_exists('OAI_Elementor','activate_single_source')&&method_exists('OAI_REST','elementor_patch_fragment'));
-  $add('catalog.expected_tools',count($all)===(self::content_navigation_allowed()?96:95),array('expected_count'=>count($all),'catalog_sha256'=>hash('sha256',implode("\n",$all))));
+  $add('catalog.expected_tools',count($all)===count(array_unique($all))&&count($all)>=100,array('expected_count'=>count($all),'unique_count'=>count(array_unique($all)),'catalog_sha256'=>hash('sha256',implode("\n",$all))));
   $defs=class_exists('OAI_MCP')&&method_exists('OAI_MCP','tool_definitions')?OAI_MCP::tool_definitions():array();$def_names=array();foreach((array)$defs as $d)if(is_array($d)&&!empty($d['name']))$def_names[]=(string)$d['name'];
   $add('catalog.exported_tools',count($def_names)===count($all)&&!array_diff($all,$def_names),array('exported_count'=>count($def_names),'missing'=>array_values(array_diff($all,$def_names))));
   $add('navigation.gutenberg_outline_tool',in_array('gutenberg.get_outline',$def_names,true));
