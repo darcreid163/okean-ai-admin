@@ -64,7 +64,7 @@ class OAI_P0 {
   if($filename===''||$encoded==='')return new WP_Error('oai_media_payload','filename and content_base64 are required',array('status'=>400));
   $bytes=base64_decode($encoded,true);if($bytes===false||$bytes==='')return new WP_Error('oai_media_base64','Invalid base64 media payload',array('status'=>422));
   if(strlen($bytes)>10*1024*1024)return new WP_Error('oai_media_size','Media payload exceeds 10 MB',array('status'=>413));
-  $check=wp_check_filetype_and_ext('', $filename);$mime=(string)($a['mime_type']??($check['type']??''));
+  $check=wp_check_filetype($filename);$mime=(string)($a['mime_type']??($check['type']??''));
   $allowed=array('image/jpeg','image/png','image/webp','image/gif');
   if(!in_array($mime,$allowed,true))return new WP_Error('oai_media_mime','Only JPEG, PNG, WEBP and GIF images are supported in P0',array('status'=>422,'allowed'=>$allowed));
   $up=wp_upload_bits($filename,null,$bytes);if(!empty($up['error']))return new WP_Error('oai_media_upload',$up['error'],array('status'=>500));
