@@ -263,11 +263,11 @@ class OAI_Test_Automation {
    $parts=explode(':',$target,2);$allowed=self::product_allowed(absint($parts[0]??0),$cfg);$reason=$allowed?'allowed_test_product':'product_not_allowlisted';
   }elseif($type==='woocommerce_product_create'){
    $pid=absint($target);$post=$pid?get_post($pid):false;
-   $allowed=$post && $post->post_type==='product' && (string)$post->post_status==='draft' && (string)get_post_meta($pid,'_oai_sandbox_artifact',true)==='1';
+   $session=(string)($cfg['session_id']??'');$owned=(string)get_post_meta($pid,'_oai_test_session_id',true);$allowed=$post && $post->post_type==='product' && (string)$post->post_status==='draft' && ((string)get_post_meta($pid,'_oai_sandbox_artifact',true)==='1'||($session!==''&&$owned!==''&&hash_equals($session,$owned)));
    $reason=$allowed?'allowed_created_test_product':'created_product_not_sandbox_draft';
   }elseif(in_array($type,array('media_upload','media_alt','media_title'),true)){
    $aid=absint($target);$post=$aid?get_post($aid):false;
-   $allowed=$post && $post->post_type==='attachment' && (string)get_post_meta($aid,'_oai_sandbox_artifact',true)==='1';
+   $session=(string)($cfg['session_id']??'');$owned=(string)get_post_meta($aid,'_oai_test_session_id',true);$allowed=$post && $post->post_type==='attachment' && ((string)get_post_meta($aid,'_oai_sandbox_artifact',true)==='1'||($session!==''&&$owned!==''&&hash_equals($session,$owned)));
    $reason=$allowed?'allowed_created_test_media':'media_not_session_sandbox_artifact';
   }elseif($type==='media_featured'){
    $post_id=absint($target);$allowed=self::post_allowed($post_id,$cfg);$reason=$allowed?'allowed_test_featured_post':'featured_post_not_allowlisted';
@@ -275,10 +275,10 @@ class OAI_Test_Automation {
    $menu_id=absint($meta['menu_id']??0);
    if(!$menu_id && $type==='menu_create')$menu_id=absint($target);
    if(!$menu_id && $type!=='menu_create'){$terms=wp_get_object_terms(absint($target),'nav_menu',array('fields'=>'ids'));if(!is_wp_error($terms)&&$terms)$menu_id=absint($terms[0]);}
-   $allowed=$menu_id && (string)get_term_meta($menu_id,'_oai_sandbox_artifact',true)==='1';
+   $session=(string)($cfg['session_id']??'');$owned=(string)get_term_meta($menu_id,'_oai_test_session_id',true);$allowed=$menu_id && ((string)get_term_meta($menu_id,'_oai_sandbox_artifact',true)==='1'||($session!==''&&$owned!==''&&hash_equals($session,$owned)));
    $reason=$allowed?'allowed_created_test_menu':'menu_not_session_sandbox_artifact';
   }elseif($type==='menu_assign_location'){
-   $menu_id=absint(json_decode((string)($row['after_data']??''),true));$allowed=$menu_id && (string)get_term_meta($menu_id,'_oai_sandbox_artifact',true)==='1';
+   $menu_id=absint(json_decode((string)($row['after_data']??''),true));$session=(string)($cfg['session_id']??'');$owned=(string)get_term_meta($menu_id,'_oai_test_session_id',true);$allowed=$menu_id && ((string)get_term_meta($menu_id,'_oai_sandbox_artifact',true)==='1'||($session!==''&&$owned!==''&&hash_equals($session,$owned)));
    $reason=$allowed?'allowed_created_test_menu_location':'menu_location_target_not_sandbox_menu';
   }elseif(in_array($type,array('file_write','theme_file_write'),true)){
    $allowed=self::file_allowed($target,$cfg);$reason=$allowed?'allowed_test_file_prefix':'file_outside_test_prefix';
@@ -311,6 +311,14 @@ class OAI_Test_Automation {
     OAI_DB::update((int)$row['id'],array('meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)));
     return array('active'=>true,'tagged'=>false,'eligible'=>false,'reason'=>'created_draft_scope_registration_failed');
    }
+  }
+  if(in_array($elig['reason'],array('allowed_created_test_product','allowed_created_test_media'),true))update_post_meta(absint($row['target']),'_oai_test_session_id',(string)$status['session_id']);
+  if(in_array($elig['reason'],array('allowed_created_test_menu','allowed_created_test_menu_location'),true)){
+   $menu_id=absint($meta['menu_id']??0);
+   if(!$menu_id && $row['type']==='menu_create')$menu_id=absint($row['target']);
+   if(!$menu_id && $row['type']==='menu_assign_location')$menu_id=absint(json_decode((string)($row['after_data']??''),true));
+   if(!$menu_id && in_array($row['type'],array('menu_add_item','menu_remove_item','menu_move_item'),true)){$terms=wp_get_object_terms(absint($row['target']),'nav_menu',array('fields'=>'ids'));if(!is_wp_error($terms)&&$terms)$menu_id=absint($terms[0]);}
+   if($menu_id)update_term_meta($menu_id,'_oai_test_session_id',(string)$status['session_id']);
   }
   $meta['test_automation']=array(
    'session_id'=>$status['session_id'],'tagged'=>true,'tool'=>sanitize_text_field((string)$tool),'client_id_hash'=>$client_hash,'user_id'=>$user_id,'tagged_at'=>time(),'eligibility'=>$elig['reason']
