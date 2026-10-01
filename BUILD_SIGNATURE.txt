@@ -1,21 +1,16 @@
 WP AI Admin Build Signature
-Version: 2.1.3
-Build ID: 2.1.3-disable-state-sanitization-20260930
+Version: 2.1.4
+Build ID: 2.1.4-elementor-create-schema-20261001
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
-Purpose: Commercial Beta manual-disable state sanitization
-Expected catalog: 111 tools
-Expected self-test checks: 78
-Expected security-fuzz checks at 10 iterations: 220
-Expected extended matrix: 109 PASS / 0 FAIL / 2 intentional SKIP / 0 BLOCKED
-Intentional matrix SKIP: wp.visual_qa_result requires real browser execution; menu.assign_location_sandbox is not auto-applied to production menu locations
-Production default: human approval only
+Purpose: Typed Elementor creation tree and cached-client JSON-node compatibility
+Expected catalog: 112 tools
+Inherited self-test checks: 78 (runtime retest required after installation)
+Security fuzz at 10 iterations: 220 (runtime retest required after installation)
 Direct live writes: false
-Operations history page size: 25
-Connected-client UI: single Disconnect action; no OAuth client/token table
-Test Automation page selector: draft/private pages only
-Build upgrade guard: first admin request after build change clears AI/Test session state and blocks stale enable-form replay on that request
-Manual disable sanitization: AI Lifecycle and Test Automation clear owner/client/session/allowlist/action state when switched OFF
-Test Automation file prefix: wp-ai-admin-tests/
+Production default: human approval only
+AI Lifecycle and Test Automation: administrator opt-in, client-bound and build-bound
 OAuth/site/installation identity: preserved across normal plugin upgrade
-Control Plane: verification foundation available; remote enforcement not required for local commercial beta
+WooCommerce stock: PHP_ROUND_HALF_UP integers (inherited 2.1.3 policy)
+Creation data: root objects explicitly typed; cached serialized root nodes decoded before persistence
+Control Plane: verification foundation; remote enforcement not required for local commercial beta

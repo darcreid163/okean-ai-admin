@@ -12,6 +12,27 @@ if (!defined('ABSPATH')) exit;
 class OAI_Elementor {
  public static function available(){ return defined('ELEMENTOR_VERSION') && class_exists('Elementor\\Plugin'); }
 
+ /**
+  * Decode serialized root nodes sent by clients that cached an untyped array schema.
+  * Object nodes and their nested settings/HTML are preserved without rewriting.
+  * Invalid values are rejected before the REST create callback persists a draft.
+  */
+ public static function decode_create_nodes($data){
+  if(!is_array($data)||!array_is_list($data))
+   return new WP_Error('oai_elementor_data','data must be a list of Elementor elements',array('status'=>400));
+  foreach($data as $index=>$node){
+   if(is_string($node)){
+    $node=json_decode($node,true,64);
+    if(json_last_error()!==JSON_ERROR_NONE)
+     return new WP_Error('oai_data_json','Invalid JSON in Elementor element',array('status'=>400,'element_index'=>$index));
+   }
+   if(!is_array($node)||array_is_list($node))
+    return new WP_Error('oai_elementor_data','Each Elementor element must be an object',array('status'=>400,'element_index'=>$index));
+   $data[$index]=$node;
+  }
+  return $data;
+ }
+
  /** Replace one exact fragment; the caller supplies the widget hash to prevent stale edits. */
  public static function replace_html_fragment($html,$old,$replacement,$expected_sha256){
   if(!is_string($html)||!is_string($old)||$old===''||!is_string($replacement)||!is_string($expected_sha256)||!preg_match('/^[a-f0-9]{64}$/D',$expected_sha256))return new WP_Error('oai_fragment_input','A nonempty old_fragment and current widget SHA-256 are required',array('status'=>400));

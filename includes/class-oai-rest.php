@@ -207,6 +207,7 @@ class OAI_REST {
   else { $data=$req->get_param('data'); if($data===null && $source_id)$data=OAI_Elementor::get_data($source_id); if(is_wp_error($data))return $data; if(is_string($data)){ $data=json_decode($data,true); if(json_last_error()!==JSON_ERROR_NONE)return new WP_Error('oai_data_json','Invalid JSON in data',array('status'=>400,'message'=>json_last_error_msg())); } }
   if(!is_array($data))return new WP_Error('oai_elementor_data','data must be an Elementor element array or element object',array('status'=>400));
   if(!self::is_list_array($data) && (isset($data['elType'])||isset($data['widgetType'])||isset($data['elements']))){$data=array($data);}
+  $data=OAI_Elementor::decode_create_nodes($data); if(is_wp_error($data))return $data;
   $data=self::normalize_elementor_page_data($data); if(is_wp_error($data))return $data;
 
   $adapter=OAI_Builder_Manager::get('elementor');

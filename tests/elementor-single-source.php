@@ -88,5 +88,22 @@ namespace {
  OAI_DB::$rows[902]=array('id'=>902,'type'=>'elementor_widget_html','target'=>'42:widget','meta_data'=>json_encode(array()));
  $tag_patch=\OAI_Test_Automation::tag_operation(902,'elementor.patch_widget','fixture-client',7);
  expect(!empty($tag_patch['tagged']) && !empty($tag_patch['eligible']),'Follow-up Elementor patch did not inherit test-session scope');
- echo "PASS: one source, in-place image/text edits, stale/ambiguous rejection, layout preservation, manual-content conflict and created-draft test scope\n";
+ // Reproduce the cached client schema that exported data as array<string>.
+ $encoded_nodes=array(wp_json_encode($tree[0]));
+ expect(\OAI_Elementor::decode_create_nodes($encoded_nodes)===$tree,'Serialized root node did not round-trip');
+ expect(\OAI_Elementor::decode_create_nodes($tree)===$tree,'Object tree changed while decoding');
+ $mixed=array($tree[0],wp_json_encode($tree[0]));
+ expect(\OAI_Elementor::decode_create_nodes($mixed)===array($tree[0],$tree[0]),'Mixed cached/object payload changed');
+ foreach(array(array('broken JSON'),array('null'),array('42'),array('[]'),array('{}'),array(42),array(null)) as $invalid){
+  expect(is_wp_error(\OAI_Elementor::decode_create_nodes($invalid)),'Malformed/scalar root node accepted');
+ }
+ // Ensure the actual exported MCP tool describes object nodes for fresh clients.
+ if(!class_exists('OAI_Platform')){class OAI_Platform {public static function content_navigation_allowed(){return true;}}}
+ require dirname(__DIR__).'/includes/class-oai-mcp.php';
+ $create_tools=array_values(array_filter(\OAI_MCP::tool_definitions(),function($tool){return $tool['name']==='elementor.create_draft';}));
+ expect(count($create_tools)===1,'Elementor create tool missing or duplicated');
+ $data_schema=$create_tools[0]['inputSchema']['properties']['data'];
+ expect(($data_schema['items']['type']??'')==='object','MCP root elements have no object item schema');
+ expect(($data_schema['items']['properties']['elements']['items']['type']??'')==='object','MCP child elements have no object item schema');
+ echo "PASS: one source, precise edits, conflict guards, created-draft scope, serialized creation input and MCP object-array schema\n";
 }
