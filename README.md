@@ -221,3 +221,5 @@ Validated pre-candidate baseline (2.0.78): 71/71 self-tests, 220/220 security fu
 - Adds `security.ai_lifecycle_status_contract` to the read-only self-test suite.
 - Expected MCP catalog: 91 tools. Expected self-test checks: 54.
 - Direct live writes remain disabled. Human lifecycle remains the default; AI Lifecycle Control remains administrator opt-in and MCP-client-bound.
+
+- `media.import_url_sandbox` — safe remote image import from public HTTP(S) URLs into the normal sandbox/apply/verify/rollback lifecycle (2.1.3 media URL import build).
