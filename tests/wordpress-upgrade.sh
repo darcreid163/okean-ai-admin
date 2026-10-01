@@ -9,9 +9,17 @@ task_wp() { php "$TASK_CLI_FILE" --path="$TASK_WP_DIR" "$@"; }
 task_wp core download --version="${WP_TEST_VERSION:-latest}"
 task_wp config create --dbname=wp_test --dbuser=root --dbpass=test-password --dbhost=127.0.0.1 --skip-check
 task_wp core install --url=http://wp-upgrade.test --title='Upgrade CI' --admin_user=ci-admin --admin_password=disposable-ci-password --admin_email=ci@example.test --skip-email
-task_wp plugin install woocommerce --version="${WOO_TEST_VERSION:-latest}" --activate
-task_wp plugin install elementor --version="${ELEMENTOR_TEST_VERSION:-latest}" --activate
-task_wp plugin install wordpress-seo --version="${YOAST_TEST_VERSION:-latest}" --activate
+task_install_plugin() {
+ local task_plugin="$1" task_version="$2"
+ if [[ "$task_version" == latest ]]; then
+  task_wp plugin install "$task_plugin" --activate
+ else
+  task_wp plugin install "$task_plugin" --version="$task_version" --activate
+ fi
+}
+task_install_plugin woocommerce "${WOO_TEST_VERSION:-latest}"
+task_install_plugin elementor "${ELEMENTOR_TEST_VERSION:-latest}"
+task_install_plugin wordpress-seo "${YOAST_TEST_VERSION:-latest}"
 mkdir -p "$TASK_WP_DIR/wp-content/mu-plugins"
 cat > "$TASK_WP_DIR/wp-content/mu-plugins/upgrade-save-listener.php" <<'PHP'
 <?php
