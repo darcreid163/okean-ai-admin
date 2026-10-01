@@ -15,18 +15,23 @@ class OAI_WooCommerce {
   return (float)$normalized;
  }
  private static function begin_decimal_stock_scope(){
-  $priority=has_filter('woocommerce_stock_amount','intval');
-  if($priority!==false)remove_filter('woocommerce_stock_amount','intval',$priority);
+  global $wp_filter;
+  $original=null;
+  if(isset($wp_filter['woocommerce_stock_amount']) && $wp_filter['woocommerce_stock_amount'] instanceof WP_Hook)$original=clone $wp_filter['woocommerce_stock_amount'];
+  remove_all_filters('woocommerce_stock_amount');
   add_filter('woocommerce_stock_amount',array(__CLASS__,'decimal_stock_filter'),10,1);
-  return $priority;
+  return $original;
  }
  public static function decimal_stock_filter($amount){
-  if(!is_numeric($amount))return 0;
-  return (float)$amount;
+  if($amount===null)return null;
+  $normalized=is_scalar($amount)?str_replace(',','.',trim((string)$amount)):'';
+  return is_numeric($normalized)?(float)$normalized:0;
  }
- private static function end_decimal_stock_scope($priority){
-  remove_filter('woocommerce_stock_amount',array(__CLASS__,'decimal_stock_filter'),10);
-  if($priority!==false)add_filter('woocommerce_stock_amount','intval',$priority,1);
+ private static function end_decimal_stock_scope($original){
+  global $wp_filter;
+  remove_all_filters('woocommerce_stock_amount');
+  if($original instanceof WP_Hook)$wp_filter['woocommerce_stock_amount']=$original;
+  else unset($wp_filter['woocommerce_stock_amount']);
  }
  public static function validate_snapshot($data){
   if(!is_array($data))return new WP_Error('oai_woo_snapshot','Invalid WooCommerce product snapshot',array('status'=>422));
