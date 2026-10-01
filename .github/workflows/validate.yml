@@ -106,6 +106,22 @@ jobs:
 
   wordpress-boot-upgrade:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: site-public-versions
+            wp: '7.0.6'
+            php: '8.3.33'
+            woo: '11.1.2'
+            elementor: '4.3.2'
+            yoast: '28.6'
+          - profile: latest-public-versions
+            wp: latest
+            php: '8.3'
+            woo: latest
+            elementor: latest
+            yoast: latest
     services:
       mysql:
         image: mysql:8.0
@@ -123,10 +139,15 @@ jobs:
       - uses: actions/checkout@v6
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: ${{ matrix.php }}
           extensions: mysqli
           coverage: none
       - name: Real WordPress with WooCommerce, Elementor and Yoast
+        env:
+          WP_TEST_VERSION: ${{ matrix.wp }}
+          WOO_TEST_VERSION: ${{ matrix.woo }}
+          ELEMENTOR_TEST_VERSION: ${{ matrix.elementor }}
+          YOAST_TEST_VERSION: ${{ matrix.yoast }}
         run: bash tests/wordpress-upgrade.sh
 
   publish-archive:

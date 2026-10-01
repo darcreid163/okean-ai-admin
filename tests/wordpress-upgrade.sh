@@ -6,10 +6,12 @@ TASK_CLI_FILE="$RUNNER_TEMP/wp-cli.phar"
 curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$TASK_CLI_FILE"
 mkdir -p "$TASK_WP_DIR"
 task_wp() { php "$TASK_CLI_FILE" --path="$TASK_WP_DIR" "$@"; }
-task_wp core download
+task_wp core download --version="${WP_TEST_VERSION:-latest}"
 task_wp config create --dbname=wp_test --dbuser=root --dbpass=test-password --dbhost=127.0.0.1 --skip-check
 task_wp core install --url=http://wp-upgrade.test --title='Upgrade CI' --admin_user=ci-admin --admin_password=disposable-ci-password --admin_email=ci@example.test --skip-email
-task_wp plugin install woocommerce elementor wordpress-seo --activate
+task_wp plugin install woocommerce --version="${WOO_TEST_VERSION:-latest}" --activate
+task_wp plugin install elementor --version="${ELEMENTOR_TEST_VERSION:-latest}" --activate
+task_wp plugin install wordpress-seo --version="${YOAST_TEST_VERSION:-latest}" --activate
 mkdir -p "$TASK_WP_DIR/wp-content/mu-plugins"
 cat > "$TASK_WP_DIR/wp-content/mu-plugins/upgrade-save-listener.php" <<'PHP'
 <?php
