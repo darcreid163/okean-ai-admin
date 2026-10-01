@@ -42,6 +42,8 @@ jobs:
         run: php tests/control-plane-entitlements.php
       - name: Elementor single source and fragment edits
         run: php tests/elementor-single-source.php
+      - name: WooCommerce integer stock rounding
+        run: php tests/woocommerce-stock-rounding.php
       - name: Plugin ZIP integrity
         shell: bash
         run: |
