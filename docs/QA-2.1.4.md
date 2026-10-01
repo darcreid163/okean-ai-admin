@@ -23,3 +23,11 @@ The connected client exported elementor.create_draft data as array<string> becau
 Run 36859574064 completed real steps: PHP 8.2/8.3/8.4 lint, entitlement, Elementor, stock rounding, ZIP integrity, MySQL concurrent mutex and OAuth upgrade/client retention all succeeded. This closes the previously reported pre-step CI infrastructure blocker for 2.1.3.
 ## Candidate gate
 2.1.4 requires its own CI and installed live create/precise-patch/rollback retest. Full regression runner/matrix was not rerun in this session because scoped Test Automation was disabled; AI Lifecycle opt-in permitted isolated manual lifecycle checks. Do not claim full 2.1.4 release readiness before installation and read-back.
+
+## 2.1.4 CI result
+Run [36867052108](https://github.com/darcreid163/okean-ai-admin/actions/runs/36867052108): all four jobs SUCCESS with actual workflow steps completed.
+- PHP 8.2, 8.3 and 8.4: syntax, entitlement checks, expanded Elementor creation/schema contract, stock rounding and archive integrity succeeded.
+- MySQL: two independent PHP requests contending for the same batch lock succeeded; OAuth schema upgrade and registered-client retention succeeded.
+- Published archive: releases/2.1.4/wp-ai-admin-2.1.4.zip, 230435 bytes, Git blob d71ccff2933fefbaa65e07e0457de034ab88d3c9.
+- Code commit tested: 892c432b26cd8c5cff9ae9bfd758160445190a29. Archive publication commit: f9cfc59b2691d69e62ab56a3d26e62757c757bf3.
+- NOT YET VERIFIED: installed live 2.1.4 runtime, live Elementor create/fragment lifecycle, upgrade state reset and reconnect retention. User installation is the next step; enable AI Lifecycle/Test Automation deliberately after the build-bound reset.
