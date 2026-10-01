@@ -960,6 +960,21 @@ frame.addEventListener('load',function(){
   }
   return true;
  }
+ public static function normalize_option_snapshot($target,$value){
+  // Match WordPress' sanitize_option pipeline before the diff is approved.
+  // Never learn the expected state from a post-write read: that would conceal
+  // unexpected writes and weaken authoritative verification.
+  try {
+   $normalized=sanitize_option($target,$value);
+   if(is_wp_error($normalized))return $normalized;
+   $second=sanitize_option($target,$normalized);
+   if(is_wp_error($second))return $second;
+   if($normalized!==$second)return new WP_Error('oai_option_unstable','Option sanitization is not idempotent; no operation was created',array('status'=>422));
+   return $normalized;
+  } catch(Throwable $e){
+   return new WP_Error('oai_option_sanitize','Option sanitization failed; no operation was created',array('status'=>422));
+  }
+ }
  public static function sandbox_create($req){
   $type=sanitize_key($req->get_param('type'));
   $target=sanitize_text_field((string)$req->get_param('target'));
@@ -988,6 +1003,15 @@ frame.addEventListener('load',function(){
    } else {
     $after=is_string($raw)?$raw:$raw;
    }
+  }
+  if($type==='option_update'){
+   if($exists){
+    $roundtrip=self::normalize_option_snapshot($target,$before);
+    if(is_wp_error($roundtrip))return $roundtrip;
+    if($roundtrip!==$before)return new WP_Error('oai_option_rollback_unsafe','Existing option cannot be restored exactly through WordPress sanitization; save it in its native settings screen before creating a sandbox operation',array('status'=>409));
+   }
+   $after=self::normalize_option_snapshot($target,$after);
+   if(is_wp_error($after))return $after;
   }
   $woo_guard=self::validate_woo_payload($type,$after);if(is_wp_error($woo_guard))return $woo_guard;
   $op='OAI-'.gmdate('Ymd-His').'-'.wp_rand(1000,9999);

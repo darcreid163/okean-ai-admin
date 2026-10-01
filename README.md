@@ -1,5 +1,13 @@
 # WP AI Admin
 
+## 2.1.5 — Option Normalization Before Approval
+
+- Capture WordPress `sanitize_option` output before creating the approved diff, preventing false verification failures when Yoast drops legacy fields.
+- Reject non-idempotent sanitizers and baselines that cannot be restored exactly through WordPress before creating an operation.
+- Preserve strict authoritative verification and stale-target/rollback conflict guards; never infer the expected snapshot from a live post-write read.
+- Installed 2.1.4 operation 1689 exposed this issue; supported-baseline restore 1692 and corrected apply 1693 both verified successfully.
+- Existing 2.1.4 Elementor and 2.1.3 integer stock/price policies remain unchanged.
+
 ## 2.1.3 — Disable State Sanitization
 
 - When AI Lifecycle Control is switched off manually, owner and client-binding metadata are cleared.
