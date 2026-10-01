@@ -55,18 +55,24 @@ class OAI_WooCommerce {
   return array('id'=>(int)$attribute->get_id(),'name'=>(string)$attribute->get_name(),'options'=>array_values((array)$attribute->get_options()),'position'=>(int)$attribute->get_position(),'visible'=>(bool)$attribute->get_visible(),'variation'=>(bool)$attribute->get_variation());
  }
  private static function variation_snapshot($v){
-  return array('id'=>(int)$v->get_id(),'sku'=>(string)$v->get_sku(),'status'=>(string)$v->get_status(),'regular_price'=>(string)$v->get_regular_price(),'sale_price'=>(string)$v->get_sale_price(),'price'=>(string)$v->get_price(),'stock'=>$v->get_stock_quantity(),'stock_status'=>(string)$v->get_stock_status(),'manage_stock'=>(bool)$v->managing_stock(),'attributes'=>(array)$v->get_attributes());
+  $scope=self::begin_decimal_stock_scope();
+  try{$stock=$v->get_stock_quantity();}
+  finally{self::end_decimal_stock_scope($scope);}
+  return array('id'=>(int)$v->get_id(),'sku'=>(string)$v->get_sku(),'status'=>(string)$v->get_status(),'regular_price'=>(string)$v->get_regular_price(),'sale_price'=>(string)$v->get_sale_price(),'price'=>(string)$v->get_price(),'stock'=>$stock,'stock_status'=>(string)$v->get_stock_status(),'manage_stock'=>(bool)$v->managing_stock(),'attributes'=>(array)$v->get_attributes());
  }
  public static function get_full($id){
   if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
   $p=wc_get_product((int)$id);if(!$p)return new WP_Error('oai_not_found','Product not found',array('status'=>404));
   $attrs=array();foreach((array)$p->get_attributes() as $a)$attrs[]=self::attribute_snapshot($a);
   $vars=array();if($p->is_type('variable'))foreach((array)$p->get_children() as $child){$v=wc_get_product($child);if($v)$vars[]=self::variation_snapshot($v);}
+  $scope=self::begin_decimal_stock_scope();
+  try{$stock=$p->get_stock_quantity();}
+  finally{self::end_decimal_stock_scope($scope);}
   return array(
    'id'=>(int)$p->get_id(),'type'=>(string)$p->get_type(),'sku'=>(string)$p->get_sku(),'name'=>(string)$p->get_name(),
    'slug'=>(string)$p->get_slug(),'description'=>(string)$p->get_description(),'short_description'=>(string)$p->get_short_description(),
    'regular_price'=>(string)$p->get_regular_price(),'sale_price'=>(string)$p->get_sale_price(),'price'=>(string)$p->get_price(),
-   'stock'=>$p->get_stock_quantity(),'stock_status'=>(string)$p->get_stock_status(),'manage_stock'=>(bool)$p->managing_stock(),
+   'stock'=>$stock,'stock_status'=>(string)$p->get_stock_status(),'manage_stock'=>(bool)$p->managing_stock(),
    'status'=>(string)$p->get_status(),'featured'=>(bool)$p->get_featured(),'catalog_visibility'=>(string)$p->get_catalog_visibility(),
    'categories'=>array_values(array_map('intval',(array)$p->get_category_ids())),'tags'=>array_values(array_map('intval',(array)$p->get_tag_ids())),
    'image_id'=>(int)$p->get_image_id(),'gallery_ids'=>array_values(array_map('intval',(array)$p->get_gallery_image_ids())),
@@ -116,7 +122,7 @@ class OAI_WooCommerce {
   if($query!=='')$args['s']=sanitize_text_field($query);
   $result=wc_get_products($args);
   if(!is_object($result)||!isset($result->products,$result->total,$result->max_num_pages))return new WP_Error('oai_woo_page','WooCommerce did not return a paginated product result',array('status'=>500));
-  $items=array(); foreach($result->products as $p){$row=array('id'=>$p->get_id(),'sku'=>$p->get_sku(),'name'=>$p->get_name(),'regular_price'=>$p->get_regular_price(),'sale_price'=>$p->get_sale_price(),'price'=>$p->get_price(),'stock'=>$p->get_stock_quantity(),'stock_status'=>$p->get_stock_status(),'manage_stock'=>$p->managing_stock(),'status'=>$p->get_status());$items[]=array_intersect_key($row,array_flip($selected));}
+  $items=array(); foreach($result->products as $p){$scope=self::begin_decimal_stock_scope();try{$stock=$p->get_stock_quantity();}finally{self::end_decimal_stock_scope($scope);}$row=array('id'=>$p->get_id(),'sku'=>$p->get_sku(),'name'=>$p->get_name(),'regular_price'=>$p->get_regular_price(),'sale_price'=>$p->get_sale_price(),'price'=>$p->get_price(),'stock'=>$stock,'stock_status'=>$p->get_stock_status(),'manage_stock'=>$p->managing_stock(),'status'=>$p->get_status());$items[]=array_intersect_key($row,array_flip($selected));}
   return array('query'=>$query,'sku'=>$sku,'page'=>$page,'limit'=>$limit,'fields'=>$selected,'count'=>count($items),'total'=>(int)$result->total,'total_pages'=>(int)$result->max_num_pages,'has_more'=>$page<(int)$result->max_num_pages,'items'=>$items);
  }
  public static function variations($product_id,$page=1,$limit=20){
