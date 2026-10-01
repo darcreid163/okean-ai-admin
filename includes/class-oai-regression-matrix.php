@@ -24,6 +24,10 @@ class OAI_Regression_Matrix {
   foreach((array)$runs as $run)foreach((array)($run['scenarios']??array()) as $s)if(($s['name']??'')===$name)return $s;
   return null;
  }
+ private static function scenario_status($scenario){
+  $status=(string)($scenario['status']??'FAIL');
+  return in_array($status,array('PASS','FAIL','SKIP','BLOCKED'),true)?$status:'FAIL';
+ }
  private static function first_operation($runs){
   foreach((array)$runs as $run)foreach((array)($run['scenarios']??array()) as $s)if(!empty($s['operation_id']))return absint($s['operation_id']);
   return 0;
@@ -161,14 +165,14 @@ class OAI_Regression_Matrix {
   $mutation_ok=$runs && !array_filter($runs,function($r){return ($r['status']??'')!=='PASS'||empty($r['baseline_restored']);});self::set($matrix,'system.regression_run',$mutation_ok?'PASS':'FAIL',array('iterations'=>count($runs)));
 
   $scenario_map=array('content'=>'content.patch','woocommerce'=>'woocommerce.update_product_sandbox','woocommerce_create'=>'woocommerce.create_product_sandbox','elementor'=>'elementor.patch_widget','elementor_fragment'=>'elementor.patch_fragment','elementor_settings'=>'elementor.patch_settings','elementor_container'=>'elementor.patch_container_settings','elementor_page_layout'=>'elementor.patch_page_layout','elementor_create'=>'elementor.create_draft','option_update'=>'wp.option_update_sandbox','file'=>'file.write_sandbox','gutenberg'=>'gutenberg.patch','reject_guard'=>'operation.reject');
-  foreach($scenario_map as $name=>$tool){$sc=self::scenario($runs,$name);if(!$sc){self::set($matrix,$tool,'SKIP','scenario not produced');continue;}self::set($matrix,$tool,($sc['status']??'')==='PASS'?'PASS':(($sc['status']??'')==='SKIP'?'SKIP':'FAIL'),array('operation_id'=>$sc['operation_id']??null,'stages'=>$sc['stages']??array()));}
+  foreach($scenario_map as $name=>$tool){$sc=self::scenario($runs,$name);if(!$sc){self::set($matrix,$tool,'SKIP','scenario not produced');continue;}self::set($matrix,$tool,self::scenario_status($sc),array('operation_id'=>$sc['operation_id']??null,'stages'=>$sc['stages']??array()));}
   $media_sc=self::scenario($runs,'media_suite');
   foreach(array('media_upload'=>'media.upload_sandbox','media_alt'=>'media.update_alt_sandbox','media_title'=>'media.update_title_sandbox','media_featured'=>'media.set_featured_sandbox') as $stage=>$tool){$ok=$media_sc&&($media_sc['status']??'')==='PASS'&&($media_sc['stages'][$stage]??'')==='PASS';self::set($matrix,$tool,$ok?'PASS':(($media_sc&&($media_sc['status']??'')==='SKIP')?'SKIP':'FAIL'),$media_sc?array('stages'=>$media_sc['stages']??array(),'operations'=>$media_sc['operation_ids']??array()):'media suite not produced');}
   $menu_sc=self::scenario($runs,'menu_suite');
   $menu_map=array('menu_create'=>'menu.create_sandbox','menu_add_item_1'=>'menu.add_item_sandbox','menu_move_item'=>'menu.move_item_sandbox','menu_remove_item'=>'menu.remove_item_sandbox');
   foreach($menu_map as $stage=>$tool){$ok=$menu_sc&&($menu_sc['status']??'')==='PASS'&&($menu_sc['stages'][$stage]??'')==='PASS';self::set($matrix,$tool,$ok?'PASS':(($menu_sc&&($menu_sc['status']??'')==='SKIP')?'SKIP':'FAIL'),$menu_sc?array('stages'=>$menu_sc['stages']??array(),'operations'=>$menu_sc['operation_ids']??array()):'menu suite not produced');}
   self::set($matrix,'menu.assign_location_sandbox','SKIP','safety skip: registered production menu locations are not reassigned by automated regression');
-  $woo_sc=self::scenario($runs,'woocommerce');if($woo_sc)self::set($matrix,'woocommerce.patch',($woo_sc['status']??'')==='PASS'?'PASS':'FAIL','legacy alias uses same validated sandbox endpoint');
+  $woo_sc=self::scenario($runs,'woocommerce');if($woo_sc)self::set($matrix,'woocommerce.patch',self::scenario_status($woo_sc),array('reason'=>$woo_sc['reason']??null,'operation_id'=>$woo_sc['operation_id']??null,'stages'=>$woo_sc['stages']??array()));
   $opid=self::first_operation($runs);
   if($opid){$og=OAI_DB::get($opid);self::set($matrix,'operation.get',$og?'PASS':'FAIL','regression operation');self::set($matrix,'operation.status',$og?'PASS':'FAIL','alias reads same ledger row');$vf=OAI_Verify::operation($opid);self::set($matrix,'operation.verify',self::ok($vf)&&!empty($vf['verified'])?'PASS':'FAIL','terminal rollback verify');self::set($matrix,'verify.operation',self::ok($vf)&&!empty($vf['verified'])?'PASS':'FAIL','legacy verify alias');$proof=OAI_Proof::make($opid);self::set($matrix,'operation.proof',is_array($proof)&&!empty($proof['hash'])?'PASS':'FAIL','proof hash');self::set($matrix,'proof.operation',is_array($proof)&&!empty($proof['hash'])?'PASS':'FAIL','legacy proof alias');$receipt=OAI_Receipts::build($opid);self::set($matrix,'operation.get_receipt',is_array($receipt)?'PASS':'FAIL','receipt');$diff=$og?json_decode((string)$og['diff_data'],true):null;self::set($matrix,'operation.diff',is_array($diff)?'PASS':'FAIL','stored diff');}
   $content_sc=self::scenario($runs,'content');$preview_ok=$content_sc&&(($content_sc['stages']['preview']??'')==='PASS');self::set($matrix,'operation.preview_link',$preview_ok?'PASS':'FAIL','pending preview generated by lifecycle');self::set($matrix,'preview.get',$preview_ok?'PASS':'FAIL','preview alias contract');

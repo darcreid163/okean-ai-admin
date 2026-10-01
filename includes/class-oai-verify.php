@@ -121,7 +121,7 @@ class OAI_Verify {
    return $result;
   }
 
-  $same=$expected_exists ? self::same($current,$expected) : !$exists;
+  $same=$expected_exists ? OAI_REST::same_snapshot($row['type'],$current,$expected) : !$exists;
   $result['checks'][]=array('name'=>'value_match','ok'=>$same);
   $result['verified']=self::all_checks_ok($result['checks']);
   return $result;

@@ -1,9 +1,9 @@
 WP AI Admin Build Signature
-Version: 2.1.6
-Build ID: 2.1.6-safe-upgrade-20261001
+Version: 2.1.7
+Build ID: 2.1.7-option-storage-matrix-20261001
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
-Purpose: Defer managed fixture cleanup until wp_loaded; reset permissions before cleanup; contain listener exceptions; preserve option normalization
+Purpose: Match native scalar option persistence before approval; preserve exact nested types and conflict guards; retain SKIP for matrix aliases; inherit safe upgrade bootstrap
 Expected catalog: 112 tools
 Inherited self-test checks: 78 (runtime retest required after installation)
 Security fuzz at 10 iterations: 220 (runtime retest required after installation)

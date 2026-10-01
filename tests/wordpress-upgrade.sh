@@ -41,3 +41,7 @@ cp -a "$TASK_REPO_DIR/includes/." "$TASK_WP_DIR/wp-content/plugins/okean-ai-admi
 task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-upgrade.php"
 task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-upgrade.php"
 task_wp plugin list --fields=name,version,status
+
+for task_option_phase in plan apply rollback verify; do
+ OAI_OPTION_PHASE="$task_option_phase" task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-options.php"
+done

@@ -11,6 +11,7 @@ function sanitize_option($key,$value){
  if($key==='throwing')throw new RuntimeException('private diagnostic');
  if($key==='wpseo_titles'){unset($value['legacy_flag']);return $value;}
  if($key==='scalar')return strtolower(trim($value));
+ if($key==='native_integer')return abs((int)$value);
  return $value;
 }
 function wp_rand(){return 1234;}
@@ -22,7 +23,7 @@ class OAI_Lifecycle {public static function descriptor($type,$target,$before,$me
 require dirname(__DIR__).'/includes/class-oai-rest.php';
 function expect($ok,$message){if(!$ok)throw new RuntimeException($message);}
 class Request {private $args;public function __construct($key,$value){$this->args=array('type'=>'option_update','target'=>$key,'value'=>$value);}public function get_param($key){return $this->args[$key]??null;}}
-$GLOBALS['options']=array('wpseo_titles'=>array('title'=>'old'),'scalar'=>'old','unstable'=>1,'throwing'=>'old','legacy'=>array('x'=>1));
+$GLOBALS['options']=array('wpseo_titles'=>array('title'=>'old'),'scalar'=>'old','unstable'=>1,'throwing'=>'old','legacy'=>array('x'=>1),'native_integer'=>'150');
 $requested=array('title'=>'new','legacy_flag'=>true);
 $op=OAI_REST::sandbox_create(new Request('wpseo_titles',$requested));
 expect(!is_wp_error($op),'normalized option must plan successfully');
@@ -41,5 +42,17 @@ $unstable=OAI_REST::sandbox_create(new Request('unstable',4));
 expect(is_wp_error($unstable)&&$unstable->get_error_code()==='oai_option_unstable','non-idempotent sanitizers must be rejected');
 $throwing=OAI_REST::sandbox_create(new Request('throwing','new'));
 expect(is_wp_error($throwing)&&$throwing->get_error_code()==='oai_option_sanitize','sanitizer exceptions must fail before mutation');
-expect(count(OAI_DB::$rows)===2,'failed plans must not create operations');
+$native=OAI_REST::sandbox_create(new Request('native_integer','0151'));
+expect(!is_wp_error($native),'native string-to-integer sanitizer must not block a restorable baseline');
+expect($native['before_data']==='150'&&$native['after_data']==='151','numeric snapshot must match persistent scalar representation');
+$native_noop=OAI_REST::sandbox_create(new Request('native_integer','0150'));
+expect(is_wp_error($native_noop)&&$native_noop->get_error_code()==='oai_noop','effective native numeric no-op must be rejected');
+expect(OAI_REST::option_storage_value(array('count'=>1,'flag'=>false))===array('count'=>1,'flag'=>false),'nested scalar types must remain exact');
+expect(OAI_REST::option_storage_value(false)===''&&OAI_REST::option_storage_value(true)==='1','boolean storage representation must match WordPress');
+expect(count(OAI_DB::$rows)===3,'failed plans must not create operations');
+require dirname(__DIR__).'/includes/class-oai-regression-matrix.php';
+$status_method=new ReflectionMethod('OAI_Regression_Matrix','scenario_status');
+foreach(array('PASS','SKIP','FAIL','BLOCKED') as $state)expect($status_method->invoke(null,array('status'=>$state))===$state,'matrix alias must preserve scenario status');
+expect($status_method->invoke(null,array('status'=>'unknown'))==='FAIL','unknown scenario status must fail closed');
 echo "Option normalization planning tests passed\n";
+

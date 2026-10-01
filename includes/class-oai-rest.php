@@ -869,7 +869,7 @@ frame.addEventListener('load',function(){
   return OAI_Elementor::save_document($ref['post_id'],$data);
  }
  public static function snapshot_for_verify($type,$target){ return self::current($type,$target); }
- private static function current($type,$target){ if(class_exists('OAI_P0')){$p0=OAI_P0::current($type,$target);if($p0!==null)return $p0;} switch($type){case 'elementor_page_create': $parts=explode(':',(string)$target,2); $pid=absint($parts[1]??0); if(!$pid)return array(false,null); $v=OAI_Verify::elementor_page($pid); return is_wp_error($v)?array(false,$v):array(true,$v); case 'option_update': $exists=get_option($target,null); return array($exists!==null,$exists); case 'post_title': return array(true,get_post_field('post_title',(int)$target)); case 'post_excerpt': return array(true,get_post_field('post_excerpt',(int)$target)); case 'post_content': return array(true,get_post_field('post_content',(int)$target)); case 'elementor_widget_html': return self::elementor_widget_html_current($target); case 'elementor_widget_settings': $parts=explode(':',(string)$target,2); $ref=OAI_Elementor::find_node(absint($parts[0]??0),sanitize_text_field($parts[1]??'')); return is_wp_error($ref)?array(false,null):array(true,is_array($ref['node']['settings']??null)?$ref['node']['settings']:array()); case 'file_write': $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); $r=OAI_Files::read($parts[0],$parts[1]); if(is_wp_error($r))return array(false,null); return array(true,$r['content']??''); case 'theme_file_write': $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); $r=OAI_Files::read($parts[0],$parts[1]); if(is_wp_error($r))return array(false,null); return array(true,$r['content']??''); case 'woo_product_price': if(!class_exists('WooCommerce'))return array(false,null); $p=wc_get_product((int)$target); return array((bool)$p,$p?$p->get_regular_price():null); case 'woo_product_stock': if(!class_exists('WooCommerce'))return array(false,null); $p=wc_get_product((int)$target); return array((bool)$p,$p?array('stock'=>$p->get_stock_quantity(),'manage_stock'=>$p->managing_stock(),'stock_status'=>$p->get_stock_status()):null); case 'woocommerce_product': if(!class_exists('WooCommerce'))return array(false,null); $v=OAI_WooCommerce::get_full((int)explode(':',(string)$target,2)[0]); return is_wp_error($v)?array(false,$v):array(true,$v); } return array(false,null); }
+ private static function current($type,$target){ if(class_exists('OAI_P0')){$p0=OAI_P0::current($type,$target);if($p0!==null)return $p0;} switch($type){case 'elementor_page_create': $parts=explode(':',(string)$target,2); $pid=absint($parts[1]??0); if(!$pid)return array(false,null); $v=OAI_Verify::elementor_page($pid); return is_wp_error($v)?array(false,$v):array(true,$v); case 'option_update': $exists=get_option($target,null); return array($exists!==null,$exists===null?null:self::option_storage_value($exists)); case 'post_title': return array(true,get_post_field('post_title',(int)$target)); case 'post_excerpt': return array(true,get_post_field('post_excerpt',(int)$target)); case 'post_content': return array(true,get_post_field('post_content',(int)$target)); case 'elementor_widget_html': return self::elementor_widget_html_current($target); case 'elementor_widget_settings': $parts=explode(':',(string)$target,2); $ref=OAI_Elementor::find_node(absint($parts[0]??0),sanitize_text_field($parts[1]??'')); return is_wp_error($ref)?array(false,null):array(true,is_array($ref['node']['settings']??null)?$ref['node']['settings']:array()); case 'file_write': $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); $r=OAI_Files::read($parts[0],$parts[1]); if(is_wp_error($r))return array(false,null); return array(true,$r['content']??''); case 'theme_file_write': $parts=explode(':',$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400)); $r=OAI_Files::read($parts[0],$parts[1]); if(is_wp_error($r))return array(false,null); return array(true,$r['content']??''); case 'woo_product_price': if(!class_exists('WooCommerce'))return array(false,null); $p=wc_get_product((int)$target); return array((bool)$p,$p?$p->get_regular_price():null); case 'woo_product_stock': if(!class_exists('WooCommerce'))return array(false,null); $p=wc_get_product((int)$target); return array((bool)$p,$p?array('stock'=>$p->get_stock_quantity(),'manage_stock'=>$p->managing_stock(),'stock_status'=>$p->get_stock_status()):null); case 'woocommerce_product': if(!class_exists('WooCommerce'))return array(false,null); $v=OAI_WooCommerce::get_full((int)explode(':',(string)$target,2)[0]); return is_wp_error($v)?array(false,$v):array(true,$v); } return array(false,null); }
  public static function sandbox_list($req=null){
   $page=1;$per_page=50;$statuses=array();
   if($req instanceof WP_REST_Request){
@@ -960,6 +960,18 @@ frame.addEventListener('load',function(){
   }
   return true;
  }
+ public static function option_storage_value($value){
+  // Top-level scalar options persist as strings in wp_options. Arrays retain
+  // their nested types through serialization. Do not coerce nested values.
+  return is_scalar($value)||$value===null?(string)$value:$value;
+ }
+ public static function same_snapshot($type,$current,$expected){
+  if($type==='option_update'){
+   $current=self::option_storage_value($current);
+   $expected=self::option_storage_value($expected);
+  }
+  return OAI_Verify::same($current,$expected);
+ }
  public static function normalize_option_snapshot($target,$value){
   // Match WordPress' sanitize_option pipeline before the diff is approved.
   // Never learn the expected state from a post-write read: that would conceal
@@ -967,10 +979,11 @@ frame.addEventListener('load',function(){
   try {
    $normalized=sanitize_option($target,$value);
    if(is_wp_error($normalized))return $normalized;
+   $normalized=self::option_storage_value($normalized);
    $second=sanitize_option($target,$normalized);
    if(is_wp_error($second))return $second;
-   if($normalized!==$second)return new WP_Error('oai_option_unstable','Option sanitization is not idempotent; no operation was created',array('status'=>422));
-   return $normalized;
+   if(self::option_storage_value($normalized)!==self::option_storage_value($second))return new WP_Error('oai_option_unstable','Option sanitization is not idempotent; no operation was created',array('status'=>422));
+   return self::option_storage_value($normalized);
   } catch(Throwable $e){
    return new WP_Error('oai_option_sanitize','Option sanitization failed; no operation was created',array('status'=>422));
   }
@@ -983,6 +996,7 @@ frame.addEventListener('load',function(){
   $target_guard=self::validate_sandbox_target($type,$target); if(is_wp_error($target_guard))return $target_guard;
   $raw=$req->get_param('value');
   $requested_before=$req->get_param('old_data');
+  if($type==='option_update'&&$requested_before!==null)$requested_before=self::option_storage_value($requested_before);
   $requested_after=$req->get_param('new_data');
   if($type==='elementor_widget_settings'){
    if(!is_array($raw))return new WP_Error('oai_changes','Elementor changes must be an object',array('status'=>400));
@@ -1098,9 +1112,9 @@ frame.addEventListener('load',function(){
      $conflict=true;
     } elseif($cur_exists){
      if($r['type']==='woocommerce_product'){
-      if(!OAI_Verify::same($current_now,$before)) $conflict=true;
+      if(!self::same_snapshot($r['type'],$current_now,$before)) $conflict=true;
      } else {
-      $conflict=!OAI_Verify::same($current_now,$before);
+      $conflict=!self::same_snapshot($r['type'],$current_now,$before);
      }
     }
     if($conflict){
@@ -1257,9 +1271,9 @@ frame.addEventListener('load',function(){
    if($type==='woocommerce_product'){
     if(!self::snapshot_fields_match($current,$applied,array('id','sku','name','regular_price','sale_price','price','stock','stock_status','manage_stock','status')))return new WP_Error('oai_rollback_conflict','WooCommerce product changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
    } elseif(in_array($type,array('woo_product_price','woo_product_stock'),true)){
-    if(!OAI_Verify::same($current,$applied))return new WP_Error('oai_rollback_conflict','WooCommerce product state changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+    if(!self::same_snapshot($r['type'],$current,$applied))return new WP_Error('oai_rollback_conflict','WooCommerce product state changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
    } else {
-    if(!OAI_Verify::same($current,$applied))return new WP_Error('oai_rollback_conflict','Target changed after Apply; rollback was blocked to protect the newer change',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+    if(!self::same_snapshot($r['type'],$current,$applied))return new WP_Error('oai_rollback_conflict','Target changed after Apply; rollback was blocked to protect the newer change',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
    }
   }
   return true;
