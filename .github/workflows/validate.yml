@@ -37,7 +37,18 @@ jobs:
             php -l "$file"
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
-          test "$count" -eq 70
+          test "$count" -eq 72
+      - name: Reproduce early bootstrap save on 2.1.5
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q releases/2.1.5/wp-ai-admin-2.1.5.zip -d "$RUNNER_TEMP/upgrade-baseline"
+          if OAI_TEST_IMPLEMENTATION="$RUNNER_TEMP/upgrade-baseline/okean-ai-admin/includes/class-oai-test-automation.php" php tests/upgrade-bootstrap.php > "$RUNNER_TEMP/upgrade-baseline.log" 2>&1; then
+            echo 'ERROR: baseline should fail'; exit 1
+          fi
+          grep -F 'Post saved before dependent plugins initialized' "$RUNNER_TEMP/upgrade-baseline.log"
+      - name: Upgrade bootstrap guard and listener failure
+        run: php tests/upgrade-bootstrap.php
       - name: Signed entitlement contract
         run: php tests/control-plane-entitlements.php
       - name: Elementor single source and fragment edits
@@ -54,24 +65,6 @@ jobs:
           cp -a okean-ai-admin.php includes starter-themes README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
           (cd dist && zip -qr okean-ai-admin.zip okean-ai-admin)
           unzip -tq dist/okean-ai-admin.zip
-      - name: Publish installable ZIP to branch
-        if: matrix.php == '8.3' && github.event_name != 'pull_request'
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="$(sed -n "s/^define('OAI_VERSION','\\([^']*\\)').*/\\1/p" okean-ai-admin.php | head -n1)"
-          test -n "$VERSION"
-          mkdir -p "releases/$VERSION"
-          cp dist/okean-ai-admin.zip "releases/$VERSION/wp-ai-admin-$VERSION.zip"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "releases/$VERSION/wp-ai-admin-$VERSION.zip"
-          if git diff --cached --quiet; then
-            echo "ZIP already published"
-          else
-            git commit -m "Publish WP AI Admin $VERSION ZIP [skip ci]"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
 
   batch-mutex-concurrency:
     runs-on: ubuntu-latest
@@ -109,3 +102,60 @@ jobs:
           DB_PASSWORD: test-password
           DB_NAME: wp_test
         run: php tests/oauth-schema-upgrade.php
+
+
+  wordpress-boot-upgrade:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-password
+          MYSQL_DATABASE: wp_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+      - name: Real WordPress with WooCommerce, Elementor and Yoast
+        run: bash tests/wordpress-upgrade.sh
+
+  publish-archive:
+    if: github.event_name != 'pull_request'
+    needs: [php-lint-and-archive, batch-mutex-concurrency, wordpress-boot-upgrade]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build checked installable ZIP
+        run: |
+          set -euo pipefail
+          mkdir -p dist/okean-ai-admin
+          cp -a okean-ai-admin.php includes starter-themes README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
+          (cd dist && zip -qr okean-ai-admin.zip okean-ai-admin)
+          unzip -tq dist/okean-ai-admin.zip
+      - name: Publish installable ZIP to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n "s/^define('OAI_VERSION','\\([^']*\\)').*/\\1/p" okean-ai-admin.php | head -n1)"
+          test -n "$VERSION"
+          mkdir -p "releases/$VERSION"
+          cp dist/okean-ai-admin.zip "releases/$VERSION/wp-ai-admin-$VERSION.zip"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "releases/$VERSION/wp-ai-admin-$VERSION.zip"
+          if git diff --cached --quiet; then
+            echo "ZIP already published"
+          else
+            git commit -m "Publish WP AI Admin $VERSION ZIP [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi

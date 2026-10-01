@@ -69,3 +69,5 @@ Execution input tokenizer replaced with a deterministic quote-aware parser; no r
 2.0.59: Elementor drafts use one authoritative source, source-page layout cloning and exact SHA-guarded fragment edits; 91 MCP tools and 53 self-tests.
 
 2.0.60: preserves all 2.0.59 Elementor single-source/source_post_id/SHA-fragment protections and fixes Test Automation scope inheritance: an Elementor draft created and tagged in the active test session is automatically added to the session allowlist, so later widget/settings/fragment patches on that same draft can be tagged and lifecycle-tested without recreating the page.
+
+2.1.6: Build-reset permissions are disabled before managed fixture cleanup. Cleanup is deferred until wp_loaded and listener exceptions are contained. Added failing-baseline upgrade regression and real WordPress/WooCommerce/Elementor/Yoast bootstrap CI. The reported production fatal error remains unconfirmed without its PHP stack trace.

@@ -20,6 +20,8 @@ class OAI_Test_Automation {
  const LAST_REGRESSION_OPTION='oai_test_automation_last_regression';
  const LAST_MATRIX_OPTION='oai_test_automation_last_matrix';
  private static $request_context=null;
+ private static $pending_fixture_releases=array();
+ private static $fixture_release_hooked=false;
 
  public static function parse_ids($value){
   if(is_array($value))$parts=$value;else$parts=preg_split('/[\s,;]+/',(string)$value,-1,PREG_SPLIT_NO_EMPTY);
@@ -99,8 +101,36 @@ class OAI_Test_Automation {
  private static function release_gutenberg_fixture($cfg){
   $id=absint($cfg['managed_gutenberg_fixture_id']??0);
   if(!$id)return true;
+  // Build resets run on plugins_loaded. Post-save listeners from other
+  // plugins must not run before WordPress has completed init.
+  if(!did_action('wp_loaded')){
+   self::$pending_fixture_releases[$id]=$cfg;
+   if(!self::$fixture_release_hooked){
+    add_action('wp_loaded',array(__CLASS__,'release_pending_fixtures'),99);
+    self::$fixture_release_hooked=true;
+   }
+   return false;
+  }
+  try{return self::release_gutenberg_fixture_now($cfg);}
+  catch(Throwable $e){
+   error_log('WP AI Admin: test fixture cleanup failed ('.get_class($e).'). Test permissions remain disabled after a build reset.');
+   return false;
+  }
+ }
+
+ public static function release_pending_fixtures(){
+  $pending=self::$pending_fixture_releases;
+  self::$pending_fixture_releases=array();
+  foreach($pending as $cfg)self::release_gutenberg_fixture($cfg);
+ }
+
+ private static function release_gutenberg_fixture_now($cfg){
+  $id=absint($cfg['managed_gutenberg_fixture_id']??0);
+  if(!$id)return true;
   $post=get_post($id);if(!$post)return true;
   if((string)get_post_meta($id,'_wpai_test_fixture',true)!=='gutenberg_regression')return false;
+  $session=(string)get_post_meta($id,'_wpai_test_session_id',true);
+  if($session!=='' && !empty($cfg['session_id']) && !hash_equals((string)$cfg['session_id'],$session))return false;
   if(!in_array((string)$post->post_status,array('draft','private','trash'),true))return false;
   if((string)$post->post_status==='trash')wp_untrash_post($id);
   $updated=wp_update_post(array(
@@ -150,7 +180,6 @@ class OAI_Test_Automation {
 
  public static function disable($reason='manual',$actor_user_id=0){
   $cfg=self::raw();
-  self::release_gutenberg_fixture($cfg);
   self::save(array(
    'enabled'=>false,
    'session_id'=>'',
@@ -171,13 +200,13 @@ class OAI_Test_Automation {
    'disabled_by'=>absint($actor_user_id),
   ));
   self::$request_context=null;
+  self::release_gutenberg_fixture($cfg);
   return self::status();
  }
 
  public static function reset_for_build_change(){
   if(!defined('OAI_BUILD_ID'))return false;
   $cfg=self::raw();
-  self::release_gutenberg_fixture($cfg);
   self::save(array(
    'enabled'=>false,
    'session_id'=>'',
@@ -198,6 +227,7 @@ class OAI_Test_Automation {
    'disabled_by'=>0,
   ));
   self::$request_context=null;
+  self::release_gutenberg_fixture($cfg);
   return true;
  }
 
