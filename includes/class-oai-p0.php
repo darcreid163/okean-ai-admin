@@ -79,6 +79,44 @@ class OAI_P0 {
   $op=self::op('media_upload',(string)$id,null,$after,array('attachment_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_attachment($id,true);return $op;}return $op;
  }
 
+ public static function media_import_url($a){
+  if(!current_user_can('upload_files'))return new WP_Error('oai_media_permission','upload_files capability required',array('status'=>403));
+  $url=esc_url_raw((string)($a['url']??''));
+  if($url===''||!wp_http_validate_url($url))return new WP_Error('oai_media_url','A valid public HTTP(S) image URL is required',array('status'=>400));
+  $parts=wp_parse_url($url);$scheme=strtolower((string)($parts['scheme']??''));
+  if(!in_array($scheme,array('http','https'),true))return new WP_Error('oai_media_scheme','Only HTTP and HTTPS URLs are supported',array('status'=>422));
+  $limit=10*1024*1024;
+  $response=wp_safe_remote_get($url,array('timeout'=>20,'redirection'=>3,'limit_response_size'=>$limit+1,'user-agent'=>'WP AI Admin/'.(defined('OAI_VERSION')?OAI_VERSION:'unknown').' (media.import_url_sandbox)'));
+  if(is_wp_error($response))return new WP_Error('oai_media_remote',$response->get_error_message(),array('status'=>502));
+  $code=(int)wp_remote_retrieve_response_code($response);
+  if($code<200||$code>=300)return new WP_Error('oai_media_remote_status','Remote image server returned HTTP '.$code,array('status'=>502,'remote_status'=>$code));
+  $bytes=(string)wp_remote_retrieve_body($response);
+  if($bytes==='')return new WP_Error('oai_media_remote_empty','Remote image response is empty',array('status'=>422));
+  if(strlen($bytes)>$limit)return new WP_Error('oai_media_size','Remote image exceeds 10 MB',array('status'=>413));
+  $image=@getimagesizefromstring($bytes);
+  $mime=is_array($image)?strtolower((string)($image['mime']??'')):'';
+  $allowed=array('image/jpeg','image/png','image/webp','image/gif');
+  if(!in_array($mime,$allowed,true))return new WP_Error('oai_media_mime','Remote content is not a supported JPEG, PNG, WEBP or GIF image',array('status'=>422,'allowed'=>$allowed));
+  $filename=sanitize_file_name((string)($a['filename']??''));
+  if($filename===''){
+   $path=(string)($parts['path']??'');$filename=sanitize_file_name(wp_basename($path));
+  }
+  $ext_map=array('image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','image/gif'=>'gif');$ext=$ext_map[$mime];
+  if($filename===''||strtolower((string)pathinfo($filename,PATHINFO_EXTENSION))!==$ext){
+   $base=sanitize_file_name((string)pathinfo($filename,PATHINFO_FILENAME));if($base==='')$base='imported-image';
+   $filename=$base.'.'.$ext;
+  }
+  $upload=array('filename'=>$filename,'content_base64'=>base64_encode($bytes),'mime_type'=>$mime);
+  if(array_key_exists('title',$a))$upload['title']=$a['title'];
+  if(array_key_exists('alt',$a))$upload['alt']=$a['alt'];
+  $op=self::media_upload($upload);
+  if(is_array($op)){
+   $op['source_url']=$url;
+   $op['imported_via']='media.import_url_sandbox';
+  }
+  return $op;
+ }
+
  public static function menu_snapshot($menu_id){
   $menu=wp_get_nav_menu_object(absint($menu_id));if(!$menu)return new WP_Error('oai_menu_not_found','Menu not found',array('status'=>404));
   $items=wp_get_nav_menu_items($menu->term_id,array('post_status'=>'any'));$rows=array();
