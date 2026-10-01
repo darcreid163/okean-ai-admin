@@ -8,6 +8,26 @@ class OAI_WooCommerce {
   if($raw!=='' && ($normalized==='' || !is_numeric($normalized) || (float)$normalized<0 || !is_finite((float)$normalized)))return new WP_Error('oai_woo_price','Invalid WooCommerce price: '.$field,array('status'=>422,'field'=>$field));
   return true;
  }
+ private static function normalize_stock_amount($raw){
+  if($raw===null)return null;
+  $normalized=is_scalar($raw)?str_replace(',','.',trim((string)$raw)):'';
+  if($normalized===''||!is_numeric($normalized)||!is_finite((float)$normalized)||(float)$normalized<0)return new WP_Error('oai_woo_stock','Invalid WooCommerce stock quantity',array('status'=>422));
+  return (float)$normalized;
+ }
+ private static function begin_decimal_stock_scope(){
+  $priority=has_filter('woocommerce_stock_amount','intval');
+  if($priority!==false)remove_filter('woocommerce_stock_amount','intval',$priority);
+  add_filter('woocommerce_stock_amount',array(__CLASS__,'decimal_stock_filter'),10,1);
+  return $priority;
+ }
+ public static function decimal_stock_filter($amount){
+  if(!is_numeric($amount))return 0;
+  return (float)$amount;
+ }
+ private static function end_decimal_stock_scope($priority){
+  remove_filter('woocommerce_stock_amount',array(__CLASS__,'decimal_stock_filter'),10);
+  if($priority!==false)add_filter('woocommerce_stock_amount','intval',$priority,1);
+ }
  public static function validate_snapshot($data){
   if(!is_array($data))return new WP_Error('oai_woo_snapshot','Invalid WooCommerce product snapshot',array('status'=>422));
   foreach(array('regular_price','sale_price') as $field)if(array_key_exists($field,$data)){$valid=self::validate_price($data[$field],$field);if(is_wp_error($valid))return $valid;}
@@ -72,7 +92,7 @@ class OAI_WooCommerce {
   $id=absint($v['id']??0);if(!$id)return new WP_Error('oai_woo_variation_id','Existing product variation updates require id',array('status'=>422));
   $out=array('id'=>$id);
   foreach(array('sku','regular_price','sale_price','stock_status','status') as $k)if(array_key_exists($k,$v))$out[$k]=sanitize_text_field((string)$v[$k]);
-  if(array_key_exists('stock_quantity',$v))$out['stock']=$v['stock_quantity']===null?null:wc_stock_amount($v['stock_quantity']);
+  if(array_key_exists('stock_quantity',$v)){ $stock=self::normalize_stock_amount($v['stock_quantity']);if(is_wp_error($stock))return $stock;$out['stock']=$stock;}
   if(array_key_exists('manage_stock',$v))$out['manage_stock']=(bool)$v['manage_stock'];
   if(array_key_exists('attributes',$v))$out['attributes']=(array)$v['attributes'];
   return $out;
@@ -123,7 +143,7 @@ class OAI_WooCommerce {
   if(array_key_exists('slug',$changes))$after['slug']=sanitize_title((string)$changes['slug']);
   if(array_key_exists('sku',$changes))$after['sku']=wc_clean((string)$changes['sku']);
   if(array_key_exists('manage_stock',$changes))$after['manage_stock']=(bool)$changes['manage_stock'];
-  if(array_key_exists('stock_quantity',$changes)){if($changes['stock_quantity']!==null&&(!is_numeric($changes['stock_quantity'])||(float)$changes['stock_quantity']<0))return new WP_Error('oai_woo_stock','Invalid WooCommerce stock quantity',array('status'=>422));$after['stock']=$changes['stock_quantity']===null?null:wc_stock_amount($changes['stock_quantity']);}
+  if(array_key_exists('stock_quantity',$changes)){ $stock=self::normalize_stock_amount($changes['stock_quantity']);if(is_wp_error($stock))return $stock;$after['stock']=$stock;}
   if(array_key_exists('stock_status',$changes)){if(!in_array($changes['stock_status'],array('instock','outofstock','onbackorder'),true))return new WP_Error('oai_woo_stock_status','Invalid WooCommerce stock_status',array('status'=>422));$after['stock_status']=sanitize_key($changes['stock_status']);}
   if(array_key_exists('status',$changes)){if(!in_array($changes['status'],array('draft','publish','private','pending'),true))return new WP_Error('oai_woo_status','Invalid product status',array('status'=>422));$after['status']=sanitize_key($changes['status']);}
   if(array_key_exists('featured',$changes))$after['featured']=(bool)$changes['featured'];
@@ -155,7 +175,7 @@ class OAI_WooCommerce {
   $expected=is_array($expected_after)&&$expected_after?$expected_after:$before;
   if(!$expected_after){
    foreach($changes as $change=>$value){
-    if($change==='stock_quantity'){$expected['stock']=$value===null?null:wc_stock_amount($value);if(!array_key_exists('stock_status',$changes)&&!empty($expected['manage_stock'])&&$expected['stock']!==null)$expected['stock_status']=(float)$expected['stock']>0?'instock':'outofstock';continue;}
+    if($change==='stock_quantity'){ $stock=self::normalize_stock_amount($value);if(is_wp_error($stock))return $stock;$expected['stock']=$stock;if(!array_key_exists('stock_status',$changes)&&!empty($expected['manage_stock'])&&$expected['stock']!==null)$expected['stock_status']=(float)$expected['stock']>0?'instock':'outofstock';continue;}
     if($change==='images'){$ids=is_array($value)?array_values(array_filter(array_map('absint',$value))):array();$expected['image_id']=$ids?(int)$ids[0]:0;$expected['gallery_ids']=$ids?array_slice($ids,1):array();continue;}
     if($change==='regular_price'||$change==='sale_price'){$expected[$change]=wc_format_decimal($value);continue;}
     if($change==='manage_stock'||$change==='featured'){$expected[$change]=(bool)$value;continue;}
@@ -191,6 +211,7 @@ class OAI_WooCommerce {
   $valid=self::validate_snapshot($data);if(is_wp_error($valid))return $valid;
   $p=wc_get_product((int)$id);if(!$p)return new WP_Error('oai_not_found','Product not found',array('status'=>404));
   if(isset($data['type'])&&(string)$data['type']!==$p->get_type())return new WP_Error('oai_woo_type','Changing product type is not supported by update_product_sandbox',array('status'=>422));
+  $stock_scope=self::begin_decimal_stock_scope();
   try{
    if(array_key_exists('name',$data))$p->set_name(wp_strip_all_tags((string)$data['name']));
    if(array_key_exists('slug',$data))$p->set_slug(sanitize_title((string)$data['slug']));
@@ -200,8 +221,8 @@ class OAI_WooCommerce {
    if(array_key_exists('regular_price',$data))$p->set_regular_price(wc_format_decimal($data['regular_price']));
    if(array_key_exists('sale_price',$data))$p->set_sale_price(wc_format_decimal($data['sale_price']));
    if(array_key_exists('manage_stock',$data))$p->set_manage_stock((bool)$data['manage_stock']);
-   if(array_key_exists('stock',$data))$p->set_stock_quantity($data['stock']===null?null:wc_stock_amount($data['stock']));
-   if(array_key_exists('stock_quantity',$data))$p->set_stock_quantity($data['stock_quantity']===null?null:wc_stock_amount($data['stock_quantity']));
+   if(array_key_exists('stock',$data)){ $stock=self::normalize_stock_amount($data['stock']);if(is_wp_error($stock))return $stock;$p->set_stock_quantity($stock); }
+   if(array_key_exists('stock_quantity',$data)){ $stock=self::normalize_stock_amount($data['stock_quantity']);if(is_wp_error($stock))return $stock;$p->set_stock_quantity($stock); }
    if(array_key_exists('stock_status',$data))$p->set_stock_status(sanitize_key((string)$data['stock_status']));
    if(array_key_exists('status',$data))$p->set_status(sanitize_key((string)$data['status']));
    if(array_key_exists('featured',$data))$p->set_featured((bool)$data['featured']);
@@ -221,7 +242,7 @@ class OAI_WooCommerce {
      if(array_key_exists('regular_price',$row))$v->set_regular_price(wc_format_decimal($row['regular_price']));
      if(array_key_exists('sale_price',$row))$v->set_sale_price(wc_format_decimal($row['sale_price']));
      if(array_key_exists('manage_stock',$row))$v->set_manage_stock((bool)$row['manage_stock']);
-     if(array_key_exists('stock',$row))$v->set_stock_quantity($row['stock']===null?null:wc_stock_amount($row['stock']));
+     if(array_key_exists('stock',$row)){ $stock=self::normalize_stock_amount($row['stock']);if(is_wp_error($stock))return $stock;$v->set_stock_quantity($stock); }
      if(array_key_exists('stock_status',$row))$v->set_stock_status(sanitize_key((string)$row['stock_status']));
      if(array_key_exists('status',$row))$v->set_status(sanitize_key((string)$row['status']));
      if(array_key_exists('attributes',$row))$v->set_attributes((array)$row['attributes']);$v->save();
@@ -229,6 +250,7 @@ class OAI_WooCommerce {
    }
    wc_delete_product_transients((int)$id);return self::get_full($id);
   }catch(Throwable $e){return new WP_Error('oai_woo_apply',$e->getMessage(),array('status'=>422));}
+  finally{self::end_decimal_stock_scope($stock_scope);}
  }
  public static function create_draft($changes){
   if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
@@ -240,7 +262,7 @@ class OAI_WooCommerce {
   $variations=$changes['variations']??array();unset($changes['variations'],$changes['type']);$changes['status']='draft';
   $x=self::patch($id,$changes);if(is_wp_error($x)){wp_delete_post($id,true);return $x;}$applied=self::apply($id,$x['after']);if(is_wp_error($applied)){wp_delete_post($id,true);return $applied;}
   if($type==='variable'&&is_array($variations)){
-   foreach($variations as $row){if(!is_array($row))continue;$v=new WC_Product_Variation();$v->set_parent_id($id);$v->set_status('publish');if(isset($row['sku']))$v->set_sku(wc_clean((string)$row['sku']));if(isset($row['regular_price']))$v->set_regular_price(wc_format_decimal($row['regular_price']));if(isset($row['sale_price']))$v->set_sale_price(wc_format_decimal($row['sale_price']));if(isset($row['manage_stock']))$v->set_manage_stock((bool)$row['manage_stock']);if(array_key_exists('stock_quantity',$row))$v->set_stock_quantity($row['stock_quantity']===null?null:wc_stock_amount($row['stock_quantity']));if(isset($row['stock_status']))$v->set_stock_status(sanitize_key((string)$row['stock_status']));if(isset($row['attributes']))$v->set_attributes((array)$row['attributes']);$v->save();}
+   foreach($variations as $row){if(!is_array($row))continue;$v=new WC_Product_Variation();$v->set_parent_id($id);$v->set_status('publish');if(isset($row['sku']))$v->set_sku(wc_clean((string)$row['sku']));if(isset($row['regular_price']))$v->set_regular_price(wc_format_decimal($row['regular_price']));if(isset($row['sale_price']))$v->set_sale_price(wc_format_decimal($row['sale_price']));if(isset($row['manage_stock']))$v->set_manage_stock((bool)$row['manage_stock']);if(array_key_exists('stock_quantity',$row)){ $stock=self::normalize_stock_amount($row['stock_quantity']);if(is_wp_error($stock)){wp_delete_post($id,true);return $stock;}$scope=self::begin_decimal_stock_scope();try{$v->set_stock_quantity($stock);}finally{self::end_decimal_stock_scope($scope);} }if(isset($row['stock_status']))$v->set_stock_status(sanitize_key((string)$row['stock_status']));if(isset($row['attributes']))$v->set_attributes((array)$row['attributes']);$v->save();}
   }
   return self::get_full($id);
  }
