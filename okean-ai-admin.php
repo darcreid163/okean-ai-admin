@@ -8,7 +8,7 @@
  */
 if (!defined('ABSPATH')) exit;
 define('OAI_VERSION','2.1.3');
-define('OAI_BUILD_ID','2.1.3-media-import-url-20261001');
+define('OAI_BUILD_ID','2.1.3-woocommerce-verify-normalization-20261001');
 define('OAI_DB_VERSION',23);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
