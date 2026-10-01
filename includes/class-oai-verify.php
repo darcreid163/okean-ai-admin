@@ -147,7 +147,23 @@ class OAI_Verify {
   if(is_array($value)){
    $is_list=array_keys($value)===range(0,count($value)-1);
    if($is_list)return array_map(array(__CLASS__,'canonicalize'),$value);
-   $out=array(); foreach($value as $k=>$v)$out[(string)$k]=self::canonicalize($v); ksort($out,SORT_STRING); return $out;
+   $out=array();
+   foreach($value as $k=>$v){
+    $key=(string)$k;
+    $canon=self::canonicalize($v);
+    // WooCommerce treats product categories and tags as unordered sets.
+    // Their API/read layer may return the same IDs in a different order
+    // after a save. Canonicalize only these semantic sets so Verify does
+    // not roll back an otherwise correct price/stock update. Keep ordered
+    // collections such as gallery_ids, variations and attributes intact.
+    if(in_array($key,array('categories','tags'),true) && is_array($canon) && array_keys($canon)===range(0,count($canon)-1)){
+     usort($canon,function($a,$b){
+      return strcmp(wp_json_encode($a,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),wp_json_encode($b,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+     });
+    }
+    $out[$key]=$canon;
+   }
+   ksort($out,SORT_STRING); return $out;
   }
   if(is_object($value))return self::canonicalize((array)$value);
   return $value;
