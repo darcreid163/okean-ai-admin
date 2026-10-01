@@ -60,7 +60,7 @@ class OAI_MCP {
   return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope,'_meta'=>$meta));
  }
  private static function tool_requires_write($name,$args){
-  if(in_array($name,array('system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
+  if(in_array($name,array('system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_import_url_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
   if($name==='wordpress.execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
   return false;
  }
@@ -282,6 +282,7 @@ class OAI_MCP {
   $create_product_changes=$product_changes;$create_product_changes['properties']['type']=array('type'=>'string','enum'=>array('simple','variable'));
   $schemas['woocommerce.create_product_sandbox']=array('type'=>'object','required'=>array('product'),'additionalProperties'=>false,'properties'=>array('product'=>$create_product_changes));
   $schemas['media.upload_sandbox']=array('type'=>'object','required'=>array('filename','content_base64'),'additionalProperties'=>false,'properties'=>array('filename'=>array('type'=>'string','minLength'=>1),'content_base64'=>array('type'=>'string','minLength'=>4),'mime_type'=>array('type'=>'string'),'title'=>array('type'=>'string'),'alt'=>array('type'=>'string')));
+  $schemas['media.import_url_sandbox']=array('type'=>'object','required'=>array('url'),'additionalProperties'=>false,'properties'=>array('url'=>array('type'=>'string','minLength'=>8),'filename'=>array('type'=>'string'),'title'=>array('type'=>'string'),'alt'=>array('type'=>'string')));
   $schemas['media.update_alt_sandbox']=array('type'=>'object','required'=>array('attachment_id','alt'),'additionalProperties'=>false,'properties'=>array('attachment_id'=>array('type'=>'integer','minimum'=>1),'alt'=>array('type'=>'string')));
   $schemas['media.update_title_sandbox']=array('type'=>'object','required'=>array('attachment_id','title'),'additionalProperties'=>false,'properties'=>array('attachment_id'=>array('type'=>'integer','minimum'=>1),'title'=>array('type'=>'string','minLength'=>1)));
   $schemas['media.set_featured_sandbox']=array('type'=>'object','required'=>array('post_id','attachment_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'attachment_id'=>array('type'=>'integer','minimum'=>0)));
@@ -348,6 +349,7 @@ class OAI_MCP {
   $tools[]=self::tool('woocommerce.update_product_sandbox','Modernized WooCommerce sandbox update. Strict product fields only; live data is not written until human approval.', $schemas['woocommerce.update_product_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.create_product_sandbox','Create a WooCommerce product as a draft sandbox artifact. Apply commits the draft to the normal lifecycle; rollback deletes only the product created by this operation.',$schemas['woocommerce.create_product_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('media.upload_sandbox','Upload an image as a private sandbox attachment. Apply activates the attachment; rollback removes only the attachment created by this operation.',$schemas['media.upload_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('media.import_url_sandbox','Safely download a public HTTP(S) image URL into a private sandbox attachment. Validates URL, response size and real image MIME; Apply activates the attachment and rollback deletes it.',$schemas['media.import_url_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('media.update_alt_sandbox','Create a sandbox change for attachment alt text.',$schemas['media.update_alt_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('media.update_title_sandbox','Create a sandbox change for attachment title.',$schemas['media.update_title_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('media.set_featured_sandbox','Create a sandbox change for a post or product featured image. Pass attachment_id=0 to clear it.',$schemas['media.set_featured_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
@@ -522,6 +524,7 @@ class OAI_MCP {
     $out=OAI_P0::op_for_created_product($snap);
     break;
    case 'media_upload_sandbox':$out=OAI_P0::media_upload($a);break;
+   case 'media_import_url_sandbox':$out=OAI_P0::media_import_url($a);break;
    case 'media_update_alt_sandbox':$out=OAI_P0::media_update_alt($a);break;
    case 'media_update_title_sandbox':$out=OAI_P0::media_update_title($a);break;
    case 'media_set_featured_sandbox':$out=OAI_P0::media_set_featured($a);break;
