@@ -1,9 +1,9 @@
 WP AI Admin Build Signature
-Version: 2.1.9
-Build ID: 2.1.9-woodmart-settings-20261002
+Version: 2.1.10
+Build ID: 2.1.10-mcp-onboarding-20261002
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
-Purpose: Woodmart base setting sandbox with native MCP 1.0.1 normalization, transactional conflict guards, CSS invalidation and exact rollback; inherit Yoast and safe upgrade fixes
+Purpose: administrator-only nonce-protected MCP enable/disable for fresh installations; OAuth and identity retention; inherit Woodmart, Yoast and safe upgrade fixes
 Expected catalog: 116 tools
 Inherited self-test checks: 79 (runtime retest required after installation)
 Security fuzz at 10 iterations: 220 (runtime retest required after installation)

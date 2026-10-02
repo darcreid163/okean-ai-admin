@@ -37,7 +37,7 @@ jobs:
             php -l "$file"
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
-          test "$count" -eq 76
+          test "$count" -eq 77
       - name: Reproduce early bootstrap save on 2.1.5
         shell: bash
         run: |

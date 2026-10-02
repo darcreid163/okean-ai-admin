@@ -1,3 +1,6 @@
+WP AI Admin 2.1.10 — MCP onboarding
+Enable/disable MCP from AI Admin with administrator consent and nonce checks. No token generation or OAuth identity reset. Enabling MCP does not enable automated lifecycle; disabling stops automated modes.
+
 # WP AI Admin
 
 ## 2.1.9 — Woodmart Base Settings Adapter

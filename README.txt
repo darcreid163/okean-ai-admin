@@ -1,3 +1,6 @@
+WP AI Admin 2.1.10 — MCP onboarding
+Enable/disable MCP from AI Admin with administrator consent and nonce checks. No token generation or OAuth identity reset. Enabling MCP does not enable automated lifecycle; disabling stops automated modes.
+
 WP AI Admin 2.1.0 — Commercial Beta Candidate
 Commercial beta release profile: human approval default, direct live writes disabled, generic QA defaults, build-bound AI/Test automation, upgrade-safe OAuth/site/installation identity.
 Release gates and limitations: COMMERCIAL-BETA-CANDIDATE.md
