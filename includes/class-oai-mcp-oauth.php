@@ -430,15 +430,6 @@ class OAI_MCP_OAuth {
   if(!$user || !$user->exists() || !user_can($user,'manage_options')){
    return self::json_error('access_denied','A WordPress administrator must approve this connection',403);
   }
-  // Bootstrap a fresh Commercial Beta installation on first administrator-approved OAuth connection.
-  // Without a local owner license OAuth succeeds, but MCP tools/list is rejected by OAI_License::can('mcp'),
-  // which surfaces in ChatGPT as "Authentication succeeded, action discovery failed".
-  $license=OAI_License::status();
-  if(empty($license['active'])){
-   $activated=OAI_License::activate_local_owner((int)$user->ID);
-   if(is_wp_error($activated)) return self::json_error('server_error','Could not activate the local beta license',500);
-  }
-  update_option('oai_mcp_enabled',true,false);
   if($_SERVER['REQUEST_METHOD']==='GET'){
    $nonce=wp_create_nonce('oai_oauth_authorize');
    ob_start(); ?>
@@ -535,9 +526,14 @@ class OAI_MCP_OAuth {
  }
 
  private static function issue_tokens($user_id,$client_id,$scope,$resource=''){
-  // A successful OAuth connection is itself the administrator-approved MCP enablement path.
-  // Fresh installs previously issued valid OAuth tokens while leaving MCP disabled, causing
-  // clients to authenticate successfully and then fail during tools/list discovery.
+  // A successful administrator-approved OAuth exchange bootstraps a fresh local beta install.
+  // Fresh installs previously issued valid OAuth tokens while MCP/license gates still blocked
+  // tools/list, which ChatGPT reported as authentication success followed by discovery failure.
+  $license=OAI_License::status();
+  if(empty($license['active'])){
+   $activated=OAI_License::activate_local_owner((int)$user_id);
+   if(is_wp_error($activated)) return self::json_error('server_error','Could not activate the local beta license',500);
+  }
   update_option('oai_mcp_enabled',true,false);
   $scope=self::normalize_scope($scope,false);
   if($scope==='') return self::json_error('invalid_scope','Access token cannot be issued without a valid MCP scope',400);
