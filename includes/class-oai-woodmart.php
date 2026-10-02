@@ -39,10 +39,14 @@ class OAI_Woodmart {
   $safe=OAI_Read::option_value($id,array('default'=>$args['default']??null));
   return !empty($safe['redacted']);
  }
+ private static function native_types(){
+  // Fixed contract of supported native MCP 1.0.1; its constant is private.
+  return array_merge(array_slice(self::TYPES,0,-1),array('editor','background'));
+ }
  private static function writable($field){
   $type=$field->args['type']??'';
   return !self::restricted($field) && in_array($type,self::TYPES,true)
-   && in_array($type,apply_filters('woodmart_ai_writable_field_types',\XTS\AI_Abilities\Theme_Settings\Abilities::WRITABLE_TYPES),true);
+   && in_array($type,apply_filters('woodmart_ai_writable_field_types',self::native_types()),true);
  }
  private static function stored($name,$lock=false){
   global $wpdb;
@@ -59,7 +63,7 @@ class OAI_Woodmart {
  private static function hash($value){return hash('sha256',serialize(self::canonical($value)));}
  private static function context($field,$presets){
   return self::hash(array('template'=>get_template(),'stylesheet'=>get_stylesheet(),'theme'=>WOODMART_VERSION,'mcp'=>WOODMART_MCP_VERSION,
-   'field'=>$field->args,'presets'=>$presets,'types'=>apply_filters('woodmart_ai_writable_field_types',\XTS\AI_Abilities\Theme_Settings\Abilities::WRITABLE_TYPES)));
+   'field'=>$field->args,'presets'=>$presets,'types'=>apply_filters('woodmart_ai_writable_field_types',self::native_types())));
  }
  private static function state($field,$options,$presets){
   $id=$field->get_id();$exists=array_key_exists($id,$options);
