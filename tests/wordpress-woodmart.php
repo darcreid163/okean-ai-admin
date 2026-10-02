@@ -54,7 +54,7 @@ if($phase==='plan'){
  oai_wm_expect(OAI_REST::same_option_value(get_option('xts-woodmart-options'),$baseline),'entire baseline restored');
  foreach(array('spacing','inherited-color','font') as $field){
   $id=$plans[$field];oai_wm_ok(oai_wm_action($id,'approve'),'approve '.$field);oai_wm_ok(oai_wm_action($id,'apply'),'apply '.$field);
-  if($field==='spacing'){$d=OAI_Woodmart::get_setting($field);oai_wm_expect($d['base_value']['devices']['desktop']['top']==='24'&&$d['base_value']['devices']['tablet']['top']==='7'&&$d['base_value']['devices']['mobile']['top']==='4','unspecified devices preserved');}
+  if($field==='spacing'){$d=OAI_Woodmart::get_setting($field);oai_wm_expect($d['base_value']['devices']['desktop']['top']===24&&$d['base_value']['devices']['tablet']['top']==='7'&&$d['base_value']['devices']['mobile']['top']==='4','unspecified devices preserved');}
   oai_wm_ok(oai_wm_action($id,'rollback'),'rollback '.$field);oai_wm_expect(!empty(OAI_Verify::operation($id)['verified']),'verified '.$field);
   oai_wm_expect(OAI_REST::same_option_value(get_option('xts-woodmart-options'),$baseline),'exact raw baseline '.$field);
  }
