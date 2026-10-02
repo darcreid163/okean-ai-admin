@@ -526,6 +526,10 @@ class OAI_MCP_OAuth {
  }
 
  private static function issue_tokens($user_id,$client_id,$scope,$resource=''){
+  // A successful OAuth connection is itself the administrator-approved MCP enablement path.
+  // Fresh installs previously issued valid OAuth tokens while leaving MCP disabled, causing
+  // clients to authenticate successfully and then fail during tools/list discovery.
+  update_option('oai_mcp_enabled',true,false);
   $scope=self::normalize_scope($scope,false);
   if($scope==='') return self::json_error('invalid_scope','Access token cannot be issued without a valid MCP scope',400);
   $access='oai_access_'.wp_generate_password(72,false,false);
