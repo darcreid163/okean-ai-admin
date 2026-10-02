@@ -42,6 +42,6 @@ task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-upgrade.php"
 task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-upgrade.php"
 task_wp plugin list --fields=name,version,status
 
-for task_option_phase in plan apply rollback verify; do
+for task_option_phase in plan apply rollback verify yoast-cold-verify; do
  OAI_OPTION_PHASE="$task_option_phase" task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-options.php"
 done

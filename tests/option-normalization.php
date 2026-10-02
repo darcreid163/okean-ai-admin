@@ -12,6 +12,7 @@ function sanitize_option($key,$value){
  if($key==='wpseo_titles'){unset($value['legacy_flag']);return $value;}
  if($key==='scalar')return strtolower(trim($value));
  if($key==='native_integer')return abs((int)$value);
+ if($key==='reordered')return array_reverse($value,true);
  return $value;
 }
 function wp_rand(){return 1234;}
@@ -50,9 +51,21 @@ expect(is_wp_error($native_noop)&&$native_noop->get_error_code()==='oai_noop','e
 expect(OAI_REST::option_storage_value(array('count'=>1,'flag'=>false))===array('count'=>1,'flag'=>false),'nested scalar types must remain exact');
 expect(OAI_REST::option_storage_value(false)===''&&OAI_REST::option_storage_value(true)==='1','boolean storage representation must match WordPress');
 expect(count(OAI_DB::$rows)===3,'failed plans must not create operations');
+$GLOBALS['options']['reordered']=array('title'=>'old','cache'=>array('width'=>69,'height'=>50));
+$reordered=OAI_REST::sandbox_create(new Request('reordered',array('title'=>'new','cache'=>array('height'=>50,'width'=>69))));
+expect(!is_wp_error($reordered),'map reordering must not make a baseline unsafe');
+expect($reordered['before_data']===$GLOBALS['options']['reordered'],'baseline snapshot must remain unchanged');
+$reordered_noop=OAI_REST::sandbox_create(new Request('reordered',$GLOBALS['options']['reordered']));
+expect(is_wp_error($reordered_noop)&&$reordered_noop->get_error_code()==='oai_noop','map reordering alone must be a no-op');
+expect(OAI_REST::same_snapshot('option_update',array('a'=>1,'b'=>false),array('b'=>false,'a'=>1)),'option verification must ignore map insertion order');
+expect(!OAI_REST::same_option_value(array('a'=>1),array('a'=>'1')),'nested scalar type change must not compare equal');
+expect(!OAI_REST::same_option_value(array('a'=>false),array('a'=>'')),'nested boolean must not be coerced');
+expect(!OAI_REST::same_option_value(array('a'=>null),array()),'missing keys must not compare equal to null');
+expect(!OAI_REST::same_option_value(array('categories'=>array(1,2)),array('categories'=>array(2,1))),'option lists must stay ordered even under categories keys');
+expect(!OAI_REST::same_option_value(array(1,2),array('1','2')),'list item types must remain exact');
+expect(count(OAI_DB::$rows)===4,'reordered no-op must not create an operation');
 require dirname(__DIR__).'/includes/class-oai-regression-matrix.php';
 $status_method=new ReflectionMethod('OAI_Regression_Matrix','scenario_status');
 foreach(array('PASS','SKIP','FAIL','BLOCKED') as $state)expect($status_method->invoke(null,array('status'=>$state))===$state,'matrix alias must preserve scenario status');
 expect($status_method->invoke(null,array('status'=>'unknown'))==='FAIL','unknown scenario status must fail closed');
 echo "Option normalization planning tests passed\n";
-

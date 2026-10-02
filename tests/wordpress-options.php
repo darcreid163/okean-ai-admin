@@ -59,5 +59,41 @@ if($phase==='plan'){
  $blocked=oai_option_action($nested['id'],'apply');
  oai_option_expect(is_wp_error($blocked)&&$blocked->get_error_code()==='oai_conflict','nested type changes must remain conflicts');
  foreach(array('oai_test_options_ci_operation','oai_test_options_conflict','oai_test_options_nested') as $key)delete_option($key);
+ // Yoast rebuilds logo cache keys during sanitize_option(). The values and
+ // nested types remain identical, but strict PHP array equality sees order.
+ oai_option_expect(class_exists('WPSEO_Option_Titles'),'Yoast must be active for this regression');
+ $baseline=get_option('wpseo_titles');
+ $roundtrip=oai_option_ok(OAI_REST::normalize_option_snapshot('wpseo_titles',$baseline),'Yoast normalization');
+ oai_option_expect($baseline!==$roundtrip,'real Yoast must reproduce strict array order mismatch');
+ oai_option_expect(OAI_REST::same_option_value($baseline,$roundtrip),'real Yoast baseline must retain every key, value and type');
+ $noop=oai_option_plan('wpseo_titles',$baseline);
+ oai_option_expect(is_wp_error($noop)&&$noop->get_error_code()==='oai_noop','real Yoast unchanged settings must be a no-op, not unsafe rollback');
+ $changed=$baseline;$changed['website_name']='Disposable Yoast option lifecycle';
+ $yoast=oai_option_ok(oai_option_plan('wpseo_titles',$changed),'Yoast option planning');
+ oai_option_expect(get_option('wpseo_titles')===$baseline,'Yoast planning must not write');
+ oai_option_ok(oai_option_action($yoast['id'],'approve'),'Yoast approve');
+ oai_option_ok(oai_option_action($yoast['id'],'apply'),'Yoast apply');
+ oai_option_expect(!empty(OAI_Verify::operation($yoast['id'])['verified']),'Yoast apply verify');
+ oai_option_ok(oai_option_action($yoast['id'],'rollback'),'Yoast rollback');
+ oai_option_expect(!empty(OAI_Verify::operation($yoast['id'])['verified']),'Yoast rollback verify');
+ oai_option_expect(OAI_REST::same_option_value(get_option('wpseo_titles'),$baseline),'Yoast complete baseline restored');
+ // A disappearing legacy taxonomy flag must STILL be blocked.
+ $unsafe=$baseline;$unsafe['display-metabox-tax-unregistered_ci_taxonomy']=true;
+ global $wpdb;
+ $wpdb->update($wpdb->options,array('option_value'=>maybe_serialize($unsafe)),array('option_name'=>'wpseo_titles'));
+ wp_cache_delete('wpseo_titles','options');wp_cache_delete('alloptions','options');
+ $bad=oai_option_plan('wpseo_titles',$changed);
+ oai_option_expect(is_wp_error($bad)&&$bad->get_error_code()==='oai_option_rollback_unsafe','Yoast dropped legacy field must remain blocked');
+ $wpdb->update($wpdb->options,array('option_value'=>maybe_serialize($baseline)),array('option_name'=>'wpseo_titles'));
+ wp_cache_delete('wpseo_titles','options');wp_cache_delete('alloptions','options');
+ oai_option_expect(OAI_REST::same_option_value(get_option('wpseo_titles'),$baseline),'disposable unsafe fixture restored');
+ update_option('oai_test_yoast_ci_operation',absint($yoast['id']),false);
+ update_option('oai_test_yoast_ci_baseline',$baseline,false);
+ echo "Real Yoast map-order regression, lifecycle, and unsafe-baseline guard passed\n";
+}elseif($phase==='yoast-cold-verify'){
+ $id=absint(get_option('oai_test_yoast_ci_operation'));
+ oai_option_expect($id>0&&!empty(OAI_Verify::operation($id)['verified']),'fresh-request Yoast rollback verify');
+ oai_option_expect(OAI_REST::same_option_value(get_option('wpseo_titles'),get_option('oai_test_yoast_ci_baseline')),'fresh-request complete Yoast baseline restored');
+ delete_option('oai_test_yoast_ci_operation');delete_option('oai_test_yoast_ci_baseline');
 }else throw new RuntimeException('Unknown option CI phase');
 echo 'Real WordPress option lifecycle passed: '.$phase.', WP '.get_bloginfo('version').', PHP '.PHP_VERSION."\n";

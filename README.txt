@@ -73,3 +73,5 @@ Execution input tokenizer replaced with a deterministic quote-aware parser; no r
 2.1.6: Build-reset permissions are disabled before managed fixture cleanup. Cleanup is deferred until wp_loaded and listener exceptions are contained. Added failing-baseline upgrade regression and real WordPress/WooCommerce/Elementor/Yoast bootstrap CI. The reported production fatal error remains unconfirmed without its PHP stack trace.
 
 2.1.7: Option snapshots use native top-level scalar storage strings while preserving nested array types. Numeric sanitizers no longer reject safe baselines or produce false verify conflicts across requests. Real WordPress cross-request apply/rollback and conflict checks added. Regression aliases preserve SKIP when a fixture is outside the active test allowlist. Unsafe legacy option baselines remain blocked.
+
+2.1.8: Yoast option maps may change insertion order when logo caches are rebuilt. Option comparisons now ignore map insertion order while preserving every key, value, nested type and list order. Real Yoast normalization, no-op, apply/verify/rollback, cold-request verification and dropped-legacy-field protection are covered by WordPress CI.

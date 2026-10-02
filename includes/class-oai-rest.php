@@ -967,10 +967,26 @@ frame.addEventListener('load',function(){
  }
  public static function same_snapshot($type,$current,$expected){
   if($type==='option_update'){
-   $current=self::option_storage_value($current);
-   $expected=self::option_storage_value($expected);
+   return self::same_option_value($current,$expected);
   }
   return OAI_Verify::same($current,$expected);
+ }
+ public static function same_option_value($current,$expected){
+  return self::same_option_node(self::option_storage_value($current),self::option_storage_value($expected));
+ }
+ private static function same_option_node($current,$expected){
+  // Sanitizers may rebuild maps in a different insertion order (Yoast logo
+  // caches do this). Keep every key, value and nested type authoritative;
+  // ordered lists, including those named categories/tags, must stay ordered.
+  if(!is_array($current)||!is_array($expected))return $current===$expected;
+  if(count($current)!==count($expected))return false;
+  $current_list=$current===array()||array_keys($current)===range(0,count($current)-1);
+  $expected_list=$expected===array()||array_keys($expected)===range(0,count($expected)-1);
+  if($current_list!==$expected_list)return false;
+  foreach($current as $key=>$value){
+   if(!array_key_exists($key,$expected)||!self::same_option_node($value,$expected[$key]))return false;
+  }
+  return true;
  }
  public static function normalize_option_snapshot($target,$value){
   // Match WordPress' sanitize_option pipeline before the diff is approved.
@@ -982,7 +998,7 @@ frame.addEventListener('load',function(){
    $normalized=self::option_storage_value($normalized);
    $second=sanitize_option($target,$normalized);
    if(is_wp_error($second))return $second;
-   if(self::option_storage_value($normalized)!==self::option_storage_value($second))return new WP_Error('oai_option_unstable','Option sanitization is not idempotent; no operation was created',array('status'=>422));
+   if(!self::same_option_value($normalized,$second))return new WP_Error('oai_option_unstable','Option sanitization is not idempotent; no operation was created',array('status'=>422));
    return self::option_storage_value($normalized);
   } catch(Throwable $e){
    return new WP_Error('oai_option_sanitize','Option sanitization failed; no operation was created',array('status'=>422));
@@ -1022,7 +1038,7 @@ frame.addEventListener('load',function(){
    if($exists){
     $roundtrip=self::normalize_option_snapshot($target,$before);
     if(is_wp_error($roundtrip))return $roundtrip;
-    if($roundtrip!==$before)return new WP_Error('oai_option_rollback_unsafe','Existing option cannot be restored exactly through WordPress sanitization; save it in its native settings screen before creating a sandbox operation',array('status'=>409));
+    if(!self::same_option_value($roundtrip,$before))return new WP_Error('oai_option_rollback_unsafe','Existing option cannot be restored exactly through WordPress sanitization; save it in its native settings screen before creating a sandbox operation',array('status'=>409));
    }
    $after=self::normalize_option_snapshot($target,$after);
    if(is_wp_error($after))return $after;
@@ -1030,7 +1046,7 @@ frame.addEventListener('load',function(){
   $woo_guard=self::validate_woo_payload($type,$after);if(is_wp_error($woo_guard))return $woo_guard;
   $op='OAI-'.gmdate('Ymd-His').'-'.wp_rand(1000,9999);
   $now=current_time('mysql',true); $expiry=gmdate('Y-m-d H:i:s',time()+7*DAY_IN_SECONDS);
-  $diff=array('changed'=>$before!==$after,'before'=>$before,'after'=>$after);
+  $diff=array('changed'=>$type==='option_update'?!self::same_option_value($before,$after):$before!==$after,'before'=>$before,'after'=>$after);
   if(empty($diff['changed']))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409));
   $meta=array('before_exists'=>$exists,'after_exists'=>true);
   if($type==='elementor_widget_settings'){$parts=explode(':',$target,2);$meta['post_id']=absint($parts[0]??0);$meta['widget_id']=sanitize_text_field($parts[1]??'');$meta['save_pipeline']='elementor_document';}
