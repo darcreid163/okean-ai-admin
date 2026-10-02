@@ -1,9 +1,13 @@
 <?php
 // Run only on a disposable WordPress installation using WP-CLI eval-file.
 function oai_connect_expect($ok,$message){if(!$ok)throw new RuntimeException($message);}
+global $wpdb;
 wp_set_current_user(1);
+OAI_Platform::site_id();OAI_Platform::installation_id();
 $keys=array('oai_mcp_enabled','oai_site_id','oai_installation_id','oai_mcp_token_hash','oai_mcp_token_user_id','oai_bearer_token','oai_bearer_user_id');
 $before=array();foreach($keys as $key)$before[$key]=get_option($key,null);
+$seed_hash=hash('sha256','disposable-onboarding-ci-access');
+oai_connect_expect($wpdb->insert(OAI_MCP_OAuth::tokens_table(),array('access_hash'=>$seed_hash,'refresh_hash'=>hash('sha256','disposable-onboarding-ci-refresh'),'client_id'=>'onboarding-ci','user_id'=>1,'scope'=>'mcp:read mcp:write','resource'=>rest_url('okean-ai/mcp'),'created_at'=>gmdate('Y-m-d H:i:s'),'expires_at'=>gmdate('Y-m-d H:i:s',time()+600),'refresh_expires_at'=>gmdate('Y-m-d H:i:s',time()+1200),'revoked'=>0))!==false,'seed retained OAuth token');
 $oauth_before=$wpdb->get_results('SELECT * FROM '.OAI_MCP_OAuth::tokens_table().' ORDER BY id',ARRAY_A);
 $post_before=$_POST;$method_before=$_SERVER['REQUEST_METHOD']??null;
 try{
@@ -32,6 +36,7 @@ try{
  $_POST=array();oai_connect_expect(OAI_Admin::handle_mcp_toggle()===null,'normal page request has no effect');
  echo "PASS: MCP administrator consent, CSRF, malformed input, automation separation and identity/OAuth retention\n";
 }finally{
+ $wpdb->delete(OAI_MCP_OAuth::tokens_table(),array('access_hash'=>$seed_hash));
  foreach($before as $key=>$value){if($value===null)delete_option($key);else update_option($key,$value,false);}
  $_POST=$post_before;if($method_before===null)unset($_SERVER['REQUEST_METHOD']);else $_SERVER['REQUEST_METHOD']=$method_before;
  wp_set_current_user(1);
