@@ -1,4 +1,4 @@
-name: WP AI Cloud pilot checks
+name: Cloud Core compatible gateway checks
 on:
   push:
   pull_request:
@@ -30,12 +30,16 @@ jobs:
           extensions: pdo_sqlite, pdo_mysql, sodium, curl
           coverage: none
       - name: PHP syntax
-        run: find wp-ai-cloud -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find wp-ai-admin-cloud -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: SQLite core and process concurrency
-        run: php wp-ai-cloud/tests/run.php
+        run: php wp-ai-admin-cloud/tests/run.php
+      - name: SQLite legacy Core compatibility
+        run: php wp-ai-admin-cloud/tests/compatibility.php
       - name: MySQL core and process concurrency
         env:
           TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=cloud_test
           TEST_MYSQL_USER: root
           TEST_MYSQL_PASSWORD: test-only-password
-        run: php wp-ai-cloud/tests/run.php
+        run: |
+          php wp-ai-admin-cloud/tests/run.php
+          php wp-ai-admin-cloud/tests/compatibility.php
