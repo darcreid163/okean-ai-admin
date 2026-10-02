@@ -430,6 +430,15 @@ class OAI_MCP_OAuth {
   if(!$user || !$user->exists() || !user_can($user,'manage_options')){
    return self::json_error('access_denied','A WordPress administrator must approve this connection',403);
   }
+  // Bootstrap a fresh Commercial Beta installation on first administrator-approved OAuth connection.
+  // Without a local owner license OAuth succeeds, but MCP tools/list is rejected by OAI_License::can('mcp'),
+  // which surfaces in ChatGPT as "Authentication succeeded, action discovery failed".
+  $license=OAI_License::status();
+  if(empty($license['active'])){
+   $activated=OAI_License::activate_local_owner((int)$user->ID);
+   if(is_wp_error($activated)) return self::json_error('server_error','Could not activate the local beta license',500);
+  }
+  update_option('oai_mcp_enabled',true,false);
   if($_SERVER['REQUEST_METHOD']==='GET'){
    $nonce=wp_create_nonce('oai_oauth_authorize');
    ob_start(); ?>
