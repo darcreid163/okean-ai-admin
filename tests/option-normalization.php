@@ -64,6 +64,9 @@ expect(!OAI_REST::same_option_value(array('a'=>null),array()),'missing keys must
 expect(!OAI_REST::same_option_value(array('categories'=>array(1,2)),array('categories'=>array(2,1))),'option lists must stay ordered even under categories keys');
 expect(!OAI_REST::same_option_value(array(1,2),array('1','2')),'list item types must remain exact');
 expect(count(OAI_DB::$rows)===4,'reordered no-op must not create an operation');
+$missing_false=OAI_REST::sandbox_create(new Request('missing_false',false));
+expect(!is_wp_error($missing_false)&&$missing_false['after_data']==='','creating a missing false option is a change even though its storage value is empty');
+expect(empty($missing_false['meta_data']['before_exists']),'missing option existence must remain authoritative');
 require dirname(__DIR__).'/includes/class-oai-regression-matrix.php';
 $status_method=new ReflectionMethod('OAI_Regression_Matrix','scenario_status');
 foreach(array('PASS','SKIP','FAIL','BLOCKED') as $state)expect($status_method->invoke(null,array('status'=>$state))===$state,'matrix alias must preserve scenario status');

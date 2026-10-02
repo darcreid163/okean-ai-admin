@@ -1046,7 +1046,7 @@ frame.addEventListener('load',function(){
   $woo_guard=self::validate_woo_payload($type,$after);if(is_wp_error($woo_guard))return $woo_guard;
   $op='OAI-'.gmdate('Ymd-His').'-'.wp_rand(1000,9999);
   $now=current_time('mysql',true); $expiry=gmdate('Y-m-d H:i:s',time()+7*DAY_IN_SECONDS);
-  $diff=array('changed'=>$type==='option_update'?!self::same_option_value($before,$after):$before!==$after,'before'=>$before,'after'=>$after);
+  $diff=array('changed'=>$type==='option_update'?(!$exists||!self::same_option_value($before,$after)):$before!==$after,'before'=>$before,'after'=>$after);
   if(empty($diff['changed']))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409));
   $meta=array('before_exists'=>$exists,'after_exists'=>true);
   if($type==='elementor_widget_settings'){$parts=explode(':',$target,2);$meta['post_id']=absint($parts[0]??0);$meta['widget_id']=sanitize_text_field($parts[1]??'');$meta['save_pipeline']='elementor_document';}
