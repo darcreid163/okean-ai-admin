@@ -132,7 +132,7 @@ class OAI_Woodmart {
   if(in_array($type,array('typography','background'),true)&&!is_array($input))return new WP_Error('oai_woodmart_value','This setting requires an object',array('status'=>422));
   if(in_array($type,array('select','buttons'),true)&&(!is_scalar($input)||!array_key_exists((string)$input,$field->args['options']??array())))return new WP_Error('oai_woodmart_value','Choose a declared setting option',array('status'=>422));
   if($type==='switcher'&&!in_array($input,array('0','1','yes',0,1),true))return new WP_Error('oai_woodmart_value','Switcher requires 0, 1 or yes',array('status'=>422));
-  if($type==='range'&&(!is_numeric($input)||(isset($field->args['min'])&&(float)$input<(float)$field->args['min'])||(isset($field->args['max'])&&(float)$input>(float)$field->args['max'])))return new WP_Error('oai_woodmart_value','Range value is outside declared bounds',array('status'=>422));
+  if($type==='range'&&(!is_numeric($input)||(isset($field->args['min'])&&$field->args['min']!==''&&(float)$input<(float)$field->args['min'])||(isset($field->args['max'])&&$field->args['max']!==''&&(float)$input>(float)$field->args['max'])))return new WP_Error('oai_woodmart_value','Range value is outside declared bounds',array('status'=>422));
   if(in_array($type,array('text_input','textarea'),true)&&!is_string($input))return new WP_Error('oai_woodmart_value','Text settings require a string',array('status'=>422));
   return \XTS\AI_Abilities\Theme_Settings\Devices_Value::is_devices_type($type)
    ?\XTS\AI_Abilities\Theme_Settings\Devices_Value::encode($input,$field->args,$current):$field->sanitize($input);
