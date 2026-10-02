@@ -56,6 +56,14 @@ class OAI_Regression_Matrix {
   foreach($expected as $tool)if(in_array($tool,$def_names,true))$matrix[$tool]['evidence']='exported MCP contract present; runtime exercise pending';
   foreach($missing as $tool)self::set($matrix,$tool,'FAIL','expected tool missing from MCP export');
 
+  // Theme mutations require an explicit manual fixture; the general production suite does not change Woodmart.
+  self::set($matrix,'woodmart.status',self::ok(OAI_Woodmart::status())?'PASS':'FAIL','adapter availability');
+  if(OAI_Woodmart::available()){
+   $wr=self::req();$wr->set_param('per_page',1);$wl=OAI_Woodmart::list_settings($wr);
+   self::set($matrix,'woodmart.list_settings',self::ok($wl)?'PASS':'FAIL','bounded theme settings');
+   if(!is_wp_error($wl)&&!empty($wl['items'][0]['id']))self::set($matrix,'woodmart.get_setting',self::ok(OAI_Woodmart::get_setting($wl['items'][0]['id']))?'PASS':'FAIL','native field descriptor');
+  }
+  self::set($matrix,'woodmart.update_setting_sandbox','SKIP','explicit theme fixture required; not eligible for Test Automation');
   // Core reads.
   self::set($matrix,'wp.get_site',self::ok(OAI_REST::site())?'PASS':'FAIL','site snapshot');
   self::set($matrix,'wp.list_plugins',self::ok(OAI_REST::plugins())?'PASS':'FAIL','plugin list');

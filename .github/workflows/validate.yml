@@ -37,7 +37,7 @@ jobs:
             php -l "$file"
             count=$((count + 1))
           done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
-          test "$count" -eq 73
+          test "$count" -eq 76
       - name: Reproduce early bootstrap save on 2.1.5
         shell: bash
         run: |
@@ -114,7 +114,7 @@ jobs:
             wp: '7.0.6'
             php: '8.3.33'
             woo: '11.1.2'
-            elementor: '4.3.2'
+            elementor: '4.3.3'
             yoast: '28.6'
           - profile: latest-public-versions
             wp: latest

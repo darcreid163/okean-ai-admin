@@ -144,6 +144,10 @@ class OAI_MCP {
  public static function tool_definitions(){return self::tools();}
  private static function tools(){
   $schemas=array(
+   'woodmart.status'=>array('type'=>'object','additionalProperties'=>false),
+   'woodmart.list_settings'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('search'=>array('type'=>'string'),'section'=>array('type'=>'string'),'page'=>array('type'=>'integer','minimum'=>1),'per_page'=>array('type'=>'integer','minimum'=>1,'maximum'=>50))),
+   'woodmart.get_setting'=>array('type'=>'object','additionalProperties'=>false,'required'=>array('id'),'properties'=>array('id'=>array('type'=>'string','pattern'=>'^[a-z0-9_-]{1,100}$'))),
+   'woodmart.update_setting_sandbox'=>array('type'=>'object','additionalProperties'=>false,'required'=>array('id','value'),'properties'=>array('id'=>array('type'=>'string','pattern'=>'^[a-z0-9_-]{1,100}$'),'value'=>array('description'=>'Native setting value; base layer only.'))),
    'wp.inspect_html'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('url'=>array('type'=>'string'),'post_id'=>array('type'=>'integer','minimum'=>1),'allow_draft'=>array('type'=>'boolean','description'=>'Render draft/private/pending content internally for an authenticated WordPress administrator without publishing it.'),'selector'=>array('type'=>'string'),'mode'=>array('type'=>'string','enum'=>array('inspect','outline')),'max_results'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'max_chars'=>array('type'=>'integer','minimum'=>100,'maximum'=>10000),'include_attributes'=>array('type'=>'boolean'),'include_text'=>array('type'=>'boolean'),'include_html'=>array('type'=>'boolean'),'max_length'=>array('type'=>'integer','minimum'=>1000,'maximum'=>30000))),
    'wp.visual_qa_start'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
    'wp.visual_qa_result'=>array('type'=>'object','required'=>array('probe_id'),'additionalProperties'=>false,'properties'=>array('probe_id'=>array('type'=>'string','minLength'=>8))),
@@ -292,6 +296,7 @@ class OAI_MCP {
   $schemas['menu.move_item_sandbox']=array('type'=>'object','required'=>array('item_id'),'additionalProperties'=>false,'properties'=>array('item_id'=>array('type'=>'integer','minimum'=>1),'parent'=>array('type'=>'integer','minimum'=>0),'position'=>array('type'=>'integer','minimum'=>0)));
   $schemas['menu.assign_location_sandbox']=array('type'=>'object','required'=>array('location','menu_id'),'additionalProperties'=>false,'properties'=>array('location'=>array('type'=>'string','minLength'=>1),'menu_id'=>array('type'=>'integer','minimum'=>0)));
   $read=array(
+   'woodmart.status','woodmart.list_settings','woodmart.get_setting',
    'wp.get_site','wp.inspect_html','wp.visual_qa_result','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
    'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','elementor.get_container','elementor.get_page_layout','woocommerce.get_product','woocommerce.get_product_full','operation.get_receipt',
    'gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
@@ -299,6 +304,9 @@ class OAI_MCP {
   );
   $tools=array();
   $descriptions=array(
+   'woodmart.status'=>'Read Woodmart adapter availability and supported native MCP version.',
+   'woodmart.list_settings'=>'Read bounded Woodmart field descriptors with base/preset distinction; restricted fields are excluded.',
+   'woodmart.get_setting'=>'Read one Woodmart setting with native value format, saved base value and preset-override flag.',
    'wp.inspect_html'=>'Inspect public or authenticated draft server-rendered HTML. JavaScript is not executed.',
    'wp.visual_qa_result'=>'Read a completed browser Visual QA report for desktop, tablet and mobile viewports.',
    'wp.file.outline'=>'List file landmarks and line numbers without returning the full file; use file.read with a line range next.',
@@ -322,6 +330,7 @@ class OAI_MCP {
    $description=$descriptions[$name]??('WP AI Admin read tool: '.$name);
    $tools[]=self::tool($name,$description,$schemas[$name]??array('type'=>'object'),array('readOnlyHint'=>true,'destructiveHint'=>false));
   }
+  $tools[]=self::tool('woodmart.update_setting_sandbox','Create a normal sandbox operation for one Woodmart base setting. Native normalization, full-option/preset conflict guards, verification, CSS invalidation and exact rollback; never writes live during planning.',$schemas['woodmart.update_setting_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('wp.visual_qa_start','Create a short-lived signed browser Visual QA probe for one editable WordPress post. It does not publish or modify content; opening the returned URL executes viewport measurements and stores a bounded report.',$schemas['wp.visual_qa_start'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('system.page_qa_run','Run unified page QA. First call with post_id performs static DOM/accessibility/link checks and creates a browser Visual QA probe. After opening browser_url, call the same tool again with post_id and probe_id to receive one combined PASS/WARN report. It never publishes or changes page content.',$schemas['system.page_qa_run'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool(
@@ -377,6 +386,13 @@ class OAI_MCP {
   $raw_name=(string)($p['name']??''); $name=sanitize_key(str_replace('.','_',strtolower($raw_name))); $a=$p['arguments']??array(); if(!is_array($a))$a=array();
   $r=null;
   switch($name){
+   case 'woodmart_status':$out=OAI_Woodmart::status();break;
+   case 'woodmart_get_setting':$out=OAI_Woodmart::get_setting((string)($a['id']??''));break;
+   case 'woodmart_list_settings':
+   case 'woodmart_update_setting_sandbox':
+    $rr=new WP_REST_Request($name==='woodmart_list_settings'?'GET':'POST','/okean-ai/v1/woodmart');
+    foreach($a as $key=>$value)$rr->set_param($key,$value);
+    $out=$name==='woodmart_list_settings'?OAI_Woodmart::list_settings($rr):OAI_Woodmart::sandbox($rr);break;
    case 'system_manifest':$out=OAI_Platform::manifest();break;
    case 'system_tool_catalog':$out=OAI_Platform::tool_catalog();break;
    case 'system_self_test':$out=OAI_Platform::self_test();break;
@@ -564,7 +580,7 @@ class OAI_MCP {
     return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin unless AI Lifecycle Control is active'));
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
   }
-  $sandbox_tools=array('gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox');
+  $sandbox_tools=array('woodmart_update_setting_sandbox','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox');
   if(!is_wp_error($out) && in_array($name,$sandbox_tools,true) && is_array($out) && !empty($out['id']) && class_exists('OAI_Test_Automation')){
    $tag=OAI_Test_Automation::tag_operation(absint($out['id']),$raw_name,(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));
    if(is_array($tag))$out['test_automation']=$tag;

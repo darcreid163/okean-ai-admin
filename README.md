@@ -1,5 +1,16 @@
 # WP AI Admin
 
+## 2.1.9 — Woodmart Base Settings Adapter
+
+- Four MCP tools expose adapter status, bounded settings lists, one setting and sandbox updates.
+- Requires Woodmart and WoodMart MCP 1.0.1. Updates only the base layer; active preset values and base values are shown separately.
+- Uses native field sanitizers and device encoding before approval, and the native MCP update callback during Apply.
+- Locks transactional InnoDB option storage, checks the entire settings option, preset conditions, theme identity and field schema, verifies persistence and invalidates generated CSS.
+- Rollback restores exact raw field storage or inherited absence; unrelated newer changes block Apply and Rollback.
+- Credentials, custom code and editor writes are excluded. Headers, layouts and general native write dispatch are not included.
+- CI covers actual public WoodMart MCP 1.0.1 with a minimal theme API fixture in real WordPress; the licensed theme and its visual output require installation-site validation.
+- Retains 2.1.8 Yoast map-order and 2.1.6 upgrade bootstrap fixes.
+
 ## 2.1.5 — Option Normalization Before Approval
 
 - Capture WordPress `sanitize_option` output before creating the approved diff, preventing false verification failures when Yoast drops legacy fields.

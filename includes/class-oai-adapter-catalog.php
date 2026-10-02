@@ -9,6 +9,7 @@ if (!defined('ABSPATH')) exit;
 class OAI_Adapter_Catalog {
  public static function definitions(){
   return array(
+   'woodmart'=>array('kind'=>'theme','status'=>'partial','surface'=>'theme_settings','description'=>'Woodmart base settings through native normalization and sandbox Apply/Verify/Rollback; headers/layouts are not yet writable.'),
    'elementor'=>array('kind'=>'builder','status'=>'available','surface'=>'page_builder','description'=>'Elementor builder-owned document read/save pipeline.'),
    'gutenberg'=>array('kind'=>'builder','status'=>'available','surface'=>'block_editor','description'=>'Native Gutenberg/freeform post content resolver and sandbox patching.'),
    'woocommerce'=>array('kind'=>'platform','status'=>'available','surface'=>'commerce','description'=>'WooCommerce product read and sandbox field patch pipeline.'),
@@ -31,7 +32,8 @@ class OAI_Adapter_Catalog {
   foreach(self::definitions() as $id=>$def){
    $item=$def;
    $item['id']=$id;
-   if($id==='elementor')$item['runtime_available']=defined('ELEMENTOR_VERSION');
+   if($id==='woodmart')$item['runtime_available']=class_exists('OAI_Woodmart')&&OAI_Woodmart::available();
+   elseif($id==='elementor')$item['runtime_available']=defined('ELEMENTOR_VERSION');
    elseif($id==='woocommerce')$item['runtime_available']=class_exists('WooCommerce');
    elseif($id==='gutenberg')$item['runtime_available']=function_exists('parse_blocks') && function_exists('serialize_blocks');
    elseif($id==='generatepress')$item['runtime_available']=get_template()==='generatepress' || get_stylesheet()==='generatepress';
