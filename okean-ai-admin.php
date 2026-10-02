@@ -8,7 +8,7 @@
  */
 if (!defined('ABSPATH')) exit;
 define('OAI_VERSION','2.1.9');
-define('OAI_BUILD_ID','2.1.9-woodmart-settings-20261002');
+define('OAI_BUILD_ID','2.1.9-wpaiadmin-connect-20261002');
 define('OAI_DB_VERSION',23);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
