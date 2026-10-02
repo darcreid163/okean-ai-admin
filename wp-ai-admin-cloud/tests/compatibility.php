@@ -21,6 +21,8 @@ function is_user_logged_in() { global $loggedIn; return $loggedIn; }
 function current_user_can($capability) { global $admin; return $capability==='manage_options'?$admin:true; }
 function is_ssl() { global $ssl; return $ssl; }
 function get_current_user_id() { return 42; }
+function get_user_by($field,$value) { return (object)['ID'=>$value]; }
+function user_can($user,$capability) { return current_user_can($capability); }
 function wp_get_environment_type() { return 'production'; }
 function wp_generate_uuid4() { return '00000000-0000-4000-8000-000000000000'; }
 function wp_json_encode($value,$flags=0) { return json_encode($value,$flags); }
@@ -105,6 +107,35 @@ $loggedIn=false;check(WordPress::provisioningPermission() instanceof WP_Error,'A
 $loggedIn=true;$admin=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Subscriber provisioning');
 $admin=true;$ssl=false;check(WordPress::provisioningPermission() instanceof WP_Error,'HTTP provisioning');
 $ssl=true;check(WordPress::provisioningPermission()===true,'HTTPS administrator rejected');
+$owner=WordPress::operatorOwner(); $core=WordPress::operatorCore();
+$site='reg_'.str_repeat('e',32);
+$store->execute('INSERT INTO '.$store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$site,$owner,'https://wpaiadmin.ru',hash('sha256','https://wpaiadmin.ru'),'fixture-site','fixture-install','fixture-unused','active',time()]);
+$token=$core->mint($owner,[$site],['mcp:read'],time())['access_token'];
+class TestRequest {
+    public function __construct(public array $headers,public array $body,public string $method='POST') {}
+    public function get_header($name) { return $this->headers[$name]??''; }
+    public function get_body() { return json_encode($this->body); }
+    public function get_json_params() { return $this->body; }
+    public function get_method() { return $this->method; }
+    public function get_route() { return '/wpai-cloud/v1/mcp'; }
+}
+$headers=['authorization'=>'Bearer '.$token,'content-type'=>'application/json','accept'=>'application/json, text/event-stream','mcp-protocol-version'=>'2025-11-25'];
+$message=['jsonrpc'=>'2.0','id'=>99,'method'=>'initialize','params'=>['protocolVersion'=>'2025-11-25']];
+$req=new TestRequest($headers,$message);$response=WordPress::mcp($req);
+check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.2.0','HTTP MCP initialization failed');
+foreach ([['authorization','',401],['origin','https://evil.example.com',403],['mcp-protocol-version','unknown',400],['content-type','text/plain',415],['accept','application/json',406]] as [$header,$value,$status]) {
+    $changed=$headers; $changed[$header]=$value;
+    check(WordPress::mcp(new TestRequest($changed,$message))->status===$status,'HTTP validation bypass: '.$header);
+}
+check(WordPress::mcp(new TestRequest($headers,$message,'GET'))->status===405,'Unsupported GET accepted');
+$notify=new TestRequest($headers,['jsonrpc'=>'2.0','method'=>'notifications/initialized']);
+$notifyResponse=WordPress::mcp($notify);
+check($notifyResponse->status===202 && WordPress::emptyNotification(false,$notifyResponse,$notify,null),'Notification not empty 202');
+$admin=false;check(WordPress::mcp($req)->status===403,'Demoted user retained gateway access');$admin=true;
+$ssl=false;check(WordPress::mcp($req)->status===403,'HTTP gateway accepted');$ssl=true;
+$core->revokeToken($owner,hash('sha256',$token),time());
+check(WordPress::mcp($req)->status===401,'Revoked HTTP gateway token accepted');
+check($snapshot()===$before,'Gateway authentication changed legacy data');
 $endpointRequests=[];$loopbackBad=false;
 function wp_remote_post($url,$args) {
     global $endpointRequests,$loopbackBad;

@@ -29,7 +29,7 @@ class WPAI_Cloud_Admin {
         echo '</tbody></table>';
         echo '<p style="margin-top:18px">REST status: <code>' . esc_html(rest_url(WPAI_CLOUD_REST_NS . '/status')) . '</code></p>';
         echo '<p>Plans API: <code>' . esc_html(rest_url(WPAI_CLOUD_REST_NS . '/plans')) . '</code></p>';
-        \WPAICloudGateway\WordPress::statusPage();
+        if (class_exists('WPAICloudGateway\\WordPress')) \WPAICloudGateway\WordPress::statusPage();
         echo '</div>';
     }
 }
