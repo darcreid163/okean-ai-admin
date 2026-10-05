@@ -8,6 +8,14 @@ final class Admin {
         if (!is_string($value) || strlen($value)>2048) throw new Fault('invalid_form_input');
         return wp_unslash($value);
     }
+    private static function providers(): array {
+        return [
+            'chatgpt'=>['label'=>'ChatGPT','endpoint'=>Settings::endpoint()],
+            'qwen'=>['label'=>'Qwen 3.8 Max','endpoint'=>Settings::sseEndpoint()],
+            'claude'=>['label'=>'Claude','endpoint'=>Settings::endpoint()],
+            'deepseek'=>['label'=>'DeepSeek','endpoint'=>Settings::endpoint()],
+        ];
+    }
     private static function form(string $action,string $label,string $fields=''): void {
         echo '<form method="post" style="margin:16px 0">';
         wp_nonce_field('wpai_gateway_'.$action,'wpai_gateway_nonce');
@@ -36,6 +44,22 @@ final class Admin {
                 } else {
                     $core=WordPress::operatorCore(); $owner=WordPress::operatorOwner();
                     if ($action==='connect') $output=$core->connect($owner,home_url('/'),self::submitted('site_token'),time());
+                    elseif ($action==='provider_site') {
+                        $provider=self::submitted('provider');$site=self::submitted('site_id');$providers=self::providers();
+                        if(!isset($providers[$provider]))throw new Fault('invalid_provider');
+                        $owned=array_column($core->sites($owner),'id');if(!in_array($site,$owned,true))throw new Fault('invalid_site_selection',403);
+                        $map=get_user_meta((int)$owner,'wpai_cloud_provider_sites',true);if(!is_array($map))$map=[];
+                        $map[$provider]=$site;update_user_meta((int)$owner,'wpai_cloud_provider_sites',$map);
+                        $output=['provider'=>$provider,'site_id'=>$site,'endpoint'=>$providers[$provider]['endpoint'],'selected'=>true];
+                    }
+                    elseif ($action==='issue_provider') {
+                        $provider=self::submitted('provider');$site=self::submitted('site_id');$providers=self::providers();
+                        if(!isset($providers[$provider]))throw new Fault('invalid_provider');
+                        $owned=array_column($core->sites($owner),'id');if(!in_array($site,$owned,true))throw new Fault('invalid_site_selection',403);
+                        $value=$core->mint($owner,[$site],['mcp:read','mcp:write'],time());
+                        $secret=$value['access_token'];unset($value['access_token']);
+                        $output=$value+['provider'=>$provider,'site_id'=>$site,'endpoint'=>$providers[$provider]['endpoint'],'transport'=>$provider==='qwen'?'sse':'streamable_http'];
+                    }
                     elseif ($action==='issue') {
                         $value=$core->mint($owner,[self::submitted('site_id')],['mcp:read','mcp:write'],time());
                         $secret=$value['access_token']; unset($value['access_token']); $output=$value;
@@ -64,6 +88,19 @@ final class Admin {
         try {
             $core=WordPress::operatorCore(); $owner=WordPress::operatorOwner(); $sites=$core->sites($owner);
             echo '<p>Лимит: <code>'.esc_html(wp_json_encode($core->usage($owner,time()))).'</code></p>';
+            $providerSites=get_user_meta((int)$owner,'wpai_cloud_provider_sites',true);if(!is_array($providerSites))$providerSites=[];
+            if($sites){
+                echo '<h3>Подключения AI → сайт</h3><p>Выбор здесь — удобный профиль подключения. Безопасность всё равно ограничивается site_id внутри токена и каждого вызова.</p>';
+                foreach(self::providers() as $provider=>$profile){
+                    $selected=$providerSites[$provider]??$sites[0]['id'];
+                    $options='';
+                    foreach($sites as $site)$options.='<option value="'.esc_attr($site['id']).'"'.selected($selected,$site['id'],false).'>'.esc_html($site['home']).'</option>';
+                    $fields='<input type="hidden" name="provider" value="'.esc_attr($provider).'"><p><strong>'.esc_html($profile['label']).'</strong> · <code>'.esc_html($profile['endpoint']).'</code><br><select name="site_id">'.$options.'</select></p>';
+                    self::form('provider_site','Сохранить выбранный сайт',$fields);
+                    $issueFields='<input type="hidden" name="provider" value="'.esc_attr($provider).'"><input type="hidden" name="site_id" value="'.esc_attr($selected).'">';
+                    self::form('issue_provider','Получить токен на 1 час для '.$profile['label'],$issueFields);
+                }
+            }
             if (!$sites) self::form('connect','Подключить этот сайт','<p><label>Администраторский MCP-токен WP AI Admin для этого сайта<br><input type="password" name="site_token" autocomplete="new-password" size="70" required></label></p>');
             foreach ($sites as $site) {
                 $id='<input type="hidden" name="site_id" value="'.esc_attr($site['id']).'">';
