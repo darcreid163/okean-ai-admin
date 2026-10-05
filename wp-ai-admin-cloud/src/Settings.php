@@ -6,7 +6,7 @@ namespace WPAICloudGateway;
 final class Settings {
     private const KEY_OPTION='wpai_gateway_wrapped_keys_v1';
     public static function endpoint(): string {
-        $url=defined('WP_AI_CLOUD_PUBLIC_MCP_URL')?WP_AI_CLOUD_PUBLIC_MCP_URL:'https://mcp.wpaiadmin.ru/mcp';
+        $url=defined('WP_AI_CLOUD_PUBLIC_MCP_URL')?WP_AI_CLOUD_PUBLIC_MCP_URL:'https://wpaiadmin.ru/mcp';
         $p=is_string($url)?parse_url($url):false;
         if(!$p||($p['scheme']??'')!=='https'||!isset($p['host'])||isset($p['user'])||isset($p['query'])||isset($p['fragment'])||($p['path']??'')!=='/mcp')throw new Fault('invalid_public_mcp_url',503);
         return $url;

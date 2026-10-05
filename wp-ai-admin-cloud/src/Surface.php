@@ -16,7 +16,7 @@ final class Surface {
             '/mcp'=>'mcp',
             '/sse'=>'sse',
             '/sse/messages'=>'sse_messages',
-            '/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp'=>'resource',
+            '/.well-known/oauth-protected-resource/mcp'=>'resource',
             '/.well-known/oauth-authorization-server/wpai-cloud','/wpai-cloud/.well-known/oauth-authorization-server'=>'authorization',
             '/wpai-cloud/oauth/authorize'=>'consent',
             '/wpai-cloud/connect'=>'portal',
@@ -27,8 +27,6 @@ final class Surface {
         $path=parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH);$kind=self::routeKind(is_string($path)?$path:'');
         if(!$kind)return;
         // Preserve the local WP AI Admin OAuth discovery on the main domain.
-        $host=strtolower(explode(':',$_SERVER['HTTP_HOST']??'')[0]);
-        if($path==='/.well-known/oauth-protected-resource' && $host!==strtolower((string)parse_url(Settings::endpoint(),PHP_URL_HOST)))return;
         if(!is_ssl()){status_header(403);exit;}
         nocache_headers();
         if($kind==='mcp') { rest_get_server()->serve_request('/wpai-cloud/v1/mcp');exit; }

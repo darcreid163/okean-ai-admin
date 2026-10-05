@@ -101,7 +101,7 @@ $wpdb->query('UPDATE '.WPAI_Cloud_DB::table('plan_versions')." SET verify_billab
 foreach($actions['rest_api_init'] as $callback)$callback();
 foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
 check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1/plans'])===1,'Legacy public routes overwritten');
-check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.1','Old status version');
+check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.2','Old status version');
 check(count(WPAI_Cloud_REST::plans()->data['data']['items'])===5,'Old plans contract changed');
 $loggedIn=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Anonymous provisioning');
 $loggedIn=true;$admin=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Subscriber provisioning');
@@ -122,7 +122,7 @@ class TestRequest {
 $headers=['authorization'=>'Bearer '.$token,'content-type'=>'application/json','accept'=>'application/json, text/event-stream','mcp-protocol-version'=>'2025-11-25'];
 $message=['jsonrpc'=>'2.0','id'=>99,'method'=>'initialize','params'=>['protocolVersion'=>'2025-11-25']];
 $req=new TestRequest($headers,$message);$response=WordPress::mcp($req);
-check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.1','HTTP MCP initialization failed');
+check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.2','HTTP MCP initialization failed');
 foreach ([['authorization','',401],['origin','https://evil.example.com',403],['mcp-protocol-version','unknown',400],['content-type','text/plain',415],['accept','application/json',406]] as [$header,$value,$status]) {
     $changed=$headers; $changed[$header]=$value;
     check(WordPress::mcp(new TestRequest($changed,$message))->status===$status,'HTTP validation bypass: '.$header);
@@ -140,8 +140,11 @@ $gatewaySnapshot=function()use($store){$value=[];foreach(['accounts','balances',
 $oldGateway=$gatewaySnapshot();update_option('wpai_gateway_db_version','1',false);WordPress::enable();
 check($gatewaySnapshot()===$oldGateway && get_option('wpai_gateway_db_version')==='2','Upgrade from gateway v1 reset existing connections or tokens');
 check(WPAICloudGateway\Surface::routeKind('/.well-known/oauth-authorization-server')===null,'Native OAuth issuer discovery overwritten');
+check(WPAICloudGateway\Surface::routeKind('/.well-known/oauth-protected-resource')===null,'Native protected resource discovery overwritten');
+check(WPAICloudGateway\Surface::metadataUrl()==='https://wpaiadmin.ru/.well-known/oauth-protected-resource/mcp','Wrong main-domain metadata URL');
+check(WPAICloudGateway\Settings::sseEndpoint()==='https://wpaiadmin.ru/sse','Wrong main-domain SSE URL');
 check(WPAICloudGateway\Surface::authorizationMetadata()['issuer']==='https://wpaiadmin.ru/wpai-cloud','Central issuer conflicts with native OAuth');
-check(WPAICloudGateway\Surface::resourceMetadata()['resource']==='https://mcp.wpaiadmin.ru/mcp','Wrong public audience');
+check(WPAICloudGateway\Surface::resourceMetadata()['resource']==='https://wpaiadmin.ru/mcp','Wrong public audience');
 check(WPAICloudGateway\Surface::routeKind('/mcp')==='mcp' && str_contains(WPAICloudGateway\Surface::challenge(),'oauth-protected-resource/mcp'),'Alias/discovery challenge missing');
 $admin=false;check(!WPAICloudGateway\Settings::eligible('42'),'Unapproved subscriber access');
 update_option('wpai_gateway_beta_users',[42],false);check(WPAICloudGateway\Settings::eligible('42'),'Approved beta user blocked');
@@ -169,7 +172,7 @@ function wp_remote_retrieve_response_code($response) { return $response['code'];
 function wp_remote_retrieve_body($response) { return $response['body']; }
 $smoke=Admin::smoke('wpai_cloud_'.str_repeat('d',43),'reg_'.str_repeat('c',32));
 check($smoke['passed'] && count($endpointRequests)===6 && $smoke['billable_actions']===0 && !$smoke['writes_tested'],'HTTP smoke sequence');
-foreach($endpointRequests as [$url,$args])check($url==='https://mcp.wpaiadmin.ru/mcp' && $args['redirection']===0 && $args['sslverify']===true,'Unsafe smoke transport');
+foreach($endpointRequests as [$url,$args])check($url==='https://wpaiadmin.ru/mcp' && $args['redirection']===0 && $args['sslverify']===true,'Unsafe smoke transport');
 $loopbackBad=true;rejects(fn()=>Admin::smoke('wpai_cloud_'.str_repeat('d',43),'reg_'.str_repeat('c',32)),'gateway_smoke_step_failed');
 echo 'PASS '.$checks.' compatibility assertions; original 11 Core tables preserved; driver='.$pdo->getAttribute(PDO::ATTR_DRIVER_NAME)."\n";
 if(!getenv('TEST_MYSQL_DSN') && file_exists($database))unlink($database);

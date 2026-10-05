@@ -1,7 +1,9 @@
-# Core 0.3.0 validation, 2026-10-05
+# Core 0.3.2 validation — 2026-10-05
 
-Local PHP 8.3: 125 core, 58 compatibility/HTTP/migration and 50 OAuth assertions passed. Ten concurrent token exchanges of one code produced exactly one access token. Public client: 10 offline tests passed. Original Core DB/plan seeding/REST files remain byte-identical to recovered Core0.1.0.
+Address correction: main MCP https://wpaiadmin.ru/mcp; Qwen SSE https://wpaiadmin.ru/sse. Existing provider/site selection and OAuth code preserved. Native root OAuth/protected-resource discovery is left to WP AI Admin; central gateway discovery uses path-specific endpoints.
 
-These fixtures use real PDO transactions and stub WordPress APIs/HTTP where necessary. WordPress login, browser consent redirect, deployment routing, DNS/TLS, native plugin end-to-end lifecycle and live Qwen3.8-Max/ChatGPT calls are not covered by fixture success. CI executes original legacy DDL on MySQL 8 and repeats on PHP 8.2/8.3/8.4.
+Local PHP 8.3 SQLite: 125 core assertions, 61 compatibility assertions and 50 OAuth assertions passed. Python public client: 10 offline tests passed. Syntax checked for all PHP files. CI repeats PHP 8.2/8.3/8.4 with SQLite and MySQL 8.
 
-Actual live server at inspection: Cloud Core0.2.0 active, configured=false, oauth=false. The new version is prepared for upload, not deployed.
+Live read verification: wpaiadmin.ru responds through the existing WP AI Admin connector, native client 2.1.9 and Cloud Core 0.3.1 active. Cloud health HTTP 200 reports configured=false and oauth=false; old subdomain URLs remain in live 0.3.1. This 0.3.2 build has not been installed. Real gateway OAuth, ChatGPT/Qwen sessions and SSE buffering on hosting are not confirmed by fixture tests.
+
+The homepage rainbow heading was applied separately as native operation 34 and verified on the live page; it is not bundled in the plugin.

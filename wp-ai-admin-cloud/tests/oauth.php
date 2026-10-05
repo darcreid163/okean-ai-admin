@@ -10,7 +10,7 @@ if(getenv('TEST_MYSQL_DSN'))foreach(['oauth_access','oauth_refresh','oauth_grant
 $transport=new FakeTransport();$core=fixtureCore($store,$transport);$core->ensureAccount('1');$core->ensureAccount('2');
 $site=$core->connect('1','https://oauth.example.com','fixture-oauth-administrator-token',$now);
 $other=$core->connect('2','https://other-oauth.example.com','fixture-oauth-administrator-token-2',$now);
-$url='https://mcp.wpaiadmin.ru/mcp';$oauth=new OAuth($store,$core,$url);
+$url='https://wpaiadmin.ru/mcp';$oauth=new OAuth($store,$core,$url);
 $chat=$oauth->register(['client_name'=>'ChatGPT','redirect_uris'=>['https://chatgpt.com/oauth/callback']],$now);
 $qwen=$oauth->register(['client_name'=>'Qwen Code','redirect_uris'=>['http://127.0.0.1:7777/oauth/callback']],$now);
 check($chat['client_id']!==$qwen['client_id'] && !isset($chat['client_secret']),'Public clients not independent');

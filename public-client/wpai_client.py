@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ENDPOINT = "https://mcp.wpaiadmin.ru/mcp"
+ENDPOINT = "https://wpaiadmin.ru/mcp"
 MAX_BODY = 2 * 1024 * 1024
 
 
