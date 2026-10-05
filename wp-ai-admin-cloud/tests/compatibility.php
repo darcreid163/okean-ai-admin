@@ -101,7 +101,7 @@ $wpdb->query('UPDATE '.WPAI_Cloud_DB::table('plan_versions')." SET verify_billab
 foreach($actions['rest_api_init'] as $callback)$callback();
 foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
 check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1/plans'])===1,'Legacy public routes overwritten');
-check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.0','Old status version');
+check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.1','Old status version');
 check(count(WPAI_Cloud_REST::plans()->data['data']['items'])===5,'Old plans contract changed');
 $loggedIn=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Anonymous provisioning');
 $loggedIn=true;$admin=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Subscriber provisioning');
