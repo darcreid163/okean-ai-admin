@@ -11,6 +11,12 @@ final class Settings {
         if(!$p||($p['scheme']??'')!=='https'||!isset($p['host'])||isset($p['user'])||isset($p['query'])||isset($p['fragment'])||($p['path']??'')!=='/mcp')throw new Fault('invalid_public_mcp_url',503);
         return $url;
     }
+    public static function sseEndpoint(): string {
+        $url=defined('WP_AI_CLOUD_PUBLIC_SSE_URL')?WP_AI_CLOUD_PUBLIC_SSE_URL:preg_replace('#/mcp$#','/sse',self::endpoint());
+        $p=is_string($url)?parse_url($url):false;$m=parse_url(self::endpoint());
+        if(!$p||($p['scheme']??'')!=='https'||!isset($p['host'])||isset($p['user'])||isset($p['query'])||isset($p['fragment'])||($p['path']??'')!=='/sse'||strtolower($p['host'])!==strtolower((string)($m['host']??'')))throw new Fault('invalid_public_sse_url',503);
+        return $url;
+    }
     public static function eligible(string $owner): bool {
         $user=get_user_by('id',(int)$owner);
         if(!$user||!user_can($user,'read'))return false;
