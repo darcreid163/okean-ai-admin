@@ -49,6 +49,14 @@ final class WordPress {
     public static function oauth(): OAuth { return new OAuth(self::database(),self::core(),Settings::endpoint()); }
     public static function operatorCore(): Core { return self::core(); }
     public static function operatorOwner(): string { return self::owner(); }
+    public static function authenticateHeader(string $auth): array {
+        if (!is_string($auth)||!preg_match('/^Bearer (wpai_cloud_[A-Za-z0-9_-]{43})$/D',$auth,$m)) throw new Fault('bearer_required',401);
+        $actor=self::core()->authenticate($m[1],time());
+        self::oauth()->binding($actor,time());
+        if (!Settings::eligible($actor['owner'])) throw new Fault('account_unavailable',403);
+        Settings::account($actor['owner']);
+        return $actor;
+    }
     public static function configured(): bool {
         try { if (!self::ready()) return false; self::core(); return true; } catch (\Throwable $e) { return false; }
     }
@@ -83,7 +91,7 @@ final class WordPress {
         $route('/usage','GET',fn($r)=>self::core()->usage(self::owner(),time()));
         $route('/ledger','GET',fn($r)=>self::core()->ledger(self::owner()));
         $route('/sites/(?P<id>reg_[a-f0-9]{32})/foundation','GET',fn($r)=>self::core()->foundation(self::owner(),$r['id'],time()));
-        register_rest_route('wpai-cloud/v1','/health',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn()=>self::response(['service'=>'wp-ai-cloud','version'=>'0.3.0','configured'=>self::configured(),'mode'=>'approved_beta','public_mcp_url'=>Settings::endpoint(),'oauth_implementation'=>'beta_pkce_s256','providers'=>['chatgpt'=>'beta','qwen'=>'beta','claude'=>'planned','deepseek'=>'planned'],'schema'=>'gateway_v1_separate_from_core_v1','oauth'=>self::configured(),'batch_accounting'=>false,'billing'=>false,'commercial_client_entitlements'=>false])]);
+        register_rest_route('wpai-cloud/v1','/health',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn()=>self::response(['service'=>'wp-ai-cloud','version'=>'0.3.1','configured'=>self::configured(),'mode'=>'approved_beta','public_mcp_url'=>Settings::endpoint(),'public_sse_url'=>Settings::sseEndpoint(),'oauth_implementation'=>'beta_pkce_s256','providers'=>['chatgpt'=>'beta','qwen'=>'beta_sse_and_http','claude'=>'planned','deepseek'=>'planned'],'schema'=>'gateway_v1_separate_from_core_v1','oauth'=>self::configured(),'batch_accounting'=>false,'billing'=>false,'commercial_client_entitlements'=>false])]);
         self::oauthRoutes();
         register_rest_route('wpai-cloud/v1','/mcp',['methods'=>'POST,GET,DELETE','permission_callback'=>'__return_true','callback'=>[self::class,'mcp']]);
         $admin=function(string $path,callable $fn) {
@@ -128,12 +136,7 @@ final class WordPress {
             if ($origin && !in_array($origin,$allowed,true)) throw new Fault('origin_denied',403);
             $version=$req->get_header('mcp-protocol-version');
             if ($version && !in_array($version,Gateway::VERSIONS,true)) throw new Fault('unsupported_protocol_version');
-            $auth=$req->get_header('authorization');
-            if (!is_string($auth)||!preg_match('/^Bearer (wpai_cloud_[A-Za-z0-9_-]{43})$/D',$auth,$m)) throw new Fault('bearer_required',401);
-            $actor=self::core()->authenticate($m[1],time());
-            self::oauth()->binding($actor,time());
-            if (!Settings::eligible($actor['owner'])) throw new Fault('account_unavailable',403);
-            Settings::account($actor['owner']);
+            $actor=self::authenticateHeader((string)$req->get_header('authorization'));
             if ($req->get_method()!=='POST') { $r=self::response(['error'=>'stateless_json_transport_only'],405); $r->header('Allow','POST'); return $r; }
             $type=$req->get_header('content-type'); if (!is_string($type)||!preg_match('#^application/json(?:\s*;|$)#i',$type)) throw new Fault('json_content_type_required',415);
             $accept=$req->get_header('accept'); if (!str_contains($accept,'application/json')||!str_contains($accept,'text/event-stream')) throw new Fault('mcp_accept_header_required',406);
