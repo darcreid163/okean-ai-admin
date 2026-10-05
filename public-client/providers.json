@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "connection_name": "https://mcp.wpaiadmin.ru/mcp",
   "mcp_url": "https://mcp.wpaiadmin.ru/mcp",
   "transport": "streamable_http",
@@ -14,9 +14,11 @@
     "qwen": {
       "stage": "beta",
       "model": "qwen3.8-max",
-      "transport": "qwen_code_native_http_or_function_adapter",
+      "transport": "qwen_responses_native_sse_or_qwen_code_streamable_http",
       "api_base_env": "WPAI_QWEN_API_BASE",
-      "api_key_env": "DASHSCOPE_API_KEY"
+      "api_key_env": "DASHSCOPE_API_KEY",
+      "mcp_sse_url": "https://mcp.wpaiadmin.ru/sse",
+      "mcp_http_url": "https://mcp.wpaiadmin.ru/mcp"
     },
     "claude": {
       "stage": "planned",
@@ -30,5 +32,6 @@
       "api_base_env": "WPAI_DEEPSEEK_API_BASE",
       "api_key_env": "DEEPSEEK_API_KEY"
     }
-  }
+  },
+  "sse_url": "https://mcp.wpaiadmin.ru/sse"
 }
