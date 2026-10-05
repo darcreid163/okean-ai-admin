@@ -14,6 +14,8 @@ final class Surface {
     public static function routeKind(string $path): ?string {
         return match($path) {
             '/mcp'=>'mcp',
+            '/sse'=>'sse',
+            '/sse/messages'=>'sse_messages',
             '/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp'=>'resource',
             '/.well-known/oauth-authorization-server/wpai-cloud','/wpai-cloud/.well-known/oauth-authorization-server'=>'authorization',
             '/wpai-cloud/oauth/authorize'=>'consent',
@@ -30,6 +32,8 @@ final class Surface {
         if(!is_ssl()){status_header(403);exit;}
         nocache_headers();
         if($kind==='mcp') { rest_get_server()->serve_request('/wpai-cloud/v1/mcp');exit; }
+        if($kind==='sse') { Sse::open();exit; }
+        if($kind==='sse_messages') { Sse::messages();exit; }
         if(in_array($kind,['resource','authorization'],true)) {
             if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET'){status_header(405);exit;}
             status_header(200);header('Content-Type: application/json; charset=utf-8');header('X-Content-Type-Options: nosniff');
