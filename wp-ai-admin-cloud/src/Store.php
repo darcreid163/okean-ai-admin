@@ -12,7 +12,7 @@ final class Store {
         if (!$this->mysql) { $db->exec('PRAGMA busy_timeout=10000'); $db->exec('PRAGMA journal_mode=WAL'); }
     }
     public function table(string $name): string {
-        if (!in_array($name,['accounts','balances','sites','tokens','requests','audit','rate'],true)) throw new Fault('invalid_table',503);
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
@@ -35,7 +35,13 @@ final class Store {
             'tokens'=>'hash VARCHAR(64) PRIMARY KEY, owner VARCHAR(64) NOT NULL, scopes TEXT NOT NULL, site_ids TEXT NOT NULL, expires_at BIGINT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0',
             'requests'=>'request_key VARCHAR(64) PRIMARY KEY, owner VARCHAR(64) NOT NULL, site_id VARCHAR(64) NOT NULL, period VARCHAR(7) NOT NULL, fingerprint VARCHAR(64) NOT NULL, tool VARCHAR(120) NOT NULL, state VARCHAR(20) NOT NULL, reserved_units INTEGER NOT NULL DEFAULT 1, policy_version VARCHAR(80) NOT NULL, response_sealed '.$large.' NOT NULL, reconciliation_evidence '.$large.' NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL',
             'rate'=>'owner VARCHAR(64) NOT NULL, bucket VARCHAR(20) NOT NULL, slot BIGINT NOT NULL, hits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(owner,bucket,slot)',
-            'audit'=>'id VARCHAR(64) PRIMARY KEY, owner VARCHAR(64) NOT NULL, site_id VARCHAR(64) NOT NULL, event VARCHAR(40) NOT NULL, request_key VARCHAR(64) NOT NULL, created_at BIGINT NOT NULL'
+            'audit'=>'id VARCHAR(64) PRIMARY KEY, owner VARCHAR(64) NOT NULL, site_id VARCHAR(64) NOT NULL, event VARCHAR(40) NOT NULL, request_key VARCHAR(64) NOT NULL, created_at BIGINT NOT NULL',
+            'oauth_clients'=>'id VARCHAR(64) PRIMARY KEY, name VARCHAR(100) NOT NULL, redirects TEXT NOT NULL, created_at BIGINT NOT NULL',
+            'oauth_codes'=>'hash VARCHAR(64) PRIMARY KEY, owner VARCHAR(64) NOT NULL, client VARCHAR(64) NOT NULL, redirect TEXT NOT NULL, resource VARCHAR(512) NOT NULL, scopes TEXT NOT NULL, sites TEXT NOT NULL, challenge VARCHAR(43) NOT NULL, expires BIGINT NOT NULL, used INTEGER NOT NULL DEFAULT 0',
+            'oauth_grants'=>'id VARCHAR(64) PRIMARY KEY, owner VARCHAR(64) NOT NULL, client VARCHAR(64) NOT NULL, resource VARCHAR(512) NOT NULL, scopes TEXT NOT NULL, sites TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, expires BIGINT NOT NULL',
+            'oauth_refresh'=>'hash VARCHAR(64) PRIMARY KEY, grant_id VARCHAR(64) NOT NULL, used INTEGER NOT NULL DEFAULT 0, expires BIGINT NOT NULL',
+            'oauth_access'=>'hash VARCHAR(64) PRIMARY KEY, grant_id VARCHAR(64) NOT NULL, resource VARCHAR(512) NOT NULL',
+            'oauth_rate'=>'bucket VARCHAR(64) NOT NULL, slot BIGINT NOT NULL, hits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(bucket,slot)'
         ];
         foreach ($definitions as $name=>$def) $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table($name).' ('.$def.')'.$tail);
         // Refuse pre-existing nontransactional tables rather than pretending reservations are atomic.

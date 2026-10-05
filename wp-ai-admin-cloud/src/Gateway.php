@@ -9,7 +9,7 @@ final class Gateway {
         $site=['type'=>'string','description'=>'Explicit registered site ID; never inferred from a global active site.'];
         $tool=function(string $name,string $description,array $properties,array $required,bool $read):array {
             return ['name'=>$name,'description'=>$description,'inputSchema'=>['type'=>'object','properties'=>(object)$properties,'required'=>$required,'additionalProperties'=>false],
-                'annotations'=>['readOnlyHint'=>$read,'destructiveHint'=>!$read,'idempotentHint'=>true,'openWorldHint'=>false]];
+                'securitySchemes'=>[['type'=>'oauth2','scopes'=>$read?['mcp:read']:['mcp:read','mcp:write']]],'annotations'=>['readOnlyHint'=>$read,'destructiveHint'=>!$read,'idempotentHint'=>true,'openWorldHint'=>false]];
         };
         return [
             $tool('cloud_sites_list','List only connected sites allowed by this access token.',[],[],true),
@@ -33,7 +33,7 @@ final class Gateway {
         if ($method==='initialize') {
             $requested=$p['protocolVersion']??'';
             $version=in_array($requested,self::VERSIONS,true)?$requested:'2025-11-25';
-            return $reply(['protocolVersion'=>$version,'capabilities'=>['tools'=>['listChanged'=>false]],'serverInfo'=>['name'=>'wp-ai-cloud','version'=>'0.2.0'],'instructions'=>'Pilot gateway. Always select site_id explicitly. For an uncertain outcome reconcile the existing action before issuing another mutation. OAuth onboarding and batch receipt accounting are not available in this build.']);
+            return $reply(['protocolVersion'=>$version,'capabilities'=>['tools'=>['listChanged'=>false]],'serverInfo'=>['name'=>'wp-ai-admin-cloud','title'=>'https://mcp.wpaiadmin.ru/mcp','version'=>'0.3.0'],'instructions'=>'Multi-client beta gateway. Always select site_id explicitly. For an uncertain outcome reconcile the existing action before issuing another mutation. OAuth onboarding uses a WordPress account and explicit site consent. Batch receipt accounting is pending.']);
         }
         if ($method==='ping') return $reply((object)[]);
         if ($method==='tools/list') return $reply(['tools'=>self::tools()]);
@@ -60,7 +60,9 @@ final class Gateway {
             $failed=$name==='cloud_site_tool_call' && ($value['state']??'')==='failed';
             return $reply(['content'=>[['type'=>'text','text'=>Security::canonical($value)]],'isError'=>$failed]);
         } catch(Fault $e) {
-            return $reply(['content'=>[['type'=>'text','text'=>Security::canonical(['error'=>$e->reason,'status'=>$e->status])]],'isError'=>true]);
+            $result=['content'=>[['type'=>'text','text'=>Security::canonical(['error'=>$e->reason,'status'=>$e->status])]],'isError'=>true];
+            if(in_array($e->reason,['scope_or_site_denied','read_scope_required'],true)&&class_exists(Surface::class))$result['_meta']=['mcp/www_authenticate'=>str_replace('scope="mcp:read"','scope="mcp:read mcp:write"',Surface::challenge())];
+            return $reply($result);
         }
     }
 }

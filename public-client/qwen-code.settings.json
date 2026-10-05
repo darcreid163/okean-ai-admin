@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "wp-ai-admin": {
+      "httpUrl": "https://mcp.wpaiadmin.ru/mcp",
+      "timeout": 60000,
+      "trust": false,
+      "oauth": {
+        "enabled": true,
+        "redirectUri": "http://127.0.0.1:7777/oauth/callback",
+        "scopes": [
+          "mcp:read",
+          "mcp:write",
+          "offline_access"
+        ]
+      }
+    }
+  }
+}

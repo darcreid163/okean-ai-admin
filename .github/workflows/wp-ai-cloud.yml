@@ -35,6 +35,10 @@ jobs:
         run: php wp-ai-admin-cloud/tests/run.php
       - name: SQLite legacy Core compatibility
         run: php wp-ai-admin-cloud/tests/compatibility.php
+      - name: SQLite OAuth beta
+        run: php wp-ai-admin-cloud/tests/oauth.php
+      - name: Public client offline tests
+        run: python3 -m unittest discover -s public-client/tests -v
       - name: MySQL core and process concurrency
         env:
           TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=cloud_test
@@ -43,3 +47,4 @@ jobs:
         run: |
           php wp-ai-admin-cloud/tests/run.php
           php wp-ai-admin-cloud/tests/compatibility.php
+          php wp-ai-admin-cloud/tests/oauth.php

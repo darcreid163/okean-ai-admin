@@ -27,6 +27,12 @@ final class Admin {
                 elseif ($action==='disable') {
                     if (defined('WP_AI_CLOUD_ENABLED')) throw new Fault('gateway_mode_managed_in_wp_config',409);
                     update_option('wpai_gateway_enabled',false,false); $output=['gateway'=>'disabled'];
+                } elseif ($action==='beta_users') {
+                    $text=self::submitted('beta_users');
+                    if(!preg_match('/^[0-9, ]*$/D',$text))throw new Fault('invalid_beta_user_ids');
+                    $ids=array_values(array_unique(array_filter(array_map('intval',preg_split('/[, ]+/',$text)))));
+                    if(count($ids)>100)throw new Fault('beta_user_limit');
+                    update_option('wpai_gateway_beta_users',$ids,false);$output=['beta_users'=>$ids];
                 } else {
                     $core=WordPress::operatorCore(); $owner=WordPress::operatorOwner();
                     if ($action==='connect') $output=$core->connect($owner,home_url('/'),self::submitted('site_token'),time());
@@ -41,13 +47,15 @@ final class Admin {
             } catch (Fault $e) { $output=['error'=>$e->reason]; }
             catch (\Throwable $e) { $output=['error'=>'gateway_service_unavailable']; }
         }
-        echo '<hr><h2>Gateway — тестовый режим</h2><p>Сервер '.(WordPress::configured()?'настроен':'выключен или требует настройки').'. MCP: <code>'.esc_html(rest_url('wpai-cloud/v1/mcp')).'</code></p>';
-        echo '<p>Доступ к пилоту — только администраторам. OAuth, платежи и коммерческие разрешения клиента ещё не включены. Тарифы читаются из Cloud Core; журнал gateway хранится отдельно.</p>';
+        echo '<hr><h2>Gateway — тестовый режим</h2><p>Сервер '.(WordPress::configured()?'настроен':'выключен или требует настройки').'. MCP: <code>'.esc_html(Settings::endpoint()).'</code></p>';
+        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и коммерческие разрешения клиента ещё не включены. Тарифы читаются из Cloud Core; журнал gateway хранится отдельно.</p>';
         if ($output!==null) echo '<pre style="white-space:pre-wrap">'.esc_html(wp_json_encode($output,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)).'</pre>';
         if ($secret!==null) {
             echo '<p><strong>Токен gateway показывается один раз. Срок — 1 час.</strong></p><textarea readonly autocomplete="off" rows="2" cols="90">'.esc_textarea($secret).'</textarea>';
             echo '<p>Для отзыва сохраните SHA-256 токена: <code>'.esc_html(hash('sha256',$secret)).'</code></p>';
         }
+        self::form('beta_users','Сохранить пользователей беты','<p><label>ID пользователей WordPress через запятую<br><input name="beta_users" value="'.esc_attr(implode(',',get_option('wpai_gateway_beta_users',[]))).'" size="70"></label></p>');
+        echo '<p>Кабинет подключения сайтов: <a href="'.esc_url(home_url('/wpai-cloud/connect')).'">Открыть</a></p>';
         if (!WordPress::configured()) {
             self::form('enable','Включить тестовый gateway');
             echo '<p>Ключи создаются автоматически и шифруются ключами AUTH_KEY / AUTH_SALT из wp-config.php. Сохраните резервную копию wp-config.php и базы вместе; изменение этих ключей требует предварительного переноса ключей gateway.</p>';
@@ -72,10 +80,10 @@ final class Admin {
     public static function smoke(string $token,string $site): array {
         if (!preg_match('/^wpai_cloud_[A-Za-z0-9_-]{43}$/D',$token)) throw new Fault('invalid_gateway_token');
         Security::identifier($site);
-        $endpoint=rest_url('wpai-cloud/v1/mcp');
+        $endpoint=Settings::endpoint();
         if (parse_url($endpoint,PHP_URL_SCHEME)!=='https') throw new Fault('https_required',403);
         $requests=[
-            ['jsonrpc'=>'2.0','id'=>1,'method'=>'initialize','params'=>['protocolVersion'=>'2025-11-25','capabilities'=>(object)[],'clientInfo'=>['name'=>'wpai-admin-smoke','version'=>'0.2.0']]],
+            ['jsonrpc'=>'2.0','id'=>1,'method'=>'initialize','params'=>['protocolVersion'=>'2025-11-25','capabilities'=>(object)[],'clientInfo'=>['name'=>'wpai-admin-smoke','version'=>'0.3.0']]],
             ['jsonrpc'=>'2.0','method'=>'notifications/initialized'],
             ['jsonrpc'=>'2.0','id'=>2,'method'=>'tools/list'],
             ['jsonrpc'=>'2.0','id'=>3,'method'=>'tools/call','params'=>['name'=>'cloud_sites_list','arguments'=>(object)[]]],

@@ -1,11 +1,7 @@
-# Cloud Core 0.2.0 validation — 2026-10-02
+# Core 0.3.0 validation, 2026-10-05
 
-Recovered source: wp-ai-admin-cloud-0.1.0.zip (6052 bytes), exported in the other chat and matching live service name, version, namespace, schema version and plan values.
+Local PHP 8.3: 125 core, 58 compatibility/HTTP/migration and 50 OAuth assertions passed. Ten concurrent token exchanges of one code produced exactly one access token. Public client: 10 offline tests passed. Original Core DB/plan seeding/REST files remain byte-identical to recovered Core0.1.0.
 
-Local PHP 8.3: 125 core/security/concurrency assertions PASS. 49 compatibility assertions PASS. PHP syntax: 20 files PASS before adding this document; final packaging checks all PHP files again.
+These fixtures use real PDO transactions and stub WordPress APIs/HTTP where necessary. WordPress login, browser consent redirect, deployment routing, DNS/TLS, native plugin end-to-end lifecycle and live Qwen3.8-Max/ChatGPT calls are not covered by fixture success. CI executes original legacy DDL on MySQL 8 and repeats on PHP 8.2/8.3/8.4.
 
-The compatibility fixture executes the recovered Core installer and preserves snapshots of all 11 legacy tables, including existing account and usage balance. SQLite translates MySQL DDL only in tests. CI repeats with the original MySQL DDL on MySQL 8. Test HTTP transport is stubbed; actual public HTTPS, WordPress authentication and native plugin compatibility remain to be validated on wpaiadmin.ru after installation.
-
-No server deployment, site content changes, OAuth release or payment activation performed by this change.
-
-First integration CI run 37048146442 passed PHP 8.2/8.3/8.4, SQLite and MySQL 8. It covered 125 core assertions and the initial 37 compatibility assertions. The final additional HTTP adapter checks increase compatibility to 49; final commit CI is required before handing over this ZIP.
+Actual live server at inspection: Cloud Core0.2.0 active, configured=false, oauth=false. The new version is prepared for upload, not deployed.

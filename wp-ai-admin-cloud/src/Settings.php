@@ -5,6 +5,17 @@ namespace WPAICloudGateway;
 /** Pilot configuration. Keys never appear in HTML, REST, logs or autoloaded options. */
 final class Settings {
     private const KEY_OPTION='wpai_gateway_wrapped_keys_v1';
+    public static function endpoint(): string {
+        $url=defined('WP_AI_CLOUD_PUBLIC_MCP_URL')?WP_AI_CLOUD_PUBLIC_MCP_URL:'https://mcp.wpaiadmin.ru/mcp';
+        $p=is_string($url)?parse_url($url):false;
+        if(!$p||($p['scheme']??'')!=='https'||!isset($p['host'])||isset($p['user'])||isset($p['query'])||isset($p['fragment'])||($p['path']??'')!=='/mcp')throw new Fault('invalid_public_mcp_url',503);
+        return $url;
+    }
+    public static function eligible(string $owner): bool {
+        $user=get_user_by('id',(int)$owner);
+        if(!$user||!user_can($user,'read'))return false;
+        return user_can($user,'manage_options')||in_array((int)$owner,get_option('wpai_gateway_beta_users',[]),true);
+    }
     public static function enabled(): bool {
         return defined('WP_AI_CLOUD_ENABLED') ? WP_AI_CLOUD_ENABLED===true : get_option('wpai_gateway_enabled',false)===true;
     }
