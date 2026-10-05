@@ -1,12 +1,12 @@
-# WP AI Admin — публичный клиент беты 0.3.0
+# WP AI Admin — публичный клиент беты 0.3.1
 
-Единое имя подключения и URL: **https://mcp.wpaiadmin.ru/mcp**.
+Основной MCP URL: **https://mcp.wpaiadmin.ru/mcp** (Streamable HTTP). Для Qwen 3.8 Max Responses API: **https://mcp.wpaiadmin.ru/sse** (legacy SSE).
 
 ChatGPT и Qwen3.8-Max — первые клиенты. Claude (под «cloud» понимаем Claude) и DeepSeek предусмотрены в providers.json как следующие интеграции. Сервер предоставляет инструменты WordPress; он не запускает и не оплачивает модели ИИ. Модель выбирается в клиенте. Разные ИИ могут работать одновременно: отдельные OAuth-сессии, общий аккаунт/реестр сайтов/лимит и журнал.
 
 ## Фактическое состояние на 5 октября
 
-На wpaiadmin.ru установлен Cloud Core 0.2.0. Его /health возвращает configured=false, oauth=false, mode=operator_pilot. Новая сборка 0.3.0 подготовлена; она добавляет публичный URL, OAuth/PKCE, выбор сайтов, допуск пользователей беты и клиент Qwen. DNS/TLS и работу нового адреса пока не удалось подтвердить. Сборка не устанавливается автоматически. Включение gateway, реальный вход через клиентов и Qwen API-вызов ещё не проверены на сервере.
+На wpaiadmin.ru установлен Cloud Core 0.2.0. Его /health возвращает configured=false, oauth=false, mode=operator_pilot. Новая сборка 0.3.1 подготовлена; она добавляет публичный URL, OAuth/PKCE, выбор сайтов, отдельный профиль «провайдер → сайт», Streamable HTTP и совместимый SSE bridge для Qwen Responses API. DNS/TLS и работу нового адреса пока не удалось подтвердить. Сборка не устанавливается автоматически. Включение gateway, реальный вход через клиентов и Qwen API-вызов ещё не проверены на сервере.
 
 ## Как работает пользовательское подключение
 
@@ -22,7 +22,7 @@ ChatGPT и Qwen3.8-Max — первые клиенты. Claude (под «cloud»
 ## Настроить хостинг и сервер
 
 1. На Beget создать/привязать mcp.wpaiadmin.ru к **существующей папке WordPress wpaiadmin.ru**, настроить DNS и HTTPS-сертификат этого имени. Новый VPS или второй WordPress не требуется. Поддомен должен передавать /mcp и /.well-known/* в этот WordPress без перенаправления на главную и без удаления Authorization.
-2. Установить wp-ai-admin-cloud-0.3.0.zip вместо установленного WP AI Admin Cloud Core. Клиентский WP AI Admin 2.1.9 оставить активным.
+2. Установить wp-ai-admin-cloud-0.3.1.zip вместо установленного WP AI Admin Cloud Core. Клиентский WP AI Admin 2.1.9 оставить активным.
 3. В админке WP AI Admin Cloud нажать «Включить тестовый gateway», допустить пользователей беты и подключить wpaiadmin.ru как тестовый сайт. Ключи создаются автоматически и не выводятся.
 4. После настройки проверить https://mcp.wpaiadmin.ru/.well-known/oauth-protected-resource/mcp: resource должен точно равняться https://mcp.wpaiadmin.ru/mcp.
 5. Центральный issuer: https://wpaiadmin.ru/wpai-cloud. Discovery: https://wpaiadmin.ru/.well-known/oauth-authorization-server/wpai-cloud. Это отдельный issuer: существующий локальный OAuth WP AI Admin на https://wpaiadmin.ru не переписывается.
@@ -50,7 +50,7 @@ python wpai_client.py qwen --interactive-confirm --prompt "Проведи тес
 
 Без --interactive-confirm клиент исполняет только gateway-список сайтов/каталог/usage; native tool calls требуют отдельного подтверждения. Стабильный provider call ID привязан к исходным аргументам. Сетевой неизвестный исход или серверный pending_reconciliation останавливает сессию; автоматического повторного выполнения записи нет.
 
-Официальный Qwen Responses API документирует native MCP через SSE. Нельзя выдавать наш JSON /mcp за SSE endpoint. Для него используем Qwen Code HTTP или Function Calling адаптер. Возможность добавления такого сервера в конкретный веб-интерфейс Qwen Studio отдельно не подтверждена.
+Официальный Qwen Responses API принимает native MCP только по SSE. В 0.3.1 для этого используется отдельный https://mcp.wpaiadmin.ru/sse. Qwen Code может по-прежнему подключаться к https://mcp.wpaiadmin.ru/mcp по Streamable HTTP. В Cloud Core для Qwen, ChatGPT, Claude и DeepSeek можно выбрать активный подключённый сайт и выдать одночасовой токен, ограниченный этим сайтом.
 
 ## Следующие интеграции
 
@@ -69,3 +69,14 @@ Claude: native remote MCP/OAuth; клиентский профиль зарез�
 - https://www.alibabacloud.com/help/en/model-studio/qwen-function-calling
 - https://platform.claude.com/docs/en/agents-and-tools/mcp-connector
 - https://api-docs.deepseek.com/guides/tool_calls/
+
+
+## Qwen Responses API — прямой тест 0.3.1
+
+1. В WP AI Admin Cloud Core выберите **Qwen 3.8 Max → нужный сайт**.
+2. Нажмите **«Получить токен на 1 час для Qwen 3.8 Max»**. Токен показывается один раз и передаётся Qwen в заголовке Authorization: Bearer.
+3. В Alibaba Model Studio Responses API задайте MCP tool: server_protocol = sse, server_url = https://mcp.wpaiadmin.ru/sse.
+4. Первый безопасный prompt: «Покажи доступные сайты и остаток лимита». Затем запросите каталог инструментов выбранного сайта.
+5. Запись тестируйте только на черновике и с полным sandbox → approval → apply → verify → rollback циклом.
+
+Для SSE важно, чтобы прокси/хостинг не буферизовал text/event-stream, не удалял Authorization и позволял одновременно держать GET /sse и POST /sse/messages. На shared hosting это обязательная живая проверка.
