@@ -48,3 +48,22 @@ jobs:
           php wp-ai-admin-cloud/tests/run.php
           php wp-ai-admin-cloud/tests/compatibility.php
           php wp-ai-admin-cloud/tests/oauth.php
+
+      - name: Package Cloud Core 0.3.1 test build
+        if: matrix.php == '8.3'
+        run: |
+          rm -rf build
+          mkdir -p build/wp-ai-admin-cloud
+          cp -R wp-ai-admin-cloud/* build/wp-ai-admin-cloud/
+          rm -rf build/wp-ai-admin-cloud/tests
+          (cd build && zip -qr ../wp-ai-admin-cloud-0.3.1.zip wp-ai-admin-cloud)
+          zip -qr public-client-0.3.1.zip public-client
+      - name: Upload Cloud Core 0.3.1 test build
+        if: matrix.php == '8.3'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-ai-admin-cloud-0.3.1-test
+          path: |
+            wp-ai-admin-cloud-0.3.1.zip
+            public-client-0.3.1.zip
+          if-no-files-found: error
