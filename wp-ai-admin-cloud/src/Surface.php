@@ -39,8 +39,25 @@ final class Surface {
         }
         self::html($kind);exit;
     }
+    public static function loginRedirect(string $kind): ?string {
+        if(!in_array($kind,['portal','consent'],true))throw new Fault('invalid_login_surface');
+        if(is_user_logged_in())return null;
+        $return=home_url($kind==='portal'?'/wpai-cloud/connect':'/wpai-cloud/oauth/authorize');
+        if($kind==='consent') {
+            $query=[];
+            foreach(['client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method','resource'] as $name) {
+                $value=$_GET[$name]??null;
+                if(is_string($value)&&strlen($value)<=2048)$query[$name]=wp_unslash($value);
+            }
+            if($query)$return=add_query_arg($query,$return);
+        }
+        return wp_login_url($return,false);
+    }
     private static function html(string $kind): void {
-        auth_redirect(); // WordPress login/session remains the identity authority.
+        // Frontend URLs receive WordPress's logged-in cookie, not the /wp-admin auth cookie.
+        // WordPress validates the logged-in session before template_redirect runs.
+        $login=self::loginRedirect($kind);
+        if($login!==null) { wp_safe_redirect($login,302,'WP AI Admin');exit; }
         $owner=(string)get_current_user_id();
         ob_start();
         status_header(200);header('Content-Type: text/html; charset=utf-8');header('X-Frame-Options: DENY');header('Referrer-Policy: no-referrer');header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
@@ -49,7 +66,14 @@ final class Surface {
             if(!Settings::eligible($owner))throw new Fault('beta_access_not_granted',403);
             Settings::account($owner);$core=WordPress::operatorCore();$core->ensureAccount($owner);
             if($kind==='portal')self::portal($owner,$core);else self::consent($owner,$core);
-        } catch(Fault $e) { echo '<p>'.esc_html($e->reason).'</p>'; }
+        } catch(Fault $e) {
+            $message=match($e->reason) {
+                'cloud_not_configured'=>'Gateway ещё не включён. Администратору нужно включить его в разделе WP AI Admin Cloud.',
+                'beta_access_not_granted'=>'Доступ к тестированию для этой учётной записи пока не открыт.',
+                default=>$e->reason
+            };
+            echo '<p>'.esc_html($message).'</p>';
+        }
         catch(\Throwable $e) { echo '<p>Сервис подключения временно недоступен.</p>'; }
         echo '</main></html>';
         ob_end_flush();

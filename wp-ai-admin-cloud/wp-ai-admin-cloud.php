@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP AI Admin Cloud Core
  * Description: Central cloud control plane for WP AI Admin: plans, licenses, sites, usage and API foundation.
- * Version: 0.3.2
+ * Version: 0.3.3
  * Requires PHP: 8.2
  * Author: Андриянов Н.Г.
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('WPAI_CLOUD_VERSION', '0.3.2');
+define('WPAI_CLOUD_VERSION', '0.3.3');
 define('WPAI_CLOUD_DB_VERSION', '1');
 define('WPAI_CLOUD_DIR', plugin_dir_path(__FILE__));
 define('WPAI_CLOUD_REST_NS', 'wpai-cloud/v1');
