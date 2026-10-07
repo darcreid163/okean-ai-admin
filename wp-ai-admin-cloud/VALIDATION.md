@@ -1,7 +1,9 @@
-# Core 0.3.3 validation — 2026-10-06
+# Core 0.3.4 validation — 2026-10-07
 
-Scope: replace the admin-cookie auth_redirect guard on frontend portal/consent URLs with the WordPress logged-in session check. Anonymous login redirects preserve canonical return URLs and OAuth parameters without reauth=1. Beta access, nonce and site ownership remain enforced. Gateway-disabled and beta-access messages are explanatory. No schema migration or public-client change.
+Live diagnosis: Core 0.3.3 is active on wpaiadmin.ru. wpai_gateway_enabled returns string "1"; database schema version is "2". Health reports configured=false/oauth=false; authenticated site enumeration returns 503 cloud_not_configured. WordPress core diagnostics are healthy.
 
-Local PHP 8.3 SQLite: 125 core, 61 compatibility and 50 OAuth assertions passed. Frontend HTTP fixture: eight tests passed, including real HTTP cookie path selection, single login handoff, anonymous/expired sessions, OAuth return parameters, authenticated consent, beta denial, disabled gateway and nonce rejection. WordPress session validation itself is stubbed. The cookie-scope regression also fails against the previous 0.3.2 Surface, confirming it detects the reported bug.
+Root cause: Settings::enabled compared the persisted option strictly to boolean true. Official WordPress get_option documentation specifies that non-serialized scalar options read from the database are strings, while the freshly saved cached value may retain its original type. Accept true, 1 and "1"; retain strict disabled/noncanonical values and the existing WP_AI_CLOUD_ENABLED override.
 
-All PHP source syntax checked. CI repeats PHP 8.2/8.3/8.4 and MySQL 8. Native Cloud health returned HTTP 200 with version 0.3.2, configured=false and oauth=false. WordPress home/siteurl both use https://wpaiadmin.ru. The release has not been installed on the live site; actual WordPress login and provider OAuth require post-installation verification.
+Local PHP 8.3: all syntax passed; 125 core assertions, 76 compatibility assertions, 50 OAuth assertions and eight HTTP frontend-session tests passed. Compatibility now models cold scalar Options API reads, verifies enabled/off values and confirms existing keys/Core data remain unchanged. Substituting 0.3.3 Settings makes the cold-read assertion fail before unrelated checks. CI repeats PHP 8.2/8.3/8.4 and MySQL 8.
+
+No live installation was performed through the native connector, which does not expose plugin installation. Existing enablement should be recognized after upgrade; configured=true must still be confirmed live. Multi-site dispatch and ChatGPT/Qwen OAuth remain pending site registration and client authorization.

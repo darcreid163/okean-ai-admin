@@ -5,8 +5,14 @@ declare(strict_types=1);
 use WPAICloudGateway\{Settings,Store,WordPress,Fault,Admin,Security};
 define('ABSPATH',__DIR__.'/fixtures/wordpress/'); define('ARRAY_A','ARRAY_A');
 define('AUTH_KEY',str_repeat('a',64)); define('AUTH_SALT',str_repeat('b',64));
-$options=[]; $autoload=[]; $routes=[]; $actions=[]; $loggedIn=true; $admin=true; $ssl=true;
-function get_option($name,$default=false) { global $options; return $options[$name]??$default; }
+$options=[]; $autoload=[]; $routes=[]; $actions=[]; $loggedIn=true; $admin=true; $ssl=true; $coldOptions=false;
+function get_option($name,$default=false) {
+    global $options,$coldOptions;
+    if(!array_key_exists($name,$options))return $default;
+    $value=$options[$name];
+    // Model a fresh request reading non-serialized scalars from wp_options.
+    return $coldOptions&&is_scalar($value)?(string)$value:$value;
+}
 function update_option($name,$value,$load=null) { global $options,$autoload; $options[$name]=$value; $autoload[$name]=$load; return true; }
 function add_option($name,$value,$deprecated='',$load=true) { global $options,$autoload; if(array_key_exists($name,$options))return false; $options[$name]=$value; $autoload[$name]=$load; return true; }
 function current_time($type,$gmt=false) { return gmdate('Y-m-d H:i:s'); }
@@ -87,6 +93,19 @@ $store=new Store($pdo,'wp_wpai_gateway_');
 $property=new ReflectionProperty(WordPress::class,'store');$property->setValue(null,$store);
 WordPress::enable();
 check(WordPress::configured() && Settings::enabled(),'Gateway failed to enable');
+$coldOptions=true;
+check(get_option('wpai_gateway_enabled')==='1','Cold WordPress option fixture must return a string');
+check(WordPress::configured() && Settings::enabled(),'Enabled gateway was lost on the next request');
+foreach([true,1,'1'] as $value) {
+    $options['wpai_gateway_enabled']=$value;
+    check(Settings::enabled() && WordPress::configured(),'Valid saved enabled value rejected');
+}
+foreach([false,0,'0','','false','true',2,[],null] as $value) {
+    $options['wpai_gateway_enabled']=$value;
+    check(!Settings::enabled() && !WordPress::configured(),'Gateway enabled by an off or noncanonical value');
+}
+WordPress::enable();
+check(Settings::keys()===$keys && $snapshot()===$before,'Reload check changed existing keys or Core data');
 check(get_option('wpai_gateway_db_version')==='2','Gateway migration not recorded');
 check($snapshot()===$before,'Gateway migration modified legacy data');
 WordPress::enable(); check($snapshot()===$before && Settings::keys()===$keys,'Repeated update changed core data or keys');
@@ -101,7 +120,7 @@ $wpdb->query('UPDATE '.WPAI_Cloud_DB::table('plan_versions')." SET verify_billab
 foreach($actions['rest_api_init'] as $callback)$callback();
 foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
 check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1/plans'])===1,'Legacy public routes overwritten');
-check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.3','Old status version');
+check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.4','Old status version');
 check(count(WPAI_Cloud_REST::plans()->data['data']['items'])===5,'Old plans contract changed');
 $loggedIn=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Anonymous provisioning');
 $loggedIn=true;$admin=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Subscriber provisioning');
@@ -122,7 +141,7 @@ class TestRequest {
 $headers=['authorization'=>'Bearer '.$token,'content-type'=>'application/json','accept'=>'application/json, text/event-stream','mcp-protocol-version'=>'2025-11-25'];
 $message=['jsonrpc'=>'2.0','id'=>99,'method'=>'initialize','params'=>['protocolVersion'=>'2025-11-25']];
 $req=new TestRequest($headers,$message);$response=WordPress::mcp($req);
-check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.3','HTTP MCP initialization failed');
+check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.4','HTTP MCP initialization failed');
 foreach ([['authorization','',401],['origin','https://evil.example.com',403],['mcp-protocol-version','unknown',400],['content-type','text/plain',415],['accept','application/json',406]] as [$header,$value,$status]) {
     $changed=$headers; $changed[$header]=$value;
     check(WordPress::mcp(new TestRequest($changed,$message))->status===$status,'HTTP validation bypass: '.$header);

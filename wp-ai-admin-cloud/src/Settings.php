@@ -23,7 +23,10 @@ final class Settings {
         return user_can($user,'manage_options')||in_array((int)$owner,get_option('wpai_gateway_beta_users',[]),true);
     }
     public static function enabled(): bool {
-        return defined('WP_AI_CLOUD_ENABLED') ? WP_AI_CLOUD_ENABLED===true : get_option('wpai_gateway_enabled',false)===true;
+        if(defined('WP_AI_CLOUD_ENABLED'))return WP_AI_CLOUD_ENABLED===true;
+        // WordPress may return a cached boolean immediately after update_option,
+        // but a scalar read back from the database is a string on later requests.
+        return in_array(get_option('wpai_gateway_enabled',false),[true,1,'1'],true);
     }
     private static function wrapper(): Vault {
         foreach (['AUTH_KEY','AUTH_SALT'] as $name) {
