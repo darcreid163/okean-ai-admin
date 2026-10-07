@@ -87,7 +87,7 @@ check(in_array('cloud_sites_list',$toolNames,true) && in_array('wp_get_site',$to
 $wpTool=null;foreach($listed['result']['tools'] as $candidate)if(($candidate['name']??'')==='wp_get_site'){$wpTool=$candidate;break;}
 check(is_array($wpTool) && in_array('site_id',$wpTool['inputSchema']['required'],true) && in_array('idempotency_key',$wpTool['inputSchema']['required'],true),'Proxy routing arguments missing');
 $proxy=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>3,'method'=>'tools/call','params'=>['name'=>'wp_get_site','arguments'=>['site_id'=>$site['id'],'idempotency_key'=>'proxy-read-1']]],$now);
-check(($proxy['result']['content'][0]['text']??'')==='fixture result','Published site tool did not proxy upstream result');
+check(($proxy['result']['content'][0]['text']??'')==='fixture result','Published site tool did not proxy upstream result: '.Security::canonical($proxy));
 check(($proxy['result']['_meta']['wpai_cloud']['site_id']??'')===$site['id'],'Cloud proxy metadata missing site binding');
 
 foreach(['127.0.0.1','10.0.0.1','192.168.1.1','169.254.169.254','100.64.0.1','198.18.0.1','192.0.2.1','224.0.0.1','::1','fe80::1','fc00::1','::ffff:127.0.0.1','2001:db8::1','2001:20::1','2002:7f00:1::','3fff::1'] as $ip) check(!Security::publicIp($ip),'Unsafe IP accepted: '.$ip);
