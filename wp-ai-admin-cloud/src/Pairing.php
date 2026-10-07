@@ -15,6 +15,13 @@ final class Pairing {
         if(!is_array($value)||($value['expires']??0)<=$now)throw new Fault('pairing_request_expired',410);
         return $value;
     }
+    public function checkSite(string $owner,string $home,int $now): array {
+        $home=Security::home($home);$this->core->ensureAccount($owner);$this->core->throttle($owner,'pairing_check',$now,10);
+        $cap=$this->transport->pairing($home,'capabilities');
+        if(($cap['protocol']??null)!=='wpai-browser-pairing-v1'||($cap['site_url']??null)!==$home)throw new Fault('pairing_client_update_required',422);
+        $version=$cap['plugin_version']??'';
+        return ['site_url'=>$home,'protocol'=>'wpai-browser-pairing-v1','plugin_version'=>is_string($version)&&preg_match('/^[0-9][A-Za-z0-9.+_-]{0,63}$/D',$version)?$version:'unknown','pairing_available'=>true];
+    }
     public function start(string $owner,string $home,string $label,int $now): string {
         if(home_url('/wpai-cloud/pair/callback')!==self::CALLBACK)throw new Fault('pairing_central_host_required',503);
         $home=Security::home($home);$this->core->ensureAccount($owner);$this->core->throttle($owner,'pairing_start',$now,10);

@@ -128,5 +128,49 @@ class FrontendSession(unittest.TestCase):
         self.assertIn('Подключить автоматически', body)
         self.assertLess(body.index('value="automatic"'), body.index('name="site_token"'))
 
+    def test_second_domain_commits_document_before_navigation(self):
+        status, headers, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session', urllib.parse.urlencode({'home':'https://okean.market','connect_mode':'automatic','wpai_nonce':'fixture-nonce'}).encode())
+        self.assertEqual(status, 200)
+        self.assertNotIn('Location', headers)
+        self.assertIn("form-action 'self'", headers['Content-Security-Policy'])
+        self.assertNotIn('https:', headers['Content-Security-Policy'])
+        self.assertIn('http-equiv="refresh"', body)
+        self.assertIn('https://other.example/fixture-site-consent?state=', body)
+        self.assertIn('Продолжить подключение', body)
+
+    def test_account_summary_uses_one_plan_for_two_sites(self):
+        status, _, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session; fixture_connected=1')
+        self.assertEqual(status, 200)
+        self.assertIn('Один аккаунт и один тариф', body)
+        self.assertIn('<strong>PRO</strong>', body)
+        self.assertIn('Осталось: 492', body)
+        self.assertIn('Подключено сайтов: <strong>2</strong>', body)
+        self.assertIn('owned-site', body)
+        self.assertIn('second-site', body)
+
+    def test_preflight_does_not_register_or_navigate(self):
+        status, headers, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session', urllib.parse.urlencode({'home':'https://okean.market','connect_mode':'check','wpai_nonce':'fixture-nonce'}).encode())
+        self.assertEqual(status, 200)
+        self.assertIn('Связь с сайтом подтверждена', body)
+        self.assertIn('Подключено сайтов: <strong>1</strong>', body)
+        self.assertNotIn('Location', headers)
+        self.assertNotIn('http-equiv="refresh"', body)
+
+    def test_oauth_allow_and_deny_commit_document_before_external_callback(self):
+        cookie='wordpress_logged_in_fixture=validated-session; fixture_connected=1; fixture_oauth=ready'
+        for decision in ['allow','deny']:
+            payload=[('decision',decision),('wpai_nonce','fixture-nonce'),('sites[]','owned-site'),('sites[]','second-site')]
+            status, headers, body = self.request('/wpai-cloud/oauth/authorize',cookie,urllib.parse.urlencode(payload).encode())
+            self.assertEqual(status,200)
+            self.assertNotIn('Location',headers)
+            self.assertIn('http-equiv="refresh"',body)
+            self.assertIn('state=state%2Band%26value',body)
+            self.assertIn('code=' if decision=='allow' else 'error=access_denied',body)
+
+    def test_invalid_automatic_nonce_cannot_navigate(self):
+        status, _, body = self.request('/wpai-cloud/connect','wordpress_logged_in_fixture=validated-session',urllib.parse.urlencode({'home':'https://okean.market','connect_mode':'automatic','wpai_nonce':'invalid'}).encode())
+        self.assertEqual(status,403)
+        self.assertNotIn('http-equiv="refresh"',body)
+
 if __name__ == '__main__':
     unittest.main()

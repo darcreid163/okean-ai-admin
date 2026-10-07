@@ -33,7 +33,7 @@ final class Gateway {
         if ($method==='initialize') {
             $requested=$p['protocolVersion']??'';
             $version=in_array($requested,self::VERSIONS,true)?$requested:'2025-11-25';
-            return $reply(['protocolVersion'=>$version,'capabilities'=>['tools'=>['listChanged'=>false]],'serverInfo'=>['name'=>'wp-ai-admin-cloud','title'=>'https://wpaiadmin.ru/mcp','version'=>'0.3.5'],'instructions'=>'Multi-client beta gateway. Streamable HTTP is primary; legacy SSE is available for Qwen Responses API. Always select site_id explicitly. For an uncertain outcome reconcile the existing action before issuing another mutation. OAuth onboarding uses a WordPress account and explicit site consent. Batch receipt accounting is pending.']);
+            return $reply(['protocolVersion'=>$version,'capabilities'=>['tools'=>['listChanged'=>false]],'serverInfo'=>['name'=>'wp-ai-admin-cloud','title'=>'https://wpaiadmin.ru/mcp','version'=>'0.3.6'],'instructions'=>'Multi-client beta gateway. One account and shared plan can hold up to 50 sites. Streamable HTTP is primary; legacy SSE is available for Qwen Responses API. Always select site_id explicitly. For an uncertain outcome reconcile the existing action before issuing another mutation. OAuth onboarding uses a WordPress account and explicit site consent. Newly added sites need reauthorization. Batch receipt accounting is pending.']);
         }
         if ($method==='ping') return $reply((object)[]);
         if ($method==='tools/list') return $reply(['tools'=>self::tools()]);

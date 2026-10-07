@@ -1,7 +1,7 @@
 <?php
 // Production central/native pairing and MCP authentication; WordPress identity/HTTP are fixtures.
 declare(strict_types=1);
-define('ABSPATH',__DIR__.'/');define('OAI_VERSION','2.1.12');
+define('ABSPATH',__DIR__.'/');define('OAI_VERSION','2.1.13');
 use WPAICloudGateway\{Core,Store,Vault,Signer,Security,Pairing,Transport,PairingTransport,Fault};
 $origin='https://wpaiadmin.ru';$uid=42;$admin=true;$ssl=true;$options=[];$deleteFails=[];$httpOverride=null;$checks=0;
 function home_url($path=''){global $origin;return $origin.$path;}
@@ -51,6 +51,11 @@ class BrowserTransport implements Transport,PairingTransport {
 $db=tempnam(sys_get_temp_dir(),'pairing-');$store=new Store(new PDO('sqlite:'.$db),'pair_fixture_');$store->migrate();$vault=new Vault(str_repeat('p',32));$transport=new BrowserTransport();$keys=sodium_crypto_sign_keypair();
 $core=new Core($store,$vault,$transport,json_decode(file_get_contents(dirname(__DIR__).'/wp-ai-admin-cloud/config/plans.json'),true),new Signer(sodium_crypto_sign_secretkey($keys)));
 $pairing=new Pairing($core,$vault,$transport);$now=time();
+$preflight=$pairing->checkSite('42','https://okean.market',$now);
+check($preflight['site_url']==='https://okean.market'&&$preflight['pairing_available']===true,'Preflight failed');
+check(count($core->sites('42'))===0,'Preflight registered a site without consent');
+$transport->wrongSite=true;rejects(fn()=>$pairing->checkSite('42','https://okean.market',$now),'pairing_client_update_required');$transport->wrongSite=false;
+rejects(fn()=>$pairing->checkSite('42','http://okean.market',$now),'public_https_site_required');
 function begin($home){global $pairing,$now;$url=$pairing->start('42',$home,'Николай',$now);parse_str(parse_url($url,PHP_URL_QUERY),$q);return $q['state'];}
 function approve($home,$state){global $now;return at($home,7,function()use($state){global $now;$r=OAI_Gateway_Pairing::request($state,$now);check(!is_wp_error($r),'Trusted descriptor rejected');return OAI_Gateway_Pairing::issue_code($r,$now);});}
 $state=begin('https://okean.market');$descriptor=$pairing->descriptor($state,$now);check(!isset($descriptor['verifier']),'PKCE verifier leaked');

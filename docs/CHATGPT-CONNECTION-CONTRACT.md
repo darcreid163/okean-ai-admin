@@ -1,15 +1,25 @@
 # WP AI Admin connection contract
-Contract version: **1.0**  
+Contract version: **1.1**  
 Recorded: **2026-10-07**  
-Baseline: native **2.1.12**, central **Cloud Core 0.3.5**  
+Supported baseline: native **2.1.13**, central **Cloud Core 0.3.6**; retained predecessor: native 2.1.12 / Core 0.3.5  
 Purpose: preserve working onboarding and authorization across future releases.
 
 This is the compatibility baseline, not a prohibition on improvements. Changes to the contract require an explicit versioned design, applicable data migration, updated tests and documentation, and the two-site acceptance flow below. Do not silently replace this flow with manual tokens or change persistent identities to make a failing connection appear successful.
 
+## Amendment 1.1 — 2026-10-07
+
+This is a compatible onboarding/UI update. Native pairing protocol still supports 2.1.12; 2.1.13 updates the primary MCP block to the central gateway and retains native discovery in collapsed diagnostics. Core 0.3.6 replaces cross-origin POST redirects with a committed no-store handoff document, automatic meta navigation and a manual continuation link to an already validated target. Keep form-action self, no scripts, no arbitrary URL input and Referrer-Policy no-referrer. Apply this to both target-site consent navigation and central OAuth allow/deny callbacks. Same-origin callback-to-cabinet redirects remain valid.
+
+One account owns multiple registrations and one plan/shared quota. Registration capacity stays 50 for all plans; OAuth consent and token site capacity increase from 20 to the same 50 without expanding any existing grant. Existing identities, keys, tables, credentials and balances do not migrate or reset. A paid plan is assigned once to the account; automatic payment activation is a separate billing implementation, not part of this update.
+
+The cabinet shows shared quota, all active sites, an add-site form and optional read-only connection preflight. Authenticated /wp-json/wpai-cloud/v1/connection-check preserves public DNS validation, pinned TLS and owner/account eligibility; it issues no credential and consumes no action quota. Stable sanitized error codes aid diagnosis.
+
+Additional required gates: wp-ai-admin-cloud/tests/multisite-account.php; frontend-session.py handoff/preflight/account summary cases; browser-navigation.js in real Chromium using exact released Core 0.3.5 source for failure reproduction and candidate Surface source for both flows; wordpress-admin-navigation.php primary central endpoint/advanced native diagnostics checks. Keep future user instructions aligned.
+
 ## 1. Deployment and current limits
 
 - Native WP AI Admin runs on every managed WordPress site, including wpaiadmin.ru and okean.market.
-- Cloud Core 0.3.5 is the central service on wpaiadmin.ru. Automatic pairing protocol minimum is native 2.1.11; 2.1.12 is the supported baseline with corrected administrator navigation.
+- Cloud Core 0.3.6 is the central service on wpaiadmin.ru. Automatic pairing protocol minimum is native 2.1.11; 2.1.13 is the supported UI baseline, retaining corrected administrator navigation.
 - The public-client 0.3.2 package is a separate optional API client; browser onboarding does not require it.
 - Current access is approved-user beta: central administrators or explicitly approved testers. Site registration does not create a ChatGPT plugin automatically.
 - ChatGPT and Qwen are beta profiles; Claude and DeepSeek are planned profiles. Billing, open public enrollment, commercial client entitlement enforcement and batch receipt accounting are not implemented. Do not describe them as complete.

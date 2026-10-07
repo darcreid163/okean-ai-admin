@@ -1,0 +1,75 @@
+<?php
+declare(strict_types=1);
+require __DIR__.'/bootstrap.php';
+use WPAICloudGateway\{Core,OAuth,Gateway,Fault,Security,Signer,Pairing};
+require dirname(__DIR__).'/src/OAuth.php';
+$checks=0;
+function check(bool $ok,string $message): void {global $checks;$checks++;if(!$ok)throw new RuntimeException($message);}
+function rejects(callable $fn,string $reason): void {try{$fn();}catch(Fault $e){check($e->reason===$reason,'Expected '.$reason.', got '.$e->reason);return;}throw new RuntimeException('Expected rejection: '.$reason);}
+$now=1791350400;
+$database=sys_get_temp_dir().'/wpai-multisite-'.bin2hex(random_bytes(8)).'.sqlite';
+$store=fixtureStore($database);$store->migrate();
+if(getenv('TEST_MYSQL_DSN'))foreach(['audit','requests','oauth_access','oauth_refresh','oauth_codes','oauth_grants','oauth_clients','tokens','sites','balances','accounts','rate'] as $name)$store->execute('DELETE FROM '.$store->table($name));
+$transport=new FakeTransport();$core=fixtureCore($store,$transport);
+$core->ensureAccount('71');$core->ensureAccount('72');$core->setPlan('operator','71','pro',$now);
+$sites=[];
+foreach(['https://wpaiadmin.ru','https://okean.market','https://third.example.com'] as $home)$sites[]=$core->connect('71',$home,'fixture-multisite-admin-token-'.hash('sha256',$home),$now);
+$other=$core->connect('72','https://other.example.com','fixture-other-admin-token-aaaaaaaa',$now);
+check(count($core->sites('71'))===3,'One account must hold three sites');
+check($core->usage('71',$now)['plan']==='pro'&&$core->usage('71',$now)['limit']===500,'Plan must belong to account');
+check($core->usage('71',$now)['used']===0,'Registration must not consume action quota');
+$ids=array_column($sites,'id');
+check(count(array_unique($ids))===3,'Separate sites need separate registration IDs');
+$oauth=new OAuth($store,$core,'https://wpaiadmin.ru/mcp');
+$client=$oauth->register(['client_name'=>'ChatGPT multisite fixture','redirect_uris'=>['https://chatgpt.com/connector/oauth/fixture-multisite']],$now);
+$verifier=str_repeat('v',64);
+$query=['client_id'=>$client['client_id'],'redirect_uri'=>$client['redirect_uris'][0],'response_type'=>'code','resource'=>'https://wpaiadmin.ru/mcp','scope'=>'mcp:read mcp:write offline_access','code_challenge'=>Security::b64(hash('sha256',$verifier,true)),'code_challenge_method'=>'S256','state'=>'multisite-state'];
+$auth=$oauth->authorization($query);
+rejects(fn()=>$oauth->approve('71',$auth,[$ids[0],$other['id']],$now),'invalid_site_consent');
+$code=$oauth->approve('71',$auth,$ids,$now);
+$token=$oauth->exchange(['grant_type'=>'authorization_code','code'=>$code,'client_id'=>$client['client_id'],'redirect_uri'=>$query['redirect_uri'],'resource'=>$query['resource'],'code_verifier'=>$verifier],$now,fn($owner)=>$owner==='71');
+$actor=$core->authenticate($token['access_token'],$now);$oauth->binding($actor,$now);
+check($actor['site_ids']===$ids,'One OAuth grant must authorize all selected sites');
+$gateway=new Gateway($core);
+$list=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>1,'method'=>'tools/call','params'=>['name'=>'cloud_sites_list','arguments'=>[]]],$now);
+$visible=json_decode($list['result']['content'][0]['text'],true);
+check(count($visible)===3&&array_column($visible,'id')===$ids,'Gateway site list differs from selected sites');
+foreach($sites as $i=>$site){
+ $result=$core->call($actor,$site['id'],'wp_get_site',[],'site-read-'.$i,$now);
+ check($result['state']==='succeeded'&&$result['site_id']===$site['id'],'Wrong selected site routing');
+ check($core->usage('71',$now)['used']===$i+1,'Shared plan must accumulate actions from every site');
+}
+check($core->usage('71',$now)['remaining']===497,'Quota must not reset per site');
+check($core->usage('72',$now)['used']===0,'Another account usage leaked');
+$failed=$core->call($actor,$ids[1],'wp_get_site',['fail'=>true],'failed-second-site',$now);
+check($failed['charged_units']===0&&$core->usage('71',$now)['used']===3,'Failed second-site action charged');
+$retry=$core->call($actor,$ids[0],'wp_get_site',[],'site-read-0',$now);
+check($retry['charged_units']===1&&$core->usage('71',$now)['used']===3,'Retry charged twice');
+$read=$core->mint('71',[$ids[0]],['mcp:read'],$now);$readActor=$core->authenticate($read['access_token'],$now);
+rejects(fn()=>$core->catalog($readActor,$ids[1],$now),'scope_or_site_denied');
+rejects(fn()=>$core->catalog($actor,$other['id'],$now),'scope_or_site_denied');
+$extra=$core->connect('71','https://fourth.example.com','fixture-fourth-site-token-aaaaaaaa',$now);
+rejects(fn()=>$core->catalog($actor,$extra['id'],$now),'scope_or_site_denied');
+check(count($core->sites('71'))===4,'Adding a fourth site replaced earlier sites');
+$core->setPlan('operator','71','power',$now);
+check($core->usage('71',$now)['limit']===2000&&$core->usage('71',$now)['used']===3,'Plan upgrade must preserve shared balance');
+check(array_column($core->sites('71'),'id')===array_merge($ids,[$extra['id']]),'Plan upgrade changed registration identities');
+// Every plan uses the same registration capacity; reconnect at capacity is still allowed.
+$core->ensureAccount('73');
+$capacity=[];
+for($i=0;$i<Core::MAX_SITES;$i++)$capacity[]=$core->connect('73','https://site-'.$i.'.example.com','fixture-capacity-site-token-aaaaaaaa',$now+$i*60);
+check(count($core->sites('73'))===Core::MAX_SITES,'Fifty sites cannot share one account');
+rejects(fn()=>$core->connect('73','https://overflow.example.com','fixture-capacity-site-token-aaaaaaaa',$now+Core::MAX_SITES*60),'pilot_site_count_limit');
+$reconnect=$core->connect('73',$capacity[0]['home'],'fixture-new-capacity-site-token-aaaa',$now+Core::MAX_SITES*60,true);
+check($reconnect['id']===$capacity[0]['id']&&count($core->sites('73'))===Core::MAX_SITES,'Reconnect at capacity duplicated or replaced site ID');
+check($core->usage('73',$now)['used']===0,'Capacity checks consumed tool quota');
+$capacityIds=array_column($capacity,'id');
+$capacityNow=$now+Core::MAX_SITES*60;
+$capacityCode=$oauth->approve('73',$auth,$capacityIds,$capacityNow);
+$capacityToken=$oauth->exchange(['grant_type'=>'authorization_code','code'=>$capacityCode,'client_id'=>$client['client_id'],'redirect_uri'=>$query['redirect_uri'],'resource'=>$query['resource'],'code_verifier'=>$verifier],$capacityNow,fn($owner)=>$owner==='73');
+$capacityActor=$core->authenticate($capacityToken['access_token'],$capacityNow);$oauth->binding($capacityActor,$capacityNow);
+check(count($capacityActor['site_ids'])===Core::MAX_SITES,'All fifty selected sites must fit one OAuth grant');
+rejects(fn()=>$core->mint('73',array_merge($capacityIds,['one-extra-site']),['mcp:read'],$capacityNow),'invalid_token_policy');
+rejects(fn()=>$oauth->approve('73',$auth,array_merge($capacityIds,['one-extra-site']),$capacityNow),'invalid_site_consent');
+echo 'PASS '.$checks.' multisite shared-plan/OAuth/capacity assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite').PHP_EOL;
+if(!getenv('TEST_MYSQL_DSN'))foreach([$database,$database.'-wal',$database.'-shm'] as $file)if(file_exists($file))unlink($file);

@@ -77,32 +77,54 @@ final class Surface {
                 'pairing_request_expired','pairing_request_already_used','invalid_pairing_state','invalid_pairing_code'=>'Ссылка подключения истекла или уже использована. Начните подключение заново.',
                 'pairing_account_mismatch'=>'Войдите в тот кабинет WP AI Admin, в котором начали подключение сайта.',
                 'pairing_exchange_failed','invalid_pairing_response'=>'Не удалось завершить подключение. Начните заново и подтвердите доступ на своём сайте.',
+                'site_dns_unavailable'=>'Сервер не смог определить адрес сайта. Проверьте DNS домена и повторите попытку.',
+                'private_site_address_blocked'=>'Адрес сайта не является публичным. Нужен доступный в интернете HTTPS-сайт.',
+                'public_https_site_required','invalid_site_host','invalid_site_path'=>'Введите полный адрес WordPress-сайта вида https://example.ru без пути входа и параметров.',
+                'pilot_site_count_limit'=>'Достигнут тестовый лимит регистраций сайтов для этого аккаунта.',
                 default=>$e->reason
             };
-            echo '<p>'.esc_html($message).'</p>';
+            echo '<p>'.esc_html($message).'</p><p>Код ошибки: <code>'.esc_html($e->reason).'</code></p>';
         }
         catch(\Throwable $e) { echo '<p>Сервис подключения временно недоступен.</p>'; }
         echo '</main></html>';
         ob_end_flush();
+    }
+    /** Commit a same-origin document before navigation: form-action 'self' blocks POST redirects in Chromium. */
+    private static function navigate(string $url): void {
+        // Only call with Pairing::start's verified site URL or the registered OAuth redirect.
+        // Meta refresh starts a new navigation, so the strict form-action policy remains intact.
+        echo '<meta http-equiv="refresh" content="'.esc_attr('0;url='.$url).'"><p>Продолжаем подключение…</p><p><a href="'.esc_url($url).'" rel="noreferrer">Продолжить подключение</a></p>';
     }
     private static function portal(string $owner,Core $core): void {
         if(($_GET['connected']??'')==='1')echo '<p>Сайт подключён. Теперь его можно выбрать при подключении ИИ.</p>';
         if(($_GET['cancelled']??'')==='1')echo '<p>Подключение отменено.</p>';
         if(($_SERVER['REQUEST_METHOD']??'GET')==='POST') {
             check_admin_referer('wpai_beta_connect','wpai_nonce');
-            if(($_POST['connect_mode']??'')==='automatic') {
+            $mode=$_POST['connect_mode']??'';
+            if($mode==='check') {
+                $home=$_POST['home']??null;if(!is_string($home)||strlen($home)>512)throw new Fault('invalid_site_input');
+                $check=WordPress::pairing()->checkSite($owner,wp_unslash($home),time());
+                echo '<p>Связь с сайтом подтверждена: <strong>'.esc_html($check['site_url']).'</strong>. Версия плагина: '.esc_html($check['plugin_version']).'. Теперь нажмите «Подключить автоматически» и подтвердите доступ на сайте.</p>';
+            }elseif($mode==='automatic') {
                 $home=$_POST['home']??null;if(!is_string($home)||strlen($home)>512)throw new Fault('invalid_site_input');
                 $url=WordPress::pairing()->start($owner,wp_unslash($home),(string)wp_get_current_user()->display_name,time());
-                ob_end_clean();wp_redirect($url,303,'WP AI Admin');exit;
+                self::navigate($url);return;
+            }else{
+                $home=$_POST['home']??null;$token=$_POST['site_token']??null;
+                if(!is_string($home)||!is_string($token)||strlen($home)>512||strlen($token)>512)throw new Fault('invalid_site_input');
+                $core->connect($owner,wp_unslash($home),wp_unslash($token),time());echo '<p>Сайт подключён.</p>';
             }
-            $home=$_POST['home']??null;$token=$_POST['site_token']??null;
-            if(!is_string($home)||!is_string($token)||strlen($home)>512||strlen($token)>512)throw new Fault('invalid_site_input');
-            $core->connect($owner,wp_unslash($home),wp_unslash($token),time());echo '<p>Сайт подключён.</p>';
         }
-        echo '<p>Укажите свой сайт, войдите там как администратор и подтвердите подключение. Сайт появится в этом кабинете автоматически.</p>';
-        foreach($core->sites($owner) as $s)echo '<p><code>'.esc_html($s['home']).'</code> · <code>'.esc_html($s['id']).'</code></p>';
-        echo '<form method="post"><input type="hidden" name="connect_mode" value="automatic">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
-        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><button type="submit">Подключить автоматически</button></form>';
+        $sites=$core->sites($owner);$usage=$core->usage($owner,time());
+        echo '<h2>Мои сайты</h2><p>Один аккаунт и один тариф для всех подключённых сайтов. Действия списываются из общего лимита аккаунта.</p><p>Тариф: <strong>'.esc_html(strtoupper($usage['plan'])).'</strong> · Лимит: '.(int)$usage['limit'].' · Использовано: '.(int)$usage['used'].' · В обработке: '.(int)$usage['reserved'].' · Осталось: '.(int)$usage['remaining'].'</p><p>Подключено сайтов: <strong>'.count($sites).'</strong>. В тестовом режиме доступно до '.Core::MAX_SITES.' регистраций на аккаунт; отдельная подписка для каждого сайта не требуется.</p>';
+        if($sites){
+            echo '<table><thead><tr><th>Сайт</th><th>ID подключения</th></tr></thead><tbody>';
+            foreach($sites as $s)echo '<tr><td>'.esc_html($s['home']).'</td><td><code>'.esc_html($s['id']).'</code></td></tr>';
+            echo '</tbody></table><p>После добавления нового сайта повторите авторизацию WP AI Admin в ChatGPT и отметьте все нужные сайты.</p>';
+        }
+        echo '<h2>Добавить сайт</h2><p>Укажите адрес, войдите на этом сайте как администратор и подтвердите подключение. Сайт появится в этом кабинете автоматически.</p>';
+        echo '<form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
+        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><button type="submit" name="connect_mode" value="automatic">Подключить автоматически</button> <button type="submit" name="connect_mode" value="check">Проверить связь</button></form>';
         echo '<details><summary>Подключить существующим MCP-токеном</summary><form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
         echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><label>MCP-токен администратора <input type="password" name="site_token" autocomplete="new-password" required></label><button type="submit">Подключить сайт</button></form></details>';
     }
@@ -128,8 +150,7 @@ final class Surface {
             }
             // Registered callback was validated exactly; no redirect to arbitrary request input.
             $redirect=$auth['redirect_uri'].(str_contains($auth['redirect_uri'],'?')?'&':'?').http_build_query($parameters,'','&',PHP_QUERY_RFC3986);
-            ob_end_clean();
-            wp_redirect($redirect,303,'WP AI Admin');exit;
+            self::navigate($redirect);return;
         }
         echo '<h2>Разрешить подключение?</h2><p>Клиент: <strong>'.esc_html($auth['client_name']).'</strong> (название указано клиентом).</p><p>Возврат: <code>'.esc_html($auth['redirect_uri']).'</code></p><p>Права: <code>'.esc_html(implode(' ',$auth['scopes'])).'</code>. Записи проходят sandbox и подтверждение в WordPress.</p>';
         $sites=$core->sites($owner);

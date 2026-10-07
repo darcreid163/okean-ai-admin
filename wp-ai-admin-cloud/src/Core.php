@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace WPAICloudGateway;
 
 final class Core {
+    public const MAX_SITES = 50;
     public const READ_TOOLS = ['woodmart_status','woodmart_list_settings','woodmart_get_setting','wp_get_site','wp_inspect_html','wp_visual_qa_start','wp_visual_qa_result','system_page_qa_run','wp_get_theme_mods','wp_list_plugins','wp_list_themes','wp_list_post_types','wp_list_taxonomies','wp_list_media','wp_list_menus','wp_list_options','wp_list_users','wp_list_comments','wp_list_widgets','wp_health','wp_diagnostics','wp_list_operations','operation_get','operation_verify','operation_proof','operation_preview_link','wp_list_files','wp_search_files','wp_execution_readiness','elementor_get_structure','elementor_get_widget','elementor_get_schema','elementor_get_globals','elementor_get_container','elementor_get_page_layout','woocommerce_get_product','operation_get_receipt','gutenberg_get_blocks','gutenberg_get_outline','gutenberg_locate_block','builder_catalog','builder_detect','system_capabilities','wp_read_content','wp_read_post','wp_read_meta','wp_read_option','wp_rest_routes','wp_rest_read','file_read','wp_file_outline','woocommerce_search_products','woocommerce_get_variations','woocommerce_search_orders','woocommerce_get_product_full','operation_status','operation_diff','preview_get','verify_operation','proof_operation','elementor_inspect_page','elementor_inspect_widget','system_manifest','batch_plan','batch_preflight','batch_dry_run','batch_list','batch_status','batch_receipt','batch_proof','file_diff','system_tool_catalog','system_self_test','system_security_status','system_test_automation_status','system_regression_history','system_coverage_report'];
     public const FREE_TOOLS = ['operation_get','operation_status','operation_verify','operation_proof','operation_preview_link','operation_get_receipt','operation_diff','operation_rollback','verify_operation','proof_operation','preview_get','batch_receipt','batch_proof','batch_status','batch_list','batch_rollback'];
     public static function units(string $name): int { return in_array(str_replace('.','_',$name),self::FREE_TOOLS,true)?0:1; }
@@ -51,7 +52,7 @@ final class Core {
                 $this->store->audit($owner,$id,'site_reconnected','',$now);
                 return ['id'=>$id,'home'=>$home,'plugin_site_id'=>$pluginSite,'installation_id'=>$installation,'status'=>'active'];
             }
-            if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=?',[$owner])['n']>=50) throw new Fault('pilot_site_count_limit',409);
+            if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=?',[$owner])['n']>=self::MAX_SITES) throw new Fault('pilot_site_count_limit',409);
             $id='reg_'.bin2hex(random_bytes(16));
             $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now]);
             $this->store->audit($owner,$id,'site_connected','',$now);
@@ -68,7 +69,7 @@ final class Core {
     }
     public function mint(string $owner,array $siteIds,array $scopes,int $now,int $ttl=3600): array {
         $this->account($owner);
-        if (!$siteIds || count($siteIds)>20 || !array_is_list($siteIds) || !array_is_list($scopes) || count($scopes)>2 || array_filter($siteIds,fn($v)=>!is_string($v)) || array_filter($scopes,fn($v)=>!is_string($v))) throw new Fault('invalid_token_policy');
+        if (!$siteIds || count($siteIds)>self::MAX_SITES || !array_is_list($siteIds) || !array_is_list($scopes) || count($scopes)>2 || array_filter($siteIds,fn($v)=>!is_string($v)) || array_filter($scopes,fn($v)=>!is_string($v))) throw new Fault('invalid_token_policy');
         if (count(array_unique($siteIds,SORT_STRING))!==count($siteIds) || !in_array('mcp:read',$scopes,true) || array_diff($scopes,['mcp:read','mcp:write']) || count(array_unique($scopes))!==count($scopes) || $ttl<60 || $ttl>3600) throw new Fault('invalid_token_policy');
         foreach ($siteIds as $id) $this->ownedSite($owner,Security::identifier($id));
         $token='wpai_cloud_'.Security::b64(random_bytes(32));
