@@ -1,3 +1,4 @@
 <?php get_header(); ?>
 <main class="flex-1"><section class="max-w-2xl mx-auto px-6 py-24 text-center"><p class="text-sm uppercase tracking-wider text-secondary-600">404</p><h1 class="mt-3 text-4xl md:text-5xl font-bold tracking-tight text-neutral"><?php esc_html_e( "We can't find that page.", '{{THEME_SLUG}}' ); ?></h1><p class="mt-4 text-secondary-700"><?php esc_html_e( 'The requested page was not found.', '{{THEME_SLUG}}' ); ?></p><p class="mt-8"><a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="inline-flex items-center text-primary-500 hover:underline">&larr; <?php esc_html_e( 'Back home', '{{THEME_SLUG}}' ); ?></a></p></section></main>
 <?php get_footer(); ?>
+

@@ -29,7 +29,7 @@ final class Core {
         $this->account($owner);
         return $this->store->rows('SELECT id,home,plugin_site_id,installation_id,status,created_at FROM '.$this->store->table('sites').' WHERE owner=? AND status=? ORDER BY created_at',[$owner,'active']);
     }
-    public function connect(string $owner,string $home,string $token,int $now): array {
+    public function connect(string $owner,string $home,string $token,int $now,bool $replace=false): array {
         $this->account($owner); $home=Security::home($home);
         $this->throttle($owner,'site_proof',$now,10);
         if (!preg_match('/^[A-Za-z0-9._~-]{20,512}$/D',$token)) throw new Fault('invalid_site_token');
@@ -39,11 +39,19 @@ final class Core {
         foreach ($texts as $block) if (($block['type']??'')==='text') { $v=json_decode($block['text']??'',true); if (is_array($v) && isset($v['site_id'],$v['installation_id'])) { $manifest=$v; break; } }
         if (!$manifest || ($manifest['plugin_name']??'')!=='WP AI Admin' || ($manifest['release']['production_defaults']['direct_live_writes']??null)!==false) throw new Fault('site_manifest_incompatible',422);
         $pluginSite=Security::identifier($manifest['site_id']); $installation=Security::identifier($manifest['installation_id']);
-        return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now) {
+        return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now,$replace) {
             $this->account($owner,true);
+            $hash=hash('sha256',$home); $existing=$this->store->row('SELECT * FROM '.$this->store->table('sites').' WHERE url_hash=?',[$hash]);
+            if($existing) {
+                if(!$replace||$existing['owner']!==$owner)throw new Fault('site_already_registered',409);
+                if($existing['plugin_site_id']!==$pluginSite||$existing['installation_id']!==$installation)throw new Fault('site_identity_changed',409);
+                // A revoked registration gets a fresh ID: old grants must not regain access.
+                $id=$existing['status']==='active'?$existing['id']:'reg_'.bin2hex(random_bytes(16));
+                $this->store->execute('UPDATE '.$this->store->table('sites').' SET id=?,token_sealed=?,status=?,created_at=? WHERE id=?',[$id,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now,$existing['id']]);
+                $this->store->audit($owner,$id,'site_reconnected','',$now);
+                return ['id'=>$id,'home'=>$home,'plugin_site_id'=>$pluginSite,'installation_id'=>$installation,'status'=>'active'];
+            }
             if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=?',[$owner])['n']>=50) throw new Fault('pilot_site_count_limit',409);
-            $hash=hash('sha256',$home); $existing=$this->store->row('SELECT id FROM '.$this->store->table('sites').' WHERE url_hash=?',[$hash]);
-            if ($existing) throw new Fault('site_already_registered',409);
             $id='reg_'.bin2hex(random_bytes(16));
             $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now]);
             $this->store->audit($owner,$id,'site_connected','',$now);

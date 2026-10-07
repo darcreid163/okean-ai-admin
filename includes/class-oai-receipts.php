@@ -6,3 +6,4 @@ class OAI_Receipts {
  private static function proof_verified($r){ $p=json_decode((string)$r['proof'],true); return is_array($p)&&!empty($p['verified']); }
  public static function store($id,$receipt,$proof=null){OAI_DB::update($id,array('receipt'=>wp_json_encode($receipt,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'proof'=>wp_json_encode($proof,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)));}
 }
+

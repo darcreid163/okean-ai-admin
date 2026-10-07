@@ -20,6 +20,7 @@ final class Surface {
             '/.well-known/oauth-authorization-server/wpai-cloud','/wpai-cloud/.well-known/oauth-authorization-server'=>'authorization',
             '/wpai-cloud/oauth/authorize'=>'consent',
             '/wpai-cloud/connect'=>'portal',
+            '/wpai-cloud/pair/callback'=>'pair_callback',
             default=>null
         };
     }
@@ -40,12 +41,13 @@ final class Surface {
         self::html($kind);exit;
     }
     public static function loginRedirect(string $kind): ?string {
-        if(!in_array($kind,['portal','consent'],true))throw new Fault('invalid_login_surface');
+        if(!in_array($kind,['portal','consent','pair_callback'],true))throw new Fault('invalid_login_surface');
         if(is_user_logged_in())return null;
-        $return=home_url($kind==='portal'?'/wpai-cloud/connect':'/wpai-cloud/oauth/authorize');
-        if($kind==='consent') {
+        $return=home_url(match($kind){'portal'=>'/wpai-cloud/connect','pair_callback'=>'/wpai-cloud/pair/callback',default=>'/wpai-cloud/oauth/authorize'});
+        if($kind==='consent'||$kind==='pair_callback') {
             $query=[];
-            foreach(['client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method','resource'] as $name) {
+            $names=$kind==='pair_callback'?['state','code','error']:['client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method','resource'];
+            foreach($names as $name) {
                 $value=$_GET[$name]??null;
                 if(is_string($value)&&strlen($value)<=2048)$query[$name]=wp_unslash($value);
             }
@@ -65,11 +67,16 @@ final class Surface {
         try {
             if(!Settings::eligible($owner))throw new Fault('beta_access_not_granted',403);
             Settings::account($owner);$core=WordPress::operatorCore();$core->ensureAccount($owner);
-            if($kind==='portal')self::portal($owner,$core);else self::consent($owner,$core);
+            if($kind==='portal')self::portal($owner,$core);elseif($kind==='pair_callback')self::paired($owner);else self::consent($owner,$core);
         } catch(Fault $e) {
             $message=match($e->reason) {
                 'cloud_not_configured'=>'Gateway ещё не включён. Администратору нужно включить его в разделе WP AI Admin Cloud.',
                 'beta_access_not_granted'=>'Доступ к тестированию для этой учётной записи пока не открыт.',
+                'pairing_client_update_required'=>'Обновите WP AI Admin на подключаемом сайте до версии 2.1.10 или новее.',
+                'pairing_central_host_required'=>'Начните подключение в кабинете на wpaiadmin.ru.',
+                'pairing_request_expired','pairing_request_already_used','invalid_pairing_state','invalid_pairing_code'=>'Ссылка подключения истекла или уже использована. Начните подключение заново.',
+                'pairing_account_mismatch'=>'Войдите в тот кабинет WP AI Admin, в котором начали подключение сайта.',
+                'pairing_exchange_failed','invalid_pairing_response'=>'Не удалось завершить подключение. Начните заново и подтвердите доступ на своём сайте.',
                 default=>$e->reason
             };
             echo '<p>'.esc_html($message).'</p>';
@@ -79,16 +86,34 @@ final class Surface {
         ob_end_flush();
     }
     private static function portal(string $owner,Core $core): void {
+        if(($_GET['connected']??'')==='1')echo '<p>Сайт подключён. Теперь его можно выбрать при подключении ИИ.</p>';
+        if(($_GET['cancelled']??'')==='1')echo '<p>Подключение отменено.</p>';
         if(($_SERVER['REQUEST_METHOD']??'GET')==='POST') {
             check_admin_referer('wpai_beta_connect','wpai_nonce');
+            if(($_POST['connect_mode']??'')==='automatic') {
+                $home=$_POST['home']??null;if(!is_string($home)||strlen($home)>512)throw new Fault('invalid_site_input');
+                $url=WordPress::pairing()->start($owner,wp_unslash($home),(string)wp_get_current_user()->display_name,time());
+                ob_end_clean();wp_redirect($url,303,'WP AI Admin');exit;
+            }
             $home=$_POST['home']??null;$token=$_POST['site_token']??null;
             if(!is_string($home)||!is_string($token)||strlen($home)>512||strlen($token)>512)throw new Fault('invalid_site_input');
             $core->connect($owner,wp_unslash($home),wp_unslash($token),time());echo '<p>Сайт подключён.</p>';
         }
-        echo '<p>Подключайте только сайты, которыми управляете. Администраторский MCP-токен подтверждает права и хранится в зашифрованном виде.</p>';
+        echo '<p>Укажите свой сайт, войдите там как администратор и подтвердите подключение. Сайт появится в этом кабинете автоматически.</p>';
         foreach($core->sites($owner) as $s)echo '<p><code>'.esc_html($s['home']).'</code> · <code>'.esc_html($s['id']).'</code></p>';
-        echo '<form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
-        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><label>MCP-токен администратора <input type="password" name="site_token" autocomplete="new-password" required></label><button type="submit">Подключить сайт</button></form>';
+        echo '<form method="post"><input type="hidden" name="connect_mode" value="automatic">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
+        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><button type="submit">Подключить автоматически</button></form>';
+        echo '<details><summary>Подключить существующим MCP-токеном</summary><form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
+        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><label>MCP-токен администратора <input type="password" name="site_token" autocomplete="new-password" required></label><button type="submit">Подключить сайт</button></form></details>';
+    }
+    private static function paired(string $owner): void {
+        $state=$_GET['state']??'';$code=$_GET['code']??'';$error=$_GET['error']??'';
+        if(!is_string($state)||!is_string($code)||!is_string($error))throw new Fault('invalid_pairing_state');
+        if($error!==''){
+            if($error!=='access_denied')throw new Fault('invalid_pairing_response');
+            WordPress::pairing()->cancel($owner,wp_unslash($state),time());$return='/wpai-cloud/connect?cancelled=1';
+        }else{WordPress::pairing()->complete($owner,wp_unslash($state),wp_unslash($code),time());$return='/wpai-cloud/connect?connected=1';}
+        ob_end_clean();wp_safe_redirect(home_url($return),303,'WP AI Admin');exit;
     }
     private static function consent(string $owner,Core $core): void {
         $input=wp_unslash($_GET);$oauth=WordPress::oauth();$auth=$oauth->authorization($input);

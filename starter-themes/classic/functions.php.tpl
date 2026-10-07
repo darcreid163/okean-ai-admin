@@ -6,3 +6,4 @@ function {{FUNCTION_PREFIX}}_scripts(){wp_enqueue_style('{{THEME_SLUG}}-style',g
 add_action('wp_enqueue_scripts','{{FUNCTION_PREFIX}}_scripts');
 function {{FUNCTION_PREFIX}}_editor_tokens(){add_editor_style('editor.css');}
 add_action('after_setup_theme','{{FUNCTION_PREFIX}}_editor_tokens',20);
+

@@ -30,6 +30,7 @@ final class WordPress {
         add_action('rest_api_init',[self::class,'routes']);
         add_action('template_redirect',[Surface::class,'serve'],-10);
         add_filter('rest_pre_serve_request',[self::class,'emptyNotification'],10,4);
+        add_action('wpai_gateway_pair_cleanup',static function($key){if(is_string($key)&&preg_match('/^wpai_pair_request_[a-f0-9]{64}$/D',$key))delete_option($key);});
     }
     private static function migrate(): void {
         if ((string)get_option('wpai_gateway_db_version','')==='2') return;
@@ -48,6 +49,7 @@ final class WordPress {
     }
     public static function oauth(): OAuth { return new OAuth(self::database(),self::core(),Settings::endpoint()); }
     public static function operatorCore(): Core { return self::core(); }
+    public static function pairing(): Pairing { return new Pairing(self::core(),new Vault(Settings::keys()['vault']),new HttpsTransport()); }
     public static function operatorOwner(): string { return self::owner(); }
     public static function authenticateHeader(string $auth): array {
         if (!is_string($auth)||!preg_match('/^Bearer (wpai_cloud_[A-Za-z0-9_-]{43})$/D',$auth,$m)) throw new Fault('bearer_required',401);
@@ -90,8 +92,9 @@ final class WordPress {
         $route('/tokens/(?P<hash>[a-f0-9]{64})','DELETE',function($r) { self::core()->revokeToken(self::owner(),$r['hash'],time()); return ['revoked'=>true]; });
         $route('/usage','GET',fn($r)=>self::core()->usage(self::owner(),time()));
         $route('/ledger','GET',fn($r)=>self::core()->ledger(self::owner()));
+        register_rest_route('wpai-cloud/v1','/pairing/request',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn($r)=>self::safe(fn()=>self::response(self::pairing()->descriptor(is_string($r['state'])?$r['state']:'',time())))]);
         $route('/sites/(?P<id>reg_[a-f0-9]{32})/foundation','GET',fn($r)=>self::core()->foundation(self::owner(),$r['id'],time()));
-        register_rest_route('wpai-cloud/v1','/health',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn()=>self::response(['service'=>'wp-ai-cloud','version'=>'0.3.4','configured'=>self::configured(),'mode'=>'approved_beta','public_mcp_url'=>Settings::endpoint(),'public_sse_url'=>Settings::sseEndpoint(),'oauth_implementation'=>'beta_pkce_s256','providers'=>['chatgpt'=>'beta','qwen'=>'beta_sse_and_http','claude'=>'planned','deepseek'=>'planned'],'schema'=>'gateway_v1_separate_from_core_v1','oauth'=>self::configured(),'batch_accounting'=>false,'billing'=>false,'commercial_client_entitlements'=>false])]);
+        register_rest_route('wpai-cloud/v1','/health',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn()=>self::response(['service'=>'wp-ai-cloud','version'=>'0.3.5','configured'=>self::configured(),'mode'=>'approved_beta','public_mcp_url'=>Settings::endpoint(),'public_sse_url'=>Settings::sseEndpoint(),'oauth_implementation'=>'beta_pkce_s256','providers'=>['chatgpt'=>'beta','qwen'=>'beta_sse_and_http','claude'=>'planned','deepseek'=>'planned'],'schema'=>'gateway_v1_separate_from_core_v1','oauth'=>self::configured(),'batch_accounting'=>false,'billing'=>false,'commercial_client_entitlements'=>false])]);
         self::oauthRoutes();
         register_rest_route('wpai-cloud/v1','/mcp',['methods'=>'POST,GET,DELETE','permission_callback'=>'__return_true','callback'=>[self::class,'mcp']]);
         $admin=function(string $path,callable $fn) {

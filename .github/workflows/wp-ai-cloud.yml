@@ -37,6 +37,8 @@ jobs:
         run: php wp-ai-admin-cloud/tests/compatibility.php
       - name: Frontend login cookie and redirect regression
         run: python3 wp-ai-admin-cloud/tests/frontend-session.py
+      - name: Browser pairing and two-site registration
+        run: php tests/browser-pairing.php
       - name: SQLite OAuth beta
         run: php wp-ai-admin-cloud/tests/oauth.php
       - name: Public client offline tests
@@ -51,21 +53,21 @@ jobs:
           php wp-ai-admin-cloud/tests/compatibility.php
           php wp-ai-admin-cloud/tests/oauth.php
 
-      - name: Package Cloud Core 0.3.4 test build
+      - name: Package Cloud Core 0.3.5 test build
         if: matrix.php == '8.3'
         run: |
           rm -rf build
           mkdir -p build/wp-ai-admin-cloud
           cp -R wp-ai-admin-cloud/* build/wp-ai-admin-cloud/
           rm -rf build/wp-ai-admin-cloud/tests
-          (cd build && zip -qr ../wp-ai-admin-cloud-0.3.4.zip wp-ai-admin-cloud)
+          (cd build && zip -qr ../wp-ai-admin-cloud-0.3.5.zip wp-ai-admin-cloud)
           zip -qr public-client-0.3.2.zip public-client -x "*/__pycache__/*" "*.pyc"
-      - name: Upload Cloud Core 0.3.4 test build
+      - name: Upload Cloud Core 0.3.5 test build
         if: matrix.php == '8.3'
         uses: actions/upload-artifact@v4
         with:
-          name: wp-ai-admin-cloud-0.3.4-test
+          name: wp-ai-admin-cloud-0.3.5-test
           path: |
-            wp-ai-admin-cloud-0.3.4.zip
+            wp-ai-admin-cloud-0.3.5.zip
             public-client-0.3.2.zip
           if-no-files-found: error

@@ -113,5 +113,20 @@ class FrontendSession(unittest.TestCase):
         self.assertIn('fixture-invalid-nonce', body)
         self.assertNotIn('fixture-connect-called', body)
 
+    def test_pairing_callback_login_preserves_code_and_state(self):
+        status, headers, _ = self.request('/wpai-cloud/pair/callback?state=' + 's'*43 + '&code=' + 'c'*43)
+        self.assertEqual(status, 302)
+        login_query = urllib.parse.parse_qs(urllib.parse.urlparse(headers['Location']).query)
+        callback = urllib.parse.urlparse(login_query['redirect_to'][0])
+        self.assertEqual(callback.path, '/wpai-cloud/pair/callback')
+        self.assertEqual(urllib.parse.parse_qs(callback.query), {'state':['s'*43], 'code':['c'*43]})
+        self.assertNotIn('reauth', login_query)
+
+    def test_automatic_connect_is_primary_form(self):
+        status, _, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session')
+        self.assertEqual(status, 200)
+        self.assertIn('Подключить автоматически', body)
+        self.assertLess(body.index('value="automatic"'), body.index('name="site_token"'))
+
 if __name__ == '__main__':
     unittest.main()

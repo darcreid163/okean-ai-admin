@@ -1,4 +1,15 @@
-AI Admin 2.0.13
-Build: 2.0.13-wpcli-gutenberg-hardening-20260922
-Author: Андриянов Н.Г.
-Copyright: Андриянов Н.Г.
+WP AI Admin Build Metadata (not a cryptographic signature)
+Version: 2.1.10
+Build ID: 2.1.10-browser-pairing-20261007
+Release channel: commercial_beta
+Release profile: commercial_beta_candidate
+Purpose: browser consent and automatic central registration; inherit native 2.1.9 Woodmart/Yoast/upgrade fixes
+Expected catalog: 116 tools
+Inherited self-test checks: 79 (runtime retest required after installation)
+Security fuzz at 10 iterations: 220 (runtime retest required after installation)
+Direct live writes: false
+Production default: human approval only
+AI Lifecycle and Test Automation: administrator opt-in, client-bound and build-bound
+OAuth/site/installation identity: preserved across normal plugin upgrade
+Browser pairing: fixed wpaiadmin.ru gateway, S256, one-use code, per-connection hash-only native credential
+Control Plane: verification foundation; remote enforcement not required for local commercial beta

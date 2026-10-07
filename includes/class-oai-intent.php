@@ -28,3 +28,4 @@ class OAI_Intent {
   return array('contract'=>'ai-admin/intent/v1','intent'=>$intent,'domain'=>$domain,'action'=>$action,'signals'=>$signals,'confidence'=>$confidence,'safe_default'=>true,'requires_read_before_write'=>$action==='mutate','context'=>is_array($context)?$context:array());
  }
 }
+

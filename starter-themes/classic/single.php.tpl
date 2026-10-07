@@ -1,1 +1,2 @@
 <?php get_header(); ?><main class="flex-1"><?php if(have_posts()):while(have_posts()):the_post(); ?><article class="max-w-3xl mx-auto px-6 py-16"><header class="mb-10"><h1 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral"><?php the_title(); ?></h1><p class="mt-3 text-sm uppercase tracking-wider text-secondary-600"><time datetime="<?php echo esc_attr(get_the_date('c')); ?>"><?php echo esc_html(get_the_date()); ?></time></p></header><div class="prose max-w-none"><?php the_content(); ?></div></article><?php endwhile;endif; ?></main><?php get_footer(); ?>
+
