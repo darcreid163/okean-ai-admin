@@ -119,7 +119,8 @@ final class Gateway {
 
     private static function validateArguments(array $definition,array $args): void {
         $schema=$definition['inputSchema']??[];
-        $properties=is_array($schema['properties']??null)?$schema['properties']:[];
+        $rawProperties=$schema['properties']??[];
+        $properties=is_array($rawProperties)?$rawProperties:(is_object($rawProperties)?(array)$rawProperties:[]);
         if (array_diff(array_keys($args),array_keys($properties))) throw new Fault('unexpected_argument');
         foreach (($schema['required']??[]) as $key) if (!array_key_exists($key,$args)) throw new Fault('missing_argument');
 
