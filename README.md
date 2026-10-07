@@ -1,5 +1,11 @@
 # WP AI Admin
 
+## Connection compatibility baseline
+
+The preserved onboarding and ChatGPT authorization flow is defined in [Connection Contract 1.0](docs/CHATGPT-CONNECTION-CONTRACT.md), with repository working rules in [AGENTS.md](AGENTS.md). Supported baseline: native 2.1.12 on each site, central Cloud Core 0.3.5 on wpaiadmin.ru, public MCP https://wpaiadmin.ru/mcp. Register sites through browser administrator consent, then separately authorize the ChatGPT client for explicitly selected sites.
+
+Live checks on 2026-10-07 confirmed native 2.1.12 on wpaiadmin.ru and okean.market and enabled Core 0.3.5 with OAuth. Actual central ChatGPT authorization and reads against both registration IDs remain pending user-account acceptance. Future connection-affecting changes must follow the contract's compatibility, migration and regression process.
+
 ## 2.1.12 — Restore administrator dashboard navigation
 
 The main WP AI Admin entry now opens the existing management dashboard. The parent menu, explicit first dashboard submenu and connections submenu are registered together in that order. This fixes 2.1.11 registering the child before the parent, which replaced the main link and generated a bare /wp-admin/oai-gateway-connections path.
@@ -278,4 +284,3 @@ Validated pre-candidate baseline (2.0.78): 71/71 self-tests, 220/220 security fu
 2.1.7: Option snapshots use native top-level scalar storage strings while preserving nested array types. Numeric sanitizers no longer reject safe baselines or produce false verify conflicts across requests. Real WordPress cross-request apply/rollback and conflict checks added. Regression aliases preserve SKIP when a fixture is outside the active test allowlist. Unsafe legacy option baselines remain blocked.
 
 2.1.8: Yoast option maps may change insertion order when logo caches are rebuilt. Option comparisons now ignore map insertion order while preserving every key, value, nested type and list order. Real Yoast normalization, no-op, apply/verify/rollback, cold-request verification and dropped-legacy-field protection are covered by WordPress CI.
-
