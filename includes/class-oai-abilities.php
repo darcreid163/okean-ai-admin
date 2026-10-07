@@ -13,3 +13,4 @@ class OAI_Abilities {
   foreach($defs as $d){try{wp_register_ability($d['name'],$d);}catch(Throwable $e){}}
  }
 }
+

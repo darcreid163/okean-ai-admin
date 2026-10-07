@@ -1,3 +1,4 @@
 <?php get_header(); $front=(int)get_option('page_on_front'); $heading=$front?get_post_meta($front,'hero_heading',true):''; $sub=$front?get_post_meta($front,'hero_subheading',true):''; ?>
 <main class="flex-1"><section class="bg-gradient-to-br from-primary-50 to-background py-20"><div class="max-w-4xl mx-auto px-6 text-center"><h1 class="text-5xl font-bold tracking-tight text-neutral"><?php echo esc_html($heading?:'Welcome to {{THEME_NAME_PHP}}.'); ?></h1><p class="mt-4 text-xl text-secondary-600 max-w-2xl mx-auto"><?php echo esc_html($sub?:'A fresh WordPress theme ready for your content.'); ?></p></div></section><?php if(have_posts()):while(have_posts()):the_post(); if(get_the_content()): ?><article class="prose max-w-3xl mx-auto px-6 py-16"><?php the_content(); ?></article><?php endif; endwhile; endif; ?></main>
 <?php get_footer(); ?>
+

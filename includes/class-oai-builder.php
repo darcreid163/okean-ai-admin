@@ -29,3 +29,4 @@ class OAI_Builder_Manager {
   $out=array(); foreach(self::$adapters as $id=>$a)$out[$id]=array('id'=>$id,'supports'=>true); return $out;
  }
 }
+

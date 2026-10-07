@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "connection_name": "https://wpaiadmin.ru/mcp",
+  "mcp_url": "https://wpaiadmin.ru/mcp",
+  "transport": "streamable_http",
+  "auth": "oauth_authorization_code_pkce_s256",
+  "providers": {
+    "chatgpt": {
+      "stage": "beta",
+      "host": "ChatGPT developer mode",
+      "transport": "native_mcp",
+      "model_selection": "host"
+    },
+    "qwen": {
+      "stage": "beta",
+      "model": "qwen3.8-max",
+      "transport": "qwen_responses_native_sse_or_qwen_code_streamable_http",
+      "api_base_env": "WPAI_QWEN_API_BASE",
+      "api_key_env": "DASHSCOPE_API_KEY",
+      "mcp_sse_url": "https://wpaiadmin.ru/sse",
+      "mcp_http_url": "https://wpaiadmin.ru/mcp"
+    },
+    "claude": {
+      "stage": "planned",
+      "transport": "native_mcp",
+      "model": null
+    },
+    "deepseek": {
+      "stage": "planned",
+      "transport": "function_adapter",
+      "model": null,
+      "api_base_env": "WPAI_DEEPSEEK_API_BASE",
+      "api_key_env": "DEEPSEEK_API_KEY"
+    }
+  },
+  "sse_url": "https://wpaiadmin.ru/sse"
+}

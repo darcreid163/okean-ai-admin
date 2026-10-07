@@ -8,7 +8,7 @@ class OAI_License {
  const MODE='subscription-ready';
  const LOCAL_MODE='local-owner';
  const LOCAL_PLAN='local-owner';
- const LOCAL_FEATURES=array('mcp','mcp_apply','mcp_rollback','agent','sandbox','preview','verify','proof','rollback');
+ const LOCAL_FEATURES=array('mcp','mcp_apply','mcp_rollback','agent','sandbox','preview','verify','proof','rollback','elementor','gutenberg','woocommerce','wp_cli');
 
  public static function status(){
   $lic=get_option('oai_license',array());
@@ -27,6 +27,21 @@ class OAI_License {
    'source'=>$lic['source']??null,
    'owner_user_id'=>isset($lic['owner_user_id'])?(int)$lic['owner_user_id']:null,
    'local_valid'=>$local_valid,
+  );
+ }
+
+ /**
+  * User-facing license state. Internal local-owner identifiers and features
+  * are deliberately normalized away.
+  */
+ public static function user_status(){
+  $s=self::status();
+  $plan=sanitize_key((string)($s['plan']??''));
+  if($plan===self::LOCAL_PLAN) $plan='free';
+  return array(
+   'active'=>(bool)$s['active'],
+   'plan'=>$plan ?: 'unlicensed',
+   'expires_at'=>$s['expires_at'],
   );
  }
 
@@ -54,7 +69,11 @@ class OAI_License {
   $s=self::status();
   if(!$s['active']) return new WP_Error('oai_license_required','Active Okean AI subscription/license required for this feature',array('status'=>402,'feature'=>$feature));
   if(!empty($s['expires_at']) && strtotime($s['expires_at'])<time()) return new WP_Error('oai_license_expired','Okean AI subscription has expired',array('status'=>402));
-  if(!empty($s['features']) && !in_array($feature,$s['features'],true)) return new WP_Error('oai_feature_unavailable','Feature is not included in the current plan',array('status'=>403,'feature'=>$feature));
+  // Enforce the same plan matrix used by the public entitlement layer.
+  // An active subscription with an empty/missing feature list must NOT become
+  // an accidental allow-all license.
+  if(class_exists('OAI_Entitlements') && !OAI_Entitlements::can($feature)) return new WP_Error('oai_feature_unavailable','Feature is not included in the current plan',array('status'=>403,'feature'=>$feature));
+  if(!class_exists('OAI_Entitlements') && !empty($s['features']) && !in_array($feature,$s['features'],true)) return new WP_Error('oai_feature_unavailable','Feature is not included in the current plan',array('status'=>403,'feature'=>$feature));
   return true;
  }
 
@@ -94,3 +113,4 @@ class OAI_License {
   return self::status();
  }
 }
+

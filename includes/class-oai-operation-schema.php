@@ -10,6 +10,7 @@ if (!defined('ABSPATH')) exit;
 class OAI_Operation_Schema {
  public static function catalog(){
   return array(
+   'woodmart_theme_setting'=>array('domain'=>'woodmart','mutating'=>true,'risk'=>'high','target'=>'setting_id','value'=>'native_setting_value','approval'=>true),
    'option_update'=>array('domain'=>'options','mutating'=>true,'risk'=>'high','target'=>'option_name','value'=>'scalar|object|array','approval'=>true),
    'post_title'=>array('domain'=>'content','mutating'=>true,'risk'=>'low','target'=>'post_id:post_title','value'=>'string','approval'=>true),
    'post_excerpt'=>array('domain'=>'content','mutating'=>true,'risk'=>'low','target'=>'post_id:post_excerpt','value'=>'string','approval'=>true),
@@ -33,3 +34,4 @@ class OAI_Operation_Schema {
   return true;
  }
 }
+

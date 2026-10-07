@@ -12,3 +12,4 @@ class OAI_WP_Post_Resolver {
   return array('post_id'=>(int)$p->ID,'post_type'=>$p->post_type,'post_status'=>$p->post_status,'title'=>$p->post_title,'builder'=>$builder,'elementor'=>array('available'=>class_exists('Elementor\\Plugin'),'data_exists'=>$elementor!==''),'has_blocks'=>function_exists('has_blocks')?has_blocks($p->post_content):false,'permalink'=>get_permalink($p));
  }
 }
+

@@ -15,3 +15,4 @@ class OAI_Audit {
  }
  public static function list($limit=200){$rows=OAI_DB::audit_all(min(500,max(1,(int)$limit))); foreach($rows as &$r)$r['details']=json_decode($r['details'],true); return $rows;}
 }
+

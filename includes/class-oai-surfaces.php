@@ -23,3 +23,4 @@ class OAI_Surfaces {
   return new WP_Error('oai_surface','Unsupported surface',array('status'=>400,'surface'=>$surface));
  }
 }
+

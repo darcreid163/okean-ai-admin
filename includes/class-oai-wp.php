@@ -8,3 +8,4 @@ class OAI_WP {
  public static function taxonomies(){return get_taxonomies(array(),'objects');}
  public static function post_types(){return get_post_types(array(),'objects');}
 }
+

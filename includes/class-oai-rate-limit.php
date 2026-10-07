@@ -11,3 +11,4 @@ class OAI_Rate_Limit {
   $raw=(string)($_SERVER['REMOTE_ADDR']??'unknown'); return hash('sha256',wp_salt('auth').'|'.$raw);
  }
 }
+

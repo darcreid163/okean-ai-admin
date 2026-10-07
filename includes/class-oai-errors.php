@@ -24,3 +24,4 @@ class OAI_Errors {
   return new WP_REST_Response($n,$n['status']);
  }
 }
+

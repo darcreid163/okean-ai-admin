@@ -52,3 +52,4 @@ class OAI_Elementor_Adapter implements OAI_Builder_Adapter {
  public function preview($post_id){return array('url'=>get_permalink((int)$post_id),'post_id'=>(int)$post_id);}
  public function rollback($post_id,array $snapshot){return OAI_Elementor::save_document((int)$post_id,$snapshot);}
 }
+

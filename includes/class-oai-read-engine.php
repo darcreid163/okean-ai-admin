@@ -39,3 +39,4 @@ class OAI_Read_Engine {
  }
  private static function request($params){$r=new WP_REST_Request('GET','/okean-ai/v1/read'); foreach((array)$params as $k=>$v)if(is_scalar($v)||is_array($v))$r->set_param($k,$v); return $r;}
 }
+

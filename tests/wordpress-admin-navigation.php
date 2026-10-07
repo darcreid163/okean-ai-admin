@@ -1,0 +1,45 @@
+<?php
+// WP-CLI fixture on disposable WordPress; use actual menu registration, rendered links and page callbacks.
+function oai_nav_expect($ok,$message){global $oai_nav_checks;$oai_nav_checks++;if(!$ok)throw new RuntimeException($message);}
+global $oai_nav_checks;$oai_nav_checks=0;
+global $menu,$submenu,$admin_page_hooks,$_registered_pages,$_parent_pages,$_wp_real_parent_file,$_wp_submenu_nopriv,$_wp_menu_nopriv;
+global $parent_file,$submenu_file,$self,$plugin_page,$typenow,$wpdb;
+require_once ABSPATH.'wp-admin/includes/plugin.php';
+wp_set_current_user(1);
+$menu=$submenu=$admin_page_hooks=$_registered_pages=$_parent_pages=$_wp_real_parent_file=$_wp_submenu_nopriv=$_wp_menu_nopriv=array();
+$parent_file='';$submenu_file=null;$plugin_page='';$typenow='';$_SERVER['PHP_SELF']='/wp-admin/admin.php';
+$_SERVER['REQUEST_METHOD']='GET';$_POST=$_REQUEST=array();
+$keys=array('oai_site_id','oai_installation_id','oai_mcp_token_hash','oai_mcp_token_user_id','oai_mcp_enabled','oai_license');
+$before=array();foreach($keys as $key)$before[$key]=get_option($key,null);
+$oauth_before=$wpdb->get_results('SELECT * FROM '.OAI_MCP_OAuth::tokens_table().' ORDER BY id',ARRAY_A);
+$grants_before=$wpdb->get_results($wpdb->prepare("SELECT option_name,option_value FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_name",$wpdb->esc_like(OAI_Gateway_Pairing::CREDENTIAL_PREFIX).'%'),ARRAY_A);
+do_action('admin_menu');
+$children=array_values($submenu['okean-ai-admin']??array());
+oai_nav_expect(($children[0][2]??'')==='okean-ai-admin','WP AI Admin main menu must open its dashboard');
+oai_nav_expect(($children[0][0]??'')==='Рабочий стол','Dashboard label missing');
+oai_nav_expect(count(array_filter($children,function($r){return $r[2]==='okean-ai-admin';}))===1,'Duplicate dashboard submenu');
+oai_nav_expect(count(array_filter($children,function($r){return $r[2]==='oai-gateway-connections';}))===1,'Connections submenu missing/duplicated');
+foreach($children as $child)oai_nav_expect($child[1]==='manage_options','Native admin page must require administrator');
+$dashboard=get_plugin_page_hook('okean-ai-admin','admin.php');$connections=get_plugin_page_hook('oai-gateway-connections','okean-ai-admin');
+oai_nav_expect($dashboard&&has_action($dashboard,array('OAI_Admin','page'))!==false,'Dashboard callback missing');
+oai_nav_expect($connections&&has_action($connections,array('OAI_Gateway_Pairing','page'))!==false,'Connections callback registered before parent');
+ob_start();require ABSPATH.'wp-admin/menu-header.php';$html=ob_get_clean();
+oai_nav_expect(preg_match('/id="toplevel_page_okean-ai-admin"[^>]*>\s*<a href=[\'"]([^\'"]+)[\'"]/s',$html,$link)===1,'Main menu anchor missing');
+oai_nav_expect($link[1]==='admin.php?page=okean-ai-admin','Main menu generated a bare slug or connections URL');
+oai_nav_expect(strpos($html,"href='admin.php?page=oai-gateway-connections'")!==false,'Connections link must use admin.php?page');
+oai_nav_expect(strpos($html,"href='oai-gateway-connections'")===false,'Broken connections path generated');
+ob_start();do_action($dashboard);$desk=ob_get_clean();
+foreach(array('WP AI Admin','Подключение MCP','AI Lifecycle Control','Test Automation Mode','Все операции','Управление подключениями') as $label)oai_nav_expect(strpos($desk,$label)!==false,'Dashboard control missing: '.$label);
+oai_nav_expect(strpos($desk,esc_url(admin_url('admin.php?page=oai-gateway-connections')))!==false,'Dashboard connections link invalid');
+oai_nav_expect(strpos($desk,'https://wpaiadmin.ru/wpai-cloud/connect')!==false,'Automatic site connection missing');
+oai_nav_expect(strpos($desk,'Единый адрес для ChatGPT:')!==false&&strpos($desk,'<code>https://wpaiadmin.ru/mcp</code>')!==false,'Primary connection must use central gateway');
+oai_nav_expect(strpos($desk,'добавьте отдельное OAuth-подключение для этого сайта')===false,'Legacy single-site instructions must not be primary');
+oai_nav_expect(strpos($desk,'https://wpaiadmin.ru/.well-known/oauth-protected-resource/mcp')!==false,'Central resource discovery link missing');
+oai_nav_expect(strpos($desk,'https://wpaiadmin.ru/.well-known/oauth-authorization-server/wpai-cloud')!==false,'Central issuer discovery link missing');
+oai_nav_expect(strpos($desk,'<details><summary>Прямое подключение и диагностика этого сайта</summary>')!==false&&strpos($desk,esc_html(rest_url('okean-ai/mcp')))!==false,'Local endpoint must remain available in advanced diagnostics');
+ob_start();do_action($connections);$panel=ob_get_clean();
+oai_nav_expect(strpos($panel,esc_url(admin_url('admin.php?page=okean-ai-admin')))!==false,'Connections page lacks dashboard return link');
+foreach($before as $key=>$value)oai_nav_expect(get_option($key,null)===$value,'Navigation changed credential/identity/state: '.$key);
+oai_nav_expect($wpdb->get_results('SELECT * FROM '.OAI_MCP_OAuth::tokens_table().' ORDER BY id',ARRAY_A)===$oauth_before,'Navigation changed OAuth tokens');
+oai_nav_expect($wpdb->get_results($wpdb->prepare("SELECT option_name,option_value FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_name",$wpdb->esc_like(OAI_Gateway_Pairing::CREDENTIAL_PREFIX).'%'),ARRAY_A)===$grants_before,'Navigation changed paired credentials');
+echo 'PASS '.$oai_nav_checks.' real WordPress admin navigation checks; WP '.get_bloginfo('version').', native '.OAI_VERSION.PHP_EOL;
