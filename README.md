@@ -1,5 +1,7 @@
 # WP AI Admin
 
+> **Commercial Beta source of truth:** `main` = WP AI Admin 2.1.14 + Cloud Core 0.3.6. Older installable artifacts are retained only when they are still useful for rollback/compatibility; historical development remains available through Git history.
+
 ## 2.1.14 — Native consent callback navigation
 
 After the actual site's administrator selects allow or deny, commit a no-store HTML handoff with automatic meta navigation and a manual continuation link to the fixed central callback. Native 2.1.13 retained a POST/303 chain blocked by its self-only CSP when returning from another domain. Preserve strict CSP, no-referrer, nonce, HTTPS, administrator checks, one-use code exchange, credentials and identities. Core remains 0.3.6. New Chromium regression loads the real authorize() handler from the exact native 2.1.13 release and the candidate.
@@ -19,7 +21,7 @@ See [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md). Chromium rep
 
 The preserved onboarding and ChatGPT authorization flow is defined in [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md), with repository working rules in [AGENTS.md](AGENTS.md). Supported baseline: native 2.1.14 on each site, central Cloud Core 0.3.6 on wpaiadmin.ru, public MCP https://wpaiadmin.ru/mcp. Register sites through browser administrator consent, then separately authorize the ChatGPT client for explicitly selected sites.
 
-Live checks on 2026-10-07 confirmed native 2.1.12 on wpaiadmin.ru and okean.market and enabled Core 0.3.5 with OAuth. Actual central ChatGPT authorization and reads against both registration IDs remain pending user-account acceptance. Future connection-affecting changes must follow the contract's compatibility, migration and regression process.
+Commercial beta baseline was consolidated into `main` on 2026-10-07: native WP AI Admin 2.1.14, Cloud Core 0.3.6, central MCP `https://wpaiadmin.ru/mcp`. Live central ChatGPT authorization and reads against both `wpaiadmin.ru` and `okean.market` have been confirmed. The remaining live release gate is a real mutation → verify → receipt/proof → rollback → rollback verification cycle through the central gateway. Future connection-affecting changes must follow the contract's compatibility, migration and regression process.
 
 ## 2.1.12 — Restore administrator dashboard navigation
 
