@@ -3,7 +3,7 @@
 use WPAICloudGateway\{Core,Store,Vault,Signer,Security,Pairing,Transport,PairingTransport,Fault};
 function pair_expect($ok,$message){global $pair_checks;$pair_checks++;if(!$ok)throw new RuntimeException($message);}
 function pair_reject(callable $fn,$reason){try{$fn();}catch(Fault $e){pair_expect($e->reason===$reason,'Unexpected pairing fault: '.$e->reason);return;}throw new RuntimeException('Expected '.$reason);}
-$pair_checks=0;wp_set_current_user(1);$_SERVER['HTTPS']='on';
+global $pair_checks;$pair_checks=0;wp_set_current_user(1);$_SERVER['HTTPS']='on';
 $old_home=get_option('home');$old_siteurl=get_option('siteurl');update_option('home','https://wpaiadmin.ru');update_option('siteurl','https://wpaiadmin.ru');
 $subscriber=wp_create_user('pair-fixture-subscriber-'.wp_generate_password(8,false,false),'disposable-password','pair-fixture@example.test');
 if(is_wp_error($subscriber))throw new RuntimeException('Pairing fixture user setup failed');
@@ -39,7 +39,7 @@ try {
  pair_expect(get_option('oai_mcp_token_hash','')===$manualHash,'Pairing rotated old manual token');pair_expect((string)$wpdb->get_var('SELECT COUNT(*) FROM '.OAI_MCP_OAuth::clients_table())===(string)$nativeClients,'Pairing rewrote OAuth clients');
  $stored=get_option(OAI_Gateway_Pairing::CREDENTIAL_PREFIX.hash('sha256',$token));pair_expect(is_array($stored)&&!str_contains(wp_json_encode($stored),$token),'Native token stored plaintext');
  $row=$store->row('SELECT token_sealed FROM '.$store->table('sites').' WHERE id=?',[$site['id']]);pair_expect(!str_contains($row['token_sealed'],$token),'Gateway token stored plaintext');
- $access=$core->mint('1',[$site['id']],['mcp:read','mcp:write'],$now);$actor=$core->authenticate($access['access_token'],$now);$reply=$core->call($actor,$site['id'],'wp_get_site',[],'real-wp-pair-read',$now);pair_expect($reply['state']==='succeeded','Real MCP read failed');
+ $access=$core->mint('1',[$site['id']],['mcp:read','mcp:write'],$now);$actor=$core->authenticate($access['access_token'],$now);$reply=$core->call($actor,$site['id'],'wp.get_site',[],'real-wp-pair-read',$now);pair_expect($reply['state']==='succeeded','Real MCP read failed');
  $data=json_decode($reply['upstream']['result']['content'][0]['text'],true);pair_expect(str_starts_with($data['url'],'https://wpaiadmin.ru'),'MCP read selected wrong site');
  pair_reject(fn()=>$pairing->complete('1',$state,$code,$now),'pairing_request_expired');
  $req=new WP_REST_Request('POST','/okean-ai/mcp');$req->set_header('content-type','application/json');$req->set_body(wp_json_encode(['jsonrpc'=>'2.0','id'=>'apply-guard','method'=>'tools/call','params'=>['name'=>'operation_apply','arguments'=>['id'=>1]]]));$_SERVER['HTTP_AUTHORIZATION']='Bearer '.$token;

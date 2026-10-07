@@ -43,7 +43,7 @@ class BrowserTransport implements Transport,PairingTransport {
  public function rpc(string $home,string $token,array $p):array {
   return at($home,7,function()use($token,$p,$home){global $now;$actor=OAI_Gateway_Pairing::authenticate($token,$now);if(!$actor)throw new Fault('upstream_outcome_unknown',502);
    if(($p['params']['name']??'')==='system_manifest')return ['jsonrpc'=>'2.0','id'=>$p['id'],'result'=>['content'=>[['type'=>'text','text'=>json_encode(['plugin_name'=>'WP AI Admin','site_id'=>'site-'.hash('sha256',$home),'installation_id'=>'inst-'.hash('sha256',$home),'release'=>['production_defaults'=>['direct_live_writes'=>false]]])]]]];
-   if($p['method']==='tools/list')return ['jsonrpc'=>'2.0','id'=>$p['id'],'result'=>['tools'=>[['name'=>'wp_get_site','inputSchema'=>['type'=>'object']]]]];
+   if($p['method']==='tools/list')return ['jsonrpc'=>'2.0','id'=>$p['id'],'result'=>['tools'=>[['name'=>'wp.get_site','inputSchema'=>['type'=>'object']]]]];
    $_SERVER['HTTP_AUTHORIZATION']='Bearer '.$token;$req=new class($p){public function __construct(private $p){}public function get_json_params(){return $this->p;}};$r=OAI_MCP::handle($req);return $r->data;
   });
  }
@@ -68,7 +68,7 @@ at('https://okean.market',7,function()use($state,$code,$verifier){global $now;$r
 $state2=begin('https://wpaiadmin.ru');$code2=approve('https://wpaiadmin.ru',$state2);$site2=$pairing->complete('42',$state2,$code2,$now);
 check(count($core->sites('42'))===2&&$site2['id']!==$site['id'],'Two-site registration failed');
 $access=$core->mint('42',[$site['id'],$site2['id']],['mcp:read','mcp:write'],$now);$actor=$core->authenticate($access['access_token'],$now);
-foreach([$site,$site2] as $s){$r=$core->call($actor,$s['id'],'wp_get_site',[],'read-'.$s['id'],$now);check($r['state']==='succeeded','Read dispatch failed');$json=str_replace('\\/','/',json_encode($r,JSON_UNESCAPED_SLASHES));check(str_contains($json,$s['home']),'Read crossed site boundary');}
+foreach([$site,$site2] as $s){$r=$core->call($actor,$s['id'],'wp.get_site',[],'read-'.$s['id'],$now);check($r['state']==='succeeded','Read dispatch failed');$json=str_replace('\\/','/',json_encode($r,JSON_UNESCAPED_SLASHES));check(str_contains($json,$s['home']),'Read crossed site boundary');}
 $state3=begin('https://okean.market');$code3=approve('https://okean.market',$state3);$again=$pairing->complete('42',$state3,$code3,$now);check($again['id']===$site['id']&&count($core->sites('42'))===2,'Reconnect duplicated site');
 $freshToken=$transport->lastToken;$core->disconnect('42',$site['id'],$now);
 $state4=begin('https://okean.market');$code4=approve('https://okean.market',$state4);$restored=$pairing->complete('42',$state4,$code4,$now);check($restored['id']!==$site['id'],'Revoked registration ID reused');

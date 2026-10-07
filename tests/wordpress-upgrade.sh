@@ -61,4 +61,4 @@ done
 
 
 # On the disposable WordPress, exercise the new grant and MCP through real REST/Options APIs.
-task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-browser-pairing.php"
+OAI_WOODMART_NATIVE_DIR="$TASK_WOODMART_DIR/woodmart-mcp" task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-browser-pairing.php"
