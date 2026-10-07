@@ -119,7 +119,7 @@ final class Core {
         return ['plan'=>$a['plan'],'period'=>$period,'timezone'=>'UTC','limit'=>$limit,'used'=>(int)$b['used'],'reserved'=>(int)$b['reserved'],'remaining'=>max(0,$limit-(int)$b['used']-(int)$b['reserved']),'policy_version'=>$this->policy['version'],'batch_available'=>false];
     }
     public function call(array $actor,string $siteId,string $name,array $args,string $nonce,int $now): array {
-        Security::identifier($name); if (!preg_match('/^[A-Za-z0-9_.:-]{8,128}$/D',$nonce)) throw new Fault('invalid_idempotency_key');
+        Security::identifier($name); if (!preg_match('/^[A-Za-z0-9_.:-]{1,128}$/D',$nonce)) throw new Fault('invalid_idempotency_key');
         $site=$this->authorize($actor,$siteId,self::writes($name,$args)?'mcp:write':'mcp:read',$now);
         $normalized=str_replace('.','_',$name);
         if (in_array($normalized,['batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','system_regression_run','system_regression_matrix'],true)) throw new Fault('batch_receipt_accounting_not_ready',422);
