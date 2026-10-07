@@ -18,7 +18,8 @@ async function port(){const s=net.createServer();await new Promise(r=>s.listen(0
    await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><h1>Fixture central callback reached</h1>'});
   });
   await context.route(origin+'/**',async route=>{if(stripRefresh&&route.request().method()==='POST'){const r=await route.fetch();await route.fulfill({response:r,body:(await r.text()).replace(/<meta http-equiv="refresh"[^>]*>/g,'')});}else await route.continue();});
-  const page=await context.newPage();let violations=[];page.on('console',m=>{if(m.text().includes('form-action'))violations.push(m.text());});
+  const page=await context.newPage();let violations=[],postResponse;page.on('console',m=>{if(m.text().includes('form-action'))violations.push(m.text());});
+  page.on('response',r=>{if(r.url().startsWith(origin+'/wp-admin/admin-post.php')&&r.request().method()==='POST')postResponse=r;});
   const url=origin+'/wp-admin/admin-post.php?action=oai_gateway_pair&state='+'s'.repeat(43);
   let response=await page.goto(url);
   verify(response.headers()['content-security-policy'].includes("form-action 'self'"),'Native consent CSP missing');
@@ -30,6 +31,7 @@ async function port(){const s=net.createServer();await new Promise(r=>s.listen(0
    verify(options.codes===1,'Baseline POST did not issue code');verify(callbacks.length===0,'Baseline callback unexpectedly reached');verify(violations.length>0,'Baseline did not trigger CSP block');
   }else{
    await page.waitForURL('https://wpaiadmin.ru/wpai-cloud/pair/callback?*',{timeout:5000});
+   const handoffHeaders=await postResponse.allHeaders();verify(postResponse.status()===200&&!handoffHeaders.location,'Native POST still redirects');verify(handoffHeaders['cache-control'].includes('no-store')&&handoffHeaders['referrer-policy']==='no-referrer'&&handoffHeaders['content-security-policy'].includes("form-action 'self'"),'Handoff policy weakened');
    const cb=callbacks.at(-1);verify(cb.query.state==='s'.repeat(43)&&/^[A-Za-z0-9_-]{43}$/.test(cb.query.code),'Code/state not preserved');verify(!cb.query.token&&!cb.query.verifier,'Durable secret exposed');verify(cb.method==='GET'&&!cb.referer,'POST/referrer leaked');verify(violations.length===0,'Native callback violates CSP');
    let options=await (await fetch('http://127.0.0.1:'+p+'/fixture-options')).json();verify(options.codes===1&&options.credentials===0&&options.mcp_enabled===true,'Consent side effects changed');
    await page.goto(url);await page.getByRole('button',{name:'Отмена',exact:true}).click({noWaitAfter:true});await page.waitForURL('https://wpaiadmin.ru/wpai-cloud/pair/callback?*',{timeout:5000});
