@@ -1,5 +1,13 @@
 # WP AI Admin
 
+## 2.1.12 — Restore administrator dashboard navigation
+
+The main WP AI Admin entry now opens the existing management dashboard. The parent menu, explicit first dashboard submenu and connections submenu are registered together in that order. This fixes 2.1.11 registering the child before the parent, which replaced the main link and generated a bare /wp-admin/oai-gateway-connections path.
+
+The dashboard includes automatic site connection and connection management links; the connections page has a return button. All MCP, AI Lifecycle, Test Automation, operation history, sandbox and approval controls remain on the dashboard. Credentials, OAuth, identities and browser pairing are preserved; Cloud Core 0.3.5 does not need replacing.
+
+Real WordPress regression validation renders actual menu HTML and both page callbacks and checks token/identity retention. The same test reproduces the failure with the exact previous 2.1.11 archive before verifying the update.
+
 ## 2.1.11 — Browser site connection
 
 Install this native plugin on every connected WordPress site. Install Cloud Core 0.3.5 only on the central wpaiadmin.ru gateway. Both wpaiadmin.ru and okean.market need native 2.1.11 for automatic onboarding.

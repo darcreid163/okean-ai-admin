@@ -9,7 +9,6 @@ class OAI_Gateway_Pairing {
   add_action('admin_post_oai_gateway_pair',array(__CLASS__,'authorize'));
   add_action('admin_post_nopriv_oai_gateway_pair',array(__CLASS__,'authorize'));
   add_action('rest_api_init',array(__CLASS__,'routes'));
-  add_action('admin_menu',array(__CLASS__,'menu'));
   add_action('oai_gateway_pair_cleanup',array(__CLASS__,'cleanup'),10,1);
  }
  public static function routes(){
@@ -101,7 +100,8 @@ class OAI_Gateway_Pairing {
   echo '<input type="hidden" name="action" value="oai_gateway_pair"><input type="hidden" name="state" value="'.esc_attr($state).'">';wp_nonce_field('oai_gateway_pair_'.$state,'oai_pair_nonce');
   echo '<button name="decision" value="allow">Подключить сайт</button><button name="decision" value="deny">Отмена</button></form></main></html>';exit;
  }
- public static function menu(){add_submenu_page('okean-ai-admin','Подключения к gateway','Подключения к gateway','manage_options','oai-gateway-connections',array(__CLASS__,'page'));}
+ public static function connections_url(){return admin_url('admin.php?page=oai-gateway-connections');}
+ public static function menu(){add_submenu_page('okean-ai-admin','WP AI Admin — Подключения к gateway','Подключения к gateway','manage_options','oai-gateway-connections',array(__CLASS__,'page'));}
  public static function page(){
   if(!current_user_can('manage_options'))return;
   if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){
@@ -109,7 +109,7 @@ class OAI_Gateway_Pairing {
    check_admin_referer('oai_gateway_revoke_'.$hash,'oai_pair_nonce');$result=self::revoke($hash);
    echo '<div class="notice '.(is_wp_error($result)?'notice-error':'notice-success').'"><p>'.esc_html(is_wp_error($result)?$result->get_error_message():'Доступ отозван.').'</p></div>';
   }
-  echo '<div class="wrap"><h1>Подключения к gateway</h1><p>Начните подключение в <a href="https://wpaiadmin.ru/wpai-cloud/connect">кабинете WP AI Admin</a>.</p>';
+  echo '<div class="wrap"><h1>Подключения к gateway</h1><p><a class="button" href="'.esc_url(OAI_Admin::dashboard_url()).'">Рабочий стол WP AI Admin</a> <a class="button button-primary" href="https://wpaiadmin.ru/wpai-cloud/connect">Подключить сайт</a></p><p>Здесь можно отозвать доступ к этому сайту. Автоматическое подключение выполняется в кабинете WP AI Admin.</p>';
   global $wpdb;$keys=$wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 1000",$wpdb->esc_like(self::CREDENTIAL_PREFIX).'%'));
   $count=0;foreach($keys as $key){$r=get_option($key,null);if(!is_array($r)||(int)$r['user_id']!==get_current_user_id())continue;$hash=substr($key,strlen(self::CREDENTIAL_PREFIX));$count++;
    echo '<p>Кабинет: <strong>'.esc_html($r['account_label']).'</strong> · '.esc_html(gmdate('Y-m-d H:i',$r['created_at'])).' UTC</p><form method="post">';wp_nonce_field('oai_gateway_revoke_'.$hash,'oai_pair_nonce');echo '<input type="hidden" name="credential_hash" value="'.esc_attr($hash).'"><button class="button" type="submit">Отозвать доступ</button></form>';

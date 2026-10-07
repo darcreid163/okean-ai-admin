@@ -1,7 +1,7 @@
 <?php
 // Production central/native pairing and MCP authentication; WordPress identity/HTTP are fixtures.
 declare(strict_types=1);
-define('ABSPATH',__DIR__.'/');define('OAI_VERSION','2.1.11');
+define('ABSPATH',__DIR__.'/');define('OAI_VERSION','2.1.12');
 use WPAICloudGateway\{Core,Store,Vault,Signer,Security,Pairing,Transport,PairingTransport,Fault};
 $origin='https://wpaiadmin.ru';$uid=42;$admin=true;$ssl=true;$options=[];$deleteFails=[];$httpOverride=null;$checks=0;
 function home_url($path=''){global $origin;return $origin.$path;}

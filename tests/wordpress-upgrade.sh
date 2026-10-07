@@ -62,3 +62,14 @@ done
 
 # On the disposable WordPress, exercise the new grant and MCP through real REST/Options APIs.
 OAI_WOODMART_NATIVE_DIR="$TASK_WOODMART_DIR/woodmart-mcp" task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-browser-pairing.php"
+
+# Render actual admin links and callbacks, reproduce the reported 2.1.11 regression, then retest the update.
+OAI_WOODMART_NATIVE_DIR="$TASK_WOODMART_DIR/woodmart-mcp" task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-admin-navigation.php"
+unzip -oq "$TASK_REPO_DIR/releases/2.1.11/wp-ai-admin-2.1.11.zip" -d "$TASK_WP_DIR/wp-content/plugins"
+if OAI_WOODMART_NATIVE_DIR="$TASK_WOODMART_DIR/woodmart-mcp" task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-admin-navigation.php" > "$RUNNER_TEMP/admin-navigation-baseline.log" 2>&1; then
+ echo 'ERROR: 2.1.11 must reproduce the wrong main menu target'; exit 1
+fi
+grep -F 'WP AI Admin main menu must open its dashboard' "$RUNNER_TEMP/admin-navigation-baseline.log"
+cp -a "$TASK_REPO_DIR/okean-ai-admin.php" "$TASK_WP_DIR/wp-content/plugins/okean-ai-admin/"
+cp -a "$TASK_REPO_DIR/includes/." "$TASK_WP_DIR/wp-content/plugins/okean-ai-admin/includes/"
+OAI_WOODMART_NATIVE_DIR="$TASK_WOODMART_DIR/woodmart-mcp" task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-admin-navigation.php"

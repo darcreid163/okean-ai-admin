@@ -1,3 +1,6 @@
+WP AI Admin 2.1.12 — dashboard navigation fix
+Install on both wpaiadmin.ru and okean.market. The main menu opens the full dashboard; automatic connection and connection management links are available inside. Cloud Core 0.3.5 remains compatible.
+
 WP AI Admin 2.1.11 — browser connection
 No PowerShell, application password or manual token copying: start at https://wpaiadmin.ru/wpai-cloud/connect, enter your site, log in there as administrator and confirm. Requires central Cloud Core 0.3.5. Revoke paired credentials in WP AI Admin → Подключения к gateway. Existing native/manual OAuth credentials and guarded writes are preserved.
 
