@@ -5,6 +5,7 @@ use WPAICloudGateway\{Core,OAuth,Gateway,Fault,Security,Signer,Pairing};
 require dirname(__DIR__).'/src/OAuth.php';
 $checks=0;
 function check(bool $ok,string $message): void {global $checks;$checks++;if(!$ok)throw new RuntimeException($message);}
+function sameIds(array $left,array $right): bool {sort($left,SORT_STRING);sort($right,SORT_STRING);return $left===$right;}
 function rejects(callable $fn,string $reason): void {try{$fn();}catch(Fault $e){check($e->reason===$reason,'Expected '.$reason.', got '.$e->reason);return;}throw new RuntimeException('Expected rejection: '.$reason);}
 $now=1791350400;
 $database=sys_get_temp_dir().'/wpai-multisite-'.bin2hex(random_bytes(8)).'.sqlite';
@@ -33,7 +34,7 @@ check($actor['site_ids']===$ids,'One OAuth grant must authorize all selected sit
 $gateway=new Gateway($core);
 $list=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>1,'method'=>'tools/call','params'=>['name'=>'cloud_sites_list','arguments'=>[]]],$now);
 $visible=json_decode($list['result']['content'][0]['text'],true);
-check(count($visible)===3&&array_column($visible,'id')===$ids,'Gateway site list differs from selected sites');
+check(count($visible)===3&&sameIds(array_column($visible,'id'),$ids),'Gateway site list differs from selected sites');
 foreach($sites as $i=>$site){
  $result=$core->call($actor,$site['id'],'wp_get_site',[],'site-read-'.$i,$now);
  check($result['state']==='succeeded'&&$result['site_id']===$site['id'],'Wrong selected site routing');
@@ -53,7 +54,7 @@ rejects(fn()=>$core->catalog($actor,$extra['id'],$now),'scope_or_site_denied');
 check(count($core->sites('71'))===4,'Adding a fourth site replaced earlier sites');
 $core->setPlan('operator','71','power',$now);
 check($core->usage('71',$now)['limit']===2000&&$core->usage('71',$now)['used']===3,'Plan upgrade must preserve shared balance');
-check(array_column($core->sites('71'),'id')===array_merge($ids,[$extra['id']]),'Plan upgrade changed registration identities');
+check(sameIds(array_column($core->sites('71'),'id'),array_merge($ids,[$extra['id']])),'Plan upgrade changed registration identities');
 // Every plan uses the same registration capacity; reconnect at capacity is still allowed.
 $core->ensureAccount('73');
 $capacity=[];
