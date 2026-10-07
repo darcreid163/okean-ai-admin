@@ -141,7 +141,7 @@ class TestRequest {
 $headers=['authorization'=>'Bearer '.$token,'content-type'=>'application/json','accept'=>'application/json, text/event-stream','mcp-protocol-version'=>'2025-11-25'];
 $message=['jsonrpc'=>'2.0','id'=>99,'method'=>'initialize','params'=>['protocolVersion'=>'2025-11-25']];
 $req=new TestRequest($headers,$message);$response=WordPress::mcp($req);
-check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.5','HTTP MCP initialization failed');
+check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.6','HTTP MCP initialization failed');
 foreach ([['authorization','',401],['origin','https://evil.example.com',403],['mcp-protocol-version','unknown',400],['content-type','text/plain',415],['accept','application/json',406]] as [$header,$value,$status]) {
     $changed=$headers; $changed[$header]=$value;
     check(WordPress::mcp(new TestRequest($changed,$message))->status===$status,'HTTP validation bypass: '.$header);
