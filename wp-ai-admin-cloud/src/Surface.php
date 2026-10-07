@@ -81,6 +81,7 @@ final class Surface {
                 'private_site_address_blocked'=>'Адрес сайта не является публичным. Нужен доступный в интернете HTTPS-сайт.',
                 'public_https_site_required','invalid_site_host','invalid_site_path'=>'Введите полный адрес WordPress-сайта вида https://example.ru без пути входа и параметров.',
                 'pilot_site_count_limit'=>'Достигнут тестовый лимит регистраций сайтов для этого аккаунта.',
+                'site_already_registered'=>'Этот WordPress-сайт уже подключён к другому аккаунту WP AI Admin. Для защиты от перехвата сайта повторное подключение другим аккаунтом запрещено. Используйте другой тестовый сайт либо сначала отключите сайт в аккаунте-владельце.',
                 default=>$e->reason
             };
             echo '<p>'.esc_html($message).'</p><p>Код ошибки: <code>'.esc_html($e->reason).'</code></p>';
