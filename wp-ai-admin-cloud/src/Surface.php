@@ -72,7 +72,7 @@ final class Surface {
             $message=match($e->reason) {
                 'cloud_not_configured'=>'Gateway ещё не включён. Администратору нужно включить его в разделе WP AI Admin Cloud.',
                 'beta_access_not_granted'=>'Доступ к тестированию для этой учётной записи пока не открыт.',
-                'pairing_client_update_required'=>'Обновите WP AI Admin на подключаемом сайте до версии 2.1.10 или новее.',
+                'pairing_client_update_required'=>'Обновите WP AI Admin на подключаемом сайте до версии 2.1.11 или новее.',
                 'pairing_central_host_required'=>'Начните подключение в кабинете на wpaiadmin.ru.',
                 'pairing_request_expired','pairing_request_already_used','invalid_pairing_state','invalid_pairing_code'=>'Ссылка подключения истекла или уже использована. Начните подключение заново.',
                 'pairing_account_mismatch'=>'Войдите в тот кабинет WP AI Admin, в котором начали подключение сайта.',

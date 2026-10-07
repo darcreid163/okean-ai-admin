@@ -1,6 +1,6 @@
 # WP AI Admin Cloud Core 0.3.5 — automatic browser registration
 
-Install this Cloud Core update only on wpaiadmin.ru. Install the native WP AI Admin 2.1.10 update on every connected site, including wpaiadmin.ru and okean.market. The unchanged public-client 0.3.2 package is not needed for browser onboarding.
+Install this Cloud Core update only on wpaiadmin.ru. Install the native WP AI Admin 2.1.11 update on every connected site, including wpaiadmin.ru and okean.market. The unchanged public-client 0.3.2 package is not needed for browser onboarding.
 
 The primary cabinet form at https://wpaiadmin.ru/wpai-cloud/connect asks only for the site's canonical HTTPS address. It redirects the user to their site's regular WordPress administrator login and an explicit consent screen identifying the receiving central account. After consent, the gateway exchanges a short-lived one-use code directly with that site and automatically registers it after validating its actual system_manifest. No terminal, application password or manually copied MCP token is required. The old token form is retained in a collapsed legacy section.
 

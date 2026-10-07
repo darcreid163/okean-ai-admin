@@ -1,8 +1,8 @@
 # WP AI Admin
 
-## 2.1.10 — Browser site connection
+## 2.1.11 — Browser site connection
 
-Install this native plugin on every connected WordPress site. Install Cloud Core 0.3.5 only on the central wpaiadmin.ru gateway. Both wpaiadmin.ru and okean.market need native 2.1.10 for automatic onboarding.
+Install this native plugin on every connected WordPress site. Install Cloud Core 0.3.5 only on the central wpaiadmin.ru gateway. Both wpaiadmin.ru and okean.market need native 2.1.11 for automatic onboarding.
 
 1. Open https://wpaiadmin.ru/wpai-cloud/connect in your approved beta account.
 2. Enter the canonical HTTPS address of your WordPress site and click «Подключить автоматически».
@@ -17,6 +17,10 @@ Existing manual MCP tokens, native OAuth registrations and installation identiti
 Reconnect of an active central registration updates its credential without duplicating the site. A revoked registration receives a new registration ID so old AI consent cannot regain access. An already registered site cannot be silently transferred to another central account.
 
 Automated validation includes a two-site fixture and real WordPress REST/Options/MCP integration in CI. Live installation and real ChatGPT/Qwen authorization must be verified after installing both release packages. Billing and general-public enrollment remain outside this approved-user beta.
+
+## 2.1.10 — MCP enable and disable
+
+Administrator-only nonce-protected MCP toggle. Enabling preserves OAuth/manual credentials and identities; disabling stops automated modes. This fix is included in 2.1.11 alongside the 2.1.9 OAuth connection fix.
 
 ## 2.1.9 — Woodmart Base Settings Adapter
 

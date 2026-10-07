@@ -41,6 +41,7 @@ cp -a "$TASK_REPO_DIR/includes/." "$TASK_WP_DIR/wp-content/plugins/okean-ai-admi
 task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-upgrade.php"
 task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-upgrade.php"
 task_wp plugin list --fields=name,version,status
+task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-mcp-onboarding.php"
 
 for task_option_phase in plan apply rollback verify yoast-cold-verify; do
  OAI_OPTION_PHASE="$task_option_phase" task_wp eval-file "$TASK_REPO_DIR/tests/wordpress-options.php"
@@ -50,7 +51,7 @@ done
 # fixture, not a licensed commercial Woodmart theme installation.
 TASK_WOODMART_ZIP="$RUNNER_TEMP/woodmart-mcp-1.0.1.zip"
 TASK_WOODMART_DIR="$RUNNER_TEMP/woodmart-native"
-curl -fsSL --retry 3 https://woodmart.xtemos.com/plugins/woodmart-mcp.zip -o "$TASK_WOODMART_ZIP"
+cp "$TASK_REPO_DIR/tests/fixtures/woodmart-mcp-1.0.1.zip" "$TASK_WOODMART_ZIP"
 echo "d9d8a8ac07cc189488cb30356acfec1d7b885312faab741ed40fa0bf6c640615  $TASK_WOODMART_ZIP" | sha256sum -c -
 unzip -q "$TASK_WOODMART_ZIP" -d "$TASK_WOODMART_DIR"
 cp "$TASK_REPO_DIR/tests/woodmart-native-fixture.php" "$TASK_WP_DIR/wp-content/mu-plugins/woodmart-native-fixture.php"

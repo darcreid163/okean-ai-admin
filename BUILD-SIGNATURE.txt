@@ -1,6 +1,6 @@
 WP AI Admin Build Metadata (not a cryptographic signature)
-Version: 2.1.10
-Build ID: 2.1.10-browser-pairing-20261007
+Version: 2.1.11
+Build ID: 2.1.11-browser-pairing-20261007
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
 Purpose: browser consent and automatic central registration; inherit native 2.1.9 Woodmart/Yoast/upgrade fixes
