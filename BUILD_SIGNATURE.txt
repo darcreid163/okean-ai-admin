@@ -1,6 +1,6 @@
 WP AI Admin Build Metadata (not a cryptographic signature)
-Version: 2.1.13
-Build ID: 2.1.13-central-mcp-ui-20261007
+Version: 2.1.14
+Build ID: 2.1.14-native-consent-return-20261007
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
 Purpose: restore native dashboard navigation and connection links; retain browser pairing and all native 2.1.11 fixes

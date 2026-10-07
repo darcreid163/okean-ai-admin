@@ -92,13 +92,20 @@ class OAI_Gateway_Pairing {
    if($decision==='deny')$query=array('state'=>$state,'error'=>'access_denied');
    elseif($decision==='allow'){$code=self::issue_code($r,time());if(is_wp_error($code)){wp_die(esc_html($code->get_error_message()),'',array('response'=>400));return;}$query=array('state'=>$state,'code'=>$code);}
    else{wp_die('Подтвердите или отмените подключение.','',array('response'=>400));return;}
-   // Only the fixed trusted central callback receives a code, never a credential.
-   wp_redirect(add_query_arg($query,self::CALLBACK),303,'WP AI Admin');exit;
+   // Commit a document before cross-origin navigation: Chromium applies the
+   // consent form's self-only CSP to every redirect in its POST chain.
+   // Only the fixed trusted callback receives a one-use code, never a credential.
+   self::browser_headers();
+   $url=add_query_arg($query,self::CALLBACK);
+   echo '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="'.esc_attr('0;url='.$url).'"><title>Возврат в WP AI Admin</title></head><body><main><h1>Возврат в кабинет</h1><p>Завершаем подключение. Если переход не произошёл, нажмите ссылку.</p><p><a href="'.esc_url($url).'" rel="noreferrer">Продолжить в кабинете</a></p></main></body></html>';exit;
   }
-  nocache_headers();header('X-Frame-Options: DENY');header('Referrer-Policy: no-referrer');header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+  self::browser_headers();
   echo '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Подключение к WP AI Admin</title><style>body{font:16px system-ui;max-width:640px;margin:50px auto;padding:24px;background:#f5f7fc;color:#14234a}main{padding:28px;background:white;border-radius:18px}button{padding:12px;margin:8px;font:inherit}</style><main><h1>Подключить этот сайт?</h1><p><strong>'.esc_html(home_url('/')).'</strong></p><p>Сайт будет доступен в кабинете <strong>'.esc_html($r['account_label']).'</strong> на <strong>wpaiadmin.ru</strong>.</p><p>ИИ сможет читать сайт и готовить изменения. Применение изменений сохраняет проверки и подтверждение WP AI Admin. Доступ можно отозвать в разделе «Подключения к gateway».</p><form method="post" action="'.esc_url(admin_url('admin-post.php')).'">';
   echo '<input type="hidden" name="action" value="oai_gateway_pair"><input type="hidden" name="state" value="'.esc_attr($state).'">';wp_nonce_field('oai_gateway_pair_'.$state,'oai_pair_nonce');
   echo '<button name="decision" value="allow">Подключить сайт</button><button name="decision" value="deny">Отмена</button></form></main></html>';exit;
+ }
+ private static function browser_headers(){
+  nocache_headers();header('Content-Type: text/html; charset=utf-8');header('X-Content-Type-Options: nosniff');header('X-Frame-Options: DENY');header('Referrer-Policy: no-referrer');header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
  }
  public static function connections_url(){return admin_url('admin.php?page=oai-gateway-connections');}
  public static function menu(){add_submenu_page('okean-ai-admin','WP AI Admin — Подключения к gateway','Подключения к gateway','manage_options','oai-gateway-connections',array(__CLASS__,'page'));}

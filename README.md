@@ -1,18 +1,23 @@
 # WP AI Admin
 
-## 2.1.13 / Cloud Core 0.3.6 — Central gateway and many-site onboarding
+## 2.1.14 — Native consent callback navigation
 
-The native MCP block now explains its site access toggle and shows https://wpaiadmin.ru/mcp as the primary ChatGPT endpoint. Local MCP and native OAuth discovery remain in collapsed diagnostics. Native 2.1.13 goes on every site; Core 0.3.6 goes only on wpaiadmin.ru.
+After the actual site's administrator selects allow or deny, commit a no-store HTML handoff with automatic meta navigation and a manual continuation link to the fixed central callback. Native 2.1.13 retained a POST/303 chain blocked by its self-only CSP when returning from another domain. Preserve strict CSP, no-referrer, nonce, HTTPS, administrator checks, one-use code exchange, credentials and identities. Core remains 0.3.6. New Chromium regression loads the real authorize() handler from the exact native 2.1.13 release and the candidate.
+
+
+## 2.1.14 / Cloud Core 0.3.6 — Central gateway and many-site onboarding
+
+The native MCP block now explains its site access toggle and shows https://wpaiadmin.ru/mcp as the primary ChatGPT endpoint. Local MCP and native OAuth discovery remain in collapsed diagnostics. Native 2.1.14 goes on every site; Core 0.3.6 goes only on wpaiadmin.ru.
 
 Core 0.3.5 form-action self could block form redirects to another site's consent page and the ChatGPT OAuth callback in Chromium. Core 0.3.6 commits a no-store handoff document with automatic meta navigation and a manual continuation link to the already validated target; the strict self-only form policy, nonce, PKCE, owner binding and exact callback checks remain intact.
 
 The central cabinet displays one account plan/shared quota and all connected sites, plus an optional connection check. Registration, OAuth consent and access-token site capacity now consistently allow up to 50 registrations per account across every plan. Adding a site still requires new client consent; sites are never silently added to an existing grant. Paid-plan assignment is an account-level capability; payment processing and automatic purchase activation remain a separate unfinished billing stage.
 
-See [Connection Contract 1.1](docs/CHATGPT-CONNECTION-CONTRACT.md). Chromium reproduction and candidate checks run against actual Surface.php with fixture WordPress/session/back-channel behavior; actual production account authorization remains a separate acceptance gate.
+See [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md). Chromium reproduction and candidate checks run against actual Surface.php with fixture WordPress/session/back-channel behavior; actual production account authorization remains a separate acceptance gate.
 
 ## Connection compatibility baseline
 
-The preserved onboarding and ChatGPT authorization flow is defined in [Connection Contract 1.1](docs/CHATGPT-CONNECTION-CONTRACT.md), with repository working rules in [AGENTS.md](AGENTS.md). Supported baseline: native 2.1.13 on each site, central Cloud Core 0.3.6 on wpaiadmin.ru, public MCP https://wpaiadmin.ru/mcp. Register sites through browser administrator consent, then separately authorize the ChatGPT client for explicitly selected sites.
+The preserved onboarding and ChatGPT authorization flow is defined in [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md), with repository working rules in [AGENTS.md](AGENTS.md). Supported baseline: native 2.1.14 on each site, central Cloud Core 0.3.6 on wpaiadmin.ru, public MCP https://wpaiadmin.ru/mcp. Register sites through browser administrator consent, then separately authorize the ChatGPT client for explicitly selected sites.
 
 Live checks on 2026-10-07 confirmed native 2.1.12 on wpaiadmin.ru and okean.market and enabled Core 0.3.5 with OAuth. Actual central ChatGPT authorization and reads against both registration IDs remain pending user-account acceptance. Future connection-affecting changes must follow the contract's compatibility, migration and regression process.
 

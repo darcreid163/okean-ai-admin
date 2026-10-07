@@ -1,10 +1,16 @@
 # WP AI Admin connection contract
-Contract version: **1.1**  
+Contract version: **1.2**  
 Recorded: **2026-10-07**  
-Supported baseline: native **2.1.13**, central **Cloud Core 0.3.6**; retained predecessor: native 2.1.12 / Core 0.3.5  
+Supported baseline: native **2.1.14**, central **Cloud Core 0.3.6**; retained predecessor: native 2.1.12 / Core 0.3.5  
 Purpose: preserve working onboarding and authorization across future releases.
 
 This is the compatibility baseline, not a prohibition on improvements. Changes to the contract require an explicit versioned design, applicable data migration, updated tests and documentation, and the two-site acceptance flow below. Do not silently replace this flow with manual tokens or change persistent identities to make a failing connection appear successful.
+
+## Amendment 1.2 — 2026-10-07
+
+Native 2.1.14 applies committed no-store handoff navigation to the actual administrator consent handler after both allow and deny. The target remains the exact fixed callback. This completes the reverse leg missed by Core 0.3.6: after submitting the native self-only consent form, an HTTP redirect to the central domain is blocked by Chromium. Do not widen CSP or drop nonce/administrator/HTTPS/request checks. Both response documents retain no-referrer, no-store and strict form-action self; only the one-use code and state leave the site. No persistent migration, key rotation or identity reset. Core remains 0.3.6.
+
+New gate: native-consent-navigation.js loads the exact released native 2.1.13 handler to reproduce the blocked callback, then the candidate actual authorize() handler for allow, deny, manual continuation, bad nonce, invalid request, administrator and HTTPS denial. WordPress primitives/backchannel are fixtures; real Chromium handles actual response headers and cross-origin navigation. Keep the existing real WordPress nonce/code/exchange tests and central browser gates. Do not present a simplified consent form as production handler coverage.
 
 ## Amendment 1.1 — 2026-10-07
 
@@ -19,7 +25,7 @@ Additional required gates: wp-ai-admin-cloud/tests/multisite-account.php; fronte
 ## 1. Deployment and current limits
 
 - Native WP AI Admin runs on every managed WordPress site, including wpaiadmin.ru and okean.market.
-- Cloud Core 0.3.6 is the central service on wpaiadmin.ru. Automatic pairing protocol minimum is native 2.1.11; 2.1.13 is the supported UI baseline, retaining corrected administrator navigation.
+- Cloud Core 0.3.6 is the central service on wpaiadmin.ru. Automatic pairing protocol minimum is native 2.1.11; 2.1.14 is the supported browser/UI baseline, retaining corrected administrator navigation.
 - The public-client 0.3.2 package is a separate optional API client; browser onboarding does not require it.
 - Current access is approved-user beta: central administrators or explicitly approved testers. Site registration does not create a ChatGPT plugin automatically.
 - ChatGPT and Qwen are beta profiles; Claude and DeepSeek are planned profiles. Billing, open public enrollment, commercial client entitlement enforcement and batch receipt accounting are not implemented. Do not describe them as complete.

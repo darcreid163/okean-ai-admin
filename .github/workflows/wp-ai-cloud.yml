@@ -27,6 +27,12 @@ jobs:
           WPAI_BASELINE_SURFACE="$RUNNER_TEMP/cloud-browser-baseline/wp-ai-admin-cloud/src/Surface.php" node wp-ai-admin-cloud/tests/browser-navigation.js --baseline
       - name: Two-origin browser pairing and OAuth navigation
         run: node wp-ai-admin-cloud/tests/browser-navigation.js
+      - name: Reproduce actual native 2.1.13 consent return failure
+        run: |
+          unzip -q releases/2.1.13/wp-ai-admin-2.1.13.zip -d "$RUNNER_TEMP/native-consent-baseline"
+          WPAI_BASELINE_NATIVE_PAIRING="$RUNNER_TEMP/native-consent-baseline/okean-ai-admin/includes/class-oai-gateway-pairing.php" node wp-ai-admin-cloud/tests/native-consent-navigation.js --baseline
+      - name: Actual native consent allow/deny and manual callback navigation
+        run: node wp-ai-admin-cloud/tests/native-consent-navigation.js
   core:
     runs-on: ubuntu-latest
     strategy:
