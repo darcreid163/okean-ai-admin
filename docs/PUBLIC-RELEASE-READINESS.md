@@ -41,7 +41,7 @@ Required evidence:
 
 Do not mark this gate passed from unit/integration tests alone.
 
-### 2. Multi-Tenant Isolation Gate — BLOCKED / pending
+### 2. Multi-Tenant Isolation Gate — AUTOMATED COVERAGE STRONG / real two-account acceptance pending
 
 Validate with two independently owned central accounts when the second tester is available. Until then, keep automated two-owner fixture coverage mandatory.
 
@@ -61,7 +61,7 @@ Account A must be unable to:
 
 Required result: deny-by-default on every boundary, with stable sanitized errors and no cross-tenant metadata leakage.
 
-### 3. OAuth / MCP public-client gate
+### 3. OAuth / MCP public-client gate — AUTOMATED COVERAGE STRONG / clean external client acceptance pending
 
 Confirm from a clean external ChatGPT account:
 - DCR succeeds;
@@ -75,7 +75,13 @@ Confirm from a clean external ChatGPT account:
 - `tools/list` / site catalog remains stable enough for the client;
 - central endpoint works without manual WordPress passwords, copied site tokens or provider API keys.
 
-### 4. Release CI gate
+### 4. Release CI gate — BLOCKED by GitHub-hosted runner allocation
+
+Runner diagnosis as of 2026-10-08:
+- a dedicated minimal `Runner Smoke` workflow (allocate `ubuntu-latest` → echo → checkout → `php -v`) repeatedly fails before execution with `steps=[]`;
+- re-running the failed smoke is accepted by GitHub but again fails with zero steps;
+- GitHub public status currently reports Actions operational, so this is tracked as an account/repository-level hosted-runner allocation/billing/budget/policy blocker until disproved;
+- product test failures cannot be evaluated while no runner is allocated.
 
 The following workflows must be green from the exact release commit:
 - `.github/workflows/validate.yml`
@@ -95,7 +101,7 @@ Required:
 
 No release from a commit with skipped required checks or a package produced from different source bytes.
 
-### 5. Release artifact provenance
+### 5. Release artifact provenance — AUTOMATED GATE IMPLEMENTED / execution pending runner
 
 For native and Cloud Core packages:
 - version is unique and immutable;
@@ -106,7 +112,7 @@ For native and Cloud Core packages:
 - no development-only secrets, fixtures or test credentials ship;
 - public download instructions point to the exact approved artifacts.
 
-### 6. Secrets and logging gate
+### 6. Secrets and logging gate — AUTOMATED GATE IMPLEMENTED / execution pending runner
 
 Before publication:
 - scan repository and release artifacts for credentials/tokens/private keys;
@@ -115,7 +121,7 @@ Before publication:
 - verify debug/test switches are disabled by default;
 - confirm AI Lifecycle Control and Test Automation remain explicit opt-in and reset on build change.
 
-### 7. Destructive-operation safety gate
+### 7. Destructive-operation safety gate — AUTOMATED COVERAGE STRONG / live acceptance pending
 
 Production defaults:
 - direct live writes OFF;
@@ -125,7 +131,7 @@ Production defaults:
 - uncertain write outcome is reconciled before retry;
 - rollback must reject stale/conflicting state instead of overwriting newer changes.
 
-### 8. Public onboarding gate
+### 8. Public onboarding gate — DOCUMENTED / clean-user walkthrough pending
 
 A new user must be able to complete, from documentation alone:
 1. install native plugin;
@@ -154,9 +160,9 @@ Before general-public enrollment, publish and link:
 - explicit statement of what data traverses Cloud Core;
 - deletion/account closure procedure.
 
-Repository currently has no root LICENSE or SECURITY.md. Do not choose a software license implicitly; license selection is a product/legal decision.
+`SECURITY.md`, `CHANGELOG.md`, public onboarding guidance and a release-candidate data-retention/uninstall policy are now present. Root LICENSE is still intentionally absent: do not choose a software license implicitly; license selection remains a product/legal decision. Privacy Policy, Terms, subprocessors/hosting disclosure, account deletion procedure and paid-plan refund/cancellation terms are still pending.
 
-### 10. Billing and entitlement truthfulness gate
+### 10. Billing and entitlement truthfulness gate — BETA TRUTHFULNESS AUTOMATED / paid commercial enforcement pending
 
 Current contract says public enrollment, automatic payment activation, commercial entitlement enforcement and batch receipt accounting are unfinished. Public UI/docs must not imply completion until implemented and tested.
 
@@ -255,9 +261,30 @@ A release candidate is publishable only when:
 
 ## Current next actions
 
-1. Run automated isolation regression on current main baseline.
-2. Run the real live mutation lifecycle acceptance.
-3. Recruit/use one external tester account for the real Multi-Tenant Isolation Gate.
-4. Add a public-release workflow/report that records release commit, versions, checks and artifact hashes.
-5. Draft SECURITY.md and public privacy/data-flow documentation.
-6. Decide public-beta licensing and repository visibility separately from software-runtime release.
+1. Resolve GitHub-hosted runner allocation blocker. First account-level checks: Actions usage/minutes, Actions budget/spending limit, valid payment method if quota is exhausted, and repository/account Actions policy. Keep `.github/workflows/runner-smoke.yml` until a real runner executes its steps.
+2. Once runner executes, run the exact **2.1.15 / Cloud Core 0.3.6** commit through Validate, Cloud Core checks, Public Release Sandbox and Runner Smoke; fix only real test failures from logs.
+3. Run the final live mutation lifecycle acceptance against a dedicated disposable WordPress site.
+4. Run real two-account isolation and a clean external ChatGPT OAuth/onboarding walkthrough.
+5. Publish/approve Privacy Policy, Terms, subprocessors/data-flow disclosure and deletion/account-closure process.
+6. Make the explicit software-license/repository-visibility decision separately.
+7. If public beta is free, keep billing/commercial entitlement/batch accounting claims disabled. Paid launch remains blocked until billing/entitlement implementation is complete.
+
+## Automated coverage added on the 2.1.15 release-candidate branch
+
+- tenant isolation and canonical URL ownership;
+- token TTL/revoke/disconnect/multi-site grants;
+- OAuth PKCE/refresh/replay/concurrency/privacy;
+- quota/idempotency/month rollover/reconciliation;
+- sealed credential and reconciliation-evidence tamper resistance;
+- JSON-RPC/MCP protocol and HTTP transport boundaries;
+- SSRF/DNS/IP/canonical-home boundaries;
+- signed Ed25519 compatibility foundation proof;
+- apply/rollback conflict and expired sandbox safety;
+- human approval and MCP-toggle safety;
+- plugin deactivation safety reset;
+- native operation cleanup and quota-event retention;
+- public onboarding contract;
+- reproducible native/Cloud ZIPs, SHA-256 provenance and payload secret scans;
+- SECURITY/changelog/data-retention release metadata;
+- public health/initialize metadata secret-leak checks.
+
