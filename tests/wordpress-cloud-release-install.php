@@ -76,6 +76,16 @@ $gatewayTableCountBefore=count($wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}
 $gatewayTableCountAfter=count($wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}wpai_gateway_%'"));
 cloud_release_expect($gatewayTableCountAfter===$gatewayTableCountBefore,'Repeated Cloud enable changed gateway schema table count');
 
+// Wrapped gateway key corruption must fail closed after a fresh runtime load.
+$coreRef=new ReflectionProperty('WPAICloudGateway\\WordPress','core');$coreRef->setAccessible(true);
+$storeRef=new ReflectionProperty('WPAICloudGateway\\WordPress','store');$storeRef->setAccessible(true);
+update_option('wpai_gateway_wrapped_keys_v1',substr($wrappedBefore,0,-1).($wrappedBefore[-1]==='A'?'B':'A'),false);
+$coreRef->setValue(null,null);$storeRef->setValue(null,null);
+cloud_release_expect(!\WPAICloudGateway\WordPress::configured(),'Corrupted wrapped gateway keys did not fail closed');
+update_option('wpai_gateway_wrapped_keys_v1',$wrappedBefore,false);
+$coreRef->setValue(null,null);$storeRef->setValue(null,null);
+cloud_release_expect(\WPAICloudGateway\WordPress::configured(),'Restored wrapped gateway keys did not recover configuration');
+
 // Public MCP transport must fail closed before any tool dispatch.
 // WP-CLI has no HTTPS request server context even when home_url() is HTTPS.
 $_SERVER['HTTPS']='on';
