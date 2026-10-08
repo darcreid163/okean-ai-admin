@@ -118,6 +118,22 @@ jobs:
 
   fresh-release-install:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: site-baseline
+            wp: '7.0.6'
+            php: '8.3'
+          - profile: latest-php82
+            wp: latest
+            php: '8.2'
+          - profile: latest-php83
+            wp: latest
+            php: '8.3'
+          - profile: latest-php84
+            wp: latest
+            php: '8.4'
     services:
       mysql:
         image: mysql:8.0
@@ -135,7 +151,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: ${{ matrix.php }}
           extensions: mysqli, pdo_mysql, sodium, curl
           coverage: none
       - name: Build installable release ZIP
@@ -155,7 +171,7 @@ jobs:
           WPCLI="$RUNNER_TEMP/wp-cli.phar"
           curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$WPCLI"
           mkdir -p "$WP_DIR"
-          php "$WPCLI" --path="$WP_DIR" core download
+          php "$WPCLI" --path="$WP_DIR" core download --version="${{ matrix.wp }}"
           php "$WPCLI" --path="$WP_DIR" config create --dbname=fresh_release --dbuser=root --dbpass=fresh-install-password --dbhost=127.0.0.1 --skip-check
           php "$WPCLI" --path="$WP_DIR" core install --url=http://fresh-release.test --title='Fresh Release' --admin_user=release-admin --admin_password=disposable-release-password --admin_email=release@example.test --skip-email
           ZIP="$(ls "$GITHUB_WORKSPACE"/dist/wp-ai-admin-*.zip | head -n1)"
