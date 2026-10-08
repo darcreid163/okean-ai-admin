@@ -367,10 +367,14 @@ jobs:
           test -f SECURITY.md
           test -f CHANGELOG.md
           test -f docs/DATA-RETENTION.md
+          test -f docs/DATA-FLOW.md
           grep -Fq "WP AI Admin native: 2.1.15" SECURITY.md
           grep -Fq "## 2.1.15" CHANGELOG.md
           grep -Fq "current release candidate intentionally has no automatic destructive uninstall routine" docs/DATA-RETENTION.md
           grep -Fq "autonomous modes remain OFF" docs/DATA-RETENTION.md
+          grep -Fq "sealed response storage" docs/DATA-FLOW.md
+          grep -Fq "does not claim that Cloud Core is a zero-retention relay" docs/DATA-FLOW.md
+          grep -Fq "automatic payment activation is not complete" docs/DATA-FLOW.md
           if grep -Eqi 'uninstall.*(deletes all|complete data erasure|removes all data)' README.md README.txt docs/PUBLIC-ONBOARDING.md; then
             echo "Release documentation overstates uninstall/data erasure behavior"; exit 1
           fi
