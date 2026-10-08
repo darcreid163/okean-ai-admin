@@ -60,6 +60,15 @@ rejects(fn()=>$oauth->exchange($expiredExchange,$now+300,$eligible),'invalid_gra
 $oauth->rate('fixture-ip',$now,2);$oauth->rate('fixture-ip',$now,2);rejects(fn()=>$oauth->rate('fixture-ip',$now,2),'oauth_rate_limit');
 check(!str_contains(Security::canonical($store->rows('SELECT * FROM '.$store->table('oauth_refresh'))),$tokenQ['refresh_token']),'Plaintext refresh token');
 check(!str_contains(Security::canonical($store->rows('SELECT * FROM '.$store->table('oauth_codes'))),$codeQ),'Plaintext authorization code');
+$oauthStorage=Security::canonical(array_merge(
+    $store->rows('SELECT * FROM '.$store->table('oauth_codes')),
+    $store->rows('SELECT * FROM '.$store->table('oauth_grants')),
+    $store->rows('SELECT * FROM '.$store->table('oauth_access')),
+    $store->rows('SELECT * FROM '.$store->table('oauth_refresh')),
+    $store->rows('SELECT * FROM '.$store->table('audit'))
+));
+check(!str_contains($oauthStorage,$verifier),'Plaintext PKCE verifier persisted in OAuth/audit storage');
+check(!str_contains($oauthStorage,'bound-state'),'OAuth state persisted in OAuth/audit storage');
 $parallelCode=$oauth->approve('1',$auth,[$site['id']],$now);$parallel=$exchange;$parallel['code']=$parallelCode;
 $before=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('tokens'))['n'];
 putenv('CLOUD_OAUTH_EXCHANGE='.json_encode($parallel));
