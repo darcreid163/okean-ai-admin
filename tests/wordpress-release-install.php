@@ -43,6 +43,35 @@ $proof=OAI_Batch_Executor::proof($batch['id'],$client,1);
 release_install_expect(!is_wp_error($receipt)&&preg_match('/^[a-f0-9]{64}$/',(string)($receipt['payload_hash']??''))===1,'Batch receipt hash missing or malformed');
 release_install_expect(!is_wp_error($proof)&&($proof['payload_hash']??'')===($receipt['payload_hash']??'')&&preg_match('/^[a-f0-9]{64}$/',(string)($proof['hash']??''))===1,'Batch proof not bound to receipt');
 
+// MCP admin toggle must stop automation without destroying persistent identity/credentials.
+$toggleSite=OAI_Platform::site_id();
+$toggleInstallation=OAI_Platform::installation_id();
+$toggleTokenHash=(string)get_option('oai_mcp_token_hash','');
+$toggleLicense=OAI_License::status();
+global $wpdb;
+$toggleOauthBefore=$wpdb->get_results('SELECT * FROM '.OAI_MCP_OAuth::tokens_table().' ORDER BY id',ARRAY_A);
+$aiToggle=OAI_AI_Lifecycle_Control::enable(1);
+$taToggle=OAI_Test_Automation::enable(15,array(),array(),1);
+release_install_expect(!is_wp_error($aiToggle)&&OAI_AI_Lifecycle_Control::is_active(),'Unable to enable AI Lifecycle for MCP-toggle fixture');
+release_install_expect(!is_wp_error($taToggle)&&OAI_Test_Automation::is_active(),'Unable to enable Test Automation for MCP-toggle fixture');
+$toggleMethod=new ReflectionMethod('OAI_Admin','handle_mcp_toggle');$toggleMethod->setAccessible(true);
+$_SERVER['REQUEST_METHOD']='POST';
+$_POST=array('oai_mcp_state'=>'disabled','_wpnonce'=>wp_create_nonce('oai_mcp_toggle'));
+$toggleOff=$toggleMethod->invoke(null);
+release_install_expect(!is_wp_error($toggleOff)&&empty($toggleOff['enabled'])&&!get_option('oai_mcp_enabled',true),'MCP disable handler failed');
+release_install_expect(!OAI_AI_Lifecycle_Control::is_active()&&!OAI_Test_Automation::is_active(),'MCP disable did not stop automation modes');
+release_install_expect(OAI_Platform::site_id()===$toggleSite&&OAI_Platform::installation_id()===$toggleInstallation,'MCP disable changed persistent site identity');
+release_install_expect((string)get_option('oai_mcp_token_hash','')===$toggleTokenHash,'MCP disable changed MCP credential hash');
+$toggleLicenseAfter=OAI_License::status();
+release_install_expect(($toggleLicenseAfter['license_id']??'')===($toggleLicense['license_id']??''),'MCP disable changed license identity');
+$toggleOauthAfter=$wpdb->get_results('SELECT * FROM '.OAI_MCP_OAuth::tokens_table().' ORDER BY id',ARRAY_A);
+release_install_expect(wp_json_encode($toggleOauthAfter)===wp_json_encode($toggleOauthBefore),'MCP disable changed OAuth token rows');
+$_POST=array('oai_mcp_state'=>'enabled','_wpnonce'=>wp_create_nonce('oai_mcp_toggle'));
+$toggleOn=$toggleMethod->invoke(null);
+release_install_expect(!is_wp_error($toggleOn)&&!empty($toggleOn['enabled'])&&get_option('oai_mcp_enabled',false),'MCP re-enable handler failed');
+release_install_expect(!OAI_AI_Lifecycle_Control::is_active()&&!OAI_Test_Automation::is_active(),'MCP re-enable silently restored automation');
+$_POST=array();$_REQUEST=array();$_SERVER['REQUEST_METHOD']='GET';
+
 // Human lifecycle gate: no nonce / no explicit automation means no approval or live Apply.
 $nonce=wp_create_nonce('wp_rest');
 update_option('wpai_release_human_gate','baseline',false);
