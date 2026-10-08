@@ -66,16 +66,22 @@ $key=$ledger[0]['request_key']??'';
 qcheck(preg_match('/^[a-f0-9]{64}$/',$key)===1&&($ledger[0]['state']??'')==='uncertain','Uncertain request not visible in owner ledger');
 
 qreject(fn()=>$core->reconcile('operator','reconcile-owner',$key,'failed',['note'=>'too short','receipt_sha256'=>str_repeat('a',64)],$now+12),'operator_receipt_evidence_required');
+$evidenceNote='Independent site receipt confirms no mutation occurred; evidence-marker-7f3c.';
+$evidenceHash=str_repeat('b',64);
 $reconciled=$core->reconcile('operator','reconcile-owner',$key,'failed',[
-    'note'=>'Independent site receipt confirms no mutation occurred.',
-    'receipt_sha256'=>str_repeat('b',64)
+    'note'=>$evidenceNote,
+    'receipt_sha256'=>$evidenceHash
 ],$now+13);
 qcheck($reconciled['state']==='failed'&&$reconciled['charged_units']===0&&!empty($reconciled['reconciled']),'Failed reconciliation result wrong');
+$reconciledRow=$store->row('SELECT evidence_sealed,response_sealed FROM '.$store->table('requests').' WHERE owner=? AND request_key=?',['reconcile-owner',$key]);
+qcheck(is_array($reconciledRow)&&strlen((string)($reconciledRow['evidence_sealed']??''))>40,'Reconciliation evidence was not sealed');
+$rawReconcileStorage=Security::canonical(array_merge([$reconciledRow],$store->rows('SELECT event,request_key FROM '.$store->table('audit').' WHERE owner=?',['reconcile-owner'])));
+qcheck(!str_contains($rawReconcileStorage,$evidenceNote)&&!str_contains($rawReconcileStorage,$evidenceHash),'Plaintext reconciliation evidence leaked into request/audit storage');
 $afterReconcile=$core->usage('reconcile-owner',$now+13);
 qcheck($afterReconcile['used']===0&&$afterReconcile['reserved']===0&&$afterReconcile['remaining']===2,'Failed reconciliation did not release reservation');
 qreject(fn()=>$core->reconcile('operator','reconcile-owner',$key,'failed',[
-    'note'=>'Independent site receipt confirms no mutation occurred.',
-    'receipt_sha256'=>str_repeat('b',64)
+    'note'=>$evidenceNote,
+    'receipt_sha256'=>$evidenceHash
 ],$now+14),'request_not_reconcilable');
 
 // Cached idempotent receipts are sealed. Storage tampering must fail closed and must never re-dispatch the write.
