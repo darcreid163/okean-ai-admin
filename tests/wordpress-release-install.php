@@ -136,5 +136,16 @@ $secretProbe=OAI_Read::option_value('fixture_settings',array('name'=>'safe','con
 release_install_expect(!empty($secretProbe['redacted'])&&($secretProbe['value']['name']??'')==='safe'&&($secretProbe['value']['consumer_secret']??'')==='[REDACTED]'&&($secretProbe['value']['nested']['api_key']??'')==='[REDACTED]','Sensitive option redaction failed');
 $wholeSecret=OAI_Read::option_value('oai_bearer_token','plaintext-must-never-return');
 release_install_expect(!empty($wholeSecret['redacted'])&&($wholeSecret['value']??'')==='[REDACTED]','Sensitive top-level option was exposed');
+$userMarker='private-release-user@example.test';
+$privacyUser=wp_create_user('release-privacy-user-'.wp_generate_password(6,false,false),'disposable-password',$userMarker);
+release_install_expect(!is_wp_error($privacyUser),'Unable to create user privacy fixture');
+$userReq=new WP_REST_Request('GET','/');$userReq->set_param('limit',100);$userReq->set_param('page',1);
+$userList=OAI_Read::users($userReq);
+release_install_expect(!is_wp_error($userList),'wp.list_users privacy fixture failed');
+$userEncoded=wp_json_encode($userList,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+release_install_expect(!str_contains($userEncoded,$userMarker)&&!str_contains(strtolower($userEncoded),'user_email'),'wp.list_users leaked email data');
+foreach((array)($userList['items']??array()) as $u){
+    release_install_expect(array_diff(array_keys($u),array('id','login','display_name','roles','registered'))===array(),'wp.list_users returned field outside minimal projection');
+}
 
 echo 'PASS fresh release ZIP install: WP '.get_bloginfo('version').', plugin '.OAI_VERSION.', tools '.count($catalog).', self-test '.$self['passed'].'/'.$self['total'].', fuzz '.$fuzz['summary']['PASS'].'/'.$fuzz['summary']['total'].PHP_EOL;
