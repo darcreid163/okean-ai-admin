@@ -20,7 +20,8 @@ $catalog=$tools->invoke(null);
 release_install_expect(is_array($catalog)&&count($catalog)>=100,'Fresh-install MCP catalog unexpectedly small');
 
 $self=OAI_Platform::self_test();
-release_install_expect(is_array($self)&&($self['failed']??-1)===0&&($self['passed']??0)===($self['total']??-1)&&($self['total']??0)>=70,'Fresh-install runtime self-test failed');
+$failedSelf=is_array($self['checks']??null)?array_values(array_filter($self['checks'],fn($row)=>empty($row['ok']))):array();
+release_install_expect(is_array($self)&&($self['failed']??-1)===0&&($self['passed']??0)===($self['total']??-1)&&($self['total']??0)>=70,'Fresh-install runtime self-test failed: '.wp_json_encode($failedSelf,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
 $fuzz=OAI_Security_Fuzz::run(10);
 release_install_expect(($fuzz['status']??'')==='PASS'&&($fuzz['summary']['FAIL']??-1)===0&&($fuzz['summary']['PASS']??0)===($fuzz['summary']['total']??-1)&&($fuzz['summary']['total']??0)>=200,'Fresh-install security fuzz failed');
 
