@@ -315,6 +315,7 @@ jobs:
           ZIP="$(ls "$GITHUB_WORKSPACE"/dist/wp-ai-admin-*.zip | head -n1)"
           php "$WPCLI" --path="$WP_DIR" plugin install "$ZIP" --activate
           php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-install.php"
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-operations-cleanup.php"
           OAI_REACTIVATION_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-reactivation.php"
           php "$WPCLI" --path="$WP_DIR" plugin deactivate okean-ai-admin
           php "$WPCLI" --path="$WP_DIR" plugin activate okean-ai-admin
