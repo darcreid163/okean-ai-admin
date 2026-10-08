@@ -180,6 +180,36 @@ $expiredReceipt=OAI_Receipts::build((int)$expiredOp['id']);
 release_install_expect(is_array($expiredReceipt)&&($expiredReceipt['status']??'')==='expired'&&(($expiredReceipt['receipt']['reason']??'')==='sandbox_expired'),'Expired sandbox receipt missing');
 delete_option('wpai_release_expired_fixture');
 
+// Signed preview tokens are short-lived and bound to exact operation id + expiry.
+$previewId=424242;
+$previewExpiry=time()+300;
+$previewToken=OAI_REST::preview_token($previewId,$previewExpiry);
+release_install_expect(is_string($previewToken)&&preg_match('/^[a-f0-9]{64}$/',$previewToken)===1,'Preview token format invalid');
+$previewUser=get_current_user_id();
+wp_set_current_user(0);
+$previewReq=new WP_REST_Request('GET','/okean-ai/v1/preview/'.$previewId);
+$previewReq->set_param('id',$previewId);$previewReq->set_param('preview_token',$previewToken);$previewReq->set_param('expires',$previewExpiry);
+release_install_expect(OAI_REST::preview_perm($previewReq)===true,'Valid signed preview token was rejected');
+
+$wrongIdReq=new WP_REST_Request('GET','/okean-ai/v1/preview/'.($previewId+1));
+$wrongIdReq->set_param('id',$previewId+1);$wrongIdReq->set_param('preview_token',$previewToken);$wrongIdReq->set_param('expires',$previewExpiry);
+release_install_expect(OAI_REST::preview_perm($wrongIdReq)===false,'Preview token was reusable for another operation id');
+
+$wrongExpiryReq=new WP_REST_Request('GET','/okean-ai/v1/preview/'.$previewId);
+$wrongExpiryReq->set_param('id',$previewId);$wrongExpiryReq->set_param('preview_token',$previewToken);$wrongExpiryReq->set_param('expires',$previewExpiry+1);
+release_install_expect(OAI_REST::preview_perm($wrongExpiryReq)===false,'Preview token was reusable with another expiry');
+
+$expiredPreviewReq=new WP_REST_Request('GET','/okean-ai/v1/preview/'.$previewId);
+$expiredPreviewReq->set_param('id',$previewId);$expiredPreviewReq->set_param('expires',time()-1);
+$expiredPreviewReq->set_param('preview_token',OAI_REST::preview_token($previewId,time()-1));
+release_install_expect(OAI_REST::preview_perm($expiredPreviewReq)===false,'Expired preview token was accepted');
+
+$tamperedPreviewReq=new WP_REST_Request('GET','/okean-ai/v1/preview/'.$previewId);
+$tamperedPreviewReq->set_param('id',$previewId);$tamperedPreviewReq->set_param('expires',$previewExpiry);
+$tamperedPreviewReq->set_param('preview_token',substr($previewToken,0,-1).($previewToken[-1]==='a'?'b':'a'));
+release_install_expect(OAI_REST::preview_perm($tamperedPreviewReq)===false,'Tampered preview token was accepted');
+wp_set_current_user($previewUser);
+
 // Generic option sandbox must never mutate Cloud control-plane or credential-like options.
 $opsBeforeGuard=OAI_DB::count_all();
 foreach(['wpai_gateway_wrapped_keys_v1','wpai_gateway_enabled','wpai_gateway_beta_users','wpai_cloud_db_version'] as $protectedKey){
