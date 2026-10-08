@@ -36,6 +36,10 @@ cloud_release_expect(($data['configured']??null)===false,'Fresh Cloud health mus
 cloud_release_expect(($data['public_mcp_url']??'')==='https://wpaiadmin.ru/mcp','Health public MCP URL mismatch');
 cloud_release_expect(($data['mode']??'')==='approved_beta','Fresh Cloud health must remain approved_beta');
 cloud_release_expect(($data['billing']??null)===false&&($data['batch_accounting']??null)===false&&($data['commercial_client_entitlements']??null)===false,'Fresh Cloud health overstates unfinished commercial enforcement');
+$freshHealthEncoded=wp_json_encode($data,JSON_UNESCAPED_SLASHES);
+foreach(['wpai_gateway_wrapped_keys_v1','AUTH_KEY','SECURE_AUTH_KEY','DB_PASSWORD','wpai_gateway_','PDOException',ABSPATH] as $marker){
+    cloud_release_expect(!str_contains($freshHealthEncoded,(string)$marker),'Fresh health leaked internal/secret marker: '.$marker);
+}
 
 // Explicit administrator opt-in must be the only action that creates gateway keys and enables the service.
 \WPAICloudGateway\WordPress::enable();
@@ -58,6 +62,11 @@ $data2=$health2->get_data();
 cloud_release_expect(($data2['configured']??null)===true&&($data2['oauth']??null)===true,'Enabled Cloud health did not report configured OAuth gateway');
 cloud_release_expect(($data2['mode']??'')==='approved_beta','Enabled Cloud health must remain approved_beta');
 cloud_release_expect(($data2['billing']??null)===false&&($data2['batch_accounting']??null)===false&&($data2['commercial_client_entitlements']??null)===false,'Enabled Cloud health overstates unfinished release capabilities');
+$enabledHealthEncoded=wp_json_encode($data2,JSON_UNESCAPED_SLASHES);
+cloud_release_expect(!str_contains($enabledHealthEncoded,$wrapped),'Enabled health leaked wrapped gateway key material');
+foreach(['wpai_gateway_wrapped_keys_v1','AUTH_KEY','SECURE_AUTH_KEY','DB_PASSWORD','wpai_gateway_','PDOException',ABSPATH] as $marker){
+    cloud_release_expect(!str_contains($enabledHealthEncoded,(string)$marker),'Enabled health leaked internal/secret marker: '.$marker);
+}
 
 $policy=\WPAICloudGateway\Settings::policy();
 cloud_release_expect(($policy['period']??'')==='calendar_month_utc','Cloud quota period contract mismatch');
@@ -249,6 +258,11 @@ $initialize->set_header('authorization',$bearer);$initialize->set_header('conten
 $initialize->set_body(wp_json_encode(array('jsonrpc'=>'2.0','id'=>7,'method'=>'initialize','params'=>array('protocolVersion'=>'2025-11-25'))));
 $initializeResponse=rest_do_request($initialize);$initializeData=$initializeResponse->get_data();
 cloud_release_expect($initializeResponse->get_status()===200&&(($initializeData['result']['protocolVersion']??'')==='2025-11-25')&&(($initializeData['result']['serverInfo']['version']??'')===WPAI_CLOUD_VERSION),'Authenticated MCP initialize failed');
+$initializeEncoded=wp_json_encode($initializeData,JSON_UNESCAPED_SLASHES);
+cloud_release_expect(!str_contains($initializeEncoded,$pilot['access_token'])&&!str_contains($initializeEncoded,$siteToken),'MCP initialize leaked bearer/site credential');
+foreach(['wpai_gateway_wrapped_keys_v1','AUTH_KEY','DB_PASSWORD',ABSPATH] as $marker){
+    cloud_release_expect(!str_contains($initializeEncoded,(string)$marker),'MCP initialize leaked internal/secret marker: '.$marker);
+}
 
 $toolsReq=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
 $toolsReq->set_header('authorization',$bearer);$toolsReq->set_header('content-type','application/json');$toolsReq->set_header('accept','application/json, text/event-stream');
