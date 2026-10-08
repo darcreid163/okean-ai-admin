@@ -124,6 +124,13 @@ wp_set_current_user((int)$subscriber);
 $subscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($subscriberSites->get_status()===401,'Ineligible WordPress user reached provisioning API');
 
+update_option('wpai_gateway_beta_users',array((int)$subscriber),false);
+$allowedSubscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
+cloud_release_expect($allowedSubscriberSites->get_status()===200&&is_array($allowedSubscriberSites->get_data())&&count($allowedSubscriberSites->get_data())===0,'Explicit beta allowlist did not enable isolated subscriber tenant');
+update_option('wpai_gateway_beta_users',array(),false);
+$revokedSubscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
+cloud_release_expect($revokedSubscriberSites->get_status()===401,'Removing user from beta allowlist did not revoke provisioning access');
+
 wp_set_current_user(0);
 $bearerOnly=new WP_REST_Request('GET','/wpai-cloud/v1/sites');
 $bearerOnly->set_header('authorization','Bearer wpai_cloud_'.str_repeat('A',43));
