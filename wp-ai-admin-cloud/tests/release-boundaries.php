@@ -11,7 +11,28 @@ $now=1791436800;
 $db=sys_get_temp_dir().'/wpai-boundaries-'.bin2hex(random_bytes(6)).'.sqlite';
 $store=fixtureStore($db);$store->migrate();
 if(getenv('TEST_MYSQL_DSN'))foreach(['audit','requests','oauth_access','oauth_refresh','oauth_codes','oauth_grants','oauth_clients','tokens','sites','balances','accounts','rate'] as $t)$store->execute('DELETE FROM '.$store->table($t));
-$transport=new FakeTransport();$core=fixtureCore($store,$transport,2);$core->ensureAccount('boundary');
+$transport=new FakeTransport();
+
+// Commercial policy must fail closed if its accounting contract is edited into an unsupported shape.
+$basePolicy=json_decode(file_get_contents(dirname(__DIR__).'/config/plans.json'),true);
+foreach([
+    ['period','rolling_30d','invalid_quota_policy'],
+    ['billing','attempted_tool_call','invalid_quota_policy'],
+    ['batch','enabled','invalid_quota_policy']
+] as [$key,$value,$reason]){
+    $p=$basePolicy;$p[$key]=$value;
+    breject(fn()=>new Core($store,new WPAICloudGateway\Vault(str_repeat('q',32)),$transport,$p),$reason);
+}
+foreach([
+    ['free',-1],
+    ['pro',10000001],
+    ['power','2000']
+] as [$plan,$value]){
+    $p=$basePolicy;$p['plans'][$plan]=$value;
+    breject(fn()=>new Core($store,new WPAICloudGateway\Vault(str_repeat('r',32)),$transport,$p),'invalid_plan_limit');
+}
+
+$core=fixtureCore($store,$transport,2);$core->ensureAccount('boundary');
 
 // URL and SSRF boundaries.
 bcheck(Security::home('https://EXAMPLE.COM:443/path/')==='https://example.com/path','Canonical HTTPS home normalization changed');
