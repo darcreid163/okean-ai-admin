@@ -17,10 +17,13 @@ check($chat['client_id']!==$qwen['client_id'] && !isset($chat['client_secret']),
 foreach(['http://evil.example.com/cb','https://u:p@example.com/cb','https://example.com/cb#x',"https://example.com/cb\n"] as $bad)rejects(fn()=>$oauth->register(['redirect_uris'=>[$bad]],$now),'invalid_redirect_uri');
 rejects(fn()=>$oauth->register(['redirect_uris'=>['https://example.com/cb'],'token_endpoint_auth_method'=>'client_secret_basic'],$now),'unsupported_client_auth_method');
 rejects(fn()=>$oauth->register(['redirect_uris'=>['https://example.com/cb'],'grant_types'=>'bad'],$now),'invalid_client_metadata');
+rejects(fn()=>$oauth->register(['client_name'=>'','redirect_uris'=>['https://example.com/cb']],$now),'invalid_client_metadata');
+rejects(fn()=>$oauth->register(['client_name'=>str_repeat('x',101),'redirect_uris'=>['https://example.com/cb']],$now),'invalid_client_metadata');
+rejects(fn()=>$oauth->register(['redirect_uris'=>array_map(fn($i)=>'https://example.com/cb'.$i,range(1,6))],$now),'invalid_client_metadata');
 $verifier=str_repeat('v',64);$challenge=Security::b64(hash('sha256',$verifier,true));
 $query=['client_id'=>$chat['client_id'],'redirect_uri'=>$chat['redirect_uris'][0],'response_type'=>'code','resource'=>$url,'scope'=>'mcp:read mcp:write offline_access','code_challenge'=>$challenge,'code_challenge_method'=>'S256','state'=>'bound-state'];
 $auth=$oauth->authorization($query);
-foreach([['resource','https://other.example.com/mcp','invalid_target'],['redirect_uri','https://evil.example.com/cb','invalid_redirect_uri'],['code_challenge_method','plain','pkce_s256_required'],['scope','mcp:write','invalid_scope'],['state','','state_required']] as [$key,$value,$reason]){ $bad=$query;$bad[$key]=$value;rejects(fn()=>$oauth->authorization($bad),$reason); }
+foreach([['resource','https://other.example.com/mcp','invalid_target'],['redirect_uri','https://evil.example.com/cb','invalid_redirect_uri'],['code_challenge_method','plain','pkce_s256_required'],['scope','mcp:write','invalid_scope'],['scope','mcp:read admin:all','invalid_scope'],['state','','state_required'],['state',str_repeat('s',513),'state_required']] as [$key,$value,$reason]){ $bad=$query;$bad[$key]=$value;rejects(fn()=>$oauth->authorization($bad),$reason); }
 rejects(fn()=>$oauth->approve('1',$auth,[$other['id']],$now),'invalid_site_consent');
 rejects(fn()=>$oauth->approve('1',$auth,[],$now),'invalid_site_consent');
 $code=$oauth->approve('1',$auth,[$site['id']],$now);
