@@ -102,4 +102,19 @@ $expiredReceipt=OAI_Receipts::build((int)$expiredOp['id']);
 release_install_expect(is_array($expiredReceipt)&&($expiredReceipt['status']??'')==='expired'&&(($expiredReceipt['receipt']['reason']??'')==='sandbox_expired'),'Expired sandbox receipt missing');
 delete_option('wpai_release_expired_fixture');
 
+// Universal REST safe-read policy must not expose WordPress users, credentials or external/traversal targets.
+do_action('rest_api_init');
+$blockedUsers=OAI_REST_Resolver::read('/wp/v2/users',array(),'summary',10);
+release_install_expect(is_wp_error($blockedUsers)&&$blockedUsers->get_error_code()==='oai_rest_blocked'&&(($blockedUsers->get_error_data()['reason']??'')==='wordpress_users_blocked_use_wp_list_users'),'wp.rest_read exposed WordPress users endpoint');
+$blockedAppPasswords=OAI_REST_Resolver::read('/wp/v2/users/1/application-passwords',array(),'summary',10);
+release_install_expect(is_wp_error($blockedAppPasswords)&&$blockedAppPasswords->get_error_code()==='oai_rest_blocked','wp.rest_read exposed application passwords');
+$blockedExternal=OAI_REST_Resolver::read('https://example.com/wp-json/wp/v2/posts',array(),'summary',10);
+release_install_expect(is_wp_error($blockedExternal)&&$blockedExternal->get_error_code()==='oai_rest_route','wp.rest_read accepted external URL');
+$blockedTraversal=OAI_REST_Resolver::read('../wp/v2/posts',array(),'summary',10);
+release_install_expect(is_wp_error($blockedTraversal)&&$blockedTraversal->get_error_code()==='oai_rest_route','wp.rest_read accepted traversal route');
+$secretProbe=OAI_Read::option_value('fixture_settings',array('name'=>'safe','consumer_secret'=>'must-hide','nested'=>array('api_key'=>'must-hide-too')));
+release_install_expect(!empty($secretProbe['redacted'])&&($secretProbe['value']['name']??'')==='safe'&&($secretProbe['value']['consumer_secret']??'')==='[REDACTED]'&&($secretProbe['value']['nested']['api_key']??'')==='[REDACTED]','Sensitive option redaction failed');
+$wholeSecret=OAI_Read::option_value('oai_bearer_token','plaintext-must-never-return');
+release_install_expect(!empty($wholeSecret['redacted'])&&($wholeSecret['value']??'')==='[REDACTED]','Sensitive top-level option was exposed');
+
 echo 'PASS fresh release ZIP install: WP '.get_bloginfo('version').', plugin '.OAI_VERSION.', tools '.count($catalog).', self-test '.$self['passed'].'/'.$self['total'].', fuzz '.$fuzz['summary']['PASS'].'/'.$fuzz['summary']['total'].PHP_EOL;
