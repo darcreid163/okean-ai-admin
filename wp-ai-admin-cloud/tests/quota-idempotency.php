@@ -94,5 +94,30 @@ $store->execute('UPDATE '.$store->table('requests').' SET response_sealed=? WHER
 qreject(fn()=>$core->call($actor3,$site3['id'],'operation_apply',['id'=>8],'tamper-cache',$now+21),'secret_binding_failed');
 qcheck($transport->executions===$tamperExecutions,'Tampered cached receipt caused write redispatch');
 
+// Plan changes must preserve already-used units and only change the ceiling.
+$core->ensureAccount('plan-owner');
+$planSite=$core->connect('plan-owner','https://plan.example.com','fixture-plan-site-token-dddddddd',$now);
+$planToken=$core->mint('plan-owner',[$planSite['id']],['mcp:read','mcp:write'],$now);
+$planActor=$core->authenticate($planToken['access_token'],$now);
+$core->call($planActor,$planSite['id'],'operation_apply',['id'=>9],'plan-charge',$now+30);
+$freeUsage=$core->usage('plan-owner',$now+30);
+qcheck($freeUsage['plan']==='free'&&$freeUsage['used']===1,'Plan fixture free usage wrong');
+$core->setPlan('operator','plan-owner','pro',$now+31);
+$proUsage=$core->usage('plan-owner',$now+31);
+qcheck($proUsage['plan']==='pro'&&$proUsage['used']===1&&$proUsage['limit']===500&&$proUsage['remaining']===499,'Plan upgrade reset or corrupted usage');
+qreject(fn()=>$core->setPlan('operator','plan-owner','does-not-exist',$now+32),'unknown_plan');
+$afterBadPlan=$core->usage('plan-owner',$now+32);
+qcheck($afterBadPlan['plan']==='pro'&&$afterBadPlan['used']===1,'Rejected plan change mutated account state');
+
+// Billing periods are calendar-month UTC and must not carry used/reserved balances into the next month.
+$nextMonth=strtotime('2026-11-01 00:00:05 UTC');
+$nextUsage=$core->usage('plan-owner',$nextMonth);
+qcheck($nextUsage['period']==='2026-11'&&$nextUsage['used']===0&&$nextUsage['reserved']===0&&$nextUsage['remaining']===500,'New UTC month inherited previous balance');
+$core->call($planActor,$planSite['id'],'operation_apply',['id'=>10],'november-charge',$nextMonth);
+$nextUsage2=$core->usage('plan-owner',$nextMonth);
+qcheck($nextUsage2['used']===1&&$nextUsage2['remaining']===499,'New-period charge accounting wrong');
+$oldUsage=$core->usage('plan-owner',$now+33);
+qcheck($oldUsage['period']==='2026-10'&&$oldUsage['used']===1,'New-period activity mutated prior-period balance');
+
 echo 'PASS '.$checks.' quota/idempotency/reconciliation assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite').PHP_EOL;
 if(!getenv('TEST_MYSQL_DSN'))foreach([$db,$db.'-wal',$db.'-shm'] as $f)if(file_exists($f))unlink($f);
