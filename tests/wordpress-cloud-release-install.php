@@ -36,4 +36,25 @@ cloud_release_expect(($data['configured']??null)===false,'Fresh Cloud health mus
 cloud_release_expect(($data['public_mcp_url']??'')==='https://wpaiadmin.ru/mcp','Health public MCP URL mismatch');
 cloud_release_expect(($data['billing']??null)===false&&($data['commercial_client_entitlements']??null)===false,'Fresh Cloud health overstates unfinished commercial enforcement');
 
-echo 'PASS fresh Cloud Core ZIP install: WP '.get_bloginfo('version').', PHP '.PHP_VERSION.', cloud '.WPAI_CLOUD_VERSION.', plans '.count($plans).PHP_EOL;
+// Explicit administrator opt-in must be the only action that creates gateway keys and enables the service.
+\WPAICloudGateway\WordPress::enable();
+cloud_release_expect(\WPAICloudGateway\Settings::enabled(),'Explicit Cloud gateway enable did not persist');
+cloud_release_expect(\WPAICloudGateway\WordPress::configured(),'Enabled Cloud gateway is not configured');
+$wrapped=(string)get_option('wpai_gateway_wrapped_keys_v1','');
+cloud_release_expect(strlen($wrapped)>80,'Wrapped gateway key material missing');
+cloud_release_expect(!str_contains($wrapped,'PRIVATE KEY')&&!str_contains($wrapped,'wpai_cloud_'),'Wrapped gateway option appears to contain plaintext credential material');
+$autoload=$wpdb->get_var($wpdb->prepare("SELECT autoload FROM {$wpdb->options} WHERE option_name=%s",'wpai_gateway_wrapped_keys_v1'));
+cloud_release_expect(in_array((string)$autoload,['no','off','auto-off'],true),'Gateway wrapped keys must not be autoloaded');
+cloud_release_expect((string)get_option('wpai_gateway_db_version','')==='2','Gateway schema migration did not complete');
+foreach(['accounts','balances','sites','tokens','requests','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate'] as $name){
+    $table=$wpdb->prefix.'wpai_gateway_'.$name;
+    $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$table));
+    cloud_release_expect((string)$found===$table,'Missing gateway table after enable: '.$name);
+}
+$health2=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'));
+cloud_release_expect($health2->get_status()===200,'Enabled Cloud health route failed');
+$data2=$health2->get_data();
+cloud_release_expect(($data2['configured']??null)===true&&($data2['oauth']??null)===true,'Enabled Cloud health did not report configured OAuth gateway');
+cloud_release_expect(($data2['billing']??null)===false&&($data2['batch_accounting']??null)===false,'Enabled Cloud health overstates unfinished release capabilities');
+
+echo 'PASS fresh Cloud Core ZIP install+enable: WP '.get_bloginfo('version').', PHP '.PHP_VERSION.', cloud '.WPAI_CLOUD_VERSION.', plans '.count($plans).PHP_EOL;
