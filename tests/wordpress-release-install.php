@@ -85,4 +85,21 @@ release_install_expect(is_wp_error($rollbackReplay)&&$rollbackReplay->get_error_
 release_install_expect((string)get_option('wpai_release_rollback_conflict')==='external-after-apply','Rollback replay overwrote newer state');
 delete_option('wpai_release_rollback_conflict');
 
+// Expired sandbox snapshots must never be approved or applied.
+update_option('wpai_release_expired_fixture','baseline',false);
+$expiredReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+$expiredReq->set_param('type','option_update');$expiredReq->set_param('target','wpai_release_expired_fixture');$expiredReq->set_param('new_data','must-never-apply');
+$expiredOp=OAI_REST::sandbox_create($expiredReq);
+release_install_expect(!is_wp_error($expiredOp)&&!empty($expiredOp['id']),'Unable to create expiry fixture');
+OAI_DB::update((int)$expiredOp['id'],array('expires_at'=>gmdate('Y-m-d H:i:s',time()-60)));
+$expiredApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$expiredOp['id'].'/approve');$expiredApprove->set_header('X-WP-Nonce',$nonce);
+$expiredResult=OAI_REST::sandbox_action($expiredApprove);
+release_install_expect(is_wp_error($expiredResult)&&$expiredResult->get_error_code()==='oai_expired','Expired sandbox was not rejected');
+release_install_expect((string)get_option('wpai_release_expired_fixture')==='baseline','Expired sandbox changed live state');
+$expiredRow=OAI_DB::get((int)$expiredOp['id']);
+release_install_expect(($expiredRow['status']??'')==='expired','Expired sandbox status not persisted');
+$expiredReceipt=OAI_Receipts::get((int)$expiredOp['id']);
+release_install_expect(is_array($expiredReceipt)&&($expiredReceipt['status']??'')==='expired','Expired sandbox receipt missing');
+delete_option('wpai_release_expired_fixture');
+
 echo 'PASS fresh release ZIP install: WP '.get_bloginfo('version').', plugin '.OAI_VERSION.', tools '.count($catalog).', self-test '.$self['passed'].'/'.$self['total'].', fuzz '.$fuzz['summary']['PASS'].'/'.$fuzz['summary']['total'].PHP_EOL;
