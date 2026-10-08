@@ -896,6 +896,13 @@ frame.addEventListener('load',function(){
    );
    if(isset($wpdb) && is_object($wpdb) && !empty($wpdb->prefix))$protected[]=$wpdb->prefix.'user_roles';
    if(in_array($key,$protected,true))return new WP_Error('oai_option_protected','Protected WordPress option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   // Cloud Core control-plane options are never generic content settings.
+   // The native plugin may coexist with Cloud Core on wpaiadmin.ru; allowing
+   // option_update to touch these keys would bypass the Cloud admin/OAuth
+   // lifecycle and could corrupt wrapped keys, beta enrollment or schema state.
+   if(str_starts_with($key,'wpai_gateway_')||str_starts_with($key,'wpai_cloud_')){
+    return new WP_Error('oai_option_control_plane','Cloud control-plane option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   }
    if(preg_match('/(?:^|_)(?:password|passwd|secret|auth|token|private_key|api_key|apikey|client_secret)(?:_|$)/i',$key)){
     return new WP_Error('oai_option_sensitive','Sensitive credential/security option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
    }
