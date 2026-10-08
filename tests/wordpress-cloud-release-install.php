@@ -34,7 +34,8 @@ $data=$health->get_data();
 cloud_release_expect(($data['service']??'')==='wp-ai-cloud'&&($data['version']??'')===WPAI_CLOUD_VERSION,'Cloud health identity mismatch');
 cloud_release_expect(($data['configured']??null)===false,'Fresh Cloud health must report configured=false');
 cloud_release_expect(($data['public_mcp_url']??'')==='https://wpaiadmin.ru/mcp','Health public MCP URL mismatch');
-cloud_release_expect(($data['billing']??null)===false&&($data['commercial_client_entitlements']??null)===false,'Fresh Cloud health overstates unfinished commercial enforcement');
+cloud_release_expect(($data['mode']??'')==='approved_beta','Fresh Cloud health must remain approved_beta');
+cloud_release_expect(($data['billing']??null)===false&&($data['batch_accounting']??null)===false&&($data['commercial_client_entitlements']??null)===false,'Fresh Cloud health overstates unfinished commercial enforcement');
 
 // Explicit administrator opt-in must be the only action that creates gateway keys and enables the service.
 \WPAICloudGateway\WordPress::enable();
@@ -55,7 +56,8 @@ $health2=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'));
 cloud_release_expect($health2->get_status()===200,'Enabled Cloud health route failed');
 $data2=$health2->get_data();
 cloud_release_expect(($data2['configured']??null)===true&&($data2['oauth']??null)===true,'Enabled Cloud health did not report configured OAuth gateway');
-cloud_release_expect(($data2['billing']??null)===false&&($data2['batch_accounting']??null)===false,'Enabled Cloud health overstates unfinished release capabilities');
+cloud_release_expect(($data2['mode']??'')==='approved_beta','Enabled Cloud health must remain approved_beta');
+cloud_release_expect(($data2['billing']??null)===false&&($data2['batch_accounting']??null)===false&&($data2['commercial_client_entitlements']??null)===false,'Enabled Cloud health overstates unfinished release capabilities');
 
 $policy=\WPAICloudGateway\Settings::policy();
 cloud_release_expect(($policy['period']??'')==='calendar_month_utc','Cloud quota period contract mismatch');
