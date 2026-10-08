@@ -169,4 +169,51 @@ foreach([$badRegisterResponse,$badTokenResponse,$httpRegisterResponse] as $negat
     cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'OAuth denial leaked internal diagnostics');
 }
 
+// Real HTTP MCP transport with a valid short-lived pilot bearer, without external network access.
+$gatewayCore=\WPAICloudGateway\WordPress::operatorCore();
+$gatewayCore->ensureAccount('1');
+$httpSite='reg_'.str_repeat('a',32);
+$vault=new \WPAICloudGateway\Vault(\WPAICloudGateway\Settings::keys()['vault']);
+$siteToken='fixture-http-mcp-site-token-aaaaaaaa';
+$sealed=$vault->seal($siteToken,'site:1:'.$httpSite);
+$wpdb->insert($wpdb->prefix.'wpai_gateway_sites',array(
+    'id'=>$httpSite,'owner'=>'1','home'=>'https://http-mcp.example.com','url_hash'=>hash('sha256','https://http-mcp.example.com'),
+    'plugin_site_id'=>'plugin-http-mcp','installation_id'=>'install-http-mcp','token_sealed'=>$sealed,'status'=>'active','created_at'=>time()
+));
+cloud_release_expect($wpdb->last_error==='','Unable to seed HTTP MCP site registration');
+$pilot=$gatewayCore->mint('1',array($httpSite),array('mcp:read'),time());
+$bearer='Bearer '.$pilot['access_token'];
+
+$getMcp=new WP_REST_Request('GET','/wpai-cloud/v1/mcp');$getMcp->set_header('authorization',$bearer);
+$getMcpResponse=rest_do_request($getMcp);
+cloud_release_expect($getMcpResponse->get_status()===405&&(($getMcpResponse->get_data()['error']??'')==='stateless_json_transport_only'),'Authenticated MCP GET was not rejected as stateless POST-only');
+
+$wrongType=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$wrongType->set_header('authorization',$bearer);$wrongType->set_header('content-type','text/plain');$wrongType->set_header('accept','application/json, text/event-stream');$wrongType->set_body('{}');
+$wrongTypeResponse=rest_do_request($wrongType);
+cloud_release_expect($wrongTypeResponse->get_status()===415&&(($wrongTypeResponse->get_data()['error']??'')==='json_content_type_required'),'Authenticated MCP accepted wrong Content-Type');
+
+$wrongAccept=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$wrongAccept->set_header('authorization',$bearer);$wrongAccept->set_header('content-type','application/json');$wrongAccept->set_header('accept','application/json');$wrongAccept->set_body(wp_json_encode(array('jsonrpc'=>'2.0','id'=>1,'method'=>'ping')));
+$wrongAcceptResponse=rest_do_request($wrongAccept);
+cloud_release_expect($wrongAcceptResponse->get_status()===406&&(($wrongAcceptResponse->get_data()['error']??'')==='mcp_accept_header_required'),'Authenticated MCP accepted incomplete Accept header');
+
+$initialize=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$initialize->set_header('authorization',$bearer);$initialize->set_header('content-type','application/json');$initialize->set_header('accept','application/json, text/event-stream');$initialize->set_header('mcp-protocol-version','2025-11-25');
+$initialize->set_body(wp_json_encode(array('jsonrpc'=>'2.0','id'=>7,'method'=>'initialize','params'=>array('protocolVersion'=>'2025-11-25'))));
+$initializeResponse=rest_do_request($initialize);$initializeData=$initializeResponse->get_data();
+cloud_release_expect($initializeResponse->get_status()===200&&(($initializeData['result']['protocolVersion']??'')==='2025-11-25')&&(($initializeData['result']['serverInfo']['version']??'')===WPAI_CLOUD_VERSION),'Authenticated MCP initialize failed');
+
+$toolsReq=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$toolsReq->set_header('authorization',$bearer);$toolsReq->set_header('content-type','application/json');$toolsReq->set_header('accept','application/json, text/event-stream');
+$toolsReq->set_body(wp_json_encode(array('jsonrpc'=>'2.0','id'=>8,'method'=>'tools/list','params'=>(object)array())));
+$toolsResponse=rest_do_request($toolsReq);$toolsData=$toolsResponse->get_data();
+cloud_release_expect($toolsResponse->get_status()===200&&count($toolsData['result']['tools']??array())===4,'Authenticated gateway tools/list contract changed unexpectedly');
+
+foreach([$getMcpResponse,$wrongTypeResponse,$wrongAcceptResponse,$initializeResponse,$toolsResponse] as $response){
+    $headers=$response->get_headers();
+    cloud_release_expect(str_contains(strtolower((string)($headers['Cache-Control']??'')),'no-store'),'Authenticated MCP response missing no-store');
+    cloud_release_expect(strtolower((string)($headers['X-Content-Type-Options']??''))==='nosniff','Authenticated MCP response missing nosniff');
+}
+
 echo 'PASS fresh Cloud Core ZIP install+enable: WP '.get_bloginfo('version').', PHP '.PHP_VERSION.', cloud '.WPAI_CLOUD_VERSION.', plans '.count($plans).PHP_EOL;
