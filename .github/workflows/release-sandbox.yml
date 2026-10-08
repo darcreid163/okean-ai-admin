@@ -195,6 +195,11 @@ jobs:
           test "$BUILD_ID" = "$SIG2_BUILD"
           cmp -s BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt
           echo "Metadata consistent: version=$CONST_VERSION build=$BUILD_ID"
+          CLOUD_HEADER_VERSION="$(sed -n 's/^ \* Version: //p' wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          CLOUD_CONST_VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          test -n "$CLOUD_HEADER_VERSION" -a "$CLOUD_HEADER_VERSION" = "$CLOUD_CONST_VERSION"
+          grep -Fq "WP AI Admin Cloud Core $CLOUD_CONST_VERSION" wp-ai-admin-cloud/README.md
+          echo "Cloud metadata consistent: version=$CLOUD_CONST_VERSION"
       - name: Build native release candidate and prove reproducibility
         shell: bash
         run: |
@@ -216,11 +221,27 @@ jobs:
           printf 'commit=%s\nversion=%s\nsha256=%s\nreproducible=true\n' "$GITHUB_SHA" "$VERSION" "$SHA" | tee dist/PROVENANCE.txt
           test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
           test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)\.git')" -eq 0
+          CLOUD_VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          rm -rf cloud-dist cloud-rebuild
+          for ROOT in cloud-dist cloud-rebuild; do
+            mkdir -p "$ROOT/wp-ai-admin-cloud"
+            cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/includes wp-ai-admin-cloud/src wp-ai-admin-cloud/config wp-ai-admin-cloud/README.md "$ROOT/wp-ai-admin-cloud/"
+            find "$ROOT/wp-ai-admin-cloud" -type f -exec touch -r wp-ai-admin-cloud/wp-ai-admin-cloud.php {} +
+            (cd "$ROOT" && zip -X -qr "wp-ai-admin-cloud-$CLOUD_VERSION.zip" wp-ai-admin-cloud)
+            unzip -tq "$ROOT/wp-ai-admin-cloud-$CLOUD_VERSION.zip"
+          done
+          CLOUD_SHA="$(sha256sum "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | awk '{print $1}')"
+          CLOUD_SHA2="$(sha256sum "cloud-rebuild/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | awk '{print $1}')"
+          test "$CLOUD_SHA" = "$CLOUD_SHA2"
+          cmp -s "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" "cloud-rebuild/wp-ai-admin-cloud-$CLOUD_VERSION.zip"
+          test "$(unzip -Z1 "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
+          printf 'cloud_version=%s\ncloud_sha256=%s\ncloud_reproducible=true\n' "$CLOUD_VERSION" "$CLOUD_SHA" | tee -a dist/PROVENANCE.txt
       - name: Upload release provenance evidence
         uses: actions/upload-artifact@v4
         with:
           name: public-release-provenance
           path: |
             dist/wp-ai-admin-*.zip
+            cloud-dist/wp-ai-admin-cloud-*.zip
             dist/PROVENANCE.txt
           if-no-files-found: error
