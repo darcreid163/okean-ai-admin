@@ -214,6 +214,25 @@ $bearer='Bearer '.$pilot['access_token'];
 $getMcp=new WP_REST_Request('GET','/wpai-cloud/v1/mcp');$getMcp->set_header('authorization',$bearer);
 $getMcpResponse=rest_do_request($getMcp);
 cloud_release_expect($getMcpResponse->get_status()===405&&(($getMcpResponse->get_data()['error']??'')==='stateless_json_transport_only'),'Authenticated MCP GET was not rejected as stateless POST-only');
+cloud_release_expect((string)($getMcpResponse->get_headers()['Allow']??'')==='POST','Authenticated MCP GET response missing Allow: POST');
+
+$oversizedMcp=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$oversizedMcp->set_header('authorization',$bearer);$oversizedMcp->set_header('content-type','application/json');$oversizedMcp->set_header('accept','application/json, text/event-stream');
+$oversizedMcp->set_body('{"jsonrpc":"2.0","id":10,"method":"ping","pad":"'.str_repeat('x',131200).'"}');
+$oversizedMcpResponse=rest_do_request($oversizedMcp);
+cloud_release_expect($oversizedMcpResponse->get_status()===413&&(($oversizedMcpResponse->get_data()['error']??'')==='request_too_large'),'Oversized MCP request was not rejected before dispatch');
+
+$listBody=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$listBody->set_header('authorization',$bearer);$listBody->set_header('content-type','application/json');$listBody->set_header('accept','application/json, text/event-stream');
+$listBody->set_body('[{"jsonrpc":"2.0","id":11,"method":"ping"}]');
+$listBodyResponse=rest_do_request($listBody);
+cloud_release_expect($listBodyResponse->get_status()===400&&(($listBodyResponse->get_data()['error']??'')==='json_object_required'),'JSON-RPC batch/list body was not rejected');
+
+$notification=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$notification->set_header('authorization',$bearer);$notification->set_header('content-type','application/json');$notification->set_header('accept','application/json, text/event-stream');
+$notification->set_body(wp_json_encode(array('jsonrpc'=>'2.0','method'=>'notifications/initialized','params'=>(object)array())));
+$notificationResponse=rest_do_request($notification);
+cloud_release_expect($notificationResponse->get_status()===202&&$notificationResponse->get_data()===null,'MCP notification did not return empty 202 semantics');
 
 $wrongType=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
 $wrongType->set_header('authorization',$bearer);$wrongType->set_header('content-type','text/plain');$wrongType->set_header('accept','application/json, text/event-stream');$wrongType->set_body('{}');
@@ -245,7 +264,7 @@ $revokedResponse=rest_do_request($revokedReq);
 cloud_release_expect($revokedResponse->get_status()===401&&(($revokedResponse->get_data()['error']??'')==='invalid_or_expired_token'),'Revoked MCP bearer remained valid over HTTP');
 cloud_release_expect(str_contains((string)($revokedResponse->get_headers()['WWW-Authenticate']??''),'resource_metadata='),'Revoked MCP bearer response missing authorization challenge');
 
-foreach([$getMcpResponse,$wrongTypeResponse,$wrongAcceptResponse,$initializeResponse,$toolsResponse,$revokedResponse] as $response){
+foreach([$getMcpResponse,$oversizedMcpResponse,$listBodyResponse,$notificationResponse,$wrongTypeResponse,$wrongAcceptResponse,$initializeResponse,$toolsResponse,$revokedResponse] as $response){
     $headers=$response->get_headers();
     cloud_release_expect(str_contains(strtolower((string)($headers['Cache-Control']??'')),'no-store'),'Authenticated MCP response missing no-store');
     cloud_release_expect(strtolower((string)($headers['X-Content-Type-Options']??''))==='nosniff','Authenticated MCP response missing nosniff');
