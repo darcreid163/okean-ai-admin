@@ -16,6 +16,7 @@ All notable public-release changes are recorded here. Published versions must ne
 - Add public onboarding and release-provenance gates.
 - Add reproducible ZIP builds, SHA-256 provenance and release-payload secret scanning.
 - Add Runner Smoke diagnostic workflow.
+- Recompute native execution proof when the lifecycle moves from Apply into Rollback, preventing a rollback receipt from reusing a stale Apply proof.
 
 ### Commercial truthfulness
 - Keep public health mode at approved_beta.
