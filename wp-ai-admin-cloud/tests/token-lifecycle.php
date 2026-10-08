@@ -50,5 +50,16 @@ tlreject(fn()=>$core->call($freshActor,$site['id'],'operation_apply',['id'=>2],'
 // Old disconnected registration cannot be reintroduced into a new token grant.
 tlreject(fn()=>$core->mint('owner-a',[$site['id']],['mcp:read'],$now+11),'site_unavailable');
 
+// Multi-site grants degrade narrowly: disconnecting one site must not revoke access to another allowed site.
+$multiA=$core->connect('owner-a','https://multi-a.example.com','fixture-multi-a-site-token-aaaaaaaa',$now+20);
+$multiB=$core->connect('owner-a','https://multi-b.example.com','fixture-multi-b-site-token-bbbbbbbb',$now+20);
+$multiToken=$core->mint('owner-a',[$multiA['id'],$multiB['id']],['mcp:read'],$now+20,3600);
+$multiActor=$core->authenticate($multiToken['access_token'],$now+21);
+tlcheck(is_array($core->catalog($multiActor,$multiA['id'],$now+21))&&is_array($core->catalog($multiActor,$multiB['id'],$now+21)),'Multi-site token failed before disconnect');
+$core->disconnect('owner-a',$multiA['id'],$now+22);
+tlreject(fn()=>$core->catalog($multiActor,$multiA['id'],$now+23),'site_unavailable');
+tlcheck(is_array($core->catalog($multiActor,$multiB['id'],$now+23)),'Disconnecting one site revoked sibling site access');
+tlcheck($multiActor['site_ids']===[$multiA['id'],$multiB['id']],'Runtime actor grant mutated unexpectedly');
+
 echo 'PASS '.$checks.' token/session lifecycle assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite').PHP_EOL;
 if(!getenv('TEST_MYSQL_DSN'))foreach([$db,$db.'-wal',$db.'-shm'] as $f)if(file_exists($f))unlink($f);
