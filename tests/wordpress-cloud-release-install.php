@@ -210,7 +210,15 @@ $toolsReq->set_body(wp_json_encode(array('jsonrpc'=>'2.0','id'=>8,'method'=>'too
 $toolsResponse=rest_do_request($toolsReq);$toolsData=$toolsResponse->get_data();
 cloud_release_expect($toolsResponse->get_status()===200&&count($toolsData['result']['tools']??array())===4,'Authenticated gateway tools/list contract changed unexpectedly');
 
-foreach([$getMcpResponse,$wrongTypeResponse,$wrongAcceptResponse,$initializeResponse,$toolsResponse] as $response){
+$gatewayCore->revokeToken('1',hash('sha256',$pilot['access_token']),time());
+$revokedReq=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$revokedReq->set_header('authorization',$bearer);$revokedReq->set_header('content-type','application/json');$revokedReq->set_header('accept','application/json, text/event-stream');
+$revokedReq->set_body(wp_json_encode(array('jsonrpc'=>'2.0','id'=>9,'method'=>'tools/list','params'=>(object)array())));
+$revokedResponse=rest_do_request($revokedReq);
+cloud_release_expect($revokedResponse->get_status()===401&&(($revokedResponse->get_data()['error']??'')==='invalid_or_expired_token'),'Revoked MCP bearer remained valid over HTTP');
+cloud_release_expect(str_contains((string)($revokedResponse->get_headers()['WWW-Authenticate']??''),'resource_metadata='),'Revoked MCP bearer response missing authorization challenge');
+
+foreach([$getMcpResponse,$wrongTypeResponse,$wrongAcceptResponse,$initializeResponse,$toolsResponse,$revokedResponse] as $response){
     $headers=$response->get_headers();
     cloud_release_expect(str_contains(strtolower((string)($headers['Cache-Control']??'')),'no-store'),'Authenticated MCP response missing no-store');
     cloud_release_expect(strtolower((string)($headers['X-Content-Type-Options']??''))==='nosniff','Authenticated MCP response missing nosniff');
