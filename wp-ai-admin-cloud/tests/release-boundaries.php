@@ -83,5 +83,15 @@ bcheck(count($core2->sites('site-limit'))===Core::MAX_SITES,'Site-limit fixture 
 breject(fn()=>$core2->connect('site-limit','https://limit-overflow.example.com','fixture-site-limit-token-overflow-xxxxxxxx',$now+((Core::MAX_SITES+1)*60)),'pilot_site_count_limit');
 bcheck(count($core2->sites('site-limit'))===Core::MAX_SITES,'Rejected 51st site changed tenant registry');
 
+// MySQL deployments must fail closed if a critical table loses transactional InnoDB semantics.
+if(getenv('TEST_MYSQL_DSN')){
+    $requestsTable=$store->table('requests');
+    $store->execute('ALTER TABLE '.$requestsTable.' ENGINE=MyISAM');
+    breject(fn()=>$store->migrate(),'innodb_required');
+    $store->execute('ALTER TABLE '.$requestsTable.' ENGINE=InnoDB');
+    $store->migrate();
+    bcheck(true,'InnoDB restoration failed');
+}
+
 echo 'PASS '.$checks.' release boundary assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite').PHP_EOL;
 if(!getenv('TEST_MYSQL_DSN'))foreach([$db,$db.'-wal',$db.'-shm'] as $f)if(file_exists($f))unlink($f);
