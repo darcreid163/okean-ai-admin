@@ -45,7 +45,7 @@ try {
  update_option('thumbnail_size_w',150,false);
  OAI_AI_Lifecycle_Control::enable(1);
  $sandbox=$core->call($actor,$site['id'],'wp_option_update_sandbox',['key'=>'thumbnail_size_w','value'=>151],'release-lifecycle-sandbox',$now);
- pair_expect($sandbox['state']==='succeeded','Central sandbox creation failed');
+ pair_expect($sandbox['state']==='succeeded','Central sandbox creation failed: '.wp_json_encode($sandbox,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
  $sandboxData=json_decode($sandbox['upstream']['result']['content'][0]['text'],true);
  $opId=absint($sandboxData['id']??0);pair_expect($opId>0,'Central sandbox did not return operation ID');
  pair_expect((int)get_option('thumbnail_size_w')===150,'Sandbox wrote before approval');
