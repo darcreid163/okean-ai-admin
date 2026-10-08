@@ -68,6 +68,77 @@ native_auth_expect(is_wp_error($mcpDenied)&&$mcpDenied->get_error_code()==='oai_
 $admin->set_role('administrator');
 if($serverAuthBefore===null)unset($_SERVER['HTTP_AUTHORIZATION']);else $_SERVER['HTTP_AUTHORIZATION']=$serverAuthBefore;
 
+// Native OAuth one-time credentials must not be consumed while the approving user is demoted.
+global $wpdb;
+$oauthClient='release-auth-client';
+$redirect='https://client.example.test/callback';
+$resource=rest_url('okean-ai/mcp');
+$verifier='release-auth-verifier-'.wp_generate_password(48,false,false);
+$challenge=rtrim(strtr(base64_encode(hash('sha256',$verifier,true)),'+/','-_'),'=');
+$code='release-auth-code-'.wp_generate_password(40,false,false);
+$wpdb->insert(OAI_MCP_OAuth::codes_table(),array(
+    'code_hash'=>hash('sha256',$code),
+    'client_id'=>$oauthClient,
+    'user_id'=>$adminId,
+    'redirect_uri'=>$redirect,
+    'scope'=>'mcp:read mcp:write offline_access',
+    'resource'=>$resource,
+    'code_challenge'=>$challenge,
+    'created_at'=>gmdate('Y-m-d H:i:s'),
+    'expires_at'=>gmdate('Y-m-d H:i:s',time()+600),
+    'used'=>0
+));
+native_auth_expect($wpdb->last_error==='','Unable to seed OAuth code demotion fixture');
+
+$codeReq=new WP_REST_Request('POST','/okean-ai/v1/oauth/token');
+$codeReq->set_param('grant_type','authorization_code');
+$codeReq->set_param('code',$code);$codeReq->set_param('client_id',$oauthClient);$codeReq->set_param('redirect_uri',$redirect);
+$codeReq->set_param('code_verifier',$verifier);$codeReq->set_param('resource',$resource);
+
+$admin->set_role('subscriber');wp_set_current_user(0);
+$codeDenied=OAI_MCP_OAuth::token($codeReq);
+native_auth_expect($codeDenied instanceof WP_REST_Response&&(($codeDenied->get_data()['error']??'')==='invalid_grant'),'Demoted administrator exchanged OAuth authorization code');
+$codeUsed=(int)$wpdb->get_var($wpdb->prepare('SELECT used FROM '.OAI_MCP_OAuth::codes_table().' WHERE code_hash=%s',hash('sha256',$code)));
+native_auth_expect($codeUsed===0,'Denied OAuth code exchange consumed one-time code');
+
+$admin->set_role('administrator');wp_set_current_user($adminId);
+$codeAllowed=OAI_MCP_OAuth::token($codeReq);
+native_auth_expect($codeAllowed instanceof WP_REST_Response&&$codeAllowed->get_status()===200&&!empty($codeAllowed->get_data()['access_token']),'Restored administrator could not exchange preserved OAuth code');
+
+// Seed an independent refresh row to verify demotion is checked before rotation.
+$refresh='release-auth-refresh-'.wp_generate_password(48,false,false);
+$access='release-auth-access-'.wp_generate_password(48,false,false);
+$wpdb->insert(OAI_MCP_OAuth::tokens_table(),array(
+    'access_hash'=>hash('sha256',$access),
+    'refresh_hash'=>hash('sha256',$refresh),
+    'client_id'=>$oauthClient,
+    'user_id'=>$adminId,
+    'scope'=>'mcp:read mcp:write offline_access',
+    'resource'=>$resource,
+    'created_at'=>gmdate('Y-m-d H:i:s'),
+    'expires_at'=>gmdate('Y-m-d H:i:s',time()+3600),
+    'refresh_expires_at'=>gmdate('Y-m-d H:i:s',time()+3600),
+    'revoked'=>0
+));
+native_auth_expect($wpdb->last_error==='','Unable to seed OAuth refresh demotion fixture');
+
+$refreshReq=new WP_REST_Request('POST','/okean-ai/v1/oauth/token');
+$refreshReq->set_param('grant_type','refresh_token');$refreshReq->set_param('refresh_token',$refresh);
+$refreshReq->set_param('client_id',$oauthClient);$refreshReq->set_param('resource',$resource);
+
+$admin->set_role('subscriber');wp_set_current_user(0);
+$refreshDenied=OAI_MCP_OAuth::token($refreshReq);
+native_auth_expect($refreshDenied instanceof WP_REST_Response&&(($refreshDenied->get_data()['error']??'')==='invalid_grant'),'Demoted administrator rotated OAuth refresh token');
+$refreshRevoked=(int)$wpdb->get_var($wpdb->prepare('SELECT revoked FROM '.OAI_MCP_OAuth::tokens_table().' WHERE refresh_hash=%s',hash('sha256',$refresh)));
+native_auth_expect($refreshRevoked===0,'Denied OAuth refresh consumed/rotated token');
+
+$admin->set_role('administrator');wp_set_current_user($adminId);
+$refreshAllowed=OAI_MCP_OAuth::token($refreshReq);
+native_auth_expect($refreshAllowed instanceof WP_REST_Response&&$refreshAllowed->get_status()===200&&!empty($refreshAllowed->get_data()['refresh_token']),'Restored administrator could not rotate preserved refresh token');
+
+$wpdb->delete(OAI_MCP_OAuth::codes_table(),array('client_id'=>$oauthClient));
+$wpdb->query($wpdb->prepare('DELETE FROM '.OAI_MCP_OAuth::tokens_table().' WHERE client_id=%s',$oauthClient));
+
 WP_Application_Passwords::delete_all_application_passwords($adminId);
 WP_Application_Passwords::delete_all_application_passwords($subscriberId);
 wp_delete_user($subscriberId);
