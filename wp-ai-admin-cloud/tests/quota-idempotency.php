@@ -78,5 +78,21 @@ qreject(fn()=>$core->reconcile('operator','reconcile-owner',$key,'failed',[
     'receipt_sha256'=>str_repeat('b',64)
 ],$now+14),'request_not_reconcilable');
 
+// Cached idempotent receipts are sealed. Storage tampering must fail closed and must never re-dispatch the write.
+$core->ensureAccount('tamper-owner');
+$site3=$core->connect('tamper-owner','https://tamper.example.com','fixture-tamper-site-token-cccccccc',$now);
+$token3=$core->mint('tamper-owner',[$site3['id']],['mcp:read','mcp:write'],$now);
+$actor3=$core->authenticate($token3['access_token'],$now);
+$tamperedFirst=$core->call($actor3,$site3['id'],'operation_apply',['id'=>8],'tamper-cache',$now+20);
+$tamperExecutions=$transport->executions;
+$tamperKey=$tamperedFirst['request_key'];
+$row=$store->row('SELECT response_sealed FROM '.$store->table('requests').' WHERE request_key=?',[$tamperKey]);
+qcheck(is_array($row)&&strlen((string)$row['response_sealed'])>20,'Cached sealed receipt missing');
+$sealed=(string)$row['response_sealed'];
+$sealed[5]=$sealed[5]==='A'?'B':'A';
+$store->execute('UPDATE '.$store->table('requests').' SET response_sealed=? WHERE request_key=?',[$sealed,$tamperKey]);
+qreject(fn()=>$core->call($actor3,$site3['id'],'operation_apply',['id'=>8],'tamper-cache',$now+21),'secret_binding_failed');
+qcheck($transport->executions===$tamperExecutions,'Tampered cached receipt caused write redispatch');
+
 echo 'PASS '.$checks.' quota/idempotency/reconciliation assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite').PHP_EOL;
 if(!getenv('TEST_MYSQL_DSN'))foreach([$db,$db.'-wal',$db.'-shm'] as $f)if(file_exists($f))unlink($f);
