@@ -180,6 +180,24 @@ $expiredReceipt=OAI_Receipts::build((int)$expiredOp['id']);
 release_install_expect(is_array($expiredReceipt)&&($expiredReceipt['status']??'')==='expired'&&(($expiredReceipt['receipt']['reason']??'')==='sandbox_expired'),'Expired sandbox receipt missing');
 delete_option('wpai_release_expired_fixture');
 
+// Generic option sandbox must never mutate Cloud control-plane or credential-like options.
+$opsBeforeGuard=OAI_DB::count_all();
+foreach(['wpai_gateway_wrapped_keys_v1','wpai_gateway_enabled','wpai_gateway_beta_users','wpai_cloud_db_version'] as $protectedKey){
+    $beforeProtected=get_option($protectedKey,'__missing__');
+    $protectedReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+    $protectedReq->set_param('type','option_update');$protectedReq->set_param('target',$protectedKey);$protectedReq->set_param('new_data','attacker-value');
+    $protectedResult=OAI_REST::sandbox_create($protectedReq);
+    release_install_expect(is_wp_error($protectedResult)&&$protectedResult->get_error_code()==='oai_option_control_plane','Cloud control-plane option was accepted by generic sandbox: '.$protectedKey);
+    release_install_expect(get_option($protectedKey,'__missing__')===$beforeProtected,'Denied Cloud option sandbox changed value: '.$protectedKey);
+}
+foreach(['fixture_token','fixture_client_secret','fixture_api_key','fixture_auth_key','fixture_password'] as $sensitiveKey){
+    $sensitiveReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+    $sensitiveReq->set_param('type','option_update');$sensitiveReq->set_param('target',$sensitiveKey);$sensitiveReq->set_param('new_data','attacker-value');
+    $sensitiveResult=OAI_REST::sandbox_create($sensitiveReq);
+    release_install_expect(is_wp_error($sensitiveResult)&&$sensitiveResult->get_error_code()==='oai_option_sensitive','Credential-like option was accepted by generic sandbox: '.$sensitiveKey);
+}
+release_install_expect(OAI_DB::count_all()===$opsBeforeGuard,'Denied sensitive/control-plane option attempts created operation rows');
+
 // Universal REST safe-read policy must not expose WordPress users, credentials or external/traversal targets.
 do_action('rest_api_init');
 $blockedUsers=OAI_REST_Resolver::read('/wp/v2/users',array(),'summary',10);
