@@ -134,6 +134,35 @@ release_install_expect(is_wp_error($rollbackReplay)&&$rollbackReplay->get_error_
 release_install_expect((string)get_option('wpai_release_rollback_conflict')==='external-after-apply','Rollback replay overwrote newer state');
 delete_option('wpai_release_rollback_conflict');
 
+// Native proof lifecycle: preflight -> Apply execution proof -> distinct Rollback execution proof.
+update_option('wpai_release_proof_fixture','baseline',false);
+$proofReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+$proofReq->set_param('type','option_update');$proofReq->set_param('target','wpai_release_proof_fixture');$proofReq->set_param('new_data','applied-value');
+$proofOp=OAI_REST::sandbox_create($proofReq);
+release_install_expect(!is_wp_error($proofOp)&&!empty($proofOp['id']),'Unable to create proof lifecycle fixture');
+$preflightProof=OAI_Proof::make((int)$proofOp['id']);
+release_install_expect(($preflightProof['proof_kind']??'')==='preflight'&&empty($preflightProof['verified'])&&empty($preflightProof['execution_proof']),'Pending operation did not return preflight proof');
+
+$proofApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/approve');$proofApprove->set_header('X-WP-Nonce',$nonce);
+$proofApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/apply');$proofApply->set_header('X-WP-Nonce',$nonce);
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApprove)),'Proof fixture approval failed');
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApply))&&(string)get_option('wpai_release_proof_fixture')==='applied-value','Proof fixture Apply failed');
+$applyProof=OAI_Proof::make((int)$proofOp['id']);
+$applyReceipt=OAI_Receipts::build((int)$proofOp['id']);
+release_install_expect(($applyProof['proof_kind']??'')==='execution'&&($applyProof['phase']??'')==='after'&&!empty($applyProof['verified']),'Apply execution proof missing or unverified');
+release_install_expect(preg_match('/^[a-f0-9]{64}$/',(string)($applyProof['hash']??''))===1&&($applyProof['build_id']??'')===OAI_BUILD_ID,'Apply proof hash/build binding invalid');
+release_install_expect(($applyReceipt['operation_id']??'')===($proofOp['operation_id']??'')&&!empty($applyReceipt['verified'])&&(($applyReceipt['proof']['hash']??'')===($applyProof['hash']??'')),'Apply receipt not bound to Apply proof');
+
+$proofRollback=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/rollback');$proofRollback->set_header('X-WP-Nonce',$nonce);
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofRollback))&&(string)get_option('wpai_release_proof_fixture')==='baseline','Proof fixture Rollback failed');
+$rollbackProof=OAI_Proof::make((int)$proofOp['id']);
+$rollbackReceipt=OAI_Receipts::build((int)$proofOp['id']);
+release_install_expect(($rollbackProof['proof_kind']??'')==='execution'&&($rollbackProof['phase']??'')==='rollback'&&!empty($rollbackProof['verified']),'Rollback execution proof missing or unverified');
+release_install_expect(preg_match('/^[a-f0-9]{64}$/',(string)($rollbackProof['hash']??''))===1,'Rollback proof hash invalid');
+release_install_expect(!hash_equals((string)$applyProof['hash'],(string)$rollbackProof['hash']),'Rollback reused stale Apply proof');
+release_install_expect(($rollbackReceipt['status']??'')==='rolled_back'&&!empty($rollbackReceipt['verified'])&&(($rollbackReceipt['proof']['phase']??'')==='rollback')&&(($rollbackReceipt['proof']['hash']??'')===($rollbackProof['hash']??'')),'Rollback receipt not bound to fresh rollback proof');
+delete_option('wpai_release_proof_fixture');
+
 // Expired sandbox snapshots must never be approved or applied.
 update_option('wpai_release_expired_fixture','baseline',false);
 $expiredReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
