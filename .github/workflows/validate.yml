@@ -24,6 +24,14 @@ jobs:
         php: ['8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v6
+      - name: Materialize retained 2.1.5 regression baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p releases/2.1.5
+          git fetch --no-tags --depth=1 origin codex/wp-ai-admin-2.1.5-option-normalization
+          git show FETCH_HEAD:releases/2.1.5/wp-ai-admin-2.1.5.zip > releases/2.1.5/wp-ai-admin-2.1.5.zip
+          unzip -tq releases/2.1.5/wp-ai-admin-2.1.5.zip
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -140,6 +148,14 @@ jobs:
           --health-retries=5
     steps:
       - uses: actions/checkout@v6
+      - name: Materialize retained 2.1.5 regression baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p releases/2.1.5
+          git fetch --no-tags --depth=1 origin codex/wp-ai-admin-2.1.5-option-normalization
+          git show FETCH_HEAD:releases/2.1.5/wp-ai-admin-2.1.5.zip > releases/2.1.5/wp-ai-admin-2.1.5.zip
+          unzip -tq releases/2.1.5/wp-ai-admin-2.1.5.zip
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
