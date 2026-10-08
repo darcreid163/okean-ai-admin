@@ -52,6 +52,12 @@ iso_reject(
 );
 iso_check(iso_ids($core->sites('tenant-a'))===[$siteA['id']],'Cross-owner claim changed Tenant A ownership');
 iso_check(iso_ids($core->sites('tenant-b'))===[$siteB['id']],'Cross-owner claim changed Tenant B registry');
+// URL normalization must not allow the same site to be registered again through host case or trailing-slash variants.
+iso_reject(
+    fn()=>$core->connect('tenant-b','https://TENANT-A.EXAMPLE.COM/','fixture-normalized-claim-token-eeeeeeee',$now+2,true),
+    'site_already_registered'
+);
+iso_check(count($core->sites('tenant-a'))===1&&count($core->sites('tenant-b'))===1,'Normalized duplicate claim changed tenant registries');
 
 $tokenA=$core->mint('tenant-a',[$siteA['id']],['mcp:read','mcp:write'],$now);
 $tokenB=$core->mint('tenant-b',[$siteB['id']],['mcp:read','mcp:write'],$now);
