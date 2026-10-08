@@ -326,6 +326,21 @@ jobs:
           test -n "$CLOUD_HEADER_VERSION" -a "$CLOUD_HEADER_VERSION" = "$CLOUD_CONST_VERSION"
           grep -Fq "WP AI Admin Cloud Core $CLOUD_CONST_VERSION" wp-ai-admin-cloud/README.md
           echo "Cloud metadata consistent: version=$CLOUD_CONST_VERSION"
+      - name: Outbound transport SSRF/TLS static contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=wp-ai-admin-cloud/src/Transport.php
+          grep -Fq "CURLOPT_RESOLVE" "$FILE"
+          grep -Fq "CURLOPT_PROXY=>''" "$FILE"
+          grep -Fq "CURLOPT_FOLLOWLOCATION=>false" "$FILE"
+          grep -Fq "CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS" "$FILE"
+          grep -Fq "CURLOPT_REDIR_PROTOCOLS=>CURLPROTO_HTTPS" "$FILE"
+          grep -Fq "CURLOPT_SSL_VERIFYPEER=>true" "$FILE"
+          grep -Fq "CURLOPT_SSL_VERIFYHOST=>2" "$FILE"
+          grep -Fq "1048576" "$FILE"
+          grep -Fq "Security::requirePublicAddresses" "$FILE"
+          echo "Outbound transport pinning/TLS/size-limit contract present"
       - name: Build native release candidate and prove reproducibility
         shell: bash
         run: |
