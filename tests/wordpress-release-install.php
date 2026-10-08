@@ -18,6 +18,11 @@ $tools=(new ReflectionClass('OAI_MCP'))->getMethod('tools');
 $tools->setAccessible(true);
 $catalog=$tools->invoke(null);
 release_install_expect(is_array($catalog)&&count($catalog)>=100,'Fresh-install MCP catalog unexpectedly small');
+$catalogNames=array_values(array_filter(array_map(fn($tool)=>is_array($tool)?($tool['name']??''):'',$catalog)));
+release_install_expect(in_array('wp.rest_read',$catalogNames,true)&&in_array('wp.rest_routes',$catalogNames,true),'Safe REST discovery/read tools missing');
+foreach(['wp.rest_write','wp.rest_request','wp.rest_delete','wp.rest_mutate'] as $unsafeRestTool){
+    release_install_expect(!in_array($unsafeRestTool,$catalogNames,true),'Universal REST mutation tool exposed without lifecycle safety review: '.$unsafeRestTool);
+}
 
 $self=OAI_Platform::self_test();
 $failedSelf=is_array($self['checks']??null)?array_values(array_filter($self['checks'],fn($row)=>empty($row['ok']))):array();
