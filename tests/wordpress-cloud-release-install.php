@@ -127,6 +127,24 @@ cloud_release_expect($subscriberSites->get_status()===401,'Ineligible WordPress 
 update_option('wpai_gateway_beta_users',array((int)$subscriber),false);
 $allowedSubscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($allowedSubscriberSites->get_status()===200&&is_array($allowedSubscriberSites->get_data())&&count($allowedSubscriberSites->get_data())===0,'Explicit beta allowlist did not enable isolated subscriber tenant');
+
+$subscriberPlan=new WP_REST_Request('POST','/wpai-cloud/v1/accounts/'.(int)$subscriber.'/plan');
+$subscriberPlan->set_header('content-type','application/json');
+$subscriberPlan->set_body(wp_json_encode(array('plan'=>'scale')));
+$subscriberPlanResponse=rest_do_request($subscriberPlan);
+cloud_release_expect($subscriberPlanResponse->get_status()===403,'Beta subscriber self-assigned an operator-only plan');
+
+$subscriberReconcile=new WP_REST_Request('POST','/wpai-cloud/v1/accounts/'.(int)$subscriber.'/requests/'.str_repeat('a',64).'/reconcile');
+$subscriberReconcile->set_header('content-type','application/json');
+$subscriberReconcile->set_body(wp_json_encode(array('outcome'=>'failed','evidence'=>array('note'=>'subscriber must never reach reconciliation','receipt_sha256'=>str_repeat('b',64)))));
+$subscriberReconcileResponse=rest_do_request($subscriberReconcile);
+cloud_release_expect($subscriberReconcileResponse->get_status()===403,'Beta subscriber reached operator-only reconciliation');
+
+foreach([$subscriberPlanResponse,$subscriberReconcileResponse] as $negative){
+    $encoded=wp_json_encode($negative->get_data());
+    cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'Operator denial leaked internal diagnostics');
+}
+
 update_option('wpai_gateway_beta_users',array(),false);
 $revokedSubscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($revokedSubscriberSites->get_status()===401,'Removing user from beta allowlist did not revoke provisioning access');
