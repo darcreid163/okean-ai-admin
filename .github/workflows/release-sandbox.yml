@@ -98,6 +98,8 @@ jobs:
         run: php wp-ai-admin-cloud/tests/token-lifecycle.php
       - name: Gateway JSON-RPC protocol boundaries on SQLite
         run: php wp-ai-admin-cloud/tests/gateway-protocol.php
+      - name: Foundation compatibility proof on SQLite
+        run: php wp-ai-admin-cloud/tests/foundation-proof.php
       - name: Release abuse boundaries on MySQL
         env:
           TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
@@ -128,6 +130,12 @@ jobs:
           TEST_MYSQL_USER: root
           TEST_MYSQL_PASSWORD: release-boundary-password
         run: php wp-ai-admin-cloud/tests/gateway-protocol.php
+      - name: Foundation compatibility proof on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/foundation-proof.php
 
   existing-release-gates:
     runs-on: ubuntu-latest
