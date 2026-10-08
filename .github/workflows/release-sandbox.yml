@@ -358,6 +358,25 @@ jobs:
           cmp -s "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" "cloud-rebuild/wp-ai-admin-cloud-$CLOUD_VERSION.zip"
           test "$(unzip -Z1 "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
           printf 'cloud_version=%s\ncloud_sha256=%s\ncloud_reproducible=true\n' "$CLOUD_VERSION" "$CLOUD_SHA" | tee -a dist/PROVENANCE.txt
+      - name: Scan built ZIP payloads for release-only content and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ZIP in dist/wp-ai-admin-*.zip cloud-dist/wp-ai-admin-cloud-*.zip; do
+            echo "Scanning $ZIP"
+            if unzip -Z1 "$ZIP" | grep -E '(^|/)(tests?|\.git|node_modules|vendor/bin|coverage|\.env)(/|$)'; then
+              echo "Development-only path found in $ZIP"; exit 1
+            fi
+            TMP="$(mktemp -d)"
+            unzip -qq "$ZIP" -d "$TMP"
+            if grep -RIlE --binary-files=without-match -- '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{32,}' "$TMP"; then
+              echo "Credential-like material found inside release ZIP"; rm -rf "$TMP"; exit 1
+            fi
+            if grep -RIl --binary-files=without-match -- 'fixture-[A-Za-z0-9_-]*token|disposable-.*password|release-sandbox-password' "$TMP"; then
+              echo "Test fixture credential marker found inside release ZIP"; rm -rf "$TMP"; exit 1
+            fi
+            rm -rf "$TMP"
+          done
       - name: Upload release provenance evidence
         uses: actions/upload-artifact@v4
         with:
