@@ -110,6 +110,52 @@ jobs:
         run: php wp-ai-admin-cloud/tests/oauth.php
 
 
+  fresh-release-install:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: fresh-install-password
+          MYSQL_DATABASE: fresh_release
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pfresh-install-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Build installable release ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n "s/^define('OAI_VERSION','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          mkdir -p dist/okean-ai-admin
+          cp -a okean-ai-admin.php includes starter-themes README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
+          (cd dist && zip -qr "wp-ai-admin-$VERSION.zip" okean-ai-admin)
+          unzip -tq "dist/wp-ai-admin-$VERSION.zip"
+      - name: Fresh WordPress install from generated ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          WP_DIR="$RUNNER_TEMP/wpai-fresh-release"
+          WPCLI="$RUNNER_TEMP/wp-cli.phar"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$WPCLI"
+          mkdir -p "$WP_DIR"
+          php "$WPCLI" --path="$WP_DIR" core download
+          php "$WPCLI" --path="$WP_DIR" config create --dbname=fresh_release --dbuser=root --dbpass=fresh-install-password --dbhost=127.0.0.1 --skip-check
+          php "$WPCLI" --path="$WP_DIR" core install --url=http://fresh-release.test --title='Fresh Release' --admin_user=release-admin --admin_password=disposable-release-password --admin_email=release@example.test --skip-email
+          ZIP="$(ls "$GITHUB_WORKSPACE"/dist/wp-ai-admin-*.zip | head -n1)"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$ZIP" --activate
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-install.php"
+
   release-hardening:
     runs-on: ubuntu-latest
     steps:
@@ -125,6 +171,24 @@ jobs:
             echo 'Credential-like token detected in tracked release source'; exit 1
           fi
           echo 'No release-source private keys or common credential tokens detected'
+      - name: Version and build metadata consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEADER_VERSION="$(sed -n 's/^ \* Version: //p' okean-ai-admin.php | head -n1)"
+          CONST_VERSION="$(sed -n "s/^define('OAI_VERSION','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          BUILD_ID="$(sed -n "s/^define('OAI_BUILD_ID','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          SIG_VERSION="$(sed -n 's/^Version: //p' BUILD-SIGNATURE.txt | head -n1)"
+          SIG_BUILD="$(sed -n 's/^Build ID: //p' BUILD-SIGNATURE.txt | head -n1)"
+          SIG2_VERSION="$(sed -n 's/^Version: //p' BUILD_SIGNATURE.txt | head -n1)"
+          SIG2_BUILD="$(sed -n 's/^Build ID: //p' BUILD_SIGNATURE.txt | head -n1)"
+          test -n "$HEADER_VERSION" -a "$HEADER_VERSION" = "$CONST_VERSION"
+          test "$CONST_VERSION" = "$SIG_VERSION"
+          test "$CONST_VERSION" = "$SIG2_VERSION"
+          test "$BUILD_ID" = "$SIG_BUILD"
+          test "$BUILD_ID" = "$SIG2_BUILD"
+          cmp -s BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt
+          echo "Metadata consistent: version=$CONST_VERSION build=$BUILD_ID"
       - name: Build native release candidate and prove reproducibility
         shell: bash
         run: |
