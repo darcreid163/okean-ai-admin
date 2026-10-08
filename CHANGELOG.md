@@ -17,6 +17,9 @@ All notable public-release changes are recorded here. Published versions must ne
 - Add reproducible ZIP builds, SHA-256 provenance and release-payload secret scanning.
 - Add Runner Smoke diagnostic workflow.
 - Recompute native execution proof when the lifecycle moves from Apply into Rollback, preventing a rollback receipt from reusing a stale Apply proof.
+- Protect `wpai_gateway_*` and `wpai_cloud_*` control-plane options from the generic native option sandbox.
+- Re-check administrator capability before native OAuth authorization-code exchange and refresh rotation so demoted users cannot mint new credentials.
+- Add signed preview-token binding/expiry tests and native Application Password/Bearer/MCP demotion acceptance.
 
 ### Commercial truthfulness
 - Keep public health mode at approved_beta.
