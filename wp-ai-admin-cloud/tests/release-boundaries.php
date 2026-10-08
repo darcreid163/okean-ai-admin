@@ -28,6 +28,10 @@ breject(fn()=>$core->mint('boundary',[$site['id']],['mcp:read'],$now,3601),'inva
 
 $token=$core->mint('boundary',[$site['id']],['mcp:read','mcp:write'],$now);
 $actor=$core->authenticate($token['access_token'],$now);
+$readOnly=$core->mint('boundary',[$site['id']],['mcp:read'],$now);
+$readOnlyActor=$core->authenticate($readOnly['access_token'],$now);
+breject(fn()=>$core->call($readOnlyActor,$site['id'],'operation.apply',['id'=>1],'dotted-readonly-apply',$now),'scope_or_site_denied');
+breject(fn()=>$core->call($readOnlyActor,$site['id'],'operation.rollback',['id'=>1],'dotted-readonly-rollback',$now),'scope_or_site_denied');
 
 // Sealed site credentials are bound to their exact tenant/site record. Ciphertext substitution must fail closed.
 $site2=$core->connect('boundary','https://boundary-two.example.com','fixture-boundary-admin-token-bbbbbbbb',$now+1);
