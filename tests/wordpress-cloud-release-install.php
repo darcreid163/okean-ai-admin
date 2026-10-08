@@ -57,4 +57,23 @@ $data2=$health2->get_data();
 cloud_release_expect(($data2['configured']??null)===true&&($data2['oauth']??null)===true,'Enabled Cloud health did not report configured OAuth gateway');
 cloud_release_expect(($data2['billing']??null)===false&&($data2['batch_accounting']??null)===false,'Enabled Cloud health overstates unfinished release capabilities');
 
+$policy=\WPAICloudGateway\Settings::policy();
+cloud_release_expect(($policy['period']??'')==='calendar_month_utc','Cloud quota period contract mismatch');
+cloud_release_expect(($policy['billing']??'')==='successful_single_tool_call','Cloud billing contract mismatch');
+cloud_release_expect(($policy['batch']??'')==='disabled_until_receipt_accounting_contract','Cloud batch accounting gate mismatch');
+foreach(['free'=>100,'pro'=>500,'power'=>2000,'agency'=>5000,'scale'=>10000] as $slug=>$limit){
+    cloud_release_expect(($policy['plans'][$slug]??null)===$limit,'Cloud plan quota mismatch: '.$slug);
+}
+
+// Repeated administrator enable must be idempotent: never rotate central keys.
+$wrappedBefore=$wrapped;
+\WPAICloudGateway\WordPress::enable();
+$wrappedAfter=(string)get_option('wpai_gateway_wrapped_keys_v1','');
+cloud_release_expect(hash_equals($wrappedBefore,$wrappedAfter),'Repeated Cloud enable rotated wrapped gateway keys');
+cloud_release_expect(\WPAICloudGateway\WordPress::configured(),'Repeated Cloud enable left gateway unconfigured');
+$gatewayTableCountBefore=count($wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}wpai_gateway_%'"));
+\WPAICloudGateway\WordPress::enable();
+$gatewayTableCountAfter=count($wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}wpai_gateway_%'"));
+cloud_release_expect($gatewayTableCountAfter===$gatewayTableCountBefore,'Repeated Cloud enable changed gateway schema table count');
+
 echo 'PASS fresh Cloud Core ZIP install+enable: WP '.get_bloginfo('version').', PHP '.PHP_VERSION.', cloud '.WPAI_CLOUD_VERSION.', plans '.count($plans).PHP_EOL;
