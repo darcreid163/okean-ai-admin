@@ -129,4 +129,31 @@ foreach([$guestSites,$subscriberSites,$bearerSites,$httpSites] as $negative){
     cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'Provisioning denial leaked internal diagnostics');
 }
 
+// OAuth HTTP surface enforces HTTPS and exact request encodings before processing credentials.
+wp_set_current_user($adminId);$_SERVER['HTTPS']='on';
+$badRegisterType=new WP_REST_Request('POST','/wpai-cloud/v1/oauth/register');
+$badRegisterType->set_header('content-type','text/plain');
+$badRegisterType->set_body('{}');
+$badRegisterResponse=rest_do_request($badRegisterType);
+cloud_release_expect($badRegisterResponse->get_status()===415&&($badRegisterResponse->get_data()['error']??'')==='json_content_type_required','OAuth DCR accepted wrong content type');
+
+$badTokenType=new WP_REST_Request('POST','/wpai-cloud/v1/oauth/token');
+$badTokenType->set_header('content-type','application/json');
+$badTokenType->set_body('{}');
+$badTokenResponse=rest_do_request($badTokenType);
+cloud_release_expect($badTokenResponse->get_status()===415&&($badTokenResponse->get_data()['error']??'')==='form_content_type_required','OAuth token endpoint accepted wrong content type');
+
+unset($_SERVER['HTTPS']);
+$httpRegister=new WP_REST_Request('POST','/wpai-cloud/v1/oauth/register');
+$httpRegister->set_header('content-type','application/json');
+$httpRegister->set_body('{}');
+$httpRegisterResponse=rest_do_request($httpRegister);
+cloud_release_expect($httpRegisterResponse->get_status()===403&&($httpRegisterResponse->get_data()['error']??'')==='https_required','OAuth endpoint accepted non-HTTPS request');
+$_SERVER['HTTPS']='on';
+
+foreach([$badRegisterResponse,$badTokenResponse,$httpRegisterResponse] as $negative){
+    $encoded=wp_json_encode($negative->get_data());
+    cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'OAuth denial leaked internal diagnostics');
+}
+
 echo 'PASS fresh Cloud Core ZIP install+enable: WP '.get_bloginfo('version').', PHP '.PHP_VERSION.', cloud '.WPAI_CLOUD_VERSION.', plans '.count($plans).PHP_EOL;
