@@ -64,10 +64,24 @@ iso_reject(fn()=>$core->catalog($actorB,$siteA['id'],$now),'scope_or_site_denied
 iso_reject(fn()=>$core->call($actorA,$siteB['id'],'wp_get_site',[],'cross-a-to-b',$now),'scope_or_site_denied');
 iso_reject(fn()=>$core->call($actorB,$siteA['id'],'wp_get_site',[],'cross-b-to-a',$now),'scope_or_site_denied');
 
+// Free/read-style lifecycle endpoints must not become a cross-tenant side channel.
+foreach (['operation_verify','operation_get_receipt','operation_rollback'] as $tool) {
+    iso_reject(fn()=>$core->call($actorA,$siteB['id'],$tool,['id'=>777],'cross-a-'.$tool,$now),'scope_or_site_denied');
+    iso_reject(fn()=>$core->call($actorB,$siteA['id'],$tool,['id'=>777],'cross-b-'.$tool,$now),'scope_or_site_denied');
+}
+
 // Same logical nonce used by different tenants must remain isolated by owner binding.
 $a=$core->call($actorA,$siteA['id'],'wp_get_site',[],'shared-logical-nonce',$now);
 $b=$core->call($actorB,$siteB['id'],'wp_get_site',[],'shared-logical-nonce',$now);
 iso_check($a['request_key']!==$b['request_key'],'Idempotency key leaked across tenant boundary');
+
+// A revoked token must not recover a previously cached successful response.
+$revocable=$core->mint('tenant-a',[$siteA['id']],['mcp:read'],$now);
+$revActor=$core->authenticate($revocable['access_token'],$now);
+$cached=$core->call($revActor,$siteA['id'],'wp_get_site',[],'revoked-cached-request',$now);
+iso_check($cached['state']==='succeeded','Revocation fixture request failed');
+$core->revokeToken('tenant-a',$revActor['token_hash'],$now+1);
+iso_reject(fn()=>$core->call($revActor,$siteA['id'],'wp_get_site',[],'revoked-cached-request',$now+2),'invalid_or_expired_token');
 iso_check($a['site_id']===$siteA['id']&&$b['site_id']===$siteB['id'],'Same nonce crossed site routing');
 
 $ledgerA=$core->ledger('tenant-a',100);
