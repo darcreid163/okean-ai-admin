@@ -1,0 +1,82 @@
+<?php
+declare(strict_types=1);
+
+require __DIR__.'/bootstrap.php';
+
+use WPAICloudGateway\{Fault};
+
+$checks=0;
+function qcheck(bool $ok,string $message): void { global $checks; $checks++; if(!$ok) throw new RuntimeException($message); }
+function qreject(callable $fn,string $reason): void {
+    try{$fn();}catch(Fault $e){qcheck($e->reason===$reason,'Expected '.$reason.', got '.$e->reason);return;}
+    throw new RuntimeException('Expected '.$reason);
+}
+
+$now=1791436800;
+$db=sys_get_temp_dir().'/wpai-quota-idempotency-'.bin2hex(random_bytes(6)).'.sqlite';
+$store=fixtureStore($db);$store->migrate();
+if(getenv('TEST_MYSQL_DSN'))foreach(['audit','requests','oauth_access','oauth_refresh','oauth_codes','oauth_grants','oauth_clients','tokens','sites','balances','accounts','rate'] as $t)$store->execute('DELETE FROM '.$store->table($t));
+$transport=new FakeTransport();
+$core=fixtureCore($store,$transport,2);
+$core->ensureAccount('quota-owner');
+$site=$core->connect('quota-owner','https://quota.example.com','fixture-quota-site-token-aaaaaaaa',$now);
+$token=$core->mint('quota-owner',[$site['id']],['mcp:read','mcp:write'],$now);
+$actor=$core->authenticate($token['access_token'],$now);
+
+$before=$core->usage('quota-owner',$now);
+qcheck($before['used']===0&&$before['reserved']===0&&$before['remaining']===2,'Initial quota state wrong');
+
+$first=$core->call($actor,$site['id'],'operation_apply',['id'=>1],'same-nonce',$now);
+qcheck($first['state']==='succeeded'&&$first['charged_units']===1,'Successful write was not charged exactly once');
+qcheck($transport->executions===1,'Unexpected upstream execution count after first write');
+
+$cached=$core->call($actor,$site['id'],'operation_apply',['id'=>1],'same-nonce',$now+1);
+qcheck($cached['request_key']===$first['request_key'],'Idempotent replay changed request key');
+qcheck($transport->executions===1,'Idempotent replay re-executed upstream write');
+
+qreject(fn()=>$core->call($actor,$site['id'],'operation_apply',['id'=>2],'same-nonce',$now+2),'idempotency_conflict');
+qcheck($transport->executions===1,'Idempotency conflict reached upstream');
+
+$failed=$core->call($actor,$site['id'],'operation_apply',['id'=>3,'fail'=>true],'failed-write',$now+3);
+qcheck($failed['state']==='failed'&&$failed['charged_units']===0,'Failed upstream operation consumed quota');
+$afterFailed=$core->usage('quota-owner',$now+3);
+qcheck($afterFailed['used']===1&&$afterFailed['reserved']===0&&$afterFailed['remaining']===1,'Failed request changed quota incorrectly');
+
+$second=$core->call($actor,$site['id'],'operation_apply',['id'=>4],'second-success',$now+4);
+qcheck($second['state']==='succeeded'&&$second['charged_units']===1,'Second successful write charge wrong');
+$full=$core->usage('quota-owner',$now+4);
+qcheck($full['used']===2&&$full['remaining']===0,'Quota did not reach configured limit exactly');
+qreject(fn()=>$core->call($actor,$site['id'],'operation_apply',['id'=>5],'over-limit',$now+5),'monthly_quota_exhausted');
+
+$transportExecutions=$transport->executions;
+qreject(fn()=>$core->call($actor,$site['id'],'operation_apply',['id'=>6,'uncertain'=>true],'uncertain-write',$now+6),'monthly_quota_exhausted');
+qcheck($transport->executions===$transportExecutions,'Quota rejection reached upstream');
+
+// Separate account for uncertain-outcome reconciliation so quota capacity is available.
+$core->ensureAccount('reconcile-owner');
+$site2=$core->connect('reconcile-owner','https://reconcile.example.com','fixture-reconcile-site-token-bbbbbbbb',$now);
+$token2=$core->mint('reconcile-owner',[$site2['id']],['mcp:read','mcp:write'],$now);
+$actor2=$core->authenticate($token2['access_token'],$now);
+qreject(fn()=>$core->call($actor2,$site2['id'],'operation_apply',['id'=>7,'uncertain'=>true],'uncertain-write',$now+10),'request_outcome_pending_reconciliation');
+$uncertainUsage=$core->usage('reconcile-owner',$now+10);
+qcheck($uncertainUsage['used']===0&&$uncertainUsage['reserved']===1,'Uncertain write did not retain reservation');
+qreject(fn()=>$core->call($actor2,$site2['id'],'operation_apply',['id'=>7,'uncertain'=>true],'uncertain-write',$now+11),'request_outcome_pending_reconciliation');
+$ledger=$core->ledger('reconcile-owner',10);
+$key=$ledger[0]['request_key']??'';
+qcheck(preg_match('/^[a-f0-9]{64}$/',$key)===1&&($ledger[0]['state']??'')==='uncertain','Uncertain request not visible in owner ledger');
+
+qreject(fn()=>$core->reconcile('operator','reconcile-owner',$key,'failed',['note'=>'too short','receipt_sha256'=>str_repeat('a',64)],$now+12),'operator_receipt_evidence_required');
+$reconciled=$core->reconcile('operator','reconcile-owner',$key,'failed',[
+    'note'=>'Independent site receipt confirms no mutation occurred.',
+    'receipt_sha256'=>str_repeat('b',64)
+],$now+13);
+qcheck($reconciled['state']==='failed'&&$reconciled['charged_units']===0&&!empty($reconciled['reconciled']),'Failed reconciliation result wrong');
+$afterReconcile=$core->usage('reconcile-owner',$now+13);
+qcheck($afterReconcile['used']===0&&$afterReconcile['reserved']===0&&$afterReconcile['remaining']===2,'Failed reconciliation did not release reservation');
+qreject(fn()=>$core->reconcile('operator','reconcile-owner',$key,'failed',[
+    'note'=>'Independent site receipt confirms no mutation occurred.',
+    'receipt_sha256'=>str_repeat('b',64)
+],$now+14),'request_not_reconcilable');
+
+echo 'PASS '.$checks.' quota/idempotency/reconciliation assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite').PHP_EOL;
+if(!getenv('TEST_MYSQL_DSN'))foreach([$db,$db.'-wal',$db.'-shm'] as $f)if(file_exists($f))unlink($f);
