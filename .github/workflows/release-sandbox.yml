@@ -342,6 +342,21 @@ jobs:
           test -n "$CLOUD_HEADER_VERSION" -a "$CLOUD_HEADER_VERSION" = "$CLOUD_CONST_VERSION"
           grep -Fq "WP AI Admin Cloud Core $CLOUD_CONST_VERSION" wp-ai-admin-cloud/README.md
           echo "Cloud metadata consistent: version=$CLOUD_CONST_VERSION"
+      - name: Security, changelog and retention release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f SECURITY.md
+          test -f CHANGELOG.md
+          test -f docs/DATA-RETENTION.md
+          grep -Fq "WP AI Admin native: 2.1.15" SECURITY.md
+          grep -Fq "## 2.1.15" CHANGELOG.md
+          grep -Fq "current release candidate intentionally has no automatic destructive uninstall routine" docs/DATA-RETENTION.md
+          grep -Fq "autonomous modes remain OFF" docs/DATA-RETENTION.md
+          if grep -Eqi 'uninstall.*(deletes all|complete data erasure|removes all data)' README.md README.txt docs/PUBLIC-ONBOARDING.md; then
+            echo "Release documentation overstates uninstall/data erasure behavior"; exit 1
+          fi
+          echo "Security/changelog/data-retention metadata present; license remains a deliberate separate decision"
       - name: Public onboarding contract
         shell: bash
         run: |
