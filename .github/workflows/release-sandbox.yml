@@ -60,6 +60,37 @@ jobs:
           TEST_MYSQL_PASSWORD: release-sandbox-password
         run: php wp-ai-admin-cloud/tests/tenant-isolation.php
 
+  release-boundaries:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: release-boundary-password
+          MYSQL_DATABASE: release_boundary
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -prelease-boundary-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Release abuse boundaries on SQLite
+        run: php wp-ai-admin-cloud/tests/release-boundaries.php
+      - name: Release abuse boundaries on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/release-boundaries.php
+
   existing-release-gates:
     runs-on: ubuntu-latest
     steps:
