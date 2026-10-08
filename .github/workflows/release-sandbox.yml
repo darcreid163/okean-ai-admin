@@ -1,0 +1,79 @@
+name: Public Release Sandbox
+
+on:
+  push:
+    branches:
+      - codex/public-release-readiness
+  pull_request:
+    paths:
+      - 'wp-ai-admin-cloud/**'
+      - 'tests/**'
+      - '.github/workflows/release-sandbox.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-sandbox-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tenant-isolation-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sodium, curl
+          coverage: none
+      - name: Tenant isolation release sandbox
+        run: php wp-ai-admin-cloud/tests/tenant-isolation.php
+
+  tenant-isolation-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: release-sandbox-password
+          MYSQL_DATABASE: release_sandbox
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -prelease-sandbox-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, sodium, curl
+          coverage: none
+      - name: Tenant isolation release sandbox
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_sandbox
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-sandbox-password
+        run: php wp-ai-admin-cloud/tests/tenant-isolation.php
+
+  existing-release-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sodium, curl
+          coverage: none
+      - name: Browser pairing isolation
+        run: php tests/browser-pairing.php
+      - name: Shared-plan and OAuth isolation
+        run: php wp-ai-admin-cloud/tests/multisite-account.php
+      - name: Core gateway regression
+        run: php wp-ai-admin-cloud/tests/run.php
+      - name: OAuth regression
+        run: php wp-ai-admin-cloud/tests/oauth.php
