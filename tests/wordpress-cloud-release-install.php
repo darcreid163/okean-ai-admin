@@ -76,4 +76,25 @@ $gatewayTableCountBefore=count($wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}
 $gatewayTableCountAfter=count($wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}wpai_gateway_%'"));
 cloud_release_expect($gatewayTableCountAfter===$gatewayTableCountBefore,'Repeated Cloud enable changed gateway schema table count');
 
+// Public MCP transport must fail closed before any tool dispatch.
+$evil=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$evil->set_header('origin','https://evil.example.com');
+$evilResponse=rest_do_request($evil);
+cloud_release_expect($evilResponse->get_status()===403&&($evilResponse->get_data()['error']??'')==='origin_denied','Foreign MCP Origin was not denied');
+
+$noBearer=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$noBearerResponse=rest_do_request($noBearer);
+cloud_release_expect($noBearerResponse->get_status()===401&&($noBearerResponse->get_data()['error']??'')==='bearer_required','MCP request without Bearer was not denied');
+cloud_release_expect(str_contains((string)$noBearerResponse->get_headers()['WWW-Authenticate']??'','resource_metadata='),'MCP 401 challenge missing protected-resource metadata');
+
+$badVersion=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
+$badVersion->set_header('mcp-protocol-version','1900-01-01');
+$badVersionResponse=rest_do_request($badVersion);
+cloud_release_expect($badVersionResponse->get_status()===400&&($badVersionResponse->get_data()['error']??'')==='unsupported_protocol_version','Unsupported MCP protocol version was not denied');
+
+foreach([$evilResponse,$noBearerResponse,$badVersionResponse] as $negative){
+    $encoded=wp_json_encode($negative->get_data());
+    cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'MCP negative response leaked internal diagnostics');
+}
+
 echo 'PASS fresh Cloud Core ZIP install+enable: WP '.get_bloginfo('version').', PHP '.PHP_VERSION.', cloud '.WPAI_CLOUD_VERSION.', plans '.count($plans).PHP_EOL;
