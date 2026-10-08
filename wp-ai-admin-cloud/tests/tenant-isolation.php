@@ -95,6 +95,17 @@ $ledgerB=$core->ledger('tenant-b',100);
 iso_check(count(array_filter($ledgerA,fn($r)=>$r['site_id']===$siteB['id']))===0,'Tenant A ledger leaked Tenant B site');
 iso_check(count(array_filter($ledgerB,fn($r)=>$r['site_id']===$siteA['id']))===0,'Tenant B ledger leaked Tenant A site');
 
+// Audit storage must preserve tenant ownership and never contain plaintext bearer/site credentials.
+$auditA=$store->rows('SELECT owner,site_id,event,request_key FROM '.$store->table('audit').' WHERE owner=? ORDER BY created_at',['tenant-a']);
+$auditB=$store->rows('SELECT owner,site_id,event,request_key FROM '.$store->table('audit').' WHERE owner=? ORDER BY created_at',['tenant-b']);
+iso_check($auditA!==[]&&$auditB!==[],'Tenant audit records missing');
+iso_check(count(array_filter($auditA,fn($r)=>$r['owner']!=='tenant-a'))===0,'Tenant A audit mixed another owner');
+iso_check(count(array_filter($auditB,fn($r)=>$r['owner']!=='tenant-b'))===0,'Tenant B audit mixed another owner');
+$auditEncoded=Security::canonical(array_merge($auditA,$auditB));
+foreach([$tokenA['access_token'],$tokenB['access_token'],'fixture-tenant-a-admin-token-aaaaaaaa','fixture-tenant-b-admin-token-bbbbbbbb'] as $secret){
+    iso_check(!str_contains($auditEncoded,$secret),'Plaintext credential leaked into audit storage');
+}
+
 // OAuth consent must not be able to include another owner's site.
 $oauth=new OAuth($store,$core,'https://wpaiadmin.ru/mcp');
 $client=$oauth->register([
