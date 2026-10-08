@@ -95,6 +95,14 @@ $ledgerB=$core->ledger('tenant-b',100);
 iso_check(count(array_filter($ledgerA,fn($r)=>$r['site_id']===$siteB['id']))===0,'Tenant A ledger leaked Tenant B site');
 iso_check(count(array_filter($ledgerB,fn($r)=>$r['site_id']===$siteA['id']))===0,'Tenant B ledger leaked Tenant A site');
 
+// Rate-limit buckets are tenant-scoped: exhausting one owner must not deny another.
+$core->throttle('tenant-a','isolation-rate',$now,2);
+$core->throttle('tenant-a','isolation-rate',$now,2);
+iso_reject(fn()=>$core->throttle('tenant-a','isolation-rate',$now,2),'rate_limit_exceeded');
+$core->throttle('tenant-b','isolation-rate',$now,2);
+$core->throttle('tenant-b','isolation-rate',$now,2);
+iso_reject(fn()=>$core->throttle('tenant-b','isolation-rate',$now,2),'rate_limit_exceeded');
+
 // Audit storage must preserve tenant ownership and never contain plaintext bearer/site credentials.
 $auditA=$store->rows('SELECT owner,site_id,event,request_key FROM '.$store->table('audit').' WHERE owner=? ORDER BY created_at',['tenant-a']);
 $auditB=$store->rows('SELECT owner,site_id,event,request_key FROM '.$store->table('audit').' WHERE owner=? ORDER BY created_at',['tenant-b']);
