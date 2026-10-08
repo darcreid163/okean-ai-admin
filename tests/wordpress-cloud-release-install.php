@@ -77,6 +77,8 @@ $gatewayTableCountAfter=count($wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}w
 cloud_release_expect($gatewayTableCountAfter===$gatewayTableCountBefore,'Repeated Cloud enable changed gateway schema table count');
 
 // Public MCP transport must fail closed before any tool dispatch.
+// WP-CLI has no HTTPS request server context even when home_url() is HTTPS.
+$_SERVER['HTTPS']='on';
 $evil=new WP_REST_Request('POST','/wpai-cloud/v1/mcp');
 $evil->set_header('origin','https://evil.example.com');
 $evilResponse=rest_do_request($evil);
