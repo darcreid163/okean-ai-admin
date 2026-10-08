@@ -13,7 +13,26 @@ $store=fixtureStore($db);$store->migrate();
 if(getenv('TEST_MYSQL_DSN'))foreach(['audit','requests','oauth_access','oauth_refresh','oauth_codes','oauth_grants','oauth_clients','tokens','sites','balances','accounts','rate'] as $t)$store->execute('DELETE FROM '.$store->table($t));
 $transport=new FakeTransport();$core=fixtureCore($store,$transport,2);$core->ensureAccount('boundary');
 
-// URL and token boundaries.
+// URL and SSRF boundaries.
+bcheck(Security::home('https://EXAMPLE.COM:443/path/')==='https://example.com/path','Canonical HTTPS home normalization changed');
+foreach([
+    ['http://example.com','public_https_site_required'],
+    ['https://user@example.com','public_https_site_required'],
+    ['https://example.com?x=1','public_https_site_required'],
+    ['https://example.com#frag','public_https_site_required'],
+    ['https://example.com:8443','public_https_site_required'],
+    ['https://localhost','invalid_site_host'],
+    ['https://127.0.0.1','invalid_site_host'],
+    ['https://example.com/a/../b','invalid_site_path']
+] as [$url,$reason]) breject(fn()=>Security::home($url),$reason);
+foreach(['10.0.0.1','127.0.0.1','169.254.169.254','100.64.0.1','192.0.2.1','198.51.100.1','203.0.113.1','::1','fc00::1','fe80::1','2001:db8::1'] as $ip)
+    bcheck(Security::publicIp($ip)===false,'Reserved/private address accepted: '.$ip);
+foreach(['8.8.8.8','1.1.1.1','2606:4700:4700::1111'] as $ip)
+    bcheck(Security::publicIp($ip)===true,'Public address rejected: '.$ip);
+breject(fn()=>Security::requirePublicAddresses(['8.8.8.8','10.0.0.1']),'private_site_address_blocked');
+breject(fn()=>Security::requirePublicAddresses([]),'site_dns_unavailable');
+breject(fn()=>Security::requirePublicAddresses(array_fill(0,33,'8.8.8.8')),'site_dns_unavailable');
+
 breject(fn()=>$core->connect('boundary','http://example.com','fixture-valid-token-aaaaaaaaaaaa',$now),'public_https_site_required');
 breject(fn()=>$core->connect('boundary','https://127.0.0.1','fixture-valid-token-aaaaaaaaaaaa',$now),'invalid_site_host');
 breject(fn()=>$core->connect('boundary','https://example.com','short',$now),'invalid_site_token');
