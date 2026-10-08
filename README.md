@@ -15,7 +15,7 @@ Core 0.3.5 form-action self could block form redirects to another site's consent
 
 The central cabinet displays one account plan/shared quota and all connected sites, plus an optional connection check. Registration, OAuth consent and access-token site capacity now consistently allow up to 50 registrations per account across every plan. Adding a site still requires new client consent; sites are never silently added to an existing grant. Paid-plan assignment is an account-level capability; payment processing and automatic purchase activation remain a separate unfinished billing stage.
 
-See [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md). Chromium reproduction and candidate checks run against actual Surface.php with fixture WordPress/session/back-channel behavior; actual production account authorization remains a separate acceptance gate.
+See [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md) and [Public Beta Onboarding](docs/PUBLIC-ONBOARDING.md). Chromium reproduction and candidate checks run against actual Surface.php with fixture WordPress/session/back-channel behavior; actual production account authorization remains a separate acceptance gate.
 
 ## Connection compatibility baseline
 
