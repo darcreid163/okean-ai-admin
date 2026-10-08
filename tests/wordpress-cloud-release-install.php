@@ -97,6 +97,9 @@ cloud_release_expect($badVersionResponse->get_status()===400&&($badVersionRespon
 foreach([$evilResponse,$noBearerResponse,$badVersionResponse] as $negative){
     $encoded=wp_json_encode($negative->get_data());
     cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'MCP negative response leaked internal diagnostics');
+    $headers=$negative->get_headers();
+    cloud_release_expect(str_contains(strtolower((string)($headers['Cache-Control']??'')),'no-store'),'MCP negative response missing no-store');
+    cloud_release_expect(strtolower((string)($headers['X-Content-Type-Options']??''))==='nosniff','MCP negative response missing nosniff');
 }
 
 // Provisioning/control-plane REST must never accept anonymous, ineligible, bearer-only, or non-HTTPS access.
