@@ -1,0 +1,31 @@
+name: Runner Smoke
+
+on:
+  push:
+    branches:
+      - codex/public-release-readiness
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-smoke-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Runner allocated
+        run: |
+          echo "runner=${{ runner.name }}"
+          echo "os=${{ runner.os }}"
+          echo "arch=${{ runner.arch }}"
+      - uses: actions/checkout@v6
+      - name: Basic runtime
+        run: |
+          php -v
+          git --version
+          echo "RUNNER_SMOKE_OK"
