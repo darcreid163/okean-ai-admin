@@ -43,8 +43,28 @@ $proof=OAI_Batch_Executor::proof($batch['id'],$client,1);
 release_install_expect(!is_wp_error($receipt)&&preg_match('/^[a-f0-9]{64}$/',(string)($receipt['payload_hash']??''))===1,'Batch receipt hash missing or malformed');
 release_install_expect(!is_wp_error($proof)&&($proof['payload_hash']??'')===($receipt['payload_hash']??'')&&preg_match('/^[a-f0-9]{64}$/',(string)($proof['hash']??''))===1,'Batch proof not bound to receipt');
 
-// Conflict guard 1: an external change after Sandbox but before Apply must never be overwritten.
+// Human lifecycle gate: no nonce / no explicit automation means no approval or live Apply.
 $nonce=wp_create_nonce('wp_rest');
+update_option('wpai_release_human_gate','baseline',false);
+$humanReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+$humanReq->set_param('type','option_update');$humanReq->set_param('target','wpai_release_human_gate');$humanReq->set_param('new_data','ai-value');
+$humanOp=OAI_REST::sandbox_create($humanReq);
+release_install_expect(!is_wp_error($humanOp)&&!empty($humanOp['id']),'Unable to create human-gate sandbox');
+$approveNoNonce=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$humanOp['id'].'/approve');
+$approveDenied=OAI_REST::sandbox_action($approveNoNonce);
+release_install_expect(is_wp_error($approveDenied)&&$approveDenied->get_error_code()==='oai_human_approval_required','Approve succeeded without human/automation authorization');
+release_install_expect((OAI_DB::get((int)$humanOp['id'])['status']??'')==='pending'&&(string)get_option('wpai_release_human_gate')==='baseline','Denied Approve mutated operation or live state');
+$approveHuman=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$humanOp['id'].'/approve');$approveHuman->set_header('X-WP-Nonce',$nonce);
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($approveHuman)),'Human-gate approval with nonce failed');
+$applyNoNonce=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$humanOp['id'].'/apply');
+$applyDenied=OAI_REST::sandbox_action($applyNoNonce);
+release_install_expect(is_wp_error($applyDenied)&&$applyDenied->get_error_code()==='oai_human_approval_required','Apply succeeded without human/automation authorization');
+release_install_expect((OAI_DB::get((int)$humanOp['id'])['status']??'')==='approved'&&(string)get_option('wpai_release_human_gate')==='baseline','Denied Apply mutated operation or live state');
+$rejectHuman=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$humanOp['id'].'/reject');$rejectHuman->set_header('X-WP-Nonce',$nonce);
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($rejectHuman)),'Human-gate fixture cleanup reject failed');
+delete_option('wpai_release_human_gate');
+
+// Conflict guard 1: an external change after Sandbox but before Apply must never be overwritten.
 update_option('wpai_release_apply_conflict','baseline',false);
 $make=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
 $make->set_param('type','option_update');$make->set_param('target','wpai_release_apply_conflict');$make->set_param('new_data','ai-value');
