@@ -73,5 +73,15 @@ bcheck($transport->executions===$execAfter,'Idempotency conflict reached upstrea
 for($i=0;$i<120;$i++) $core2->throttle('boundary','relbound-rate',$now,120);
 breject(fn()=>$core2->throttle('boundary','relbound-rate',$now,120),'rate_limit_exceeded');
 
+// Site-count boundary is enforced per tenant. The 51st active registration must fail without creating a row.
+$core2->ensureAccount('site-limit');
+for($i=1;$i<=Core::MAX_SITES;$i++){
+    $host='https://limit-'.$i.'.example.com';
+    $core2->connect('site-limit',$host,'fixture-site-limit-token-'.str_pad((string)$i,24,'x'),$now+($i*60));
+}
+bcheck(count($core2->sites('site-limit'))===Core::MAX_SITES,'Site-limit fixture did not reach exact maximum');
+breject(fn()=>$core2->connect('site-limit','https://limit-overflow.example.com','fixture-site-limit-token-overflow-xxxxxxxx',$now+((Core::MAX_SITES+1)*60)),'pilot_site_count_limit');
+bcheck(count($core2->sites('site-limit'))===Core::MAX_SITES,'Rejected 51st site changed tenant registry');
+
 echo 'PASS '.$checks.' release boundary assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite').PHP_EOL;
 if(!getenv('TEST_MYSQL_DSN'))foreach([$db,$db.'-wal',$db.'-shm'] as $f)if(file_exists($f))unlink($f);
