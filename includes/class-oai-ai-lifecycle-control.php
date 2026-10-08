@@ -36,7 +36,7 @@ class OAI_AI_Lifecycle_Control {
   return self::status();
  }
 
- public static function disable($actor_user_id=0){
+ public static function disable($actor_user_id=0,$reason='manual'){
   self::save(array(
    'enabled'=>false,
    'owner_user_id'=>0,
@@ -45,7 +45,7 @@ class OAI_AI_Lifecycle_Control {
    'build_id'=>defined('OAI_BUILD_ID')?(string)OAI_BUILD_ID:'',
    'disabled_at'=>time(),
    'disabled_by'=>absint($actor_user_id),
-   'disabled_reason'=>'manual',
+   'disabled_reason'=>sanitize_key((string)$reason)?:'manual',
   ));
   self::$request_context=null;
   return self::status();
