@@ -43,4 +43,46 @@ $proof=OAI_Batch_Executor::proof($batch['id'],$client,1);
 release_install_expect(!is_wp_error($receipt)&&preg_match('/^[a-f0-9]{64}$/',(string)($receipt['payload_hash']??''))===1,'Batch receipt hash missing or malformed');
 release_install_expect(!is_wp_error($proof)&&($proof['payload_hash']??'')===($receipt['payload_hash']??'')&&preg_match('/^[a-f0-9]{64}$/',(string)($proof['hash']??''))===1,'Batch proof not bound to receipt');
 
+// Conflict guard 1: an external change after Sandbox but before Apply must never be overwritten.
+$nonce=wp_create_nonce('wp_rest');
+update_option('wpai_release_apply_conflict','baseline',false);
+$make=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+$make->set_param('type','option_update');$make->set_param('target','wpai_release_apply_conflict');$make->set_param('new_data','ai-value');
+$op=OAI_REST::sandbox_create($make);
+release_install_expect(!is_wp_error($op)&&!empty($op['id']),'Unable to create apply-conflict sandbox');
+$approve=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op['id'].'/approve');$approve->set_header('X-WP-Nonce',$nonce);
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($approve)),'Apply-conflict fixture approval failed');
+update_option('wpai_release_apply_conflict','external-newer',false);
+$apply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op['id'].'/apply');$apply->set_header('X-WP-Nonce',$nonce);
+$applyConflict=OAI_REST::sandbox_action($apply);
+release_install_expect(is_wp_error($applyConflict)&&$applyConflict->get_error_code()==='oai_conflict','Stale sandbox Apply did not fail closed');
+release_install_expect((string)get_option('wpai_release_apply_conflict')==='external-newer','Stale Apply overwrote newer external state');
+$applyRow=OAI_DB::get((int)$op['id']);
+release_install_expect(($applyRow['status']??'')==='apply_failed','Apply conflict did not persist apply_failed state');
+$applyReplay=OAI_REST::sandbox_action($apply);
+release_install_expect(is_wp_error($applyReplay)&&$applyReplay->get_error_code()==='oai_conflict','Apply conflict replay lost original conflict semantics');
+delete_option('wpai_release_apply_conflict');
+
+// Conflict guard 2: rollback must never destroy a change made after a successful Apply.
+update_option('wpai_release_rollback_conflict','baseline',false);
+$make2=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+$make2->set_param('type','option_update');$make2->set_param('target','wpai_release_rollback_conflict');$make2->set_param('new_data','ai-applied');
+$op2=OAI_REST::sandbox_create($make2);
+release_install_expect(!is_wp_error($op2)&&!empty($op2['id']),'Unable to create rollback-conflict sandbox');
+$approve2=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op2['id'].'/approve');$approve2->set_header('X-WP-Nonce',$nonce);
+$apply2=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op2['id'].'/apply');$apply2->set_header('X-WP-Nonce',$nonce);
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($approve2)),'Rollback-conflict fixture approval failed');
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($apply2))&&(string)get_option('wpai_release_rollback_conflict')==='ai-applied','Rollback-conflict fixture Apply failed');
+update_option('wpai_release_rollback_conflict','external-after-apply',false);
+$rollback2=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op2['id'].'/rollback');$rollback2->set_header('X-WP-Nonce',$nonce);
+$rollbackConflict=OAI_REST::sandbox_action($rollback2);
+release_install_expect(is_wp_error($rollbackConflict)&&$rollbackConflict->get_error_code()==='oai_rollback_conflict','Rollback over newer state did not fail closed');
+release_install_expect((string)get_option('wpai_release_rollback_conflict')==='external-after-apply','Rollback destroyed newer external state');
+$rollbackRow=OAI_DB::get((int)$op2['id']);
+release_install_expect(($rollbackRow['status']??'')==='rollback_failed','Rollback conflict did not persist rollback_failed state');
+$rollbackReplay=OAI_REST::sandbox_action($rollback2);
+release_install_expect(is_wp_error($rollbackReplay)&&$rollbackReplay->get_error_code()==='oai_rollback_conflict','Rollback conflict replay did not remain fail closed');
+release_install_expect((string)get_option('wpai_release_rollback_conflict')==='external-after-apply','Rollback replay overwrote newer state');
+delete_option('wpai_release_rollback_conflict');
+
 echo 'PASS fresh release ZIP install: WP '.get_bloginfo('version').', plugin '.OAI_VERSION.', tools '.count($catalog).', self-test '.$self['passed'].'/'.$self['total'].', fuzz '.$fuzz['summary']['PASS'].'/'.$fuzz['summary']['total'].PHP_EOL;
