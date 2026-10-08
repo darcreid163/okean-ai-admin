@@ -95,6 +95,30 @@ bcheck(count($core2->sites('site-limit'))===Core::MAX_SITES,'Site-limit fixture 
 breject(fn()=>$core2->connect('site-limit','https://limit-overflow.example.com','fixture-site-limit-token-overflow-xxxxxxxx',$now+((Core::MAX_SITES+1)*60)),'pilot_site_count_limit');
 bcheck(count($core2->sites('site-limit'))===Core::MAX_SITES,'Rejected 51st site changed tenant registry');
 
+
+// Upstream catalog must fail closed if a compromised/misbehaving site advertises more than 500 tools.
+final class OversizedCatalogTransport implements Transport {
+    public function rpc(string $home,string $token,array $request): array {
+        if(($request['method']??'')==='tools/list'){
+            $tools=[];for($i=0;$i<501;$i++)$tools[]=['name'=>'tool_'.$i,'inputSchema'=>['type'=>'object']];
+            return ['jsonrpc'=>'2.0','id'=>$request['id'],'result'=>['tools'=>$tools]];
+        }
+        if(($request['params']['name']??'')==='system_manifest'){
+            return ['jsonrpc'=>'2.0','id'=>$request['id'],'result'=>['content'=>[['type'=>'text','text'=>json_encode([
+                'plugin_name'=>'WP AI Admin','site_id'=>'oversized-plugin','installation_id'=>'oversized-install',
+                'release'=>['production_defaults'=>['direct_live_writes'=>false]]
+            ])]]]];
+        }
+        return ['jsonrpc'=>'2.0','id'=>$request['id'],'result'=>['content'=>[]]];
+    }
+}
+$oversizedCore=new Core($store,new WPAICloudGateway\Vault(str_repeat('z',32)),new OversizedCatalogTransport(),json_decode(file_get_contents(dirname(__DIR__).'/config/plans.json'),true));
+$oversizedCore->ensureAccount('oversized');
+$oversizedSite=$oversizedCore->connect('oversized','https://oversized.example.com','fixture-oversized-site-token-aaaaaaaa',$now);
+$oversizedToken=$oversizedCore->mint('oversized',[$oversizedSite['id']],['mcp:read'],$now);
+$oversizedActor=$oversizedCore->authenticate($oversizedToken['access_token'],$now);
+breject(fn()=>$oversizedCore->catalog($oversizedActor,$oversizedSite['id'],$now),'invalid_upstream_catalog');
+
 // MySQL deployments must fail closed if a critical table loses transactional InnoDB semantics.
 if(getenv('TEST_MYSQL_DSN')){
     $requestsTable=$store->table('requests');
