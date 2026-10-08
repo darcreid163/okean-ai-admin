@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-sandbox-${{ github.ref }}
+  group: release-sandbox-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
