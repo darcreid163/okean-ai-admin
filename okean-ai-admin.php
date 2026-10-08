@@ -82,6 +82,11 @@ require_once OAI_DIR.'includes/class-oai-regression-history.php';
 require_once OAI_DIR.'includes/class-oai-security-fuzz.php';
 require_once OAI_DIR.'includes/class-oai-admin.php';
 register_activation_hook(__FILE__, array('OAI_DB','install'));
+function oai_deactivation_safety_reset(){
+ if(class_exists('OAI_AI_Lifecycle_Control'))OAI_AI_Lifecycle_Control::disable(0,'plugin_deactivated');
+ if(class_exists('OAI_Test_Automation'))OAI_Test_Automation::disable('plugin_deactivated',0);
+}
+register_deactivation_hook(__FILE__,'oai_deactivation_safety_reset');
 add_action('plugins_loaded', array('OAI_DB','maybe_upgrade'));
 add_action('plugins_loaded', function(){
  if(class_exists('OAI_AI_Lifecycle_Control'))OAI_AI_Lifecycle_Control::reset_stale_build();
