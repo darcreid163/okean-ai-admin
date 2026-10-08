@@ -342,6 +342,24 @@ jobs:
           test -n "$CLOUD_HEADER_VERSION" -a "$CLOUD_HEADER_VERSION" = "$CLOUD_CONST_VERSION"
           grep -Fq "WP AI Admin Cloud Core $CLOUD_CONST_VERSION" wp-ai-admin-cloud/README.md
           echo "Cloud metadata consistent: version=$CLOUD_CONST_VERSION"
+      - name: Public onboarding contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=docs/PUBLIC-ONBOARDING.md
+          test -f "$FILE"
+          grep -Fq "https://wpaiadmin.ru/wpai-cloud/connect" "$FILE"
+          grep -Fq "https://wpaiadmin.ru/mcp" "$FILE"
+          grep -Fq "OAuth Authorization Code + PKCE S256" "$FILE"
+          grep -Fq "explicitly select the site or sites" "$FILE"
+          grep -Fq "create a sandbox operation first" "$FILE"
+          grep -Fq "Revoke access" "$FILE"
+          grep -Fq "Direct live writes are disabled" "$FILE"
+          grep -Fq "Human approval is the production default" "$FILE"
+          if grep -Eqi 'required.*(PowerShell|SSH|Application Password|manual token|copied token)' "$FILE"; then
+            echo "Normal onboarding still requires a manual/CLI credential path"; exit 1
+          fi
+          echo "Public onboarding contract present and browser-first"
       - name: Outbound transport SSRF/TLS static contract
         shell: bash
         run: |
