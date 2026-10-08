@@ -92,6 +92,8 @@ jobs:
         run: php wp-ai-admin-cloud/tests/release-boundaries.php
       - name: Reconnect identity pinning on SQLite
         run: php wp-ai-admin-cloud/tests/site-reconnect-identity.php
+      - name: Quota, idempotency and reconciliation on SQLite
+        run: php wp-ai-admin-cloud/tests/quota-idempotency.php
       - name: Release abuse boundaries on MySQL
         env:
           TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
@@ -104,6 +106,12 @@ jobs:
           TEST_MYSQL_USER: root
           TEST_MYSQL_PASSWORD: release-boundary-password
         run: php wp-ai-admin-cloud/tests/site-reconnect-identity.php
+      - name: Quota, idempotency and reconciliation on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/quota-idempotency.php
 
   existing-release-gates:
     runs-on: ubuntu-latest
