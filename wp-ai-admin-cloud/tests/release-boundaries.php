@@ -55,8 +55,8 @@ breject(fn()=>$core2->call($actor,$site['id'],'operation_verify',['id'=>2],$nonc
 bcheck($transport->executions===$execAfter,'Idempotency conflict reached upstream');
 
 // Per-owner HTTP throttle must close after the configured window count.
-for($i=0;$i<120;$i++) $core2->throttle('boundary','release-boundary-rate',$now,120);
-breject(fn()=>$core2->throttle('boundary','release-boundary-rate',$now,120),'rate_limit_exceeded');
+for($i=0;$i<120;$i++) $core2->throttle('boundary','relbound-rate',$now,120);
+breject(fn()=>$core2->throttle('boundary','relbound-rate',$now,120),'rate_limit_exceeded');
 
 echo 'PASS '.$checks.' release boundary assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite').PHP_EOL;
 if(!getenv('TEST_MYSQL_DSN'))foreach([$db,$db.'-wal',$db.'-shm'] as $f)if(file_exists($f))unlink($f);
