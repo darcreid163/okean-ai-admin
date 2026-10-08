@@ -23,6 +23,10 @@ $site=$core->connect('boundary','https://boundary.example.com','fixture-boundary
 // Token policy boundaries.
 breject(fn()=>$core->mint('boundary',[$site['id']],['mcp:write'],$now),'invalid_token_policy');
 breject(fn()=>$core->mint('boundary',[$site['id']],['mcp:read','mcp:read'],$now),'invalid_token_policy');
+breject(fn()=>$core->mint('boundary',[],['mcp:read'],$now),'invalid_token_policy');
+breject(fn()=>$core->mint('boundary',[$site['id'],$site['id']],['mcp:read'],$now),'invalid_token_policy');
+breject(fn()=>$core->mint('boundary',[$site['id']],['mcp:read','admin:all'],$now),'invalid_token_policy');
+breject(fn()=>$core->mint('boundary',array_fill(0,Core::MAX_SITES+1,$site['id']),['mcp:read'],$now),'invalid_token_policy');
 breject(fn()=>$core->mint('boundary',[$site['id']],['mcp:read'],$now,59),'invalid_token_policy');
 breject(fn()=>$core->mint('boundary',[$site['id']],['mcp:read'],$now,3601),'invalid_token_policy');
 
@@ -52,7 +56,9 @@ bcheck(is_array($core->catalog($actor,$site['id'],$now+1)),'Restored sealed site
 
 // An actor authenticated before account suspension must not retain access after suspension.
 $store->execute('UPDATE '.$store->table('accounts').' SET disabled=1 WHERE owner=?',['boundary']);
+breject(fn()=>$core->authenticate($token['access_token'],$now+1),'account_unavailable');
 breject(fn()=>$core->catalog($actor,$site['id'],$now+1),'account_unavailable');
+breject(fn()=>$core->mint('boundary',[$site['id']],['mcp:read'],$now+1),'account_unavailable');
 $store->execute('UPDATE '.$store->table('accounts').' SET disabled=0 WHERE owner=?',['boundary']);
 bcheck(is_array($core->catalog($actor,$site['id'],$now+1)),'Account restore fixture did not recover');
 
