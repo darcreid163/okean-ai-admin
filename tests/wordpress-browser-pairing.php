@@ -51,6 +51,9 @@ try {
  pair_expect((int)get_option('thumbnail_size_w')===150,'Sandbox wrote before approval');
  $approve=$core->call($actor,$site['id'],'operation.approve',['id'=>$opId],'release-lifecycle-approve',$now);
  pair_expect($approve['state']==='succeeded','Central approval failed');
+ $wrongClient=OAI_AI_Lifecycle_Control::perform($opId,'apply','release-fixture-forged-client',1);
+ pair_expect(is_wp_error($wrongClient)&&$wrongClient->get_error_code()==='oai_ai_lifecycle_client','Lifecycle client binding did not reject a second MCP client');
+ pair_expect((int)get_option('thumbnail_size_w')===150,'Rejected second client changed state');
  $apply=$core->call($actor,$site['id'],'operation.apply',['id'=>$opId],'release-lifecycle-apply',$now);
  pair_expect($apply['state']==='succeeded'&&(int)get_option('thumbnail_size_w')===151,'Central apply did not persist expected value');
  $verify=$core->call($actor,$site['id'],'operation.verify',['id'=>$opId],'release-lifecycle-verify-apply',$now);
