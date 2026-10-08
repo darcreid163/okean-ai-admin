@@ -317,6 +317,7 @@ jobs:
           php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-install.php"
           php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-operations-cleanup.php"
           php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-quota-retention.php"
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-native-auth-boundaries.php"
           OAI_REACTIVATION_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-reactivation.php"
           php "$WPCLI" --path="$WP_DIR" plugin deactivate okean-ai-admin
           php "$WPCLI" --path="$WP_DIR" plugin activate okean-ai-admin
