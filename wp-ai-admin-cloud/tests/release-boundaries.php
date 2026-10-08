@@ -37,6 +37,40 @@ breject(fn()=>$core->connect('boundary','http://example.com','fixture-valid-toke
 breject(fn()=>$core->connect('boundary','https://127.0.0.1','fixture-valid-token-aaaaaaaaaaaa',$now),'invalid_site_host');
 breject(fn()=>$core->connect('boundary','https://example.com','short',$now),'invalid_site_token');
 
+// Site proof must reject incompatible or malformed native manifests before creating a registration.
+final class ManifestBoundaryTransport implements Transport {
+    public function __construct(private array $manifest=[],private bool $isError=false){}
+    public function rpc(string $home,string $token,array $request): array {
+        if(($request['params']['name']??'')==='system_manifest'){
+            return ['jsonrpc'=>'2.0','id'=>$request['id'],'result'=>[
+                'content'=>[['type'=>'text','text'=>json_encode($this->manifest)]],
+                'isError'=>$this->isError
+            ]];
+        }
+        return ['jsonrpc'=>'2.0','id'=>$request['id'],'result'=>['tools'=>[]]];
+    }
+}
+$policy=json_decode(file_get_contents(dirname(__DIR__).'/config/plans.json'),true);
+$badManifests=[
+    [['plugin_name'=>'Wrong Plugin','site_id'=>'bad-plugin','installation_id'=>'bad-install','release'=>['production_defaults'=>['direct_live_writes'=>false]]],'site_manifest_incompatible'],
+    [['plugin_name'=>'WP AI Admin','site_id'=>'bad-plugin','installation_id'=>'bad-install','release'=>['production_defaults'=>['direct_live_writes'=>true]]],'site_manifest_incompatible'],
+    [['plugin_name'=>'WP AI Admin','release'=>['production_defaults'=>['direct_live_writes'=>false]]],'site_manifest_incompatible'],
+    [['plugin_name'=>'WP AI Admin','site_id'=>'bad/site','installation_id'=>'bad-install','release'=>['production_defaults'=>['direct_live_writes'=>false]]],'invalid_identifier']
+];
+foreach($badManifests as $idx=>$case){
+    [$manifest,$reason]=$case;
+    $badCore=new Core($store,new WPAICloudGateway\Vault(str_repeat(chr(65+$idx),32)),new ManifestBoundaryTransport($manifest),$policy);
+    $owner='manifest-'.$idx;$badCore->ensureAccount($owner);
+    breject(fn()=>$badCore->connect($owner,'https://manifest-'.$idx.'.example.com','fixture-manifest-site-token-aaaaaaaa',$now+$idx),$reason);
+    bcheck(count($badCore->sites($owner))===0,'Rejected manifest created site registration');
+}
+$errorCore=new Core($store,new WPAICloudGateway\Vault(str_repeat('m',32)),new ManifestBoundaryTransport([
+    'plugin_name'=>'WP AI Admin','site_id'=>'error-plugin','installation_id'=>'error-install','release'=>['production_defaults'=>['direct_live_writes'=>false]]
+],true),$policy);
+$errorCore->ensureAccount('manifest-error');
+breject(fn()=>$errorCore->connect('manifest-error','https://manifest-error.example.com','fixture-manifest-error-token-aaaaaaaa',$now+10),'site_admin_proof_failed');
+bcheck(count($errorCore->sites('manifest-error'))===0,'Failed admin proof created site registration');
+
 $site=$core->connect('boundary','https://boundary.example.com','fixture-boundary-admin-token-aaaaaaaa',$now);
 
 // Token policy boundaries.
