@@ -32,6 +32,14 @@ $readOnly=$core->mint('boundary',[$site['id']],['mcp:read'],$now);
 $readOnlyActor=$core->authenticate($readOnly['access_token'],$now);
 breject(fn()=>$core->call($readOnlyActor,$site['id'],'operation.apply',['id'=>1],'dotted-readonly-apply',$now),'scope_or_site_denied');
 breject(fn()=>$core->call($readOnlyActor,$site['id'],'operation.rollback',['id'=>1],'dotted-readonly-rollback',$now),'scope_or_site_denied');
+// Dynamic wordpress.execute scope classification: read mode is allowed to read-only actors, write mode is not.
+$readExec=$core->call($readOnlyActor,$site['id'],'wordpress_execute',['mode'=>'read','command'=>'wp option get blogname'],'wordpress-read-mode',$now);
+bcheck(($readExec['state']??'')==='succeeded','wordpress.execute read mode unexpectedly required write scope');
+breject(fn()=>$core->call($readOnlyActor,$site['id'],'wordpress_execute',['mode'=>'write','command'=>'wp option update blogname x'],'wordpress-write-mode',$now),'scope_or_site_denied');
+// Commercial truthfulness: batch mutation calls stay disabled until receipt accounting is ready, and must never reach upstream.
+$beforeBatchExec=$transport->executions;
+breject(fn()=>$core->call($actor,$site['id'],'batch.create',['items'=>[]],'batch-not-billable',$now),'batch_receipt_accounting_not_ready');
+bcheck($transport->executions===$beforeBatchExec,'Disabled batch accounting gate still reached upstream');
 
 // Sealed site credentials are bound to their exact tenant/site record. Ciphertext substitution must fail closed.
 $site2=$core->connect('boundary','https://boundary-two.example.com','fixture-boundary-admin-token-bbbbbbbb',$now+1);
