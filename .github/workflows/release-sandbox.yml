@@ -116,6 +116,56 @@ jobs:
         run: php wp-ai-admin-cloud/tests/oauth.php
 
 
+  cloud-core-fresh-install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: cloud-fresh-password
+          MYSQL_DATABASE: cloud_fresh
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pcloud-fresh-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Build Cloud Core release ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          mkdir -p cloud-install/wp-ai-admin-cloud
+          cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/includes wp-ai-admin-cloud/src wp-ai-admin-cloud/config wp-ai-admin-cloud/README.md cloud-install/wp-ai-admin-cloud/
+          (cd cloud-install && zip -qr "wp-ai-admin-cloud-$VERSION.zip" wp-ai-admin-cloud)
+          unzip -tq "cloud-install/wp-ai-admin-cloud-$VERSION.zip"
+      - name: Fresh WordPress Cloud Core install
+        shell: bash
+        run: |
+          set -euo pipefail
+          WP_DIR="$RUNNER_TEMP/wpai-cloud-fresh-${{ matrix.php }}"
+          WPCLI="$RUNNER_TEMP/wp-cli-cloud-${{ matrix.php }}.phar"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$WPCLI"
+          mkdir -p "$WP_DIR"
+          php "$WPCLI" --path="$WP_DIR" core download
+          php "$WPCLI" --path="$WP_DIR" config create --dbname=cloud_fresh --dbuser=root --dbpass=cloud-fresh-password --dbhost=127.0.0.1 --skip-check
+          php "$WPCLI" --path="$WP_DIR" core install --url=https://cloud-fresh.test --title='Cloud Fresh' --admin_user=cloud-admin --admin_password=disposable-cloud-password --admin_email=cloud@example.test --skip-email
+          ZIP="$(ls "$GITHUB_WORKSPACE"/cloud-install/wp-ai-admin-cloud-*.zip | head -n1)"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$ZIP" --activate
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-install.php"
+
   release-zip-upgrade:
     runs-on: ubuntu-latest
     services:
