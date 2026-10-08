@@ -14,8 +14,10 @@ if($phase==='seed'){
     react_expect($hash!==''&&!str_contains($hash,$token),'Seeded MCP credential was not hashed');
     $license=OAI_License::activate_local_owner(1);
     react_expect(!is_wp_error($license)&&!empty($license['active']),'Unable to seed local-owner license');
-    react_expect(!OAI_AI_Lifecycle_Control::is_active(),'AI Lifecycle unexpectedly active before deactivation');
-    react_expect(!OAI_Test_Automation::is_active(),'Test Automation unexpectedly active before deactivation');
+    $ai=OAI_AI_Lifecycle_Control::enable(1);
+    react_expect(!is_wp_error($ai)&&OAI_AI_Lifecycle_Control::is_active(),'Unable to enable AI Lifecycle before deactivation');
+    $ta=OAI_Test_Automation::enable(15,array(),array(),1);
+    react_expect(!is_wp_error($ta)&&OAI_Test_Automation::is_active(),'Unable to enable Test Automation before deactivation');
     update_option('wpai_reactivation_expected',array(
         'site_id'=>$site,
         'installation_id'=>$installation,
@@ -34,8 +36,12 @@ if($phase==='check'){
     react_expect((string)get_option('oai_mcp_token_hash','')===$expected['mcp_token_hash'],'MCP credential changed across deactivation/reactivation');
     $license=OAI_License::status();
     react_expect(!empty($license['active'])&&($license['license_id']??'')===$expected['license_id'],'License changed across deactivation/reactivation');
-    react_expect(!OAI_AI_Lifecycle_Control::is_active(),'AI Lifecycle auto-enabled after reactivation');
-    react_expect(!OAI_Test_Automation::is_active(),'Test Automation auto-enabled after reactivation');
+    react_expect(!OAI_AI_Lifecycle_Control::is_active(),'AI Lifecycle survived plugin deactivation');
+    react_expect(!OAI_Test_Automation::is_active(),'Test Automation survived plugin deactivation');
+    $aiCfg=get_option(OAI_AI_Lifecycle_Control::OPTION,array());
+    $taCfg=get_option(OAI_Test_Automation::OPTION,array());
+    react_expect(($aiCfg['disabled_reason']??'')==='plugin_deactivated','AI Lifecycle deactivation reason not recorded');
+    react_expect(($taCfg['disabled_reason']??'')==='plugin_deactivated','Test Automation deactivation reason not recorded');
     delete_option('wpai_reactivation_expected');
     echo "PASS deactivation/reactivation preserved identity, credential and license with automation OFF\n";
     return;
