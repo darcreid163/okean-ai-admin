@@ -91,6 +91,28 @@ bcheck($transport->executions===$execAfter,'Idempotency conflict reached upstrea
 for($i=0;$i<120;$i++) $core2->throttle('boundary','relbound-rate',$now,120);
 breject(fn()=>$core2->throttle('boundary','relbound-rate',$now,120),'rate_limit_exceeded');
 
+// Ledger API is bounded regardless of caller-supplied limit and remains owner-scoped.
+$core2->ensureAccount('ledger-owner');
+$ledgerSite=$core2->connect('ledger-owner','https://ledger.example.com','fixture-ledger-site-token-aaaaaaaa',$now+2000);
+$ledgerToken=$core2->mint('ledger-owner',[$ledgerSite['id']],['mcp:read'],$now+2000);
+$ledgerActor=$core2->authenticate($ledgerToken['access_token'],$now+2000);
+for($i=0;$i<105;$i++){
+    $core2->call($ledgerActor,$ledgerSite['id'],'wp_get_site',[],'ledger-'.$i,$now+2001+$i);
+}
+$ledgerMax=$core2->ledger('ledger-owner',1000);
+bcheck(count($ledgerMax)===100,'Ledger limit was not clamped to 100');
+bcheck(count(array_filter($ledgerMax,fn($r)=>($r['site_id']??'')!==$ledgerSite['id']))===0,'Ledger leaked another site/owner');
+$ledgerOne=$core2->ledger('ledger-owner',0);
+bcheck(count($ledgerOne)===1,'Ledger lower bound was not clamped to 1');
+
+// Rate-limit housekeeping removes buckets older than the 24h minute window.
+$core2->ensureAccount('rate-cleanup');
+$oldSlot=intdiv($now-200000,60);
+$store->execute('INSERT INTO '.$store->table('rate').' (owner,bucket,slot,hits) VALUES (?,?,?,?)',['rate-cleanup','old-bucket',$oldSlot,1]);
+$core2->throttle('rate-cleanup','fresh-bucket',$now,5);
+$oldRate=$store->row('SELECT owner FROM '.$store->table('rate').' WHERE owner=? AND slot<?',['rate-cleanup',intdiv($now,60)-1440]);
+bcheck($oldRate===null,'Rate-limit housekeeping retained stale bucket');
+
 // Site-count boundary is enforced per tenant. The 51st active registration must fail without creating a row.
 $core2->ensureAccount('site-limit');
 for($i=1;$i<=Core::MAX_SITES;$i++){
