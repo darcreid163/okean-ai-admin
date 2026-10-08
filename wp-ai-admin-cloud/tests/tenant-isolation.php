@@ -57,6 +57,10 @@ iso_reject(
     fn()=>$core->connect('tenant-b','https://TENANT-A.EXAMPLE.COM/','fixture-normalized-claim-token-eeeeeeee',$now+2,true),
     'site_already_registered'
 );
+iso_reject(
+    fn()=>$core->connect('tenant-b','https://tenant-a.example.com:443/','fixture-default-port-claim-token-ffffffff',$now+3,true),
+    'site_already_registered'
+);
 iso_check(count($core->sites('tenant-a'))===1&&count($core->sites('tenant-b'))===1,'Normalized duplicate claim changed tenant registries');
 
 $tokenA=$core->mint('tenant-a',[$siteA['id']],['mcp:read','mcp:write'],$now);
