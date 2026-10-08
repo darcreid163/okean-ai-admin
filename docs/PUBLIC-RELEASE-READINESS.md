@@ -2,6 +2,7 @@
 
 Status: **IN PROGRESS**  
 Baseline frozen on 2026-10-07: native **2.1.14**, Cloud Core **0.3.6**  
+Current public-release candidate: native **2.1.15**, Cloud Core **0.3.6**  
 Canonical public MCP: **https://wpaiadmin.ru/mcp**
 
 This document is the release-gate checklist for moving WP AI Admin from approved-user beta toward public publication. It does not change the connection contract. Any connection-affecting change must still follow `docs/CHATGPT-CONNECTION-CONTRACT.md`.
