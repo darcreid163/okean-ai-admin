@@ -54,7 +54,17 @@ final class Core {
             }
             if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=?',[$owner])['n']>=self::MAX_SITES) throw new Fault('pilot_site_count_limit',409);
             $id='reg_'.bin2hex(random_bytes(16));
-            $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now]);
+            try {
+                $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now]);
+            } catch (\PDOException $e) {
+                // Another request may have registered the same canonical URL
+                // after our initial lookup but before this INSERT. Normalize the
+                // storage race to the public ownership-conflict contract instead
+                // of leaking a raw duplicate-key/SQL error.
+                $winner=$this->store->row('SELECT id,owner FROM '.$this->store->table('sites').' WHERE url_hash=?',[$hash]);
+                if ($winner) throw new Fault('site_already_registered',409);
+                throw $e;
+            }
             $this->store->audit($owner,$id,'site_connected','',$now);
             return ['id'=>$id,'home'=>$home,'plugin_site_id'=>$pluginSite,'installation_id'=>$installation,'status'=>'active'];
         });
