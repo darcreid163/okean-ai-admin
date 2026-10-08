@@ -119,6 +119,21 @@ $oversizedToken=$oversizedCore->mint('oversized',[$oversizedSite['id']],['mcp:re
 $oversizedActor=$oversizedCore->authenticate($oversizedToken['access_token'],$now);
 breject(fn()=>$oversizedCore->catalog($oversizedActor,$oversizedSite['id'],$now),'invalid_upstream_catalog');
 
+// Re-running storage migration on an active database must be idempotent and preserve commercial/tenant state.
+$beforeAccount=$store->row('SELECT owner,plan,sequence,disabled FROM '.$store->table('accounts').' WHERE owner=?',['boundary']);
+$beforeSites=$store->rows('SELECT id,owner,home,status FROM '.$store->table('sites').' WHERE owner=? ORDER BY id',['boundary']);
+$beforeBalances=$store->rows('SELECT owner,period,used,reserved FROM '.$store->table('balances').' WHERE owner=? ORDER BY period',['boundary']);
+$beforeRequests=$store->rows('SELECT request_key,owner,site_id,state,reserved_units,policy_version FROM '.$store->table('requests').' WHERE owner=? ORDER BY request_key',['boundary']);
+$store->migrate();
+$afterAccount=$store->row('SELECT owner,plan,sequence,disabled FROM '.$store->table('accounts').' WHERE owner=?',['boundary']);
+$afterSites=$store->rows('SELECT id,owner,home,status FROM '.$store->table('sites').' WHERE owner=? ORDER BY id',['boundary']);
+$afterBalances=$store->rows('SELECT owner,period,used,reserved FROM '.$store->table('balances').' WHERE owner=? ORDER BY period',['boundary']);
+$afterRequests=$store->rows('SELECT request_key,owner,site_id,state,reserved_units,policy_version FROM '.$store->table('requests').' WHERE owner=? ORDER BY request_key',['boundary']);
+bcheck(Security::canonical($afterAccount)===Security::canonical($beforeAccount),'Repeated migrate changed account state');
+bcheck(Security::canonical($afterSites)===Security::canonical($beforeSites),'Repeated migrate changed site registry');
+bcheck(Security::canonical($afterBalances)===Security::canonical($beforeBalances),'Repeated migrate changed balances');
+bcheck(Security::canonical($afterRequests)===Security::canonical($beforeRequests),'Repeated migrate changed request ledger');
+
 // MySQL deployments must fail closed if a critical table loses transactional InnoDB semantics.
 if(getenv('TEST_MYSQL_DSN')){
     $requestsTable=$store->table('requests');
