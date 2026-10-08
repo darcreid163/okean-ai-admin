@@ -99,4 +99,34 @@ foreach([$evilResponse,$noBearerResponse,$badVersionResponse] as $negative){
     cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'MCP negative response leaked internal diagnostics');
 }
 
+// Provisioning/control-plane REST must never accept anonymous, ineligible, bearer-only, or non-HTTPS access.
+$adminId=get_current_user_id();
+wp_set_current_user(0);
+$guestSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
+cloud_release_expect($guestSites->get_status()===401,'Anonymous provisioning request was not denied');
+
+$subscriber=wp_create_user('cloud-release-subscriber-'.wp_generate_password(8,false,false),'disposable-password','cloud-release-subscriber@example.test');
+cloud_release_expect(!is_wp_error($subscriber),'Unable to create provisioning boundary subscriber');
+wp_set_current_user((int)$subscriber);
+$subscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
+cloud_release_expect($subscriberSites->get_status()===401,'Ineligible WordPress user reached provisioning API');
+
+wp_set_current_user(0);
+$bearerOnly=new WP_REST_Request('GET','/wpai-cloud/v1/sites');
+$bearerOnly->set_header('authorization','Bearer wpai_cloud_'.str_repeat('A',43));
+$bearerSites=rest_do_request($bearerOnly);
+cloud_release_expect($bearerSites->get_status()===401,'Cloud bearer token authorized provisioning without WordPress login');
+
+wp_set_current_user($adminId);
+$httpsBefore=$_SERVER['HTTPS']??null;
+unset($_SERVER['HTTPS']);
+$httpSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
+cloud_release_expect($httpSites->get_status()===403,'Provisioning over non-HTTPS was not denied');
+$_SERVER['HTTPS']='on';
+
+foreach([$guestSites,$subscriberSites,$bearerSites,$httpSites] as $negative){
+    $encoded=wp_json_encode($negative->get_data());
+    cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'Provisioning denial leaked internal diagnostics');
+}
+
 echo 'PASS fresh Cloud Core ZIP install+enable: WP '.get_bloginfo('version').', PHP '.PHP_VERSION.', cloud '.WPAI_CLOUD_VERSION.', plans '.count($plans).PHP_EOL;
