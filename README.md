@@ -1,6 +1,13 @@
 # WP AI Admin
 
-> **Commercial Beta source of truth:** `main` = WP AI Admin 2.1.14 + Cloud Core 0.3.6. Older installable artifacts are retained only when they are still useful for rollback/compatibility; historical development remains available through Git history.
+> **Commercial Beta source of truth:** `main` = WP AI Admin 2.1.14 + Cloud Core 0.3.6. Public-release candidate branch = native 2.1.15 + Cloud Core 0.3.6. Older installable artifacts are retained only when they are still useful for rollback/compatibility; historical development remains available through Git history.
+
+## 2.1.15 — Public release hardening
+
+- Plugin deactivation now fails safe: AI Lifecycle Control and Test Automation are disabled immediately and remain off after reactivation.
+- Site identity, installation identity, OAuth/MCP credentials and license state are preserved across deactivation/reactivation.
+- Release qualification adds token lifecycle, quota/idempotency/reconciliation, tenant isolation, onboarding, artifact provenance and security-boundary gates.
+- Cloud Core remains 0.3.6; live acceptance is still a separate final P0 gate.
 
 ## 2.1.14 — Native consent callback navigation
 
@@ -19,7 +26,7 @@ See [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md) and [Public B
 
 ## Connection compatibility baseline
 
-The preserved onboarding and ChatGPT authorization flow is defined in [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md), with repository working rules in [AGENTS.md](AGENTS.md). Supported baseline: native 2.1.14 on each site, central Cloud Core 0.3.6 on wpaiadmin.ru, public MCP https://wpaiadmin.ru/mcp. Register sites through browser administrator consent, then separately authorize the ChatGPT client for explicitly selected sites.
+The preserved onboarding and ChatGPT authorization flow is defined in [Connection Contract 1.2](docs/CHATGPT-CONNECTION-CONTRACT.md), with repository working rules in [AGENTS.md](AGENTS.md). Release-candidate baseline: native 2.1.15 on each site, central Cloud Core 0.3.6 on wpaiadmin.ru, public MCP https://wpaiadmin.ru/mcp. Register sites through browser administrator consent, then separately authorize the ChatGPT client for explicitly selected sites.
 
 Commercial beta baseline was consolidated into `main` on 2026-10-07: native WP AI Admin 2.1.14, Cloud Core 0.3.6, central MCP `https://wpaiadmin.ru/mcp`. Live central ChatGPT authorization and reads against both `wpaiadmin.ru` and `okean.market` have been confirmed. The remaining live release gate is a real mutation → verify → receipt/proof → rollback → rollback verification cycle through the central gateway. Future connection-affecting changes must follow the contract's compatibility, migration and regression process.
 
