@@ -29,6 +29,21 @@ breject(fn()=>$core->mint('boundary',[$site['id']],['mcp:read'],$now,3601),'inva
 $token=$core->mint('boundary',[$site['id']],['mcp:read','mcp:write'],$now);
 $actor=$core->authenticate($token['access_token'],$now);
 
+// Sealed site credentials are bound to their exact tenant/site record. Ciphertext substitution must fail closed.
+$site2=$core->connect('boundary','https://boundary-two.example.com','fixture-boundary-admin-token-bbbbbbbb',$now+1);
+$sealed1=$store->row('SELECT token_sealed FROM '.$store->table('sites').' WHERE id=?',[$site['id']])['token_sealed'];
+$sealed2=$store->row('SELECT token_sealed FROM '.$store->table('sites').' WHERE id=?',[$site2['id']])['token_sealed'];
+$store->execute('UPDATE '.$store->table('sites').' SET token_sealed=? WHERE id=?',[$sealed2,$site['id']]);
+breject(fn()=>$core->catalog($actor,$site['id'],$now+1),'secret_binding_failed');
+$store->execute('UPDATE '.$store->table('sites').' SET token_sealed=? WHERE id=?',[$sealed1,$site['id']]);
+bcheck(is_array($core->catalog($actor,$site['id'],$now+1)),'Restored sealed site credential did not recover');
+
+// An actor authenticated before account suspension must not retain access after suspension.
+$store->execute('UPDATE '.$store->table('accounts').' SET disabled=1 WHERE owner=?',['boundary']);
+breject(fn()=>$core->catalog($actor,$site['id'],$now+1),'account_unavailable');
+$store->execute('UPDATE '.$store->table('accounts').' SET disabled=0 WHERE owner=?',['boundary']);
+bcheck(is_array($core->catalog($actor,$site['id'],$now+1)),'Account restore fixture did not recover');
+
 // Oversized arguments must fail before upstream execution.
 $before=$transport->executions;
 breject(fn()=>$core->call($actor,$site['id'],'wp_get_site',['blob'=>str_repeat('x',70000)],'oversized-args',$now),'arguments_too_large');
