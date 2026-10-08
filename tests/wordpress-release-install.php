@@ -98,8 +98,8 @@ release_install_expect(is_wp_error($expiredResult)&&$expiredResult->get_error_co
 release_install_expect((string)get_option('wpai_release_expired_fixture')==='baseline','Expired sandbox changed live state');
 $expiredRow=OAI_DB::get((int)$expiredOp['id']);
 release_install_expect(($expiredRow['status']??'')==='expired','Expired sandbox status not persisted');
-$expiredReceipt=OAI_Receipts::get((int)$expiredOp['id']);
-release_install_expect(is_array($expiredReceipt)&&($expiredReceipt['status']??'')==='expired','Expired sandbox receipt missing');
+$expiredReceipt=OAI_Receipts::build((int)$expiredOp['id']);
+release_install_expect(is_array($expiredReceipt)&&($expiredReceipt['status']??'')==='expired'&&(($expiredReceipt['receipt']['reason']??'')==='sandbox_expired'),'Expired sandbox receipt missing');
 delete_option('wpai_release_expired_fixture');
 
 echo 'PASS fresh release ZIP install: WP '.get_bloginfo('version').', plugin '.OAI_VERSION.', tools '.count($catalog).', self-test '.$self['passed'].'/'.$self['total'].', fuzz '.$fuzz['summary']['PASS'].'/'.$fuzz['summary']['total'].PHP_EOL;
