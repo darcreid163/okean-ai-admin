@@ -33,8 +33,12 @@ final class WordPress {
         add_action('wpai_gateway_pair_cleanup',static function($key){if(is_string($key)&&preg_match('/^wpai_pair_request_[a-f0-9]{64}$/D',$key))delete_option($key);});
     }
     private static function migrate(): void {
-        if ((string)get_option('wpai_gateway_db_version','')==='2') return;
-        self::database()->migrate();
+        $store=self::database();
+        if ((string)get_option('wpai_gateway_db_version','')==='2') {
+            $store->assertSchema();
+            return;
+        }
+        $store->migrate();
         update_option('wpai_gateway_db_version','2',false);
     }
     public static function statusPage(): void { Admin::page(); }
