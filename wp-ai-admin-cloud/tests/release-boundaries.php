@@ -92,6 +92,40 @@ $errorCore->ensureAccount('manifest-error');
 breject(fn()=>$errorCore->connect('manifest-error','https://manifest-error.example.com','fixture-manifest-error-token-aaaaaaaa',$now+10),'site_admin_proof_failed');
 bcheck(count($errorCore->sites('manifest-error'))===0,'Failed admin proof created site registration');
 
+// Revoke-first account suspension keeps evidence but destroys active access paths.
+$core->ensureAccount('closure-owner');
+$closureSiteToken='fixture-closure-site-token-aaaaaaaa';
+$closureSite=$core->connect('closure-owner','https://closure.example.com',$closureSiteToken,$now+20);
+$closureBearer=$core->mint('closure-owner',[$closureSite['id']],['mcp:read','mcp:write'],$now+20);
+$closureGrant='grant-'.str_repeat('c',16);
+$store->execute('INSERT INTO '.$store->table('oauth_grants').' (id,owner,client,resource,scopes,sites,revoked,expires) VALUES (?,?,?,?,?,?,0,?)',[
+    $closureGrant,'closure-owner','client-closure','https://wpaiadmin.ru/mcp',
+    Security::canonical(['mcp:read','mcp:write']),Security::canonical([$closureSite['id']]),$now+3600
+]);
+$store->execute('INSERT INTO '.$store->table('oauth_codes').' (hash,owner,client,redirect,resource,scopes,sites,challenge,expires,used) VALUES (?,?,?,?,?,?,?,?,?,0)',[
+    hash('sha256','closure-code'),'closure-owner','client-closure','https://client.example/callback','https://wpaiadmin.ru/mcp',
+    Security::canonical(['mcp:read']),Security::canonical([$closureSite['id']]),str_repeat('a',43),$now+600
+]);
+$inventory=$core->closureInventory('closure-owner');
+bcheck(($inventory['active_sites']??0)===1&&($inventory['active_tokens']??0)===1&&($inventory['active_oauth_grants']??0)===1&&($inventory['unused_oauth_codes']??0)===1,'Closure inventory counts wrong');
+$inventoryEncoded=Security::canonical($inventory);
+bcheck(!str_contains($inventoryEncoded,$closureSiteToken)&&!str_contains($inventoryEncoded,$closureBearer['access_token']),'Closure preview leaked credential material');
+
+$suspended=$core->suspendAccount('closure-owner',$now+21);
+bcheck(!empty($suspended['suspended'])&&!empty($suspended['access_revoked'])&&!empty($suspended['site_credentials_cleared'])&&empty($suspended['destructive_delete_performed']),'Account suspension result contract wrong');
+breject(fn()=>$core->authenticate($closureBearer['access_token'],$now+22),'invalid_or_expired_token');
+$closureSiteRow=$store->row('SELECT status,token_sealed FROM '.$store->table('sites').' WHERE id=?',[$closureSite['id']]);
+bcheck(($closureSiteRow['status']??'')==='revoked'&&($closureSiteRow['token_sealed']??'')==='','Suspension did not revoke site and clear sealed credential');
+$closureGrantRow=$store->row('SELECT revoked FROM '.$store->table('oauth_grants').' WHERE id=?',[$closureGrant]);
+bcheck((int)($closureGrantRow['revoked']??0)===1,'Suspension did not revoke OAuth grant');
+$closureCodeRow=$store->row('SELECT used FROM '.$store->table('oauth_codes').' WHERE hash=?',[hash('sha256','closure-code')]);
+bcheck((int)($closureCodeRow['used']??0)===1,'Suspension did not invalidate unused OAuth code');
+$closureAccount=$store->row('SELECT disabled FROM '.$store->table('accounts').' WHERE owner=?',['closure-owner']);
+bcheck((int)($closureAccount['disabled']??0)===1,'Suspension did not disable core account');
+$core->ensureAccount('closure-owner');
+breject(fn()=>$core->sites('closure-owner'),'account_unavailable');
+breject(fn()=>$core->closureInventory('closure-owner'),'account_unavailable');
+
 $site=$core->connect('boundary','https://boundary.example.com','fixture-boundary-admin-token-aaaaaaaa',$now);
 
 // Token policy boundaries.
