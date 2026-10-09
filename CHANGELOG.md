@@ -15,6 +15,10 @@
 - Use account-first lock ordering for OAuth consent, code exchange and refresh rotation to avoid suspension deadlock inversions.
 - Validate current-version gateway schema at runtime even when the DB-version marker is already current; optimize MySQL validation to two metadata queries.
 - Recheck live conflict state after atomic Apply/Rollback claims so concurrent third-party changes are detected before any write.
+- Make Apply/Rollback conflict recording itself CAS-safe so an error handler cannot overwrite a concurrently winning lifecycle state.
+- Add per-operation execution leases so a second request cannot mistake an actively running Apply/Rollback for a crashed request; recovery is allowed only after the lease is gone/expired.
+- Clear operation execution leases on plugin deactivation and block the entire native `oai_*` control-plane namespace from generic option writes.
+- Refresh native build ID to `2.1.15-release-hardening-20261009` after executable October 9 hardening.
 
 
 All notable public-release changes are recorded here. Published versions must never be reused for different package bytes.
