@@ -29,6 +29,7 @@ final class WordPress {
     public static function boot(string $file): void {
         add_action('rest_api_init',[self::class,'routes']);
         add_action('template_redirect',[Surface::class,'serve'],-10);
+        add_filter('rest_post_dispatch',[self::class,'secureRestHeaders'],10,3);
         add_filter('rest_pre_serve_request',[self::class,'emptyNotification'],10,4);
         add_action('wpai_gateway_pair_cleanup',static function($key){if(is_string($key)&&preg_match('/^wpai_pair_request_[a-f0-9]{64}$/D',$key))delete_option($key);});
     }
@@ -65,6 +66,14 @@ final class WordPress {
     }
     public static function configured(): bool {
         try { if (!self::ready()) return false; self::core(); return true; } catch (\Throwable $e) { return false; }
+    }
+    public static function secureRestHeaders($result,$server,$request) {
+        $route=is_object($request)&&method_exists($request,'get_route')?(string)$request->get_route():'';
+        if(str_starts_with($route,'/wpai-cloud/v1/') && is_object($result) && method_exists($result,'header')){
+            $result->header('Cache-Control','no-store');
+            $result->header('X-Content-Type-Options','nosniff');
+        }
+        return $result;
     }
     private static function response(mixed $value,int $status=200): \WP_REST_Response {
         return new \WP_REST_Response($value,$status,['Cache-Control'=>'no-store','Content-Type'=>'application/json; charset=utf-8','X-Content-Type-Options'=>'nosniff']);
