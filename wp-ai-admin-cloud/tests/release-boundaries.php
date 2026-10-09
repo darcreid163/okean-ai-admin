@@ -13,6 +13,28 @@ $store=fixtureStore($db);$store->migrate();
 if(getenv('TEST_MYSQL_DSN'))foreach(['audit','requests','oauth_access','oauth_refresh','oauth_codes','oauth_grants','oauth_clients','tokens','sites','balances','accounts','rate'] as $t)$store->execute('DELETE FROM '.$store->table($t));
 $transport=new FakeTransport();
 
+// Nested transactional primitives must compose into one outer transaction.
+$nestedOwner='nested-tx-owner';
+try {
+    $store->transaction(function() use($store,$nestedOwner) {
+        $store->transaction(function() use($store,$nestedOwner) {
+            $store->execute('INSERT INTO '.$store->table('accounts').' (owner,plan) VALUES (?,?)',[$nestedOwner,'free']);
+        });
+        throw new RuntimeException('force outer rollback');
+    });
+} catch (RuntimeException $e) {
+    bcheck($e->getMessage()==='force outer rollback','Unexpected nested transaction exception');
+}
+bcheck($store->row('SELECT owner FROM '.$store->table('accounts').' WHERE owner=?',[$nestedOwner])===null,'Nested transaction escaped outer rollback');
+
+$store->transaction(function() use($store,$nestedOwner) {
+    $store->transaction(function() use($store,$nestedOwner) {
+        $store->execute('INSERT INTO '.$store->table('accounts').' (owner,plan) VALUES (?,?)',[$nestedOwner,'free']);
+    });
+});
+bcheck(($store->row('SELECT owner FROM '.$store->table('accounts').' WHERE owner=?',[$nestedOwner])['owner']??'')===$nestedOwner,'Nested transaction did not commit with outer transaction');
+$store->execute('DELETE FROM '.$store->table('accounts').' WHERE owner=?',[$nestedOwner]);
+
 // Commercial policy must fail closed if its accounting contract is edited into an unsupported shape.
 $basePolicy=json_decode(file_get_contents(dirname(__DIR__).'/config/plans.json'),true);
 foreach([
