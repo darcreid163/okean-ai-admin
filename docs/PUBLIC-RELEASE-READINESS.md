@@ -1,7 +1,7 @@
 # WP AI Admin — Public Release Readiness
 
 Status: **IN PROGRESS**  
-Baseline frozen on 2026-10-07: native **2.1.14**, Cloud Core **0.3.7**  
+Baseline frozen on 2026-10-07: native **2.1.14**, Cloud Core **0.3.6**  
 Current public-release candidate: native **2.1.15**, Cloud Core **0.3.7**  
 Canonical public MCP: **https://wpaiadmin.ru/mcp**
 
@@ -295,7 +295,7 @@ A release candidate is publishable only when:
 - 2.1.13 → 2.1.15 upgrade preserves identity/OAuth/license/pending operation evidence while resetting automation;
 - cross-run deterministic ZIP metadata/order;
 - canonical release builder shared by install/upgrade/provenance jobs;
-- real Cloud Core 0.3.5 → 0.3.6 state-preserving ZIP upgrade;
+- real Cloud Core 0.3.6 → 0.3.7 state-preserving ZIP upgrade;
 - revoke-first central account suspension and closure preview;
 - gateway schema fail-fast checks for incomplete tables and non-InnoDB MySQL.
 
