@@ -1,6 +1,6 @@
 # WP AI Admin — Public Beta Onboarding
 
-Supported release-candidate baseline: WP AI Admin 2.1.15 on each managed WordPress site and Cloud Core 0.3.6 on the central wpaiadmin.ru service.
+Supported release-candidate baseline: WP AI Admin 2.1.15 on each managed WordPress site and Cloud Core 0.3.7 on the central wpaiadmin.ru service.
 
 ## Normal user path
 
