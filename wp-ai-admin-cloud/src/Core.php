@@ -53,7 +53,9 @@ final class Core {
         return $this->store->transaction(function() use($owner,$now) {
             $before=$this->closureInventory($owner);
             $this->account($owner,true);
-            $this->store->execute('UPDATE '.$this->store->table('sites').' SET status=?,token_sealed=? WHERE owner=? AND status=?',['revoked','',$owner,'active']);
+            // Clear credentials from every historical registration for this owner,
+            // including legacy rows already marked revoked.
+            $this->store->execute('UPDATE '.$this->store->table('sites').' SET status=?,token_sealed=? WHERE owner=?',['revoked','',$owner]);
             $this->store->execute('UPDATE '.$this->store->table('tokens').' SET revoked=1 WHERE owner=?',[$owner]);
             $this->store->execute('UPDATE '.$this->store->table('oauth_grants').' SET revoked=1 WHERE owner=?',[$owner]);
             $this->store->execute('UPDATE '.$this->store->table('oauth_codes').' SET used=1 WHERE owner=? AND used=0',[$owner]);
