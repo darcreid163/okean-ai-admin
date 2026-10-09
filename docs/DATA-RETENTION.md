@@ -1,6 +1,6 @@
 # Data Retention and Uninstall Policy
 
-Status: release-candidate policy for WP AI Admin 2.1.15 / Cloud Core 0.3.6.
+Status: release-candidate policy for WP AI Admin 2.1.15 / Cloud Core 0.3.7.
 
 ## Principle
 
