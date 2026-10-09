@@ -119,6 +119,13 @@ $core->ensureAccount('closure-owner');
 $closureSiteToken='fixture-closure-site-token-aaaaaaaa';
 $closureSite=$core->connect('closure-owner','https://closure.example.com',$closureSiteToken,$now+20);
 $closureBearer=$core->mint('closure-owner',[$closureSite['id']],['mcp:read','mcp:write'],$now+20);
+$closureActor=$core->authenticate($closureBearer['access_token'],$now+20);
+$closureNonce='closure-uncertain';
+$closureRequestKey=hash('sha256','closure-owner|'.$closureNonce);
+breject(fn()=>$core->call($closureActor,$closureSite['id'],'operation_apply',['id'=>77,'uncertain'=>true],$closureNonce,$now+20),'request_outcome_pending_reconciliation');
+$closureUncertain=$store->row('SELECT state,reserved_units,period FROM '.$store->table('requests').' WHERE owner=? AND request_key=?',['closure-owner',$closureRequestKey]);
+bcheck(($closureUncertain['state']??'')==='uncertain'&&(int)($closureUncertain['reserved_units']??0)===1,'Unable to seed uncertain request before suspension');
+
 $closureGrant='grant-'.str_repeat('c',16);
 $closureClient='client-closure';
 $closureRedirect='https://client.example/callback';
@@ -174,6 +181,20 @@ $closureRefreshRow=$store->row('SELECT used FROM '.$store->table('oauth_refresh'
 bcheck((int)($closureRefreshRow['used']??0)===0,'Suspension-triggered refresh denial consumed refresh token unexpectedly');
 $closureAccount=$store->row('SELECT disabled FROM '.$store->table('accounts').' WHERE owner=?',['closure-owner']);
 bcheck((int)($closureAccount['disabled']??0)===1,'Suspension did not disable core account');
+breject(fn()=>$core->usage('closure-owner',$now+22),'account_unavailable');
+breject(fn()=>$core->setPlan('operator','closure-owner','pro',$now+22),'account_unavailable');
+breject(fn()=>$core->foundation('closure-owner',$closureSite['id'],$now+22),'account_unavailable');
+
+// Reconciliation is the sole intentional suspended-account exception: it may
+// settle an already-uncertain request but must not restore access.
+$closureReconciled=$core->reconcile('operator','closure-owner',$closureRequestKey,'failed',[
+    'note'=>'Independent site evidence confirms the pre-suspension write did not complete.',
+    'receipt_sha256'=>str_repeat('d',64)
+],$now+22);
+bcheck(($closureReconciled['state']??'')==='failed'&&(int)($closureReconciled['charged_units']??-1)===0,'Suspended-account reconciliation failed to settle old uncertain request');
+$closureAfterReconcile=$store->row('SELECT state FROM '.$store->table('requests').' WHERE request_key=?',[$closureRequestKey]);
+bcheck(($closureAfterReconcile['state']??'')==='failed','Suspended-account reconciliation did not persist terminal state');
+breject(fn()=>$core->authenticate($closureBearer['access_token'],$now+22),'invalid_or_expired_token');
 $core->ensureAccount('closure-owner');
 breject(fn()=>$core->sites('closure-owner'),'account_unavailable');
 breject(fn()=>$core->closureInventory('closure-owner'),'account_unavailable');
