@@ -3,7 +3,7 @@
 This candidate adds revoke-first account suspension, fail-fast gateway schema validation, stricter account/bearer/OAuth revocation boundaries and expanded release qualification. Existing gateway keys and registered site/OAuth state must be preserved on upgrade from 0.3.6.
 
 
-Install Core 0.3.6 only on central wpaiadmin.ru. Native 2.1.12 remains compatible for pairing; native 2.1.13 on every site updates the administrator MCP instructions to the central gateway.
+Install candidate Core 0.3.7 only on central wpaiadmin.ru; 0.3.6 is the preserved upgrade baseline. Native 2.1.12 remains compatible for pairing; native 2.1.13 on every site updates the administrator MCP instructions to the central gateway.
 
 Open https://wpaiadmin.ru/wpai-cloud/connect, enter a canonical HTTPS site address, optionally select «Проверить связь», then «Подключить автоматически». Sign into that site's WordPress administrator account and consent. The browser returns to the central cabinet without copying tokens or application passwords. Repeat for other sites in the same central account.
 
