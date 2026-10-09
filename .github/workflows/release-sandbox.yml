@@ -239,7 +239,7 @@ jobs:
           set -euo pipefail
           chmod +x scripts/build-release-candidate.sh
           NATIVE_OUT=dist CLOUD_OUT=cloud-upgrade-build scripts/build-release-candidate.sh
-      - name: Upgrade installed Cloud Core 0.3.5 to generated 0.3.6
+      - name: Upgrade installed Cloud Core 0.3.6 to generated 0.3.7
         shell: bash
         run: |
           set -euo pipefail
@@ -250,7 +250,7 @@ jobs:
           php "$WPCLI" --path="$WP_DIR" core download
           php "$WPCLI" --path="$WP_DIR" config create --dbname=cloud_upgrade --dbuser=root --dbpass=cloud-upgrade-password --dbhost=127.0.0.1 --skip-check
           php "$WPCLI" --path="$WP_DIR" core install --url=https://cloud-upgrade.test --title='Cloud Upgrade' --admin_user=cloud-upgrade-admin --admin_password=disposable-cloud-upgrade-password --admin_email=cloud-upgrade@example.test --skip-email
-          php "$WPCLI" --path="$WP_DIR" plugin install "$GITHUB_WORKSPACE/releases/wp-ai-cloud-0.3.5/wp-ai-admin-cloud-0.3.5.zip" --activate
+          php "$WPCLI" --path="$WP_DIR" plugin install "$GITHUB_WORKSPACE/releases/wp-ai-cloud-0.3.6/wp-ai-admin-cloud-0.3.6.zip" --activate
           WPAI_CLOUD_UPGRADE_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-upgrade.php"
           CURRENT_ZIP="$(ls "$GITHUB_WORKSPACE"/cloud-upgrade-build/wp-ai-admin-cloud-*.zip | head -n1)"
           php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
