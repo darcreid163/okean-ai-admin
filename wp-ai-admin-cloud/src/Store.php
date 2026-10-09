@@ -4,6 +4,7 @@ namespace WPAICloudGateway;
 
 final class Store {
     private bool $mysql;
+    private int $transactionDepth=0;
     public function __construct(private readonly \PDO $db, private readonly string $prefix='wpai_cloud_') {
         if (!preg_match('/^[A-Za-z0-9_]{1,48}$/D',$prefix)) throw new Fault('invalid_table_prefix',503);
         $db->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);
@@ -21,22 +22,30 @@ final class Store {
     public function lock(): string { return $this->mysql?' FOR UPDATE':''; }
     public function ignore(): string { return $this->mysql?'INSERT IGNORE':'INSERT OR IGNORE'; }
     public function transaction(callable $fn): mixed {
-        // Core/OAuth operations may compose transactional primitives. If an
-        // outer transaction already exists, reuse it rather than attempting a
-        // second PDO BEGIN (which would fail and could break OAuth exchange).
-        // Exceptions still propagate to the outer owner, which performs the
-        // single rollback/commit for the whole logical operation.
-        if ($this->db->inTransaction()) return $fn();
+        // Core/OAuth operations compose transactional primitives. Track nesting
+        // ourselves: PDO::inTransaction() is not a reliable detector for the
+        // SQLite BEGIN IMMEDIATE statement used by this Store.
+        if ($this->transactionDepth>0) return $fn();
 
         if ($this->mysql) $this->db->beginTransaction(); else $this->db->exec('BEGIN IMMEDIATE');
+        $this->transactionDepth=1;
         try {
             $value=$fn();
             if ($this->mysql) $this->db->commit(); else $this->db->exec('COMMIT');
+            $this->transactionDepth=0;
             return $value;
         } catch (\Throwable $e) {
-            if ($this->db->inTransaction()) {
-                if ($this->mysql) $this->db->rollBack(); else $this->db->exec('ROLLBACK');
+            try {
+                if ($this->mysql) {
+                    if ($this->db->inTransaction()) $this->db->rollBack();
+                } else {
+                    $this->db->exec('ROLLBACK');
+                }
+            } catch (\Throwable $rollbackError) {
+                // Preserve the original failure; caller-facing safe() will
+                // still fail closed rather than exposing a second DB error.
             }
+            $this->transactionDepth=0;
             throw $e;
         }
     }
