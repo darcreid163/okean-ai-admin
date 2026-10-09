@@ -1303,6 +1303,7 @@ frame.addEventListener('load',function(){
    if(is_wp_error($post_claim_rollback_conflict)){
     $conflict_claim=OAI_DB::transition($id,array('rollback_pending'),'rollback_failed','rollback_failed');
     if($conflict_claim!==1){
+     OAI_DB::release_operation_lease($id,$rollback_lease);
      $current_row=OAI_DB::get($id);
      return new WP_Error('oai_state_conflict','Rollback state changed while recording post-claim conflict',array('status'=>409,'current_status'=>$current_row['status']??null));
     }
