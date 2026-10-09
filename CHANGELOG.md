@@ -12,6 +12,9 @@
 - Re-enabling a suspended account does not resurrect old bearer/OAuth/site access; fresh reconnect and consent are required.
 - Support nested Cloud transactions explicitly on both SQLite and MySQL so OAuth exchange can safely call transactional bearer issuance.
 - Suspended accounts block normal plan/usage/foundation access; trusted evidence-based reconciliation remains intentionally available only to settle pre-suspension uncertain requests.
+- Use account-first lock ordering for OAuth consent, code exchange and refresh rotation to avoid suspension deadlock inversions.
+- Validate current-version gateway schema at runtime even when the DB-version marker is already current; optimize MySQL validation to two metadata queries.
+- Recheck live conflict state after atomic Apply/Rollback claims so concurrent third-party changes are detected before any write.
 
 
 All notable public-release changes are recorded here. Published versions must never be reused for different package bytes.
