@@ -169,6 +169,19 @@ bcheck((int)($closureGrantRow['revoked']??0)===1,'Suspension did not revoke OAut
 $closureCodeRow=$store->row('SELECT used FROM '.$store->table('oauth_codes').' WHERE hash=?',[hash('sha256','closure-code')]);
 bcheck((int)($closureCodeRow['used']??0)===1,'Suspension did not invalidate unused OAuth code');
 $closureOAuth=new WPAICloudGateway\OAuth($store,$core,'https://wpaiadmin.ru/mcp');
+
+// No new authorization code may be created after suspension.
+$codesBeforeSuspendApprove=(int)($store->row('SELECT COUNT(*) AS n FROM '.$store->table('oauth_codes').' WHERE owner=? AND used=0',['closure-owner'])['n']??0);
+breject(fn()=>$closureOAuth->approve('closure-owner',[
+    'client_id'=>$closureClient,
+    'redirect_uri'=>$closureRedirect,
+    'resource'=>'https://wpaiadmin.ru/mcp',
+    'challenge'=>Security::b64(hash('sha256',$closureVerifier,true)),
+    'scopes'=>['mcp:read'],
+    'state'=>'closure-state'
+],[$closureSite['id']],$now+22),'account_unavailable');
+$codesAfterSuspendApprove=(int)($store->row('SELECT COUNT(*) AS n FROM '.$store->table('oauth_codes').' WHERE owner=? AND used=0',['closure-owner'])['n']??0);
+bcheck($codesAfterSuspendApprove===$codesBeforeSuspendApprove,'Suspended account created a new OAuth authorization code');
 breject(fn()=>$closureOAuth->exchange([
     'grant_type'=>'authorization_code','client_id'=>$closureClient,'code'=>'closure-code',
     'redirect_uri'=>$closureRedirect,'code_verifier'=>$closureVerifier,'resource'=>'https://wpaiadmin.ru/mcp'
