@@ -82,6 +82,16 @@ class OAI_DB {
  public static function insert($data){global $wpdb; $t=self::table(); $ok=$wpdb->insert($t,$data); if(!$ok) return new WP_Error('oai_db','Could not create operation',array('status'=>500,'db_error'=>$wpdb->last_error)); return (int)$wpdb->insert_id;}
  public static function get($id){global $wpdb; return $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE id=%d',$id),ARRAY_A);}
  public static function update($id,$data){global $wpdb; return $wpdb->update(self::table(),$data,array('id'=>$id));}
+ public static function transition($id,$from,$status,$phase=null){
+  global $wpdb;
+  $from=array_values(array_filter(array_map('sanitize_key',(array)$from)));
+  $status=sanitize_key((string)$status);
+  if(!$from||$status==='')return false;
+  $placeholders=implode(',',array_fill(0,count($from),'%s'));
+  $sql='UPDATE '.self::table().' SET status=%s, phase=%s WHERE id=%d AND status IN ('.$placeholders.')';
+  $args=array_merge(array($status,sanitize_key((string)($phase??$status)),absint($id)),$from);
+  return $wpdb->query($wpdb->prepare($sql,$args));
+ }
  public static function all($limit=200){global $wpdb; return $wpdb->get_results($wpdb->prepare('SELECT * FROM '.self::table().' ORDER BY id DESC LIMIT %d',$limit),ARRAY_A);}
  public static function count_all(){global $wpdb; return (int)$wpdb->get_var('SELECT COUNT(*) FROM '.self::table());}
  public static function page($limit=50,$offset=0){global $wpdb;$limit=max(1,min(200,(int)$limit));$offset=max(0,(int)$offset);return $wpdb->get_results($wpdb->prepare('SELECT * FROM '.self::table().' ORDER BY id DESC LIMIT %d OFFSET %d',$limit,$offset),ARRAY_A);}
