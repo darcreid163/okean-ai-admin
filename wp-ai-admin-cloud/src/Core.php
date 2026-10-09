@@ -260,7 +260,11 @@ final class Core {
     public function reconcile(string $operator,string $owner,string $key,string $outcome,array $evidence,int $now): array {
         if (!preg_match('/^[a-f0-9]{64}$/D',$key) || !in_array($outcome,['succeeded','failed'],true) || !is_string($evidence['note']??null) || strlen($evidence['note'])<20 || strlen($evidence['note'])>2000 || !is_string($evidence['receipt_sha256']??null) || !preg_match('/^[a-f0-9]{64}$/D',$evidence['receipt_sha256'])) throw new Fault('operator_receipt_evidence_required');
         return $this->store->transaction(function() use($operator,$owner,$key,$outcome,$evidence,$now) {
-            $this->store->row('SELECT owner FROM '.$this->store->table('accounts').' WHERE owner=?'.$this->store->lock(),[$owner]);
+            // Trusted reconciliation is deliberately allowed for a suspended
+            // account so an uncertain pre-suspension request can release/settle
+            // its reservation. This path never restores account/site/token access.
+            $account=$this->store->row('SELECT owner,disabled FROM '.$this->store->table('accounts').' WHERE owner=?'.$this->store->lock(),[$owner]);
+            if(!$account) throw new Fault('account_unavailable',403);
             $row=$this->store->row('SELECT * FROM '.$this->store->table('requests').' WHERE owner=? AND request_key=?'.$this->store->lock(),[$owner,$key]);
             // Dispatching requests may still be in flight. Operator reconciliation is restricted to explicit uncertain outcomes.
             if (!$row || $row['state']!=='uncertain') throw new Fault('request_not_reconcilable',409);
