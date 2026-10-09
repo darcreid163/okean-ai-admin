@@ -128,7 +128,10 @@ class OAI_DB {
  public static function clear_operation_leases(){
   global $wpdb;
   $pattern=$wpdb->esc_like('oai_operation_lease_').'%';
-  return $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",$pattern));
+  $keys=$wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 1000",$pattern));
+  $deleted=0;
+  foreach((array)$keys as $key)if(is_string($key)&&str_starts_with($key,'oai_operation_lease_')&&delete_option($key))$deleted++;
+  return $deleted;
  }
  public static function all($limit=200){global $wpdb; return $wpdb->get_results($wpdb->prepare('SELECT * FROM '.self::table().' ORDER BY id DESC LIMIT %d',$limit),ARRAY_A);}
  public static function count_all(){global $wpdb; return (int)$wpdb->get_var('SELECT COUNT(*) FROM '.self::table());}
