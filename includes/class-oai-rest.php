@@ -900,6 +900,9 @@ frame.addEventListener('load',function(){
    // The native plugin may coexist with Cloud Core on wpaiadmin.ru; allowing
    // option_update to touch these keys would bypass the Cloud admin/OAuth
    // lifecycle and could corrupt wrapped keys, beta enrollment or schema state.
+   if(str_starts_with($key,'oai_')){
+    return new WP_Error('oai_option_control_plane','WP AI Admin control-plane option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   }
    if(str_starts_with($key,'wpai_gateway_')||str_starts_with($key,'wpai_cloud_')){
     return new WP_Error('oai_option_control_plane','Cloud control-plane option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
    }
