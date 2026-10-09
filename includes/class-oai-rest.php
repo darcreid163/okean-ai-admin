@@ -1152,37 +1152,23 @@ frame.addEventListener('load',function(){
    $after=json_decode((string)$r['after_data'],true); $before=json_decode((string)$r['before_data'],true);
    $woo_guard=self::validate_woo_payload($r['type'],$after);if(is_wp_error($woo_guard))return $woo_guard;
 
-   // Claim the operation before any live conflict check. This prevents a
-   // concurrent Reject or second Apply from winning after we have decided to
-   // execute. Only the single request that owns approved -> applying proceeds.
+   // First conflict read avoids claiming an operation that is already stale.
+   $pre_conflict=self::apply_conflict_check($r,$before,$meta);
+   if(is_wp_error($pre_conflict))return self::record_apply_conflict($id,$r,$before,$pre_conflict);
+
+   // Claim only after the preliminary check. Reject/second Apply can no longer
+   // win once approved -> applying succeeds.
    $claimed=OAI_DB::transition($id,array('approved'),'applying','applying');
    if($claimed!==1){
     $current_row=OAI_DB::get($id);
     return new WP_Error('oai_state_conflict','Operation state changed before Apply could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
    }
 
-   // Every existing live target must still match the sandbox snapshot before apply.
-   // Page creation is the only operation whose target is intentionally created by apply.
-   if($r['type']!=='elementor_page_create' && !(class_exists('OAI_P0')&&OAI_P0::is_created_artifact($r['type']))){
-    list($cur_exists,$current_now)=self::current($r['type'],$r['target']);
-    $before_exists=array_key_exists('before_exists',$meta)?(bool)$meta['before_exists']:true;
-    $conflict=false;
-    if($cur_exists !== $before_exists){
-     $conflict=true;
-    } elseif($cur_exists){
-     if($r['type']==='woocommerce_product'){
-      if(!self::same_snapshot($r['type'],$current_now,$before)) $conflict=true;
-     } else {
-      $conflict=!self::same_snapshot($r['type'],$current_now,$before);
-     }
-    }
-    if($conflict){
-     OAI_DB::update($id,array('status'=>'apply_failed','phase'=>'apply_failed'));
-     OAI_Receipts::store($id,array('event'=>'apply_failed','status'=>'apply_failed','reason'=>'conflict','at'=>gmdate('c'),'current'=>$current_now,'expected_before'=>$before),OAI_Proof::make($id));
-     OAI_Audit::log('apply_failed',array_merge($r,array('status'=>'apply_failed')),array('reason'=>'conflict','current'=>$current_now,'expected_before'=>$before));
-     return new WP_Error('oai_conflict','Target changed since sandbox snapshot',array('status'=>409,'current'=>$current_now,'expected_before'=>$before));
-    }
-   }
+   // Repeat the authoritative conflict check after the claim to close the
+   // read->claim race window. No live write has started yet, so a conflict is
+   // a normal deterministic apply_failed outcome, never an uncertain write.
+   $post_claim_conflict=self::apply_conflict_check($r,$before,$meta);
+   if(is_wp_error($post_claim_conflict))return self::record_apply_conflict($id,$r,$before,$post_claim_conflict);
 
    try {
     if($r['type']==='woodmart_theme_setting'){
@@ -1298,6 +1284,25 @@ frame.addEventListener('load',function(){
    OAI_Receipts::store($id,array('event'=>'rollback','status'=>'rolled_back','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
   }
   return self::row($id);
+ }
+
+ private static function apply_conflict_check($r,$before,$meta=array()){
+  if($r['type']==='elementor_page_create' || (class_exists('OAI_P0')&&OAI_P0::is_created_artifact($r['type'])))return true;
+  list($cur_exists,$current_now)=self::current($r['type'],$r['target']);
+  $before_exists=array_key_exists('before_exists',$meta)?(bool)$meta['before_exists']:true;
+  $conflict=($cur_exists!==$before_exists);
+  if(!$conflict && $cur_exists)$conflict=!self::same_snapshot($r['type'],$current_now,$before);
+  if(!$conflict)return true;
+  return new WP_Error('oai_conflict','Target changed since sandbox snapshot',array('status'=>409,'current'=>$current_now,'expected_before'=>$before));
+ }
+
+ private static function record_apply_conflict($id,$r,$before,$conflict){
+  $details=is_wp_error($conflict)?$conflict->get_error_data():array();
+  $current=is_array($details)&&array_key_exists('current',$details)?$details['current']:null;
+  OAI_DB::update($id,array('status'=>'apply_failed','phase'=>'apply_failed'));
+  OAI_Receipts::store($id,array('event'=>'apply_failed','status'=>'apply_failed','reason'=>'conflict','at'=>gmdate('c'),'current'=>$current,'expected_before'=>$before),OAI_Proof::make($id));
+  OAI_Audit::log('apply_failed',array_merge($r,array('status'=>'apply_failed')),array('reason'=>'conflict','current'=>$current,'expected_before'=>$before));
+  return is_wp_error($conflict)?$conflict:new WP_Error('oai_conflict','Target changed since sandbox snapshot',array('status'=>409,'current'=>$current,'expected_before'=>$before));
  }
 
  private static function recover_inflight_apply($id,$r,$meta=array()){
