@@ -269,6 +269,13 @@ require_once ABSPATH.'wp-admin/includes/user.php';
 wp_delete_user((int)$closureUser);
 wp_delete_user((int)$otherClosureUser);
 
+wp_set_current_user($adminId);
+$deletedTargetReactivate=new WP_REST_Request('POST','/wpai-cloud/v1/accounts/'.$closureUser.'/reactivate');
+$deletedTargetReactivate->set_header('content-type','application/json');
+$deletedTargetReactivate->set_body(wp_json_encode(array('confirm'=>'REACTIVATE')));
+$deletedTargetReactivateResponse=rest_do_request($deletedTargetReactivate);
+cloud_release_expect($deletedTargetReactivateResponse->get_status()===409&&(($deletedTargetReactivateResponse->get_data()['error']??'')==='target_account_ineligible'),'Deleted/ineligible WordPress identity could be reactivated as a Core account');
+
 wp_set_current_user(0);
 $bearerOnly=new WP_REST_Request('GET','/wpai-cloud/v1/sites');
 $bearerOnly->set_header('authorization','Bearer wpai_cloud_'.str_repeat('A',43));
