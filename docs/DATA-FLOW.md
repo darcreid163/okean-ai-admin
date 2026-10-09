@@ -1,6 +1,6 @@
 # WP AI Admin — Technical Data Flow
 
-Status: technical release-candidate disclosure for WP AI Admin 2.1.15 / Cloud Core 0.3.6.  
+Status: technical release-candidate disclosure for WP AI Admin 2.1.15 / Cloud Core 0.3.7.  
 This document describes implemented data paths. It is not a substitute for the final Privacy Policy or Terms of Service.
 
 ## Actors
