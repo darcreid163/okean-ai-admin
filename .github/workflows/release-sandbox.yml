@@ -490,62 +490,14 @@ jobs:
           CLOUD_ZIP="$(ls cloud-dist/wp-ai-admin-cloud-*.zip | head -n1)"
           test -n "$NATIVE_ZIP" -a -n "$CLOUD_ZIP"
 
-          # Package topology is intentional: native and central Cloud Core are
-          # separate installables and must never be accidentally nested together.
+          # Native and Cloud Core are separate installables.
           test "$(unzip -Z1 "$NATIVE_ZIP" | grep -Ec '^okean-ai-admin/')" -gt 0
           test "$(unzip -Z1 "$NATIVE_ZIP" | grep -Ec '(^|/)wp-ai-admin-cloud(/|$)')" -eq 0
-          test "$(unzip -Z1 "$NATIVE_ZIP" | grep -Ec '^okean-ai-admin/okean-ai-admin\.php
-            echo "Scanning $ZIP"
-            if unzip -Z1 "$ZIP" | grep -E '(^|/)(tests?|\.git|node_modules|vendor/bin|coverage|\.env)(/|$)'; then
-              echo "Development-only path found in $ZIP"; exit 1
-            fi
-            TMP="$(mktemp -d)"
-            unzip -qq "$ZIP" -d "$TMP"
-            if grep -RIlE --binary-files=without-match -- '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{32,}' "$TMP"; then
-              echo "Credential-like material found inside release ZIP"; rm -rf "$TMP"; exit 1
-            fi
-            if grep -RIl --binary-files=without-match -- 'fixture-[A-Za-z0-9_-]*token|disposable-.*password|release-sandbox-password' "$TMP"; then
-              echo "Test fixture credential marker found inside release ZIP"; rm -rf "$TMP"; exit 1
-            fi
-            rm -rf "$TMP"
-          done
-      - name: Upload release provenance evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-release-provenance
-          path: |
-            dist/wp-ai-admin-*.zip
-            cloud-dist/wp-ai-admin-cloud-*.zip
-            dist/PROVENANCE.txt
-          if-no-files-found: error
-)" -eq 1
+          test "$(unzip -Z1 "$NATIVE_ZIP" | grep -Ec '^okean-ai-admin/okean-ai-admin\.php$')" -eq 1
+
           test "$(unzip -Z1 "$CLOUD_ZIP" | grep -Ec '^wp-ai-admin-cloud/')" -gt 0
           test "$(unzip -Z1 "$CLOUD_ZIP" | grep -Ec '(^|/)okean-ai-admin(/|$)')" -eq 0
-          test "$(unzip -Z1 "$CLOUD_ZIP" | grep -Ec '^wp-ai-admin-cloud/wp-ai-admin-cloud\.php
-            echo "Scanning $ZIP"
-            if unzip -Z1 "$ZIP" | grep -E '(^|/)(tests?|\.git|node_modules|vendor/bin|coverage|\.env)(/|$)'; then
-              echo "Development-only path found in $ZIP"; exit 1
-            fi
-            TMP="$(mktemp -d)"
-            unzip -qq "$ZIP" -d "$TMP"
-            if grep -RIlE --binary-files=without-match -- '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{32,}' "$TMP"; then
-              echo "Credential-like material found inside release ZIP"; rm -rf "$TMP"; exit 1
-            fi
-            if grep -RIl --binary-files=without-match -- 'fixture-[A-Za-z0-9_-]*token|disposable-.*password|release-sandbox-password' "$TMP"; then
-              echo "Test fixture credential marker found inside release ZIP"; rm -rf "$TMP"; exit 1
-            fi
-            rm -rf "$TMP"
-          done
-      - name: Upload release provenance evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-release-provenance
-          path: |
-            dist/wp-ai-admin-*.zip
-            cloud-dist/wp-ai-admin-cloud-*.zip
-            dist/PROVENANCE.txt
-          if-no-files-found: error
-)" -eq 1
+          test "$(unzip -Z1 "$CLOUD_ZIP" | grep -Ec '^wp-ai-admin-cloud/wp-ai-admin-cloud\.php$')" -eq 1
 
           for ZIP in "$NATIVE_ZIP" "$CLOUD_ZIP"; do
             echo "Scanning $ZIP"
