@@ -36,7 +36,7 @@ All notable public-release changes are recorded here. Published versions must ne
 - Protect `rollback_pending` as an active operation during cleanup.
 - Add revoke-first self-service central account suspension with non-destructive closure preview; suspension revokes bearer/OAuth/site access and clears sealed site credentials while retaining ledger/audit/balance evidence.
 - Scrub sealed site credentials from all historical registrations during suspension, including legacy rows already marked revoked.
-- Add a real Cloud Core 0.3.5 → 0.3.6 ZIP upgrade acceptance preserving gateway keys, account/site identity, bearer and OAuth grants.
+- Add a real Cloud Core 0.3.6 → 0.3.7 ZIP upgrade acceptance preserving gateway keys, account/site identity, bearer and OAuth grants.
 - Use one canonical deterministic release builder across fresh install, native upgrade, Cloud upgrade and provenance jobs.
 - Fail fast with `gateway_schema_incompatible` on partial gateway schemas and reject non-InnoDB MySQL gateway tables.
 
@@ -46,7 +46,7 @@ All notable public-release changes are recorded here. Published versions must ne
 
 ### Infrastructure
 - Native candidate version advanced from 2.1.14 because executable bytes changed.
-- Cloud Core remains 0.3.6.
+- Cloud Core candidate advanced separately to 0.3.7 after executable Cloud hardening.
 - Final live acceptance remains a separate P0 gate.
 
 ## 2.1.14 — 2026-10-07
