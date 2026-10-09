@@ -116,7 +116,9 @@ final class WordPress {
             $p=self::body($r);
             if(($p['confirm']??null)!=='REACTIVATE') throw new Fault('reactivation_confirmation_required',409);
             self::owner();
-            return self::core()->reactivateAccount((string)get_current_user_id(),$r['owner'],time());
+            $target=(string)$r['owner'];
+            if(!Settings::eligible($target)) throw new Fault('target_account_ineligible',409);
+            return self::core()->reactivateAccount((string)get_current_user_id(),$target,time());
         });
         $admin('/accounts/(?P<owner>[0-9]+)/plan',function($r) { $p=self::body($r); if (!is_string($p['plan']??null)) throw new Fault('plan_required'); self::owner(); self::core()->setPlan((string)get_current_user_id(),$r['owner'],$p['plan'],time()); return ['updated'=>true]; });
         $admin('/accounts/(?P<owner>[0-9]+)/requests/(?P<key>[a-f0-9]{64})/reconcile',function($r) { $p=self::body($r); if(!is_string($p['outcome']??null)||!is_array($p['evidence']??null)) throw new Fault('operator_receipt_evidence_required'); self::owner(); return self::core()->reconcile((string)get_current_user_id(),$r['owner'],$r['key'],$p['outcome'],$p['evidence'],time()); });
