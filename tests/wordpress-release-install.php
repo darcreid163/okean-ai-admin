@@ -148,6 +148,22 @@ release_install_expect(!is_wp_error($proofOp)&&!empty($proofOp['id']),'Unable to
 $preflightProof=OAI_Proof::make((int)$proofOp['id']);
 release_install_expect(($preflightProof['proof_kind']??'')==='preflight'&&empty($preflightProof['verified'])&&empty($preflightProof['execution_proof']),'Pending operation did not return preflight proof');
 
+// Lifecycle race semantics: stale contenders may never overwrite the winner.
+$approveRace=OAI_DB::transition((int)$proofOp['id'],array('pending'),'approved','approved');
+$staleReject=OAI_DB::transition((int)$proofOp['id'],array('pending'),'rejected','rejected');
+release_install_expect($approveRace===1&&$staleReject===0&&((OAI_DB::get((int)$proofOp['id'])['status']??'')==='approved'),'Stale Reject overwrote winning Approve');
+OAI_DB::update((int)$proofOp['id'],array('status'=>'pending','phase'=>'awaiting_approval'));
+
+$rejectRace=OAI_DB::transition((int)$proofOp['id'],array('pending'),'rejected','rejected');
+$staleApprove=OAI_DB::transition((int)$proofOp['id'],array('pending'),'approved','approved');
+release_install_expect($rejectRace===1&&$staleApprove===0&&((OAI_DB::get((int)$proofOp['id'])['status']??'')==='rejected'),'Stale Approve resurrected winning Reject');
+OAI_DB::update((int)$proofOp['id'],array('status'=>'pending','phase'=>'awaiting_approval'));
+
+$expiryRace=OAI_DB::transition((int)$proofOp['id'],array('pending'),'expired','expired');
+$staleExpiry=OAI_DB::transition((int)$proofOp['id'],array('pending'),'expired','expired');
+release_install_expect($expiryRace===1&&$staleExpiry===0,'Expiry lifecycle claim was not single-winner atomic');
+OAI_DB::update((int)$proofOp['id'],array('status'=>'pending','phase'=>'awaiting_approval'));
+
 $proofApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/approve');$proofApprove->set_header('X-WP-Nonce',$nonce);
 $proofApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/apply');$proofApply->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApprove)),'Proof fixture approval failed');
