@@ -74,7 +74,13 @@ final class OAuth {
             foreach(['code','redirect_uri','code_verifier','resource'] as $k)if(!is_string($p[$k]??null))throw new Fault('invalid_request');
             if(!preg_match('/^[A-Za-z0-9._~-]{43,128}$/D',$p['code_verifier']))throw new Fault('invalid_grant');
             return $this->store->transaction(function()use($p,$now,$eligible){
-                $c=$this->store->row('SELECT * FROM '.$this->store->table('oauth_codes').' WHERE hash=?'.$this->store->lock(),[hash('sha256',$p['code'])]);
+                $hash=hash('sha256',$p['code']);
+                // Discover owner without a row lock, then establish the global
+                // account-first lock order shared with suspension/connect/mint.
+                $probe=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_codes').' WHERE hash=?',[$hash]);
+                if(!$probe)throw new Fault('invalid_grant');
+                $this->core->assertActiveAccount((string)$probe['owner'],true);
+                $c=$this->store->row('SELECT * FROM '.$this->store->table('oauth_codes').' WHERE hash=?'.$this->store->lock(),[$hash]);
                 if(!$c||(int)$c['used']!==0||(int)$c['expires']<=$now||$c['client']!==$p['client_id']||$c['redirect']!==$p['redirect_uri']||$c['resource']!==$p['resource']||$c['resource']!==$this->resource||!hash_equals($c['challenge'],Security::b64(hash('sha256',$p['code_verifier'],true))))throw new Fault('invalid_grant');
                 if(!$eligible($c['owner']))throw new Fault('access_denied',403);
                 $grant=['id'=>bin2hex(random_bytes(16)),'owner'=>$c['owner'],'client'=>$c['client'],'resource'=>$c['resource'],'scopes'=>$c['scopes'],'sites'=>$c['sites'],'expires'=>$now+2592000];
@@ -86,7 +92,15 @@ final class OAuth {
         if(($p['grant_type']??'')!=='refresh_token'||!is_string($p['refresh_token']??null))throw new Fault('unsupported_grant_type');
         // Returning the error marker commits replay revocation rather than rolling it back.
         $result=$this->store->transaction(function()use($p,$now,$eligible){
-            $r=$this->store->row('SELECT * FROM '.$this->store->table('oauth_refresh').' WHERE hash=?'.$this->store->lock(),[hash('sha256',$p['refresh_token'])]);
+            $hash=hash('sha256',$p['refresh_token']);
+            // Establish the same account-first lock order used by suspension.
+            $probeRefresh=$this->store->row('SELECT grant_id FROM '.$this->store->table('oauth_refresh').' WHERE hash=?',[$hash]);
+            if(!$probeRefresh)throw new Fault('invalid_grant');
+            $probeGrant=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_grants').' WHERE id=?',[$probeRefresh['grant_id']]);
+            if(!$probeGrant)throw new Fault('invalid_grant');
+            $this->core->assertActiveAccount((string)$probeGrant['owner'],true);
+
+            $r=$this->store->row('SELECT * FROM '.$this->store->table('oauth_refresh').' WHERE hash=?'.$this->store->lock(),[$hash]);
             if(!$r)throw new Fault('invalid_grant');
             $g=$this->store->row('SELECT * FROM '.$this->store->table('oauth_grants').' WHERE id=?'.$this->store->lock(),[$r['grant_id']]);
             if(!$g||$g['client']!==$p['client_id']||$g['resource']!==$this->resource||($p['resource']??$g['resource'])!==$g['resource'])throw new Fault('invalid_grant');
