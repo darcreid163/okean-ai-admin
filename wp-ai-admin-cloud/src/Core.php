@@ -33,6 +33,12 @@ final class Core {
         $this->account($owner);
         return $this->store->rows('SELECT id,home,plugin_site_id,installation_id,status,created_at FROM '.$this->store->table('sites').' WHERE owner=? AND status=? ORDER BY created_at',[$owner,'active']);
     }
+    public function consentSiteIds(string $owner): array {
+        // Must be called from the OAuth consent transaction. Locking the
+        // account serializes code issuance with account suspension.
+        $this->account($owner,true);
+        return array_column($this->store->rows('SELECT id FROM '.$this->store->table('sites').' WHERE owner=? AND status=? ORDER BY created_at',[$owner,'active']),'id');
+    }
     public function closureInventory(string $owner): array {
         $this->account($owner);
         $count=function(string $table,string $where,array $args) {
