@@ -106,6 +106,13 @@ $store->execute('INSERT INTO '.$store->table('oauth_codes').' (hash,owner,client
     hash('sha256','closure-code'),'closure-owner','client-closure','https://client.example/callback','https://wpaiadmin.ru/mcp',
     Security::canonical(['mcp:read']),Security::canonical([$closureSite['id']]),str_repeat('a',43),$now+600
 ]);
+// Legacy revoked row with a leftover sealed credential must also be scrubbed.
+$legacyRevoked='reg_'.str_repeat('f',32);
+$store->execute('INSERT INTO '.$store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[
+    $legacyRevoked,'closure-owner','https://closure-legacy.example.com',hash('sha256','https://closure-legacy.example.com'),
+    'plugin-closure-legacy','install-closure-legacy','legacy-sealed-credential','revoked',$now+19
+]);
+
 $inventory=$core->closureInventory('closure-owner');
 bcheck(($inventory['active_sites']??0)===1&&($inventory['active_tokens']??0)===1&&($inventory['active_oauth_grants']??0)===1&&($inventory['unused_oauth_codes']??0)===1,'Closure inventory counts wrong');
 $inventoryEncoded=Security::canonical($inventory);
@@ -116,6 +123,8 @@ bcheck(!empty($suspended['suspended'])&&!empty($suspended['access_revoked'])&&!e
 breject(fn()=>$core->authenticate($closureBearer['access_token'],$now+22),'invalid_or_expired_token');
 $closureSiteRow=$store->row('SELECT status,token_sealed FROM '.$store->table('sites').' WHERE id=?',[$closureSite['id']]);
 bcheck(($closureSiteRow['status']??'')==='revoked'&&($closureSiteRow['token_sealed']??'')==='','Suspension did not revoke site and clear sealed credential');
+$legacyRevokedRow=$store->row('SELECT status,token_sealed FROM '.$store->table('sites').' WHERE id=?',[$legacyRevoked]);
+bcheck(($legacyRevokedRow['status']??'')==='revoked'&&($legacyRevokedRow['token_sealed']??'')==='','Suspension left credential material in legacy revoked site row');
 $closureGrantRow=$store->row('SELECT revoked FROM '.$store->table('oauth_grants').' WHERE id=?',[$closureGrant]);
 bcheck((int)($closureGrantRow['revoked']??0)===1,'Suspension did not revoke OAuth grant');
 $closureCodeRow=$store->row('SELECT used FROM '.$store->table('oauth_codes').' WHERE hash=?',[hash('sha256','closure-code')]);
