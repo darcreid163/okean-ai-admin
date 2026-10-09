@@ -45,3 +45,23 @@ Public commercial release must provide a documented account/site deletion proces
 ## Secrets
 
 Raw access tokens, refresh tokens, pairing credentials, authorization codes and PKCE verifiers must not be retained in plaintext. Hashed/sealed records and sanitized audit evidence may persist only as required by the product's security, reconciliation and accounting model.
+
+
+## Central account suspension
+
+The release candidate now provides a revoke-first self-service suspension flow.
+
+Before suspension, the authenticated owner can request a non-destructive closure preview containing counts only. It does not return site credentials, bearer tokens or OAuth secrets.
+
+Confirmed suspension:
+- disables the Cloud Core account;
+- revokes Cloud bearer tokens;
+- revokes OAuth grants and invalidates unused authorization codes;
+- marks active site registrations revoked;
+- clears sealed site credentials from active registrations;
+- preserves request ledger, audit and balance evidence;
+- does not perform destructive data deletion.
+
+A suspended account is not automatically re-enabled by normal account bootstrap/ensure logic.
+
+Permanent deletion remains a separate future process governed by the final retention/privacy policy.
