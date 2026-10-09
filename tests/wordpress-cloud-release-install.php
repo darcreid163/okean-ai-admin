@@ -181,6 +181,28 @@ try{ \WPAICloudGateway\WordPress::authenticateHeader('Bearer '.$subscriberBearer
 catch(\WPAICloudGateway\Fault $e){ $bearerRevoked=$e->reason==='account_unavailable'; }
 cloud_release_expect($bearerRevoked,'Removing owner eligibility did not invalidate an already-issued Cloud bearer');
 
+// Deleting a central WordPress user must invalidate an already-issued bearer on the next request.
+$deletedUser=wp_create_user('cloud-release-deleted-'.wp_generate_password(8,false,false),'disposable-password','cloud-release-deleted@example.test');
+cloud_release_expect(!is_wp_error($deletedUser),'Unable to create deleted-owner fixture');
+update_option('wpai_gateway_beta_users',array((int)$deletedUser),false);
+$subscriberCore->ensureAccount((string)$deletedUser);
+$deletedBearer='wpai_cloud_'.\WPAICloudGateway\Security::b64(random_bytes(32));
+$gatewayStore->execute('INSERT INTO '.$gatewayStore->table('tokens').' (hash,owner,scopes,site_ids,expires_at,revoked) VALUES (?,?,?,?,?,0)',array(
+    hash('sha256',$deletedBearer),(string)$deletedUser,
+    \WPAICloudGateway\Security::canonical(array('mcp:read')),
+    \WPAICloudGateway\Security::canonical(array()),
+    time()+3600
+));
+$deletedActor=\WPAICloudGateway\WordPress::authenticateHeader('Bearer '.$deletedBearer);
+cloud_release_expect(($deletedActor['owner']??'')===(string)$deletedUser,'Deleted-owner fixture bearer was not initially valid');
+require_once ABSPATH.'wp-admin/includes/user.php';
+cloud_release_expect(wp_delete_user((int)$deletedUser)===true,'Unable to delete central owner fixture');
+$deletedBearerRevoked=false;
+try{ \WPAICloudGateway\WordPress::authenticateHeader('Bearer '.$deletedBearer); }
+catch(\WPAICloudGateway\Fault $e){ $deletedBearerRevoked=$e->reason==='account_unavailable'; }
+cloud_release_expect($deletedBearerRevoked,'Deleted central WordPress owner retained existing Cloud bearer access');
+update_option('wpai_gateway_beta_users',array(),false);
+
 wp_set_current_user(0);
 $bearerOnly=new WP_REST_Request('GET','/wpai-cloud/v1/sites');
 $bearerOnly->set_header('authorization','Bearer wpai_cloud_'.str_repeat('A',43));
