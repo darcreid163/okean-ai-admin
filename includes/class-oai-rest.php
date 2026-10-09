@@ -1090,14 +1090,17 @@ frame.addEventListener('load',function(){
   // or apply an operation against a stale snapshot; rollback of an already
   // applied operation remains available independently.
   if(in_array($action,array('approve','apply'),true) && in_array($r['status'],array('pending','approved'),true) && !empty($r['expires_at']) && strtotime((string)$r['expires_at']) < time()){
-   // Elementor page creation uses a private draft as a preview artifact. An
-   // expired operation must not leave orphaned draft pages behind.
+   $expired_claim=OAI_DB::transition($id,array((string)$r['status']),'expired','expired');
+   if($expired_claim!==1){
+    $current_row=OAI_DB::get($id);
+    return new WP_Error('oai_state_conflict','Operation state changed before expiry could be claimed',array('status'=>409,'current_status'=>$current_row['status']??null));
+   }
+   // Only the request that atomically claimed expiry may clean sandbox artifacts.
    if($r['type']==='elementor_page_create'){
     $preview_id=absint($meta['preview_page_id']??0);
     if($preview_id && get_post($preview_id))wp_delete_post($preview_id,true);
    }
    if(class_exists('OAI_P0')&&OAI_P0::is_created_artifact($r['type']))OAI_P0::cleanup_artifact($r['type'],$r['target'],$meta);
-   OAI_DB::update($id,array('status'=>'expired','phase'=>'expired'));
    OAI_Audit::log('expired',array_merge($r,array('status'=>'expired')),array('reason'=>'sandbox_expired','preview_artifact_cleaned'=>($r['type']==='elementor_page_create')));
    OAI_Receipts::store($id,array('event'=>'expired','status'=>'expired','at'=>gmdate('c'),'reason'=>'sandbox_expired','preview_artifact_cleaned'=>($r['type']==='elementor_page_create')),OAI_Proof::make($id));
    return new WP_Error('oai_expired','Sandbox operation has expired; create a fresh snapshot before approval/apply',array('status'=>409,'expires_at'=>$r['expires_at']));
@@ -1105,14 +1108,24 @@ frame.addEventListener('load',function(){
 
   if($action==='approve'){
    if($r['status']!=='pending')return new WP_Error('oai_state','Operation is not pending',array('status'=>409));
-   OAI_DB::update($id,array('status'=>'approved','phase'=>'approved','approved_at'=>current_time('mysql',true)));
+   $approved_claim=OAI_DB::transition($id,array('pending'),'approved','approved');
+   if($approved_claim!==1){
+    $current_row=OAI_DB::get($id);
+    return new WP_Error('oai_state_conflict','Operation state changed before Approve could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
+   }
+   OAI_DB::update($id,array('approved_at'=>current_time('mysql',true)));
    OAI_Audit::log('approved',array_merge($r,array('status'=>'approved')));
   }
   elseif($action==='reject'){
    if(!in_array($r['status'],array('pending','approved'),true))return new WP_Error('oai_state','Cannot reject',array('status'=>409));
+   $rejected_claim=OAI_DB::transition($id,array((string)$r['status']),'rejected','rejected');
+   if($rejected_claim!==1){
+    $current_row=OAI_DB::get($id);
+    return new WP_Error('oai_state_conflict','Operation state changed before Reject could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
+   }
    if($r['type']==='elementor_page_create' && !empty($meta['preview_page_id']))wp_delete_post(absint($meta['preview_page_id']),true);
    if(class_exists('OAI_P0')&&OAI_P0::is_created_artifact($r['type']))OAI_P0::cleanup_artifact($r['type'],$r['target'],$meta);
-   OAI_DB::update($id,array('status'=>'rejected','phase'=>'rejected','rejected_at'=>current_time('mysql',true)));
+   OAI_DB::update($id,array('rejected_at'=>current_time('mysql',true)));
    OAI_Audit::log('rejected',array_merge($r,array('status'=>'rejected')));
   }
   elseif($action==='apply'){
@@ -1134,7 +1147,15 @@ frame.addEventListener('load',function(){
    $after=json_decode((string)$r['after_data'],true); $before=json_decode((string)$r['before_data'],true);
    $woo_guard=self::validate_woo_payload($r['type'],$after);if(is_wp_error($woo_guard))return $woo_guard;
 
-   // Conflict checks happen BEFORE entering applying, so a rejected conflict can never leave the operation stuck in applying.
+   // Claim the operation before any live conflict check. This prevents a
+   // concurrent Reject or second Apply from winning after we have decided to
+   // execute. Only the single request that owns approved -> applying proceeds.
+   $claimed=OAI_DB::transition($id,array('approved'),'applying','applying');
+   if($claimed!==1){
+    $current_row=OAI_DB::get($id);
+    return new WP_Error('oai_state_conflict','Operation state changed before Apply could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
+   }
+
    // Every existing live target must still match the sandbox snapshot before apply.
    // Page creation is the only operation whose target is intentionally created by apply.
    if($r['type']!=='elementor_page_create' && !(class_exists('OAI_P0')&&OAI_P0::is_created_artifact($r['type']))){
@@ -1158,11 +1179,6 @@ frame.addEventListener('load',function(){
     }
    }
 
-   $claimed=OAI_DB::transition($id,array('approved'),'applying','applying');
-   if($claimed!==1){
-    $current_row=OAI_DB::get($id);
-    return new WP_Error('oai_state_conflict','Operation state changed before Apply could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
-   }
    try {
     if($r['type']==='woodmart_theme_setting'){
      $err=OAI_Woodmart::write($r['target'],$after,$before,$meta['native_input']??null);
