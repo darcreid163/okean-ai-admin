@@ -171,7 +171,9 @@ release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApprove)),'Pr
 $claim1=OAI_DB::transition((int)$proofOp['id'],array('approved'),'applying','applying');
 $claim2=OAI_DB::transition((int)$proofOp['id'],array('approved'),'applying','applying');
 release_install_expect($claim1===1&&$claim2===0,'Apply lifecycle claim was not single-winner atomic');
-OAI_DB::update((int)$proofOp['id'],array('status'=>'approved','phase'=>'approved'));
+$applyRecoveryReady=OAI_REST::sandbox_action($proofApply);
+release_install_expect(is_wp_error($applyRecoveryReady)&&$applyRecoveryReady->get_error_code()==='oai_apply_recovery_ready','Interrupted Apply with unchanged live state did not reconcile to retry-safe approved');
+release_install_expect((OAI_DB::get((int)$proofOp['id'])['status']??'')==='approved'&&(string)get_option('wpai_release_proof_fixture')==='baseline','Apply recovery-ready path changed live state');
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApply))&&(string)get_option('wpai_release_proof_fixture')==='applied-value','Proof fixture Apply failed');
 $applyProof=OAI_Proof::make((int)$proofOp['id']);
 $applyReceipt=OAI_Receipts::build((int)$proofOp['id']);
@@ -184,7 +186,9 @@ $proofRollback=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id']
 $rollbackClaim1=OAI_DB::transition((int)$proofOp['id'],array('applied'),'rollback_pending','rollback_pending');
 $rollbackClaim2=OAI_DB::transition((int)$proofOp['id'],array('applied'),'rollback_pending','rollback_pending');
 release_install_expect($rollbackClaim1===1&&$rollbackClaim2===0,'Rollback lifecycle claim was not single-winner atomic');
-OAI_DB::update((int)$proofOp['id'],array('status'=>'applied','phase'=>'applied'));
+$rollbackRecoveryReady=OAI_REST::sandbox_action($proofRollback);
+release_install_expect(is_wp_error($rollbackRecoveryReady)&&$rollbackRecoveryReady->get_error_code()==='oai_rollback_recovery_ready','Interrupted Rollback with intact applied state did not reconcile to retry-safe applied');
+release_install_expect((OAI_DB::get((int)$proofOp['id'])['status']??'')==='applied'&&(string)get_option('wpai_release_proof_fixture')==='applied-value','Rollback recovery-ready path changed live state');
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofRollback))&&(string)get_option('wpai_release_proof_fixture')==='baseline','Proof fixture Rollback failed');
 $rollbackProof=OAI_Proof::make((int)$proofOp['id']);
 $rollbackReceipt=OAI_Receipts::build((int)$proofOp['id']);
@@ -193,6 +197,31 @@ release_install_expect(preg_match('/^[a-f0-9]{64}$/',(string)($rollbackProof['ha
 release_install_expect(!hash_equals((string)$applyProof['hash'],(string)$rollbackProof['hash']),'Rollback reused stale Apply proof');
 release_install_expect(($rollbackReceipt['status']??'')==='rolled_back'&&!empty($rollbackReceipt['verified'])&&(($rollbackReceipt['proof']['phase']??'')==='rollback')&&(($rollbackReceipt['proof']['hash']??'')===($rollbackProof['hash']??'')),'Rollback receipt not bound to fresh rollback proof');
 delete_option('wpai_release_proof_fixture');
+
+// Interrupted requests that already completed the live write must be finalized without replaying it.
+update_option('wpai_release_recovery_fixture','before',false);
+$recoveryReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+$recoveryReq->set_param('type','option_update');$recoveryReq->set_param('target','wpai_release_recovery_fixture');$recoveryReq->set_param('new_data','after');
+$recoveryOp=OAI_REST::sandbox_create($recoveryReq);
+release_install_expect(!is_wp_error($recoveryOp)&&!empty($recoveryOp['id']),'Unable to create interrupted-write recovery fixture');
+$recoveryApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$recoveryOp['id'].'/approve');$recoveryApprove->set_header('X-WP-Nonce',$nonce);
+$recoveryApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$recoveryOp['id'].'/apply');$recoveryApply->set_header('X-WP-Nonce',$nonce);
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($recoveryApprove)),'Interrupted-write recovery fixture approval failed');
+release_install_expect(OAI_DB::transition((int)$recoveryOp['id'],array('approved'),'applying','applying')===1,'Unable to seed interrupted Apply state');
+update_option('wpai_release_recovery_fixture','after',false); // Simulate write completed before request/process died.
+$recoveredApply=OAI_REST::sandbox_action($recoveryApply);
+release_install_expect(!is_wp_error($recoveredApply)&&($recoveredApply['status']??'')==='applied','Completed interrupted Apply was not finalized');
+$recoveredApplyReceipt=OAI_Receipts::build((int)$recoveryOp['id']);
+release_install_expect(($recoveredApplyReceipt['receipt']['event']??'')==='apply_recovered'&&($recoveredApplyReceipt['receipt']['replayed_write']??true)===false,'Recovered Apply receipt does not prove no replay');
+
+$recoveryRollback=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$recoveryOp['id'].'/rollback');$recoveryRollback->set_header('X-WP-Nonce',$nonce);
+release_install_expect(OAI_DB::transition((int)$recoveryOp['id'],array('applied'),'rolling_back','rolling_back')===1,'Unable to seed interrupted Rollback state');
+update_option('wpai_release_recovery_fixture','before',false); // Simulate rollback completed before request/process died.
+$recoveredRollback=OAI_REST::sandbox_action($recoveryRollback);
+release_install_expect(!is_wp_error($recoveredRollback)&&($recoveredRollback['status']??'')==='rolled_back','Completed interrupted Rollback was not finalized');
+$recoveredRollbackReceipt=OAI_Receipts::build((int)$recoveryOp['id']);
+release_install_expect(($recoveredRollbackReceipt['receipt']['event']??'')==='rollback_recovered'&&($recoveredRollbackReceipt['receipt']['replayed_write']??true)===false,'Recovered Rollback receipt does not prove no replay');
+delete_option('wpai_release_recovery_fixture');
 
 // Expired sandbox snapshots must never be approved or applied.
 update_option('wpai_release_expired_fixture','baseline',false);
