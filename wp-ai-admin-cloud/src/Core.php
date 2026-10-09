@@ -30,6 +30,48 @@ final class Core {
         $this->account($owner);
         return $this->store->rows('SELECT id,home,plugin_site_id,installation_id,status,created_at FROM '.$this->store->table('sites').' WHERE owner=? AND status=? ORDER BY created_at',[$owner,'active']);
     }
+    public function closureInventory(string $owner): array {
+        $this->account($owner);
+        $count=function(string $table,string $where,array $args) {
+            $row=$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table($table).' WHERE '.$where,$args);
+            return (int)($row['n']??0);
+        };
+        return [
+            'owner'=>$owner,
+            'active_sites'=>$count('sites','owner=? AND status=?',[$owner,'active']),
+            'active_tokens'=>$count('tokens','owner=? AND revoked=0',[$owner]),
+            'active_oauth_grants'=>$count('oauth_grants','owner=? AND revoked=0',[$owner]),
+            'unused_oauth_codes'=>$count('oauth_codes','owner=? AND used=0',[$owner]),
+            'retained_requests'=>$count('requests','owner=?',[$owner]),
+            'retained_audit'=>$count('audit','owner=?',[$owner]),
+            'retained_balances'=>$count('balances','owner=?',[$owner]),
+            'action'=>'suspend_first_delete_later_under_retention_policy',
+            'destructive_delete_performed'=>false,
+        ];
+    }
+    public function suspendAccount(string $owner,int $now): array {
+        return $this->store->transaction(function() use($owner,$now) {
+            $before=$this->closureInventory($owner);
+            $this->account($owner,true);
+            $this->store->execute('UPDATE '.$this->store->table('sites').' SET status=?,token_sealed=? WHERE owner=? AND status=?',['revoked','',$owner,'active']);
+            $this->store->execute('UPDATE '.$this->store->table('tokens').' SET revoked=1 WHERE owner=?',[$owner]);
+            $this->store->execute('UPDATE '.$this->store->table('oauth_grants').' SET revoked=1 WHERE owner=?',[$owner]);
+            $this->store->execute('UPDATE '.$this->store->table('oauth_codes').' SET used=1 WHERE owner=? AND used=0',[$owner]);
+            $this->store->execute('UPDATE '.$this->store->table('accounts').' SET disabled=1,sequence=sequence+1 WHERE owner=?',[$owner]);
+            $this->store->audit($owner,'','account_suspended','',$now);
+            return [
+                'suspended'=>true,
+                'access_revoked'=>true,
+                'site_credentials_cleared'=>true,
+                'destructive_delete_performed'=>false,
+                'retained_evidence'=>[
+                    'requests'=>$before['retained_requests'],
+                    'audit'=>$before['retained_audit']+1,
+                    'balances'=>$before['retained_balances'],
+                ],
+            ];
+        });
+    }
     public function connect(string $owner,string $home,string $token,int $now,bool $replace=false): array {
         $this->account($owner); $home=Security::home($home);
         $this->throttle($owner,'site_proof',$now,10);
