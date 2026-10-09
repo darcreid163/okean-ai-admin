@@ -49,6 +49,35 @@ final class Store {
             $row=$this->row('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$this->prefix.$name]);
             if (strtolower($row['ENGINE']??'')!=='innodb') throw new Fault('innodb_required',503);
         }
+
+        // CREATE TABLE IF NOT EXISTS does not repair a partially-created or
+        // legacy-incompatible table. Validate the minimum schema explicitly so
+        // the gateway fails at startup instead of surfacing a later raw SQL error.
+        $required=[
+            'accounts'=>['owner','plan','disabled','sequence'],
+            'balances'=>['owner','period','used','reserved'],
+            'sites'=>['id','owner','home','url_hash','plugin_site_id','installation_id','token_sealed','status','created_at'],
+            'tokens'=>['hash','owner','scopes','site_ids','expires_at','revoked'],
+            'requests'=>['request_key','owner','site_id','period','fingerprint','tool','state','reserved_units','policy_version','response_sealed','reconciliation_evidence','created_at','updated_at'],
+            'rate'=>['owner','bucket','slot','hits'],
+            'audit'=>['id','owner','site_id','event','request_key','created_at'],
+            'oauth_clients'=>['id','name','redirects','created_at'],
+            'oauth_codes'=>['hash','owner','client','redirect','resource','scopes','sites','challenge','expires','used'],
+            'oauth_grants'=>['id','owner','client','resource','scopes','sites','revoked','expires'],
+            'oauth_refresh'=>['hash','grant_id','used','expires'],
+            'oauth_access'=>['hash','grant_id','resource'],
+            'oauth_rate'=>['bucket','slot','hits'],
+        ];
+        foreach($required as $name=>$columns){
+            if($this->mysql){
+                $rows=$this->rows('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$this->prefix.$name]);
+                $present=array_map(static fn($r)=>(string)$r['COLUMN_NAME'],$rows);
+            }else{
+                $rows=$this->rows('PRAGMA table_info('.$this->table($name).')');
+                $present=array_map(static fn($r)=>(string)$r['name'],$rows);
+            }
+            if(array_diff($columns,$present)) throw new Fault('gateway_schema_incompatible',503);
+        }
     }
     public function audit(string $owner,string $site,string $event,string $key,int $now): void {
         $this->execute('INSERT INTO '.$this->table('audit').' (id,owner,site_id,event,request_key,created_at) VALUES (?,?,?,?,?,?)',[bin2hex(random_bytes(16)),$owner,$site,$event,$key,$now]);
