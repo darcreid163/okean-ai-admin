@@ -82,7 +82,7 @@ final class OAuth {
                 try { $this->core->assertActiveAccount((string)$probe['owner'],true); }
                 catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
                 $c=$this->store->row('SELECT * FROM '.$this->store->table('oauth_codes').' WHERE hash=?'.$this->store->lock(),[$hash]);
-                if(!$c||(int)$c['used']!==0||(int)$c['expires']<=$now||$c['client']!==$p['client_id']||$c['redirect']!==$p['redirect_uri']||$c['resource']!==$p['resource']||$c['resource']!==$this->resource||!hash_equals($c['challenge'],Security::b64(hash('sha256',$p['code_verifier'],true))))throw new Fault('invalid_grant');
+                if(!$c||$c['owner']!==$probe['owner']||(int)$c['used']!==0||(int)$c['expires']<=$now||$c['client']!==$p['client_id']||$c['redirect']!==$p['redirect_uri']||$c['resource']!==$p['resource']||$c['resource']!==$this->resource||!hash_equals($c['challenge'],Security::b64(hash('sha256',$p['code_verifier'],true))))throw new Fault('invalid_grant');
                 if(!$eligible($c['owner']))throw new Fault('access_denied',403);
                 $grant=['id'=>bin2hex(random_bytes(16)),'owner'=>$c['owner'],'client'=>$c['client'],'resource'=>$c['resource'],'scopes'=>$c['scopes'],'sites'=>$c['sites'],'expires'=>$now+2592000];
                 $this->store->execute('UPDATE '.$this->store->table('oauth_codes').' SET used=1 WHERE hash=?',[$c['hash']]);
@@ -103,9 +103,9 @@ final class OAuth {
             catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
 
             $r=$this->store->row('SELECT * FROM '.$this->store->table('oauth_refresh').' WHERE hash=?'.$this->store->lock(),[$hash]);
-            if(!$r)throw new Fault('invalid_grant');
+            if(!$r||$r['grant_id']!==$probeRefresh['grant_id'])throw new Fault('invalid_grant');
             $g=$this->store->row('SELECT * FROM '.$this->store->table('oauth_grants').' WHERE id=?'.$this->store->lock(),[$r['grant_id']]);
-            if(!$g||$g['client']!==$p['client_id']||$g['resource']!==$this->resource||($p['resource']??$g['resource'])!==$g['resource'])throw new Fault('invalid_grant');
+            if(!$g||$g['owner']!==$probeGrant['owner']||$g['client']!==$p['client_id']||$g['resource']!==$this->resource||($p['resource']??$g['resource'])!==$g['resource'])throw new Fault('invalid_grant');
             if((int)$r['used']===1){$this->revokeGrant($g['id']);return ['replayed'=>true];}
             if((int)$g['revoked']!==0||(int)$r['expires']<=$now||(int)$g['expires']<=$now||!$eligible($g['owner']))throw new Fault('invalid_grant');
             if(isset($p['scope'])&&$p['scope']!==implode(' ',json_decode($g['scopes'],true)))throw new Fault('invalid_scope');
