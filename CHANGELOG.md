@@ -8,6 +8,8 @@
 - Fail fast on incomplete gateway database schemas.
 - Preserve keys/account/site/bearer/OAuth state across real Cloud Core ZIP upgrade from 0.3.6.
 - Use the canonical deterministic release artifact builder.
+- Serialize Cloud bearer issuance with account suspension so a concurrent mint cannot create a token after the suspension bulk-revoke.
+- Re-enabling a suspended account does not resurrect old bearer/OAuth/site access; fresh reconnect and consent are required.
 
 
 All notable public-release changes are recorded here. Published versions must never be reused for different package bytes.
