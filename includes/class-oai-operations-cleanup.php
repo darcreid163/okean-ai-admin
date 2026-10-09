@@ -10,6 +10,7 @@ class OAI_Operations_Cleanup {
   return array(
    'dry_run_default'=>true,
    'active_statuses_protected'=>true,
+   'rollback_pending_protected'=>in_array('rollback_pending',self::ACTIVE_STATUSES,true),
    'applied_requires_explicit_opt_in'=>true,
    'audit_log_preserved'=>true,
    'failed_terminal_statuses_supported'=>true,
