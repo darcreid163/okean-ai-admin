@@ -39,6 +39,13 @@ if(getenv('TEST_MYSQL_DSN')){
     $pdo->exec('ALTER TABLE `'.$goodPrefix.'requests` DROP COLUMN reconciliation_evidence');
     sreject(fn()=>$good->assertSchema(),'gateway_schema_incompatible');
     foreach($tables as $name)$pdo->exec('DROP TABLE IF EXISTS `'.$goodPrefix.$name.'`');
+
+    $missingPrefix='schema_missing_';
+    foreach($tables as $name)$pdo->exec('DROP TABLE IF EXISTS `'.$missingPrefix.$name.'`');
+    $missing=new Store($pdo,$missingPrefix);$missing->migrate();
+    $pdo->exec('DROP TABLE `'.$missingPrefix.'oauth_rate`');
+    sreject(fn()=>$missing->assertSchema(),'gateway_schema_incompatible');
+    foreach($tables as $name)$pdo->exec('DROP TABLE IF EXISTS `'.$missingPrefix.$name.'`');
     echo 'PASS '.$checks." gateway schema integrity assertions; driver=mysql\n";
     exit;
 }
@@ -58,6 +65,11 @@ $names=array_map(fn($r)=>$r['name'],$info);
 scheck(in_array('reconciliation_evidence',$names,true)&&in_array('policy_version',$names,true),'Valid SQLite gateway schema missing request columns');
 $goodPdo->exec('ALTER TABLE '.$good->table('requests').' DROP COLUMN reconciliation_evidence');
 sreject(fn()=>$good->assertSchema(),'gateway_schema_incompatible');
+$missingDb=sys_get_temp_dir().'/wpai-schema-missing-'.bin2hex(random_bytes(6)).'.sqlite';
+$missingPdo=new PDO('sqlite:'.$missingDb,null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+$missing=new Store($missingPdo,'schema_missing_');$missing->migrate();
+$missingPdo->exec('DROP TABLE '.$missing->table('oauth_rate'));
+sreject(fn()=>$missing->assertSchema(),'gateway_schema_incompatible');
 
 echo 'PASS '.$checks." gateway schema integrity assertions; driver=sqlite\n";
-foreach([$db,$db.'-wal',$db.'-shm',$goodDb,$goodDb.'-wal',$goodDb.'-shm'] as $file)if(file_exists($file))unlink($file);
+foreach([$db,$db.'-wal',$db.'-shm',$goodDb,$goodDb.'-wal',$goodDb.'-shm',$missingDb,$missingDb.'-wal',$missingDb.'-shm'] as $file)if(file_exists($file))unlink($file);
