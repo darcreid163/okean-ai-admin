@@ -156,6 +156,21 @@ $core->ensureAccount('closure-owner');
 breject(fn()=>$core->sites('closure-owner'),'account_unavailable');
 breject(fn()=>$core->closureInventory('closure-owner'),'account_unavailable');
 
+// Future operator recovery may re-enable the account row, but suspension must
+// never resurrect previously revoked bearer/OAuth/site access.
+$store->execute('UPDATE '.$store->table('accounts').' SET disabled=0 WHERE owner=?',['closure-owner']);
+$reopened=$core->closureInventory('closure-owner');
+bcheck(($reopened['active_sites']??-1)===0&&($reopened['active_tokens']??-1)===0&&($reopened['active_oauth_grants']??-1)===0&&($reopened['unused_oauth_codes']??-1)===0,'Re-enabled account resurrected suspended access state');
+breject(fn()=>$core->authenticate($closureBearer['access_token'],$now+23),'invalid_or_expired_token');
+breject(fn()=>$closureOAuth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$closureClient,'code'=>'closure-code',
+    'redirect_uri'=>$closureRedirect,'code_verifier'=>$closureVerifier,'resource'=>'https://wpaiadmin.ru/mcp'
+],$now+23,fn($owner)=>true),'invalid_grant');
+breject(fn()=>$closureOAuth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$closureClient,'refresh_token'=>$closureRefresh,
+    'resource'=>'https://wpaiadmin.ru/mcp'
+],$now+23,fn($owner)=>true),'invalid_grant');
+
 $site=$core->connect('boundary','https://boundary.example.com','fixture-boundary-admin-token-aaaaaaaa',$now);
 
 // Token policy boundaries.
