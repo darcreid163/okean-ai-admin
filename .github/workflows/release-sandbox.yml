@@ -479,6 +479,23 @@ jobs:
           cmp -s "dist/wp-ai-admin-$VERSION.zip" "dist-rebuild/wp-ai-admin-$VERSION.zip"
           cmp -s "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" "cloud-rebuild/wp-ai-admin-cloud-$CLOUD_VERSION.zip"
           cmp -s dist/PROVENANCE.txt dist-rebuild/PROVENANCE.txt
+
+          BUILD_ID="$(sed -n "s/^define('OAI_BUILD_ID','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          grep -Fxq "commit=$GITHUB_SHA" dist/PROVENANCE.txt
+          grep -Fxq "version=$VERSION" dist/PROVENANCE.txt
+          grep -Fxq "build_id=$BUILD_ID" dist/PROVENANCE.txt
+          grep -Fxq "sha256=$SHA" dist/PROVENANCE.txt
+          grep -Fxq "cloud_version=$CLOUD_VERSION" dist/PROVENANCE.txt
+          grep -Fxq "cloud_sha256=$CLOUD_SHA" dist/PROVENANCE.txt
+
+          NATIVE_BOOT="$(unzip -p "dist/wp-ai-admin-$VERSION.zip" okean-ai-admin/okean-ai-admin.php)"
+          CLOUD_BOOT="$(unzip -p "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" wp-ai-admin-cloud/wp-ai-admin-cloud.php)"
+          printf '%s' "$NATIVE_BOOT" | grep -Fq "Version: $VERSION"
+          printf '%s' "$NATIVE_BOOT" | grep -Fq "define('OAI_VERSION','$VERSION');"
+          printf '%s' "$NATIVE_BOOT" | grep -Fq "define('OAI_BUILD_ID','$BUILD_ID');"
+          printf '%s' "$CLOUD_BOOT" | grep -Fq "Version: $CLOUD_VERSION"
+          printf '%s' "$CLOUD_BOOT" | grep -Fq "define('WPAI_CLOUD_VERSION', '$CLOUD_VERSION');"
+
           test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
           test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)\.git')" -eq 0
           test "$(unzip -Z1 "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
