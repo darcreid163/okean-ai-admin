@@ -122,14 +122,21 @@ final class Core {
         });
     }
     public function mint(string $owner,array $siteIds,array $scopes,int $now,int $ttl=3600): array {
-        $this->account($owner);
         if (!$siteIds || count($siteIds)>self::MAX_SITES || !array_is_list($siteIds) || !array_is_list($scopes) || count($scopes)>2 || array_filter($siteIds,fn($v)=>!is_string($v)) || array_filter($scopes,fn($v)=>!is_string($v))) throw new Fault('invalid_token_policy');
         if (count(array_unique($siteIds,SORT_STRING))!==count($siteIds) || !in_array('mcp:read',$scopes,true) || array_diff($scopes,['mcp:read','mcp:write']) || count(array_unique($scopes))!==count($scopes) || $ttl<60 || $ttl>3600) throw new Fault('invalid_token_policy');
-        foreach ($siteIds as $id) $this->ownedSite($owner,Security::identifier($id));
-        $token='wpai_cloud_'.Security::b64(random_bytes(32));
-        $this->store->execute('INSERT INTO '.$this->store->table('tokens').' (hash,owner,scopes,site_ids,expires_at) VALUES (?,?,?,?,?)',[hash('sha256',$token),$owner,Security::canonical($scopes),Security::canonical($siteIds),$now+$ttl]);
-        $this->store->audit($owner,'','token_issued',hash('sha256',$token),$now);
-        return ['access_token'=>$token,'token_type'=>'Bearer','expires_in'=>$ttl,'scope'=>implode(' ',$scopes),'site_ids'=>$siteIds];
+
+        // Serialize bearer issuance with account suspension. Without the account
+        // row lock, a mint that read "active" just before suspension could
+        // insert a fresh non-revoked token after the suspension's bulk revoke.
+        return $this->store->transaction(function() use($owner,$siteIds,$scopes,$now,$ttl) {
+            $this->account($owner,true);
+            foreach ($siteIds as $id) $this->ownedSite($owner,Security::identifier($id));
+            $token='wpai_cloud_'.Security::b64(random_bytes(32));
+            $hash=hash('sha256',$token);
+            $this->store->execute('INSERT INTO '.$this->store->table('tokens').' (hash,owner,scopes,site_ids,expires_at) VALUES (?,?,?,?,?)',[$hash,$owner,Security::canonical($scopes),Security::canonical($siteIds),$now+$ttl]);
+            $this->store->audit($owner,'','token_issued',$hash,$now);
+            return ['access_token'=>$token,'token_type'=>'Bearer','expires_in'=>$ttl,'scope'=>implode(' ',$scopes),'site_ids'=>$siteIds];
+        });
     }
     public function authenticate(string $token,int $now): array {
         if (!preg_match('/^wpai_cloud_[A-Za-z0-9_-]{43}$/D',$token)) throw new Fault('bearer_required',401);
