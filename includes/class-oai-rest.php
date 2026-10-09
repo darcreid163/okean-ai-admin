@@ -1250,6 +1250,16 @@ frame.addEventListener('load',function(){
     $current_row=OAI_DB::get($id);
     return new WP_Error('oai_state_conflict','Operation state changed before Rollback could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
    }
+   // Close the pre-check -> claim race window before any destructive write.
+   $post_claim_rollback_conflict=self::rollback_conflict_check($r,$applied,$meta);
+   if(is_wp_error($post_claim_rollback_conflict)){
+    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
+    $details=$post_claim_rollback_conflict->get_error_data();
+    OAI_Receipts::store($id,array('event'=>'rollback_conflict','status'=>'rollback_failed','at'=>gmdate('c'),'reason'=>'post_apply_change','details'=>$details),OAI_Proof::make($id));
+    OAI_Audit::log('rollback_conflict',array_merge($r,array('status'=>'rollback_failed')),array('reason'=>'post_apply_change','details'=>$details));
+    return $post_claim_rollback_conflict;
+   }
+
    $rolling_claim=OAI_DB::transition($id,array('rollback_pending'),'rolling_back','rolling_back');
    if($rolling_claim!==1)return new WP_Error('oai_state_conflict','Rollback claim could not enter execution state',array('status'=>409));
    try { $err=self::rollback_write($r['type'],$r['target'],$before,$meta); }
