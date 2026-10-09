@@ -33,8 +33,11 @@ if(getenv('TEST_MYSQL_DSN')){
     $goodPrefix='schema_good_';
     foreach($tables as $name)$pdo->exec('DROP TABLE IF EXISTS `'.$goodPrefix.$name.'`');
     $good=new Store($pdo,$goodPrefix);$good->migrate();
+    $good->assertSchema();
     $row=$good->row('SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$goodPrefix.'requests']);
     scheck((int)($row['n']??0)>=13,'Valid MySQL gateway schema missing request columns');
+    $pdo->exec('ALTER TABLE `'.$goodPrefix.'requests` DROP COLUMN reconciliation_evidence');
+    sreject(fn()=>$good->assertSchema(),'gateway_schema_incompatible');
     foreach($tables as $name)$pdo->exec('DROP TABLE IF EXISTS `'.$goodPrefix.$name.'`');
     echo 'PASS '.$checks." gateway schema integrity assertions; driver=mysql\n";
     exit;
@@ -49,9 +52,12 @@ sreject(fn()=>$bad->migrate(),'gateway_schema_incompatible');
 $goodDb=sys_get_temp_dir().'/wpai-schema-good-'.bin2hex(random_bytes(6)).'.sqlite';
 $goodPdo=new PDO('sqlite:'.$goodDb,null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
 $good=new Store($goodPdo,'schema_good_');$good->migrate();
+$good->assertSchema();
 $info=$good->rows('PRAGMA table_info('.$good->table('requests').')');
 $names=array_map(fn($r)=>$r['name'],$info);
 scheck(in_array('reconciliation_evidence',$names,true)&&in_array('policy_version',$names,true),'Valid SQLite gateway schema missing request columns');
+$goodPdo->exec('ALTER TABLE '.$good->table('requests').' DROP COLUMN reconciliation_evidence');
+sreject(fn()=>$good->assertSchema(),'gateway_schema_incompatible');
 
 echo 'PASS '.$checks." gateway schema integrity assertions; driver=sqlite\n";
 foreach([$db,$db.'-wal',$db.'-shm',$goodDb,$goodDb.'-wal',$goodDb.'-shm'] as $file)if(file_exists($file))unlink($file);
