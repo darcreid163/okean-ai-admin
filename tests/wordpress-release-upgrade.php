@@ -17,6 +17,16 @@ if($phase==='seed'){
     $license=OAI_License::activate_local_owner(1);
     release_upgrade_expect(!is_wp_error($license)&&!empty($license['active']),'Baseline local owner license failed');
 
+    update_option('wpai_release_upgrade_operation','baseline',false);
+    $opReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+    $opReq->set_param('type','option_update');
+    $opReq->set_param('target','wpai_release_upgrade_operation');
+    $opReq->set_param('new_data','pending-after-upgrade');
+    $pendingOp=OAI_REST::sandbox_create($opReq);
+    release_upgrade_expect(!is_wp_error($pendingOp)&&!empty($pendingOp['id'])&&($pendingOp['status']??'')==='pending','Baseline pending operation fixture failed');
+    $pendingRow=OAI_DB::get((int)$pendingOp['id']);
+    release_upgrade_expect(is_array($pendingRow)&&!empty($pendingRow['rollback_data'])&&!empty($pendingRow['diff_data']),'Baseline pending operation missing rollback/diff evidence');
+
     $ai=OAI_AI_Lifecycle_Control::enable(1);
     release_upgrade_expect(!is_wp_error($ai)&&!empty($ai['active']),'Baseline AI lifecycle enable failed');
     $ta=OAI_Test_Automation::enable(60,array(),array(),1);
@@ -44,10 +54,16 @@ if($phase==='seed'){
         'mcp_token_hash'=>$tokenHash,
         'oauth_access_hash'=>$accessHash,
         'license_id'=>$license['license_id']??'',
+        'operation_id'=>(int)$pendingOp['id'],
+        'operation_key'=>(string)($pendingOp['operation_id']??''),
+        'operation_before'=>(string)($pendingRow['before_data']??''),
+        'operation_after'=>(string)($pendingRow['after_data']??''),
+        'operation_diff'=>(string)($pendingRow['diff_data']??''),
+        'operation_rollback'=>(string)($pendingRow['rollback_data']??''),
     ),false);
     echo 'PASS release ZIP upgrade seed: '.OAI_VERSION.PHP_EOL;
 }elseif($phase==='check'){
-    release_upgrade_expect(defined('OAI_VERSION')&&OAI_VERSION==='2.1.14','Release ZIP upgrade did not load 2.1.14');
+    release_upgrade_expect(defined('OAI_VERSION')&&OAI_VERSION==='2.1.15','Release ZIP upgrade did not load 2.1.15');
     $expected=get_option('wpai_release_upgrade_expected',array());
     release_upgrade_expect(is_array($expected)&&!empty($expected['site_id']),'Upgrade expected-state fixture missing');
     release_upgrade_expect(OAI_Platform::site_id()===$expected['site_id'],'site_id changed across ZIP upgrade');
@@ -61,13 +77,20 @@ if($phase==='seed'){
     $license=OAI_License::status();
     release_upgrade_expect(!empty($license['active'])&&($license['license_id']??'')===$expected['license_id'],'Local owner license changed across ZIP upgrade');
 
+    $pendingRow=OAI_DB::get((int)$expected['operation_id']);
+    release_upgrade_expect(is_array($pendingRow)&&($pendingRow['operation_id']??'')===$expected['operation_key']&&($pendingRow['status']??'')==='pending','Pending operation was lost or changed across ZIP upgrade');
+    release_upgrade_expect((string)$pendingRow['before_data']===$expected['operation_before']&&(string)$pendingRow['after_data']===$expected['operation_after'],'Pending operation snapshots changed across ZIP upgrade');
+    release_upgrade_expect((string)$pendingRow['diff_data']===$expected['operation_diff']&&(string)$pendingRow['rollback_data']===$expected['operation_rollback'],'Pending operation diff/rollback evidence changed across ZIP upgrade');
+    release_upgrade_expect((string)get_option('wpai_release_upgrade_operation')==='baseline','ZIP upgrade applied pending sandbox data');
+
     release_upgrade_expect(!OAI_AI_Lifecycle_Control::is_active(),'AI Lifecycle Control must reset on build change');
     release_upgrade_expect(!OAI_Test_Automation::is_active(),'Test Automation must reset on build change');
     release_upgrade_expect((get_option(OAI_AI_Lifecycle_Control::OPTION,array())['build_id']??'')===OAI_BUILD_ID,'AI lifecycle reset did not bind new build');
     release_upgrade_expect((get_option(OAI_Test_Automation::OPTION,array())['build_id']??'')===OAI_BUILD_ID,'Test automation reset did not bind new build');
 
+    delete_option('wpai_release_upgrade_operation');
     delete_option('wpai_release_upgrade_expected');
-    echo 'PASS real ZIP upgrade 2.1.13 -> '.OAI_VERSION.' with identity/OAuth/license preserved and automation reset'.PHP_EOL;
+    echo 'PASS real ZIP upgrade 2.1.13 -> '.OAI_VERSION.' with identity/OAuth/license/operation evidence preserved and automation reset'.PHP_EOL;
 }else{
     throw new RuntimeException('Unknown OAI_RELEASE_UPGRADE_PHASE');
 }
