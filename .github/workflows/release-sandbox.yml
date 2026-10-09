@@ -206,6 +206,54 @@ jobs:
           php "$WPCLI" --path="$WP_DIR" plugin install "$ZIP" --activate
           php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-install.php"
 
+  cloud-core-upgrade:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: cloud-upgrade-password
+          MYSQL_DATABASE: cloud_upgrade
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pcloud-upgrade-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Build current Cloud Core ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          mkdir -p cloud-upgrade-build/wp-ai-admin-cloud
+          cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/includes wp-ai-admin-cloud/src wp-ai-admin-cloud/config wp-ai-admin-cloud/README.md cloud-upgrade-build/wp-ai-admin-cloud/
+          (cd cloud-upgrade-build && zip -qr "wp-ai-admin-cloud-$VERSION.zip" wp-ai-admin-cloud)
+          unzip -tq "cloud-upgrade-build/wp-ai-admin-cloud-$VERSION.zip"
+      - name: Upgrade installed Cloud Core 0.3.5 to generated 0.3.6
+        shell: bash
+        run: |
+          set -euo pipefail
+          WP_DIR="$RUNNER_TEMP/wpai-cloud-upgrade"
+          WPCLI="$RUNNER_TEMP/wp-cli-cloud-upgrade.phar"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$WPCLI"
+          mkdir -p "$WP_DIR"
+          php "$WPCLI" --path="$WP_DIR" core download
+          php "$WPCLI" --path="$WP_DIR" config create --dbname=cloud_upgrade --dbuser=root --dbpass=cloud-upgrade-password --dbhost=127.0.0.1 --skip-check
+          php "$WPCLI" --path="$WP_DIR" core install --url=https://cloud-upgrade.test --title='Cloud Upgrade' --admin_user=cloud-upgrade-admin --admin_password=disposable-cloud-upgrade-password --admin_email=cloud-upgrade@example.test --skip-email
+          php "$WPCLI" --path="$WP_DIR" plugin install "$GITHUB_WORKSPACE/releases/wp-ai-cloud-0.3.5/wp-ai-admin-cloud-0.3.5.zip" --activate
+          WPAI_CLOUD_UPGRADE_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-upgrade.php"
+          CURRENT_ZIP="$(ls "$GITHUB_WORKSPACE"/cloud-upgrade-build/wp-ai-admin-cloud-*.zip | head -n1)"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
+          WPAI_CLOUD_UPGRADE_PHASE=check php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-upgrade.php"
+
   release-zip-upgrade:
     runs-on: ubuntu-latest
     services:
