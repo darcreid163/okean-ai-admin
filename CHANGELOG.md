@@ -10,6 +10,8 @@
 - Use the canonical deterministic release artifact builder.
 - Serialize Cloud bearer issuance with account suspension so a concurrent mint cannot create a token after the suspension bulk-revoke.
 - Re-enabling a suspended account does not resurrect old bearer/OAuth/site access; fresh reconnect and consent are required.
+- Support nested Cloud transactions explicitly on both SQLite and MySQL so OAuth exchange can safely call transactional bearer issuance.
+- Suspended accounts block normal plan/usage/foundation access; trusted evidence-based reconciliation remains intentionally available only to settle pre-suspension uncertain requests.
 
 
 All notable public-release changes are recorded here. Published versions must never be reused for different package bytes.
