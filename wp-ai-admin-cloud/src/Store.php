@@ -68,15 +68,19 @@ final class Store {
             'oauth_rate'=>'bucket VARCHAR(64) NOT NULL, slot BIGINT NOT NULL, hits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(bucket,slot)'
         ];
         foreach ($definitions as $name=>$def) $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table($name).' ('.$def.')'.$tail);
+        $this->assertSchema(array_keys($definitions));
+    }
+    public function assertSchema(?array $tableNames=null): void {
+        $tableNames=$tableNames??['accounts','balances','sites','tokens','requests','rate','audit','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate'];
         // Refuse pre-existing nontransactional tables rather than pretending reservations are atomic.
-        if ($this->mysql) foreach (array_keys($definitions) as $name) {
+        if ($this->mysql) foreach ($tableNames as $name) {
             $row=$this->row('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$this->prefix.$name]);
             if (strtolower($row['ENGINE']??'')!=='innodb') throw new Fault('innodb_required',503);
         }
 
-        // CREATE TABLE IF NOT EXISTS does not repair a partially-created or
-        // legacy-incompatible table. Validate the minimum schema explicitly so
-        // the gateway fails at startup instead of surfacing a later raw SQL error.
+        // Validate the minimum schema even when the WordPress DB-version option
+        // already says migration is current. This catches partial restores,
+        // manually damaged tables and interrupted historical migrations.
         $required=[
             'accounts'=>['owner','plan','disabled','sequence'],
             'balances'=>['owner','period','used','reserved'],
@@ -92,7 +96,9 @@ final class Store {
             'oauth_access'=>['hash','grant_id','resource'],
             'oauth_rate'=>['bucket','slot','hits'],
         ];
-        foreach($required as $name=>$columns){
+        foreach($tableNames as $name){
+            if(!isset($required[$name])) throw new Fault('gateway_schema_incompatible',503);
+            $columns=$required[$name];
             if($this->mysql){
                 $rows=$this->rows('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$this->prefix.$name]);
                 $present=array_map(static fn($r)=>(string)$r['COLUMN_NAME'],$rows);
