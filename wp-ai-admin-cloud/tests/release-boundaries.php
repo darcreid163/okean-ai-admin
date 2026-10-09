@@ -157,8 +157,13 @@ bcheck(($inventory['active_sites']??0)===1&&($inventory['active_tokens']??0)===1
 $inventoryEncoded=Security::canonical($inventory);
 bcheck(!str_contains($inventoryEncoded,$closureSiteToken)&&!str_contains($inventoryEncoded,$closureBearer['access_token']),'Closure preview leaked credential material');
 
+$closureSequenceBefore=(int)($store->row('SELECT sequence FROM '.$store->table('accounts').' WHERE owner=?',['closure-owner'])['sequence']??0);
 $suspended=$core->suspendAccount('closure-owner',$now+21);
 bcheck(!empty($suspended['suspended'])&&!empty($suspended['access_revoked'])&&!empty($suspended['site_credentials_cleared'])&&empty($suspended['destructive_delete_performed']),'Account suspension result contract wrong');
+$closureSequenceSuspended=(int)($store->row('SELECT sequence FROM '.$store->table('accounts').' WHERE owner=?',['closure-owner'])['sequence']??0);
+bcheck($closureSequenceSuspended===$closureSequenceBefore+1,'Suspension did not bump account sequence exactly once');
+$suspendAudit=$store->rows('SELECT event,request_key FROM '.$store->table('audit').' WHERE owner=? AND event=?',['closure-owner','account_suspended']);
+bcheck(count($suspendAudit)===1&&($suspendAudit[0]['request_key']??'')==='','Suspension audit trail missing or contains unexpected credential material');
 breject(fn()=>$core->authenticate($closureBearer['access_token'],$now+22),'invalid_or_expired_token');
 $closureSiteRow=$store->row('SELECT status,token_sealed FROM '.$store->table('sites').' WHERE id=?',[$closureSite['id']]);
 bcheck(($closureSiteRow['status']??'')==='revoked'&&($closureSiteRow['token_sealed']??'')==='','Suspension did not revoke site and clear sealed credential');
@@ -225,6 +230,10 @@ breject(fn()=>$core->closureInventory('closure-owner'),'account_unavailable');
 // only the account row and never resurrects revoked bearer/OAuth/site access.
 $reactivated=$core->reactivateAccount('operator','closure-owner',$now+23);
 bcheck(!empty($reactivated['reactivated'])&&empty($reactivated['old_access_restored'])&&!empty($reactivated['reconnect_required'])&&!empty($reactivated['oauth_reauthorization_required']),'Operator reactivation contract wrong');
+$closureSequenceReactivated=(int)($store->row('SELECT sequence FROM '.$store->table('accounts').' WHERE owner=?',['closure-owner'])['sequence']??0);
+bcheck($closureSequenceReactivated===$closureSequenceSuspended+1,'Reactivation did not bump account sequence exactly once');
+$reactivateAudit=$store->rows('SELECT event,request_key FROM '.$store->table('audit').' WHERE owner=? AND event=?',['closure-owner','operator_account_reactivated']);
+bcheck(count($reactivateAudit)===1&&preg_match('/^[a-f0-9]{64}$/D',(string)($reactivateAudit[0]['request_key']??''))===1&&!str_contains((string)$reactivateAudit[0]['request_key'],'operator'),'Reactivation audit did not hash operator identity safely');
 breject(fn()=>$core->reactivateAccount('operator','closure-owner',$now+24),'account_already_active');
 $reopened=$core->closureInventory('closure-owner');
 bcheck(($reopened['active_sites']??-1)===0&&($reopened['active_tokens']??-1)===0&&($reopened['active_oauth_grants']??-1)===0&&($reopened['unused_oauth_codes']??-1)===0,'Re-enabled account resurrected suspended access state');
