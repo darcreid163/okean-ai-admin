@@ -129,6 +129,8 @@ Production defaults:
 - destructive actions require the normal lifecycle or an explicit administrator-controlled bypass mode;
 - stale expected_version fails closed;
 - uncertain write outcome is reconciled before retry;
+- interrupted Apply/Rollback is reconciled against authoritative before/after state before any replay;
+- concurrent lifecycle transitions are single-winner atomic (Approve/Reject/Expiry/Apply/Rollback);
 - rollback must reject stale/conflicting state instead of overwriting newer changes.
 
 ### 8. Public onboarding gate — DOCUMENTED / clean-user walkthrough pending
@@ -257,6 +259,7 @@ A release candidate is publishable only when:
 - public onboarding is tested from a clean user account;
 - privacy/security/legal links exist;
 - release artifact hashes and source correspondence are recorded;
+- native and Cloud ZIP builds are reproducible across runner executions using commit-derived timestamps and stable file ordering;
 - docs describe only capabilities actually enabled in production.
 
 ## Current next actions
@@ -286,5 +289,9 @@ A release candidate is publishable only when:
 - public onboarding contract;
 - reproducible native/Cloud ZIPs, SHA-256 provenance and payload secret scans;
 - SECURITY/changelog/data-retention release metadata;
-- public health/initialize metadata secret-leak checks.
+- public health/initialize metadata secret-leak checks;
+- atomic lifecycle transition/race coverage;
+- crash-safe interrupted Apply/Rollback reconciliation with no blind replay;
+- 2.1.13 → 2.1.15 upgrade preserves identity/OAuth/license/pending operation evidence while resetting automation;
+- cross-run deterministic ZIP metadata/order.
 
