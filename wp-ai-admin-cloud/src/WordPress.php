@@ -112,6 +112,12 @@ final class WordPress {
         $admin=function(string $path,callable $fn) {
             register_rest_route('wpai-cloud/v1',$path,['methods'=>'POST','permission_callback'=>function(){ $p=self::provisioningPermission(); return $p===true?(current_user_can('manage_options')?true:new \WP_Error('cloud_admin_required','Cloud operator required',['status'=>403])):$p; },'callback'=>fn($r)=>self::safe(fn()=>self::response($fn($r)))]);
         };
+        $admin('/accounts/(?P<owner>[0-9]+)/reactivate',function($r) {
+            $p=self::body($r);
+            if(($p['confirm']??null)!=='REACTIVATE') throw new Fault('reactivation_confirmation_required',409);
+            self::owner();
+            return self::core()->reactivateAccount((string)get_current_user_id(),$r['owner'],time());
+        });
         $admin('/accounts/(?P<owner>[0-9]+)/plan',function($r) { $p=self::body($r); if (!is_string($p['plan']??null)) throw new Fault('plan_required'); self::owner(); self::core()->setPlan((string)get_current_user_id(),$r['owner'],$p['plan'],time()); return ['updated'=>true]; });
         $admin('/accounts/(?P<owner>[0-9]+)/requests/(?P<key>[a-f0-9]{64})/reconcile',function($r) { $p=self::body($r); if(!is_string($p['outcome']??null)||!is_array($p['evidence']??null)) throw new Fault('operator_receipt_evidence_required'); self::owner(); return self::core()->reconcile((string)get_current_user_id(),$r['owner'],$r['key'],$p['outcome'],$p['evidence'],time()); });
     }
