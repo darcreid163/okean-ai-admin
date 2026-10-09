@@ -22,6 +22,8 @@ All notable public-release changes are recorded here. Published versions must ne
 - Add signed preview-token binding/expiry tests and native Application Password/Bearer/MCP demotion acceptance.
 - Make native lifecycle transitions single-winner atomic for Approve, Reject, Expiry, Apply and Rollback to prevent concurrent requests from double-writing or resurrecting rejected operations.
 - Normalize release ZIP timestamps and file ordering for cross-run deterministic artifacts.
+- Add crash-safe reconciliation for interrupted Apply/Rollback: verify-before-retry, finalize already-completed writes without replay, return unchanged outcomes to an explicit retryable state, and keep ambiguous outcomes fail-closed.
+- Protect `rollback_pending` as an active operation during cleanup.
 
 ### Commercial truthfulness
 - Keep public health mode at approved_beta.
