@@ -268,7 +268,7 @@ A release candidate is publishable only when:
 2. Once runner executes, run the exact **2.1.15 / Cloud Core 0.3.6** commit through Validate, Cloud Core checks, Public Release Sandbox and Runner Smoke; fix only real test failures from logs.
 3. Run the final live mutation lifecycle acceptance against a dedicated disposable WordPress site.
 4. Run real two-account isolation and a clean external ChatGPT OAuth/onboarding walkthrough.
-5. Publish/approve Privacy Policy, Terms, subprocessors/data-flow disclosure and deletion/account-closure process.
+5. Publish/approve Privacy Policy, Terms, subprocessors/data-flow disclosure and permanent deletion process. Revoke-first account suspension is now implemented; destructive data erasure remains intentionally pending retention-policy approval.
 6. Make the explicit software-license/repository-visibility decision separately.
 7. If public beta is free, keep billing/commercial entitlement/batch accounting claims disabled. Paid launch remains blocked until billing/entitlement implementation is complete.
 
@@ -293,5 +293,9 @@ A release candidate is publishable only when:
 - atomic lifecycle transition/race coverage;
 - crash-safe interrupted Apply/Rollback reconciliation with no blind replay;
 - 2.1.13 → 2.1.15 upgrade preserves identity/OAuth/license/pending operation evidence while resetting automation;
-- cross-run deterministic ZIP metadata/order.
+- cross-run deterministic ZIP metadata/order;
+- canonical release builder shared by install/upgrade/provenance jobs;
+- real Cloud Core 0.3.5 → 0.3.6 state-preserving ZIP upgrade;
+- revoke-first central account suspension and closure preview;
+- gateway schema fail-fast checks for incomplete tables and non-InnoDB MySQL.
 
