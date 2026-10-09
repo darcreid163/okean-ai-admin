@@ -23,6 +23,7 @@ if($phase==='seed'){
     $owner='1';
     $site='reg_'.str_repeat('d',32);
     $siteToken='cloud-upgrade-site-token-'.str_repeat('x',32);
+    do_action('rest_api_init');
     $health=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'));
     cloud_upgrade_expect($health->get_status()===200&&(($health->get_data()['version']??'')==='0.3.7')&&(($health->get_data()['configured']??false)===true),'Cloud health/version/configuration incorrect after ZIP upgrade');
 
