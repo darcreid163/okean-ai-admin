@@ -30,6 +30,9 @@ $routes=rest_get_server()->get_routes();
 cloud_release_expect(isset($routes['/wpai-cloud/v1/health']),'Cloud health route not registered');
 $health=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'));
 cloud_release_expect($health->get_status()===200,'Cloud health route failed');
+$healthHeaders=$health->get_headers();
+cloud_release_expect(str_contains(strtolower((string)($healthHeaders['Cache-Control']??'')),'no-store'),'Cloud health missing no-store');
+cloud_release_expect(strtolower((string)($healthHeaders['X-Content-Type-Options']??''))==='nosniff','Cloud health missing nosniff');
 $data=$health->get_data();
 cloud_release_expect(($data['service']??'')==='wp-ai-cloud'&&($data['version']??'')===WPAI_CLOUD_VERSION,'Cloud health identity mismatch');
 cloud_release_expect(($data['configured']??null)===false,'Fresh Cloud health must report configured=false');
@@ -297,9 +300,12 @@ $httpSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($httpSites->get_status()===403,'Provisioning over non-HTTPS was not denied');
 $_SERVER['HTTPS']='on';
 
-foreach([$guestSites,$subscriberSites,$bearerSites,$httpSites] as $negative){
+foreach([$guestSites,$subscriberSites,$oversizedProvisioningResponse,$bearerSites,$httpSites] as $negative){
     $encoded=wp_json_encode($negative->get_data());
     cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'Provisioning denial leaked internal diagnostics');
+    $headers=$negative->get_headers();
+    cloud_release_expect(str_contains(strtolower((string)($headers['Cache-Control']??'')),'no-store'),'Provisioning response missing no-store');
+    cloud_release_expect(strtolower((string)($headers['X-Content-Type-Options']??''))==='nosniff','Provisioning response missing nosniff');
 }
 
 // OAuth HTTP surface enforces HTTPS and exact request encodings before processing credentials.
@@ -339,6 +345,9 @@ $_SERVER['HTTPS']='on';
 foreach([$badRegisterResponse,$badTokenResponse,$oversizedRegisterResponse,$oversizedTokenResponse,$httpRegisterResponse] as $negative){
     $encoded=wp_json_encode($negative->get_data());
     cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'OAuth denial leaked internal diagnostics');
+    $headers=$negative->get_headers();
+    cloud_release_expect(str_contains(strtolower((string)($headers['Cache-Control']??'')),'no-store'),'OAuth response missing no-store');
+    cloud_release_expect(strtolower((string)($headers['X-Content-Type-Options']??''))==='nosniff','OAuth response missing nosniff');
 }
 
 // Real HTTP MCP transport with a valid short-lived pilot bearer, without external network access.
