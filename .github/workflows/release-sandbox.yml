@@ -182,15 +182,12 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: mysqli, pdo_mysql, sodium, curl
           coverage: none
-      - name: Build Cloud Core release ZIP
+      - name: Build canonical release artifacts
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
-          mkdir -p cloud-install/wp-ai-admin-cloud
-          cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/includes wp-ai-admin-cloud/src wp-ai-admin-cloud/config wp-ai-admin-cloud/README.md cloud-install/wp-ai-admin-cloud/
-          (cd cloud-install && zip -qr "wp-ai-admin-cloud-$VERSION.zip" wp-ai-admin-cloud)
-          unzip -tq "cloud-install/wp-ai-admin-cloud-$VERSION.zip"
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-install scripts/build-release-candidate.sh
       - name: Fresh WordPress Cloud Core install
         shell: bash
         run: |
@@ -228,15 +225,12 @@ jobs:
           php-version: '8.3'
           extensions: mysqli, pdo_mysql, sodium, curl
           coverage: none
-      - name: Build current Cloud Core ZIP
+      - name: Build canonical release artifacts
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
-          mkdir -p cloud-upgrade-build/wp-ai-admin-cloud
-          cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/includes wp-ai-admin-cloud/src wp-ai-admin-cloud/config wp-ai-admin-cloud/README.md cloud-upgrade-build/wp-ai-admin-cloud/
-          (cd cloud-upgrade-build && zip -qr "wp-ai-admin-cloud-$VERSION.zip" wp-ai-admin-cloud)
-          unzip -tq "cloud-upgrade-build/wp-ai-admin-cloud-$VERSION.zip"
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-upgrade-build scripts/build-release-candidate.sh
       - name: Upgrade installed Cloud Core 0.3.5 to generated 0.3.6
         shell: bash
         run: |
@@ -276,15 +270,12 @@ jobs:
           php-version: '8.3'
           extensions: mysqli, pdo_mysql, sodium, curl
           coverage: none
-      - name: Build current release ZIP
+      - name: Build canonical release artifacts
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="$(sed -n "s/^define('OAI_VERSION','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
-          mkdir -p dist/okean-ai-admin
-          cp -a okean-ai-admin.php includes starter-themes README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
-          (cd dist && zip -qr "wp-ai-admin-$VERSION.zip" okean-ai-admin)
-          unzip -tq "dist/wp-ai-admin-$VERSION.zip"
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-dist scripts/build-release-candidate.sh
       - name: Upgrade installed 2.1.13 with generated ZIP
         shell: bash
         run: |
@@ -340,15 +331,12 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: mysqli, pdo_mysql, sodium, curl
           coverage: none
-      - name: Build installable release ZIP
+      - name: Build canonical release artifacts
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="$(sed -n "s/^define('OAI_VERSION','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
-          mkdir -p dist/okean-ai-admin
-          cp -a okean-ai-admin.php includes starter-themes README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
-          (cd dist && zip -qr "wp-ai-admin-$VERSION.zip" okean-ai-admin)
-          unzip -tq "dist/wp-ai-admin-$VERSION.zip"
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-dist scripts/build-release-candidate.sh
       - name: Fresh WordPress install from generated ZIP
         shell: bash
         run: |
@@ -465,51 +453,27 @@ jobs:
           grep -Fq "1048576" "$FILE"
           grep -Fq "Security::requirePublicAddresses" "$FILE"
           echo "Outbound transport pinning/TLS/size-limit contract present"
-      - name: Build native release candidate and prove reproducibility
+      - name: Build canonical release candidate twice and prove reproducibility
         shell: bash
         run: |
           set -euo pipefail
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-dist scripts/build-release-candidate.sh
+          NATIVE_OUT=dist-rebuild CLOUD_OUT=cloud-rebuild scripts/build-release-candidate.sh
           VERSION="$(sed -n "s/^define('OAI_VERSION','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
-          test -n "$VERSION"
-          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")"
-          test -n "$SOURCE_DATE_EPOCH"
-          rm -rf dist dist-rebuild
-          for ROOT in dist dist-rebuild; do
-            mkdir -p "$ROOT/okean-ai-admin"
-            cp -a okean-ai-admin.php includes starter-themes README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt "$ROOT/okean-ai-admin/"
-            find "$ROOT/okean-ai-admin" -exec touch -d "@$SOURCE_DATE_EPOCH" {} +
-            (
-              cd "$ROOT"
-              find okean-ai-admin -type f -print | LC_ALL=C sort | zip -X -q "wp-ai-admin-$VERSION.zip" -@
-            )
-            unzip -tq "$ROOT/wp-ai-admin-$VERSION.zip"
-          done
+          CLOUD_VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
           SHA="$(sha256sum "dist/wp-ai-admin-$VERSION.zip" | awk '{print $1}')"
           SHA2="$(sha256sum "dist-rebuild/wp-ai-admin-$VERSION.zip" | awk '{print $1}')"
-          test "$SHA" = "$SHA2"
-          cmp -s "dist/wp-ai-admin-$VERSION.zip" "dist-rebuild/wp-ai-admin-$VERSION.zip"
-          BUILD_ID="$(sed -n "s/^define('OAI_BUILD_ID','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
-          printf 'commit=%s\nsource_date_epoch=%s\nversion=%s\nbuild_id=%s\nsha256=%s\nreproducible=true\n' "$GITHUB_SHA" "$SOURCE_DATE_EPOCH" "$VERSION" "$BUILD_ID" "$SHA" | tee dist/PROVENANCE.txt
-          test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
-          test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)\.git')" -eq 0
-          CLOUD_VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
-          rm -rf cloud-dist cloud-rebuild
-          for ROOT in cloud-dist cloud-rebuild; do
-            mkdir -p "$ROOT/wp-ai-admin-cloud"
-            cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/includes wp-ai-admin-cloud/src wp-ai-admin-cloud/config wp-ai-admin-cloud/README.md "$ROOT/wp-ai-admin-cloud/"
-            find "$ROOT/wp-ai-admin-cloud" -exec touch -d "@$SOURCE_DATE_EPOCH" {} +
-            (
-              cd "$ROOT"
-              find wp-ai-admin-cloud -type f -print | LC_ALL=C sort | zip -X -q "wp-ai-admin-cloud-$CLOUD_VERSION.zip" -@
-            )
-            unzip -tq "$ROOT/wp-ai-admin-cloud-$CLOUD_VERSION.zip"
-          done
           CLOUD_SHA="$(sha256sum "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | awk '{print $1}')"
           CLOUD_SHA2="$(sha256sum "cloud-rebuild/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | awk '{print $1}')"
+          test "$SHA" = "$SHA2"
           test "$CLOUD_SHA" = "$CLOUD_SHA2"
+          cmp -s "dist/wp-ai-admin-$VERSION.zip" "dist-rebuild/wp-ai-admin-$VERSION.zip"
           cmp -s "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" "cloud-rebuild/wp-ai-admin-cloud-$CLOUD_VERSION.zip"
+          cmp -s dist/PROVENANCE.txt dist-rebuild/PROVENANCE.txt
+          test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
+          test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)\.git')" -eq 0
           test "$(unzip -Z1 "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
-          printf 'cloud_version=%s\ncloud_sha256=%s\ncloud_reproducible=true\n' "$CLOUD_VERSION" "$CLOUD_SHA" | tee -a dist/PROVENANCE.txt
       - name: Scan built ZIP payloads for release-only content and secrets
         shell: bash
         run: |
