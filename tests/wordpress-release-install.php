@@ -4,7 +4,7 @@ function release_install_expect($ok,$message){if(!$ok)throw new RuntimeException
 wp_set_current_user(1);
 
 release_install_expect(defined('OAI_VERSION') && OAI_VERSION==='2.1.15','Installed release version mismatch');
-release_install_expect(defined('OAI_BUILD_ID') && OAI_BUILD_ID==='2.1.15-release-hardening-20261008','Installed release build ID mismatch');
+release_install_expect(defined('OAI_BUILD_ID') && OAI_BUILD_ID==='2.1.15-release-hardening-20261009','Installed release build ID mismatch');
 release_install_expect(class_exists('OAI_MCP')&&class_exists('OAI_REST')&&class_exists('OAI_AI_Lifecycle_Control')&&class_exists('OAI_Test_Automation'),'Required release classes missing');
 release_install_expect(!OAI_AI_Lifecycle_Control::status()['active'],'AI Lifecycle Control must be disabled on fresh install');
 release_install_expect(!OAI_Test_Automation::status()['active'],'Test Automation must be disabled on fresh install');
