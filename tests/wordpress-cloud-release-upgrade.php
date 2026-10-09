@@ -73,7 +73,7 @@ if($phase==='check'){
     cloud_upgrade_expect(defined('WPAI_CLOUD_VERSION')&&WPAI_CLOUD_VERSION==='0.3.7','Cloud ZIP upgrade did not load 0.3.7');
     $expected=get_option('wpai_cloud_upgrade_expected',[]);
     cloud_upgrade_expect(is_array($expected)&&!empty($expected['wrapped']),'Cloud upgrade expected fixture missing');
-    cloud_upgrade_expect(\WPAICloudGateway\Settings::enabled(),'Gateway enable state was lost across 0.3.6 -> 0.3.6');
+    cloud_upgrade_expect(\WPAICloudGateway\Settings::enabled(),'Gateway enable state was lost across 0.3.6 -> 0.3.7');
     cloud_upgrade_expect(hash_equals((string)$expected['wrapped'],(string)get_option('wpai_gateway_wrapped_keys_v1','')),'Wrapped gateway keys rotated across Cloud upgrade');
 
     $account=$wpdb->get_row($wpdb->prepare("SELECT plan,disabled,sequence FROM {$tables['accounts']} WHERE owner=%s",'1'),ARRAY_A);
@@ -97,7 +97,7 @@ if($phase==='check'){
     cloud_upgrade_expect(hash_equals($expected['site_token_sha256'],hash('sha256',$opened)),'Preserved site credential cannot be opened with preserved gateway key');
 
     delete_option('wpai_cloud_upgrade_expected');
-    echo "PASS real Cloud Core ZIP upgrade 0.3.6 -> 0.3.6 with keys/account/site/bearer/OAuth preserved\n";
+    echo "PASS real Cloud Core ZIP upgrade 0.3.6 -> 0.3.7 with keys/account/site/bearer/OAuth preserved\n";
     return;
 }
 throw new RuntimeException('Unknown WPAI_CLOUD_UPGRADE_PHASE');
