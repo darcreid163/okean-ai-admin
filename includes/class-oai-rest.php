@@ -1238,6 +1238,13 @@ frame.addEventListener('load',function(){
    // The live target must still equal the state AI Admin itself verified after Apply.
    $rollback_conflict=self::rollback_conflict_check($r,$applied,$meta);
    if(is_wp_error($rollback_conflict)){
+    if((string)$r['status']==='rollback_failed'){
+     $current_row=OAI_DB::get($id);
+     if(($current_row['status']??'')!=='rollback_failed'){
+      return new WP_Error('oai_state_conflict','Operation state changed while replaying Rollback conflict',array('status'=>409,'current_status'=>$current_row['status']??null));
+     }
+     return $rollback_conflict;
+    }
     $conflict_claim=OAI_DB::transition($id,array((string)$r['status']),'rollback_failed','rollback_failed');
     if($conflict_claim!==1){
      $current_row=OAI_DB::get($id);
