@@ -72,13 +72,6 @@ final class Store {
     }
     public function assertSchema(?array $tableNames=null): void {
         $tableNames=$tableNames??['accounts','balances','sites','tokens','requests','rate','audit','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate'];
-        // Refuse pre-existing nontransactional tables rather than pretending reservations are atomic.
-        if ($this->mysql) foreach ($tableNames as $name) {
-            $row=$this->row('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$this->prefix.$name]);
-            if(!$row) throw new Fault('gateway_schema_incompatible',503);
-            if (strtolower((string)$row['ENGINE'])!=='innodb') throw new Fault('innodb_required',503);
-        }
-
         // Validate the minimum schema even when the WordPress DB-version option
         // already says migration is current. This catches partial restores,
         // manually damaged tables and interrupted historical migrations.
@@ -97,17 +90,34 @@ final class Store {
             'oauth_access'=>['hash','grant_id','resource'],
             'oauth_rate'=>['bucket','slot','hits'],
         ];
+
+        if($this->mysql){
+            $names=array_map(fn($name)=>$this->prefix.$name,$tableNames);
+            $placeholders=implode(',',array_fill(0,count($names),'?'));
+
+            $tableRows=$this->rows('SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('.$placeholders.')',$names);
+            $engines=[];
+            foreach($tableRows as $row)$engines[(string)$row['TABLE_NAME']]=strtolower((string)$row['ENGINE']);
+
+            $columnRows=$this->rows('SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('.$placeholders.')',$names);
+            $columnMap=[];
+            foreach($columnRows as $row)$columnMap[(string)$row['TABLE_NAME']][]=(string)$row['COLUMN_NAME'];
+
+            foreach($tableNames as $name){
+                if(!isset($required[$name])) throw new Fault('gateway_schema_incompatible',503);
+                $physical=$this->prefix.$name;
+                if(!isset($engines[$physical])) throw new Fault('gateway_schema_incompatible',503);
+                if($engines[$physical]!=='innodb') throw new Fault('innodb_required',503);
+                if(array_diff($required[$name],$columnMap[$physical]??[])) throw new Fault('gateway_schema_incompatible',503);
+            }
+            return;
+        }
+
         foreach($tableNames as $name){
             if(!isset($required[$name])) throw new Fault('gateway_schema_incompatible',503);
-            $columns=$required[$name];
-            if($this->mysql){
-                $rows=$this->rows('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$this->prefix.$name]);
-                $present=array_map(static fn($r)=>(string)$r['COLUMN_NAME'],$rows);
-            }else{
-                $rows=$this->rows('PRAGMA table_info('.$this->table($name).')');
-                $present=array_map(static fn($r)=>(string)$r['name'],$rows);
-            }
-            if(array_diff($columns,$present)) throw new Fault('gateway_schema_incompatible',503);
+            $rows=$this->rows('PRAGMA table_info('.$this->table($name).')');
+            $present=array_map(static fn($r)=>(string)$r['name'],$rows);
+            if(array_diff($required[$name],$present)) throw new Fault('gateway_schema_incompatible',503);
         }
     }
     public function audit(string $owner,string $site,string $event,string $key,int $now): void {
