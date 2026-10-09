@@ -290,7 +290,7 @@ A release candidate is publishable only when:
 - reproducible native/Cloud ZIPs, SHA-256 provenance and payload secret scans;
 - SECURITY/changelog/data-retention release metadata;
 - public health/initialize metadata secret-leak checks;
-- atomic lifecycle transition/race coverage;
+- atomic lifecycle transition/race coverage, including authoritative post-claim conflict rechecks for Apply/Rollback;
 - crash-safe interrupted Apply/Rollback reconciliation with no blind replay;
 - 2.1.13 → 2.1.15 upgrade preserves identity/OAuth/license/pending operation evidence while resetting automation;
 - cross-run deterministic ZIP metadata/order;
