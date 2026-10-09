@@ -217,11 +217,20 @@ $badSuspend->set_body(wp_json_encode(array('confirm'=>'NO')));
 $badSuspendResponse=rest_do_request($badSuspend);
 cloud_release_expect($badSuspendResponse->get_status()===409&&(($badSuspendResponse->get_data()['error']??'')==='suspension_confirmation_required'),'Account suspension did not require exact confirmation');
 
+$otherClosureUser=wp_create_user('cloud-release-closure-other-'.wp_generate_password(8,false,false),'disposable-password','cloud-release-closure-other@example.test');
+cloud_release_expect(!is_wp_error($otherClosureUser),'Unable to create foreign suspension target fixture');
+update_option('wpai_gateway_beta_users',array((int)$closureUser,(int)$otherClosureUser),false);
+$subscriberCore->ensureAccount((string)$otherClosureUser);
+
 $goodSuspend=new WP_REST_Request('POST','/wpai-cloud/v1/account/suspend');
 $goodSuspend->set_header('content-type','application/json');
-$goodSuspend->set_body(wp_json_encode(array('confirm'=>'SUSPEND')));
+$goodSuspend->set_body(wp_json_encode(array('confirm'=>'SUSPEND','owner'=>(string)$otherClosureUser)));
 $goodSuspendResponse=rest_do_request($goodSuspend);
 cloud_release_expect($goodSuspendResponse->get_status()===200&&!empty($goodSuspendResponse->get_data()['suspended'])&&!empty($goodSuspendResponse->get_data()['access_revoked']),'Confirmed account suspension failed');
+$foreignAccountRow=$gatewayStore->row('SELECT disabled FROM '.$gatewayStore->table('accounts').' WHERE owner=?',[(string)$otherClosureUser]);
+cloud_release_expect((int)($foreignAccountRow['disabled']??-1)===0,'Self-service suspension honored attacker-supplied foreign owner');
+$ownAccountRow=$gatewayStore->row('SELECT disabled FROM '.$gatewayStore->table('accounts').' WHERE owner=?',[(string)$closureUser]);
+cloud_release_expect((int)($ownAccountRow['disabled']??0)===1,'Self-service suspension did not disable session owner');
 
 $afterSuspendSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($afterSuspendSites->get_status()===403&&(($afterSuspendSites->get_data()['error']??'')==='account_unavailable'),'Suspended owner retained Cloud Core site access');
@@ -233,6 +242,7 @@ cloud_release_expect($repeatSuspend->get_status()===403&&(($repeatSuspend->get_d
 update_option('wpai_gateway_beta_users',array(),false);
 require_once ABSPATH.'wp-admin/includes/user.php';
 wp_delete_user((int)$closureUser);
+wp_delete_user((int)$otherClosureUser);
 
 wp_set_current_user(0);
 $bearerOnly=new WP_REST_Request('GET','/wpai-cloud/v1/sites');
