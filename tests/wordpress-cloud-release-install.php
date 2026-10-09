@@ -3,7 +3,7 @@
 function cloud_release_expect($ok,$message){if(!$ok)throw new RuntimeException($message);}
 wp_set_current_user(1);
 
-cloud_release_expect(defined('WPAI_CLOUD_VERSION')&&WPAI_CLOUD_VERSION==='0.3.6','Cloud Core version mismatch');
+cloud_release_expect(defined('WPAI_CLOUD_VERSION')&&WPAI_CLOUD_VERSION==='0.3.7','Cloud Core version mismatch');
 cloud_release_expect(defined('WPAI_CLOUD_DB_VERSION'),'Cloud Core DB version constant missing');
 cloud_release_expect(class_exists('WPAI_Cloud_DB')&&class_exists('WPAI_Cloud_Plans'),'Cloud Core v1 classes missing');
 cloud_release_expect(class_exists('WPAICloudGateway\\WordPress')&&class_exists('WPAICloudGateway\\Settings')&&class_exists('WPAICloudGateway\\Core'),'Gateway classes missing');
