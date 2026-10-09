@@ -168,9 +168,15 @@ $proofApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].
 $proofApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/apply');$proofApply->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApprove)),'Proof fixture approval failed');
 // Atomic lifecycle claim: only one contender can move approved -> applying.
+$activeApplyLease=OAI_DB::acquire_operation_lease((int)$proofOp['id'],'apply',120);
+release_install_expect(is_string($activeApplyLease)&&$activeApplyLease!=='','Unable to acquire active Apply execution lease fixture');
 $claim1=OAI_DB::transition((int)$proofOp['id'],array('approved'),'applying','applying');
 $claim2=OAI_DB::transition((int)$proofOp['id'],array('approved'),'applying','applying');
 release_install_expect($claim1===1&&$claim2===0,'Apply lifecycle claim was not single-winner atomic');
+$applyBusy=OAI_REST::sandbox_action($proofApply);
+release_install_expect(is_wp_error($applyBusy)&&$applyBusy->get_error_code()==='oai_operation_busy','Active Apply execution was mistaken for a crashed request');
+release_install_expect((OAI_DB::get((int)$proofOp['id'])['status']??'')==='applying'&&(string)get_option('wpai_release_proof_fixture')==='baseline','Busy Apply retry changed lifecycle/live state');
+release_install_expect(OAI_DB::release_operation_lease((int)$proofOp['id'],$activeApplyLease)===true,'Unable to release active Apply execution lease fixture');
 $applyRecoveryReady=OAI_REST::sandbox_action($proofApply);
 release_install_expect(is_wp_error($applyRecoveryReady)&&$applyRecoveryReady->get_error_code()==='oai_apply_recovery_ready','Interrupted Apply with unchanged live state did not reconcile to retry-safe approved');
 release_install_expect((OAI_DB::get((int)$proofOp['id'])['status']??'')==='approved'&&(string)get_option('wpai_release_proof_fixture')==='baseline','Apply recovery-ready path changed live state');
@@ -183,9 +189,15 @@ release_install_expect(($applyReceipt['operation_id']??'')===($proofOp['operatio
 
 $proofRollback=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/rollback');$proofRollback->set_header('X-WP-Nonce',$nonce);
 // Atomic lifecycle claim: only one contender can move applied -> rollback_pending.
+$activeRollbackLease=OAI_DB::acquire_operation_lease((int)$proofOp['id'],'rollback',120);
+release_install_expect(is_string($activeRollbackLease)&&$activeRollbackLease!=='','Unable to acquire active Rollback execution lease fixture');
 $rollbackClaim1=OAI_DB::transition((int)$proofOp['id'],array('applied'),'rollback_pending','rollback_pending');
 $rollbackClaim2=OAI_DB::transition((int)$proofOp['id'],array('applied'),'rollback_pending','rollback_pending');
 release_install_expect($rollbackClaim1===1&&$rollbackClaim2===0,'Rollback lifecycle claim was not single-winner atomic');
+$rollbackBusy=OAI_REST::sandbox_action($proofRollback);
+release_install_expect(is_wp_error($rollbackBusy)&&$rollbackBusy->get_error_code()==='oai_operation_busy','Active Rollback execution was mistaken for a crashed request');
+release_install_expect((OAI_DB::get((int)$proofOp['id'])['status']??'')==='rollback_pending'&&(string)get_option('wpai_release_proof_fixture')==='applied-value','Busy Rollback retry changed lifecycle/live state');
+release_install_expect(OAI_DB::release_operation_lease((int)$proofOp['id'],$activeRollbackLease)===true,'Unable to release active Rollback execution lease fixture');
 $rollbackRecoveryReady=OAI_REST::sandbox_action($proofRollback);
 release_install_expect(is_wp_error($rollbackRecoveryReady)&&$rollbackRecoveryReady->get_error_code()==='oai_rollback_recovery_ready','Interrupted Rollback with intact applied state did not reconcile to retry-safe applied');
 release_install_expect((OAI_DB::get((int)$proofOp['id'])['status']??'')==='applied'&&(string)get_option('wpai_release_proof_fixture')==='applied-value','Rollback recovery-ready path changed live state');
