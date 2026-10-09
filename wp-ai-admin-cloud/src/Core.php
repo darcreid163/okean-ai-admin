@@ -26,6 +26,9 @@ final class Core {
         if (!$s) throw new Fault('site_unavailable',404);
         return $s;
     }
+    public function assertActiveAccount(string $owner,bool $lock=false): void {
+        $this->account($owner,$lock);
+    }
     public function sites(string $owner): array {
         $this->account($owner);
         return $this->store->rows('SELECT id,home,plugin_site_id,installation_id,status,created_at FROM '.$this->store->table('sites').' WHERE owner=? AND status=? ORDER BY created_at',[$owner,'active']);
