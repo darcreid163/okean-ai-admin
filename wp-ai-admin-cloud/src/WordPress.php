@@ -93,6 +93,13 @@ final class WordPress {
         $route('/usage','GET',fn($r)=>self::core()->usage(self::owner(),time()));
         $route('/connection-check','GET',function($r) { $home=$r['home']; if(!is_string($home)||strlen($home)>512)throw new Fault('invalid_site_input'); return self::pairing()->checkSite(self::owner(),$home,time()); });
         $route('/ledger','GET',fn($r)=>self::core()->ledger(self::owner()));
+        $route('/account/closure-preview','GET',fn($r)=>self::core()->closureInventory(self::owner()));
+        $route('/account/suspend','POST',function($r) {
+            $p=self::body($r);
+            if (($p['confirm']??null)!=='SUSPEND') throw new Fault('suspension_confirmation_required',409);
+            $owner=self::owner();
+            return self::core()->suspendAccount($owner,time());
+        });
         register_rest_route('wpai-cloud/v1','/pairing/request',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn($r)=>self::safe(fn()=>self::response(self::pairing()->descriptor(is_string($r['state'])?$r['state']:'',time())))]);
         $route('/sites/(?P<id>reg_[a-f0-9]{32})/foundation','GET',fn($r)=>self::core()->foundation(self::owner(),$r['id'],time()));
         register_rest_route('wpai-cloud/v1','/health',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn()=>self::response(['service'=>'wp-ai-cloud','version'=>'0.3.6','configured'=>self::configured(),'mode'=>'approved_beta','public_mcp_url'=>Settings::endpoint(),'public_sse_url'=>Settings::sseEndpoint(),'oauth_implementation'=>'beta_pkce_s256','providers'=>['chatgpt'=>'beta','qwen'=>'beta_sse_and_http','claude'=>'planned','deepseek'=>'planned'],'schema'=>'gateway_v1_separate_from_core_v1','oauth'=>self::configured(),'batch_accounting'=>false,'billing'=>false,'commercial_client_entitlements'=>false])]);
