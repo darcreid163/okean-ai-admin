@@ -1158,7 +1158,11 @@ frame.addEventListener('load',function(){
     }
    }
 
-   OAI_DB::update($id,array('status'=>'applying','phase'=>'applying'));
+   $claimed=OAI_DB::transition($id,array('approved'),'applying','applying');
+   if($claimed!==1){
+    $current_row=OAI_DB::get($id);
+    return new WP_Error('oai_state_conflict','Operation state changed before Apply could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
+   }
    try {
     if($r['type']==='woodmart_theme_setting'){
      $err=OAI_Woodmart::write($r['target'],$after,$before,$meta['native_input']??null);
@@ -1234,8 +1238,13 @@ frame.addEventListener('load',function(){
     return $rollback_conflict;
    }
 
-   OAI_DB::update($id,array('status'=>'rollback_pending','phase'=>'rollback_pending'));
-   OAI_DB::update($id,array('status'=>'rolling_back','phase'=>'rolling_back'));
+   $rollback_claim=OAI_DB::transition($id,array((string)$r['status']),'rollback_pending','rollback_pending');
+   if($rollback_claim!==1){
+    $current_row=OAI_DB::get($id);
+    return new WP_Error('oai_state_conflict','Operation state changed before Rollback could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
+   }
+   $rolling_claim=OAI_DB::transition($id,array('rollback_pending'),'rolling_back','rolling_back');
+   if($rolling_claim!==1)return new WP_Error('oai_state_conflict','Rollback claim could not enter execution state',array('status'=>409));
    try { $err=self::rollback_write($r['type'],$r['target'],$before,$meta); }
    catch(Throwable $e){ $err=new WP_Error('oai_rollback_exception',$e->getMessage(),array('status'=>500)); }
    if(is_wp_error($err)){
