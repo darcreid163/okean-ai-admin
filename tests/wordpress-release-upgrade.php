@@ -72,7 +72,7 @@ if($phase==='seed'){
     $tools=OAI_MCP::tool_definitions();
     $toolNames=array_values(array_filter(array_map(fn($tool)=>is_array($tool)?($tool['name']??''):'',$tools)));
     release_upgrade_expect(count($toolNames)>=100,'MCP tool catalog unexpectedly small after ZIP upgrade');
-    foreach(['system_manifest','operation_apply','operation_verify','operation_get_receipt','operation_rollback'] as $requiredTool){
+    foreach(['system.manifest','operation.apply','operation.verify','operation.get_receipt','operation.rollback'] as $requiredTool){
         release_upgrade_expect(in_array($requiredTool,$toolNames,true),'Required MCP tool missing after ZIP upgrade: '.$requiredTool);
     }
     $expected=get_option('wpai_release_upgrade_expected',array());
