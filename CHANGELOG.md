@@ -24,6 +24,11 @@ All notable public-release changes are recorded here. Published versions must ne
 - Normalize release ZIP timestamps and file ordering for cross-run deterministic artifacts.
 - Add crash-safe reconciliation for interrupted Apply/Rollback: verify-before-retry, finalize already-completed writes without replay, return unchanged outcomes to an explicit retryable state, and keep ambiguous outcomes fail-closed.
 - Protect `rollback_pending` as an active operation during cleanup.
+- Add revoke-first self-service central account suspension with non-destructive closure preview; suspension revokes bearer/OAuth/site access and clears sealed site credentials while retaining ledger/audit/balance evidence.
+- Scrub sealed site credentials from all historical registrations during suspension, including legacy rows already marked revoked.
+- Add a real Cloud Core 0.3.5 → 0.3.6 ZIP upgrade acceptance preserving gateway keys, account/site identity, bearer and OAuth grants.
+- Use one canonical deterministic release builder across fresh install, native upgrade, Cloud upgrade and provenance jobs.
+- Fail fast with `gateway_schema_incompatible` on partial gateway schemas and reject non-InnoDB MySQL gateway tables.
 
 ### Commercial truthfulness
 - Keep public health mode at approved_beta.
