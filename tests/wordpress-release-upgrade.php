@@ -78,7 +78,7 @@ if($phase==='seed'){
     $expected=get_option('wpai_release_upgrade_expected',array());
     $manifest=OAI_Platform::manifest();
     release_upgrade_expect(is_array($manifest)&&($manifest['plugin_name']??'')==='WP AI Admin','System manifest identity invalid after ZIP upgrade');
-    release_upgrade_expect(($manifest['version']??'')===OAI_VERSION&&($manifest['build_id']??'')===OAI_BUILD_ID,'System manifest version/build mismatch after ZIP upgrade');
+    release_upgrade_expect(($manifest['plugin_version']??'')===OAI_VERSION&&($manifest['build_id']??'')===OAI_BUILD_ID,'System manifest version/build mismatch after ZIP upgrade');
     release_upgrade_expect(($manifest['site_id']??'')===$expected['site_id']&&($manifest['installation_id']??'')===$expected['installation_id'],'System manifest identity claims changed across ZIP upgrade');
     release_upgrade_expect((($manifest['release']['production_defaults']['direct_live_writes']??true)===false),'System manifest enabled direct live writes after ZIP upgrade');
     release_upgrade_expect(is_array($expected)&&!empty($expected['site_id']),'Upgrade expected-state fixture missing');
