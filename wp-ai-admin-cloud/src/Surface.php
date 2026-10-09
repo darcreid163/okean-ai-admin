@@ -27,9 +27,12 @@ final class Surface {
     public static function serve(): void {
         $path=parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH);$kind=self::routeKind(is_string($path)?$path:'');
         if(!$kind)return;
+        // Every public Cloud surface, including early denials, is non-cacheable
+        // and protected against MIME sniffing.
+        nocache_headers();
+        header('X-Content-Type-Options: nosniff');
         // Preserve the local WP AI Admin OAuth discovery on the main domain.
         if(!is_ssl()){status_header(403);exit;}
-        nocache_headers();
         if($kind==='mcp') { rest_get_server()->serve_request('/wpai-cloud/v1/mcp');exit; }
         if($kind==='sse') { Sse::open();exit; }
         if($kind==='sse_messages') { Sse::messages();exit; }
