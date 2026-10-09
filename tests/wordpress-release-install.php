@@ -151,6 +151,11 @@ release_install_expect(($preflightProof['proof_kind']??'')==='preflight'&&empty(
 $proofApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/approve');$proofApprove->set_header('X-WP-Nonce',$nonce);
 $proofApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/apply');$proofApply->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApprove)),'Proof fixture approval failed');
+// Atomic lifecycle claim: only one contender can move approved -> applying.
+$claim1=OAI_DB::transition((int)$proofOp['id'],array('approved'),'applying','applying');
+$claim2=OAI_DB::transition((int)$proofOp['id'],array('approved'),'applying','applying');
+release_install_expect($claim1===1&&$claim2===0,'Apply lifecycle claim was not single-winner atomic');
+OAI_DB::update((int)$proofOp['id'],array('status'=>'approved','phase'=>'approved'));
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApply))&&(string)get_option('wpai_release_proof_fixture')==='applied-value','Proof fixture Apply failed');
 $applyProof=OAI_Proof::make((int)$proofOp['id']);
 $applyReceipt=OAI_Receipts::build((int)$proofOp['id']);
@@ -159,6 +164,11 @@ release_install_expect(preg_match('/^[a-f0-9]{64}$/',(string)($applyProof['hash'
 release_install_expect(($applyReceipt['operation_id']??'')===($proofOp['operation_id']??'')&&!empty($applyReceipt['verified'])&&(($applyReceipt['proof']['hash']??'')===($applyProof['hash']??'')),'Apply receipt not bound to Apply proof');
 
 $proofRollback=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/rollback');$proofRollback->set_header('X-WP-Nonce',$nonce);
+// Atomic lifecycle claim: only one contender can move applied -> rollback_pending.
+$rollbackClaim1=OAI_DB::transition((int)$proofOp['id'],array('applied'),'rollback_pending','rollback_pending');
+$rollbackClaim2=OAI_DB::transition((int)$proofOp['id'],array('applied'),'rollback_pending','rollback_pending');
+release_install_expect($rollbackClaim1===1&&$rollbackClaim2===0,'Rollback lifecycle claim was not single-winner atomic');
+OAI_DB::update((int)$proofOp['id'],array('status'=>'applied','phase'=>'applied'));
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofRollback))&&(string)get_option('wpai_release_proof_fixture')==='baseline','Proof fixture Rollback failed');
 $rollbackProof=OAI_Proof::make((int)$proofOp['id']);
 $rollbackReceipt=OAI_Receipts::build((int)$proofOp['id']);
