@@ -248,6 +248,30 @@ breject(fn()=>$closureOAuth->exchange([
 ],$now+23,fn($owner)=>true),'invalid_grant');
 breject(fn()=>$closureOAuth->approve('closure-owner',$closureAuth,[$closureSite['id']],$now+23),'invalid_site_consent');
 
+// Recovery requires a genuinely fresh registration and fresh authorization.
+$newClosureSite=$core->connect('closure-owner','https://closure.example.com','fixture-closure-site-token-fresh-bbbbbbbb',$now+24);
+bcheck(($newClosureSite['id']??'')!==$closureSite['id'],'Reactivation reused revoked site registration id');
+$oldClosureSiteRow=$store->row('SELECT status,token_sealed FROM '.$store->table('sites').' WHERE id=?',[$closureSite['id']]);
+bcheck(($oldClosureSiteRow['status']??'')==='revoked'&&($oldClosureSiteRow['token_sealed']??'')==='','Fresh reconnect resurrected old site row or credential');
+
+$newClosureBearer=$core->mint('closure-owner',[$newClosureSite['id']],['mcp:read'],$now+24);
+$newClosureActor=$core->authenticate($newClosureBearer['access_token'],$now+24);
+bcheck(($newClosureActor['owner']??'')==='closure-owner'&&$newClosureActor['site_ids']===[$newClosureSite['id']],'Fresh bearer after reactivation has wrong owner/site binding');
+breject(fn()=>$core->authenticate($closureBearer['access_token'],$now+24),'invalid_or_expired_token');
+
+$newClosureAuth=$closureAuth;
+$newClosureAuth['state']='closure-state-fresh';
+$newClosureCode=$closureOAuth->approve('closure-owner',$newClosureAuth,[$newClosureSite['id']],$now+24);
+bcheck(is_string($newClosureCode)&&$newClosureCode!=='closure-code','Fresh OAuth consent did not issue a new code');
+$newClosureOAuthToken=$closureOAuth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$closureClient,'code'=>$newClosureCode,
+    'redirect_uri'=>$closureRedirect,'code_verifier'=>$closureVerifier,'resource'=>'https://wpaiadmin.ru/mcp'
+],$now+25,fn($owner)=>$owner==='closure-owner');
+bcheck(!empty($newClosureOAuthToken['access_token']),'Fresh OAuth exchange after reactivation did not issue access token');
+$newOauthActor=$core->authenticate($newClosureOAuthToken['access_token'],$now+25);
+bcheck($newOauthActor['site_ids']===[$newClosureSite['id']],'Fresh OAuth token after reactivation bound old registration');
+breject(fn()=>$core->authenticate($closureBearer['access_token'],$now+25),'invalid_or_expired_token');
+
 $site=$core->connect('boundary','https://boundary.example.com','fixture-boundary-admin-token-aaaaaaaa',$now);
 
 // Token policy boundaries.
