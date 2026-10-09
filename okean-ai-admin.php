@@ -85,6 +85,7 @@ register_activation_hook(__FILE__, array('OAI_DB','install'));
 function oai_deactivation_safety_reset(){
  if(class_exists('OAI_AI_Lifecycle_Control'))OAI_AI_Lifecycle_Control::disable(0,'plugin_deactivated');
  if(class_exists('OAI_Test_Automation'))OAI_Test_Automation::disable('plugin_deactivated',0);
+ if(class_exists('OAI_DB'))OAI_DB::clear_operation_leases();
 }
 register_deactivation_hook(__FILE__,'oai_deactivation_safety_reset');
 add_action('plugins_loaded', array('OAI_DB','maybe_upgrade'));
