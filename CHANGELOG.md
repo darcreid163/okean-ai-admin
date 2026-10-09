@@ -1,5 +1,15 @@
 # Changelog
 
+## Cloud Core 0.3.7 — Release candidate — 2026-10-09
+
+- Add revoke-first central account suspension and closure preview.
+- Revoke bearer/OAuth/site access and scrub all sealed site credentials on suspension.
+- Invalidate existing bearer access when the WordPress owner loses eligibility or is deleted.
+- Fail fast on incomplete gateway database schemas.
+- Preserve keys/account/site/bearer/OAuth state across real Cloud Core ZIP upgrade from 0.3.6.
+- Use the canonical deterministic release artifact builder.
+
+
 All notable public-release changes are recorded here. Published versions must never be reused for different package bytes.
 
 ## 2.1.15 — Release candidate — 2026-10-08
