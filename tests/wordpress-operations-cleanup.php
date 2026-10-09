@@ -28,6 +28,7 @@ $insert=function(string $status,string $suffix) use($wpdb,$table,$now){
 $pending=$insert('pending','pending');
 $approved=$insert('approved','approved');
 $applying=$insert('applying','applying');
+$rollbackPending=$insert('rollback_pending','rollback-pending');
 $rolling=$insert('rolling_back','rolling');
 $applied=$insert('applied','applied');
 $failed1=$insert('failed','failed1');
@@ -53,11 +54,11 @@ $dry=OAI_Operations_Cleanup::run();
 cleanup_expect(!is_wp_error($dry)&&($dry['mode']??'')==='dry_run','Cleanup default was not dry-run');
 cleanup_expect(($dry['deleted']??-1)===0,'Dry-run deleted operations');
 cleanup_expect(($dry['include_applied']??true)===false,'Dry-run unexpectedly included applied');
-cleanup_expect(OAI_DB::count_all()===8,'Dry-run changed operation count');
+cleanup_expect(OAI_DB::count_all()===9,'Dry-run changed operation count');
 
 $exec=OAI_Operations_Cleanup::run(array('dry_run'=>false));
 cleanup_expect(!is_wp_error($exec)&&($exec['mode']??'')==='execute','Terminal cleanup execute failed');
-cleanup_expect(OAI_DB::get($pending)!==null&&OAI_DB::get($approved)!==null&&OAI_DB::get($applying)!==null&&OAI_DB::get($rolling)!==null,'Active operation was deleted');
+cleanup_expect(OAI_DB::get($pending)!==null&&OAI_DB::get($approved)!==null&&OAI_DB::get($applying)!==null&&OAI_DB::get($rollbackPending)!==null&&OAI_DB::get($rolling)!==null,'Active operation was deleted');
 cleanup_expect(OAI_DB::get($applied)!==null,'Applied operation deleted without explicit opt-in');
 cleanup_expect(OAI_DB::get($failed1)===null&&OAI_DB::get($rollbackFailed)===null&&OAI_DB::get($rejected)===null,'Terminal operation survived cleanup');
 cleanup_expect((int)$wpdb->get_var("SELECT COUNT(*) FROM $audit")===$auditBefore,'Cleanup deleted audit evidence');
