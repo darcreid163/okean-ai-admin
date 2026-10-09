@@ -297,5 +297,10 @@ A release candidate is publishable only when:
 - canonical release builder shared by install/upgrade/provenance jobs;
 - real Cloud Core 0.3.6 → 0.3.7 state-preserving ZIP upgrade;
 - revoke-first central account suspension and closure preview;
-- gateway schema fail-fast checks for incomplete tables and non-InnoDB MySQL.
+- gateway schema fail-fast checks for incomplete tables and non-InnoDB MySQL;
+- revoke/suspension process races for bearer mint, OAuth consent, OAuth exchange and already-dispatched tool calls;
+- guarded operator account reactivation with fresh reconnect/OAuth requirement;
+- historical upgrade ZIP blob/size pinning;
+- provisioning/OAuth/MCP request-size enforcement and namespace-wide no-store/nosniff response hardening;
+- real HTTP OAuth discovery metadata/header checks.
 
