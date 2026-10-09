@@ -225,7 +225,10 @@ cloud_release_expect($goodSuspendResponse->get_status()===200&&!empty($goodSuspe
 
 $afterSuspendSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($afterSuspendSites->get_status()===403&&(($afterSuspendSites->get_data()['error']??'')==='account_unavailable'),'Suspended owner retained Cloud Core site access');
-$repeatSuspend=rest_do_request($goodSuspend);
+$repeatSuspendReq=new WP_REST_Request('POST','/wpai-cloud/v1/account/suspend');
+$repeatSuspendReq->set_header('content-type','application/json');
+$repeatSuspendReq->set_body(wp_json_encode(array('confirm'=>'SUSPEND')));
+$repeatSuspend=rest_do_request($repeatSuspendReq);
 cloud_release_expect($repeatSuspend->get_status()===403&&(($repeatSuspend->get_data()['error']??'')==='account_unavailable'),'Suspended account could invoke suspension flow again');
 update_option('wpai_gateway_beta_users',array(),false);
 require_once ABSPATH.'wp-admin/includes/user.php';
