@@ -79,7 +79,8 @@ final class OAuth {
                 // account-first lock order shared with suspension/connect/mint.
                 $probe=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_codes').' WHERE hash=?',[$hash]);
                 if(!$probe)throw new Fault('invalid_grant');
-                $this->core->assertActiveAccount((string)$probe['owner'],true);
+                try { $this->core->assertActiveAccount((string)$probe['owner'],true); }
+                catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
                 $c=$this->store->row('SELECT * FROM '.$this->store->table('oauth_codes').' WHERE hash=?'.$this->store->lock(),[$hash]);
                 if(!$c||(int)$c['used']!==0||(int)$c['expires']<=$now||$c['client']!==$p['client_id']||$c['redirect']!==$p['redirect_uri']||$c['resource']!==$p['resource']||$c['resource']!==$this->resource||!hash_equals($c['challenge'],Security::b64(hash('sha256',$p['code_verifier'],true))))throw new Fault('invalid_grant');
                 if(!$eligible($c['owner']))throw new Fault('access_denied',403);
@@ -98,7 +99,8 @@ final class OAuth {
             if(!$probeRefresh)throw new Fault('invalid_grant');
             $probeGrant=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_grants').' WHERE id=?',[$probeRefresh['grant_id']]);
             if(!$probeGrant)throw new Fault('invalid_grant');
-            $this->core->assertActiveAccount((string)$probeGrant['owner'],true);
+            try { $this->core->assertActiveAccount((string)$probeGrant['owner'],true); }
+            catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
 
             $r=$this->store->row('SELECT * FROM '.$this->store->table('oauth_refresh').' WHERE hash=?'.$this->store->lock(),[$hash]);
             if(!$r)throw new Fault('invalid_grant');
