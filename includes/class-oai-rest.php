@@ -1086,6 +1086,11 @@ frame.addEventListener('load',function(){
   if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
   $meta=json_decode((string)$r['meta_data'],true); if(!is_array($meta))$meta=array();
 
+  // Crash-safe reconciliation for an interrupted lifecycle request. Never
+  // blindly repeat a live write while its previous outcome is unknown.
+  if($action==='apply' && $r['status']==='applying')return self::recover_inflight_apply($id,$r,$meta);
+  if($action==='rollback' && in_array($r['status'],array('rollback_pending','rolling_back'),true))return self::recover_inflight_rollback($id,$r,$meta);
+
   // A sandbox snapshot is valid only until its explicit expiry. Never approve
   // or apply an operation against a stale snapshot; rollback of an already
   // applied operation remains available independently.
@@ -1293,6 +1298,82 @@ frame.addEventListener('load',function(){
    OAI_Receipts::store($id,array('event'=>'rollback','status'=>'rolled_back','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
   }
   return self::row($id);
+ }
+
+ private static function recover_inflight_apply($id,$r,$meta=array()){
+  $after=json_decode((string)$r['after_data'],true);
+  $before=json_decode((string)$r['before_data'],true);
+
+  // If the intended after-state is already present and stable, finalize the
+  // interrupted Apply without issuing another live write.
+  self::refresh_verification_target($r['type'],$r['target'],$meta);
+  $after_check=OAI_Verify::operation($id,$after,'after',true);
+  self::refresh_verification_target($r['type'],$r['target'],$meta);
+  $after_check2=OAI_Verify::operation($id,$after,'after',true);
+  if(!is_wp_error($after_check)&&!is_wp_error($after_check2)&&!empty($after_check['verified'])&&!empty($after_check2['verified'])){
+   OAI_DB::update($id,array(
+    'status'=>'applied','phase'=>'applied',
+    'applied_data'=>wp_json_encode($after,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION),
+    'applied_at'=>current_time('mysql',true)
+   ));
+   $final=OAI_DB::get($id);
+   OAI_Audit::log('apply_recovered',$final,array('verified'=>true,'verification'=>$after_check2,'replayed_write'=>false));
+   OAI_Receipts::store($id,array('event'=>'apply_recovered','status'=>'applied','at'=>gmdate('c'),'verification'=>$after_check2,'replayed_write'=>false),OAI_Proof::make($id));
+   return self::row($id);
+  }
+
+  // If the original before-state is still present and stable, no live write
+  // took effect. Return to approved but require a new explicit Apply request.
+  self::refresh_verification_target($r['type'],$r['target'],$meta);
+  $before_check=OAI_Verify::operation($id,$before,'rollback',true);
+  self::refresh_verification_target($r['type'],$r['target'],$meta);
+  $before_check2=OAI_Verify::operation($id,$before,'rollback',true);
+  if(!is_wp_error($before_check)&&!is_wp_error($before_check2)&&!empty($before_check['verified'])&&!empty($before_check2['verified'])){
+   $claim=OAI_DB::transition($id,array('applying'),'approved','approved');
+   if($claim!==1)return new WP_Error('oai_state_conflict','Interrupted Apply recovery lost its state claim',array('status'=>409));
+   $final=OAI_DB::get($id);
+   OAI_Audit::log('apply_recovery_ready',$final,array('verified_before'=>true,'replayed_write'=>false));
+   return new WP_Error('oai_apply_recovery_ready','Previous Apply did not reach the target state; operation was returned to approved. Submit Apply again explicitly.',array('status'=>409,'current_status'=>'approved'));
+  }
+
+  return new WP_Error('oai_apply_outcome_uncertain','Previous Apply outcome cannot be reconciled safely; no write was replayed',array('status'=>409,'current_status'=>'applying','verification_after'=>$after_check2,'verification_before'=>$before_check2));
+ }
+
+ private static function recover_inflight_rollback($id,$r,$meta=array()){
+  $before=json_decode((string)$r['before_data'],true);
+  $applied=json_decode((string)$r['applied_data'],true);
+  if($r['applied_data']===null || $r['applied_data']==='')$applied=json_decode((string)$r['after_data'],true);
+
+  // If rollback already reached the original state, finalize it without
+  // repeating a destructive write.
+  self::refresh_verification_target($r['type'],$r['target'],$meta);
+  $before_check=OAI_Verify::operation($id,$before,'rollback',true);
+  self::refresh_verification_target($r['type'],$r['target'],$meta);
+  $before_check2=OAI_Verify::operation($id,$before,'rollback',true);
+  if(!is_wp_error($before_check)&&!is_wp_error($before_check2)&&!empty($before_check['verified'])&&!empty($before_check2['verified'])){
+   OAI_DB::update($id,array('status'=>'rolled_back','phase'=>'rolled_back','rolled_back_at'=>current_time('mysql',true)));
+   $final=OAI_DB::get($id);
+   OAI_Audit::log('rollback_recovered',$final,array('verified'=>true,'verification'=>$before_check2,'replayed_write'=>false));
+   OAI_Receipts::store($id,array('event'=>'rollback_recovered','status'=>'rolled_back','at'=>gmdate('c'),'verification'=>$before_check2,'replayed_write'=>false),OAI_Proof::make($id));
+   return self::row($id);
+  }
+
+  // If the applied state is still intact, the interrupted rollback made no
+  // effective change. Restore the lifecycle to applied and require a fresh
+  // explicit Rollback request.
+  self::refresh_verification_target($r['type'],$r['target'],$meta);
+  $applied_check=OAI_Verify::operation($id,$applied,'after',true);
+  self::refresh_verification_target($r['type'],$r['target'],$meta);
+  $applied_check2=OAI_Verify::operation($id,$applied,'after',true);
+  if(!is_wp_error($applied_check)&&!is_wp_error($applied_check2)&&!empty($applied_check['verified'])&&!empty($applied_check2['verified'])){
+   $claim=OAI_DB::transition($id,array((string)$r['status']),'applied','applied');
+   if($claim!==1)return new WP_Error('oai_state_conflict','Interrupted Rollback recovery lost its state claim',array('status'=>409));
+   $final=OAI_DB::get($id);
+   OAI_Audit::log('rollback_recovery_ready',$final,array('verified_applied'=>true,'replayed_write'=>false));
+   return new WP_Error('oai_rollback_recovery_ready','Previous Rollback did not reach the original state; operation was returned to applied. Submit Rollback again explicitly.',array('status'=>409,'current_status'=>'applied'));
+  }
+
+  return new WP_Error('oai_rollback_outcome_uncertain','Previous Rollback outcome cannot be reconciled safely; no write was replayed',array('status'=>409,'current_status'=>$r['status'],'verification_before'=>$before_check2,'verification_applied'=>$applied_check2));
  }
 
  private static function rollback_conflict_check($r,$applied,$meta=array()){
