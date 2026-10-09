@@ -65,6 +65,12 @@ jobs:
           TEST_MYSQL_USER: root
           TEST_MYSQL_PASSWORD: release-sandbox-password
         run: php wp-ai-admin-cloud/tests/site-connect-concurrency.php
+      - name: Suspension versus bearer mint race
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_sandbox
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-sandbox-password
+        run: php wp-ai-admin-cloud/tests/suspension-token-concurrency.php
 
   release-boundaries:
     runs-on: ubuntu-latest
