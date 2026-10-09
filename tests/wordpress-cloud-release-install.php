@@ -139,6 +139,23 @@ update_option('wpai_gateway_beta_users',array((int)$subscriber),false);
 $allowedSubscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($allowedSubscriberSites->get_status()===200&&is_array($allowedSubscriberSites->get_data())&&count($allowedSubscriberSites->get_data())===0,'Explicit beta allowlist did not enable isolated subscriber tenant');
 
+// Already-issued Cloud bearer must be invalidated by owner eligibility loss.
+$subscriberCore=\WPAICloudGateway\WordPress::operatorCore();
+$subscriberCore->ensureAccount((string)$subscriber);
+$cloudRef=new ReflectionClass('WPAICloudGateway\\WordPress');
+$storeProp=$cloudRef->getProperty('store');$storeProp->setAccessible(true);
+$gatewayStore=$storeProp->getValue();
+cloud_release_expect($gatewayStore instanceof \WPAICloudGateway\Store,'Unable to inspect gateway store for bearer eligibility fixture');
+$subscriberBearer='wpai_cloud_'.\WPAICloudGateway\Security::b64(random_bytes(32));
+$gatewayStore->execute('INSERT INTO '.$gatewayStore->table('tokens').' (hash,owner,scopes,site_ids,expires_at,revoked) VALUES (?,?,?,?,?,0)',array(
+    hash('sha256',$subscriberBearer),(string)$subscriber,
+    \WPAICloudGateway\Security::canonical(array('mcp:read')),
+    \WPAICloudGateway\Security::canonical(array()),
+    time()+3600
+));
+$subscriberActor=\WPAICloudGateway\WordPress::authenticateHeader('Bearer '.$subscriberBearer);
+cloud_release_expect(($subscriberActor['owner']??'')===(string)$subscriber,'Eligible beta subscriber bearer was rejected');
+
 $subscriberPlan=new WP_REST_Request('POST','/wpai-cloud/v1/accounts/'.(int)$subscriber.'/plan');
 $subscriberPlan->set_header('content-type','application/json');
 $subscriberPlan->set_body(wp_json_encode(array('plan'=>'scale')));
@@ -159,6 +176,10 @@ foreach([$subscriberPlanResponse,$subscriberReconcileResponse] as $negative){
 update_option('wpai_gateway_beta_users',array(),false);
 $revokedSubscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($revokedSubscriberSites->get_status()===401,'Removing user from beta allowlist did not revoke provisioning access');
+$bearerRevoked=false;
+try{ \WPAICloudGateway\WordPress::authenticateHeader('Bearer '.$subscriberBearer); }
+catch(\WPAICloudGateway\Fault $e){ $bearerRevoked=$e->reason==='account_unavailable'; }
+cloud_release_expect($bearerRevoked,'Removing owner eligibility did not invalidate an already-issued Cloud bearer');
 
 wp_set_current_user(0);
 $bearerOnly=new WP_REST_Request('GET','/wpai-cloud/v1/sites');
