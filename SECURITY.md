@@ -6,7 +6,7 @@ Security fixes are prepared against the current public-release candidate and the
 
 Current candidate:
 - WP AI Admin native: 2.1.15
-- WP AI Admin Cloud Core: 0.3.6
+- WP AI Admin Cloud Core: 0.3.7
 
 ## Reporting a vulnerability
 
