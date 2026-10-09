@@ -239,6 +239,31 @@ $repeatSuspendReq->set_header('content-type','application/json');
 $repeatSuspendReq->set_body(wp_json_encode(array('confirm'=>'SUSPEND')));
 $repeatSuspend=rest_do_request($repeatSuspendReq);
 cloud_release_expect($repeatSuspend->get_status()===403&&(($repeatSuspend->get_data()['error']??'')==='account_unavailable'),'Suspended account could invoke suspension flow again');
+
+// Subscriber cannot reactivate accounts through the operator endpoint.
+$subscriberReactivate=new WP_REST_Request('POST','/wpai-cloud/v1/accounts/'.$closureUser.'/reactivate');
+$subscriberReactivate->set_header('content-type','application/json');
+$subscriberReactivate->set_body(wp_json_encode(array('confirm'=>'REACTIVATE')));
+$subscriberReactivateResponse=rest_do_request($subscriberReactivate);
+cloud_release_expect($subscriberReactivateResponse->get_status()===403&&(($subscriberReactivateResponse->get_data()['code']??$subscriberReactivateResponse->get_data()['error']??'')==='cloud_admin_required'),'Subscriber could invoke operator account reactivation');
+
+wp_set_current_user($adminId);
+$badReactivate=new WP_REST_Request('POST','/wpai-cloud/v1/accounts/'.$closureUser.'/reactivate');
+$badReactivate->set_header('content-type','application/json');
+$badReactivate->set_body(wp_json_encode(array('confirm'=>'NO')));
+$badReactivateResponse=rest_do_request($badReactivate);
+cloud_release_expect($badReactivateResponse->get_status()===409&&(($badReactivateResponse->get_data()['error']??'')==='reactivation_confirmation_required'),'Operator reactivation did not require exact confirmation');
+
+$goodReactivate=new WP_REST_Request('POST','/wpai-cloud/v1/accounts/'.$closureUser.'/reactivate');
+$goodReactivate->set_header('content-type','application/json');
+$goodReactivate->set_body(wp_json_encode(array('confirm'=>'REACTIVATE')));
+$goodReactivateResponse=rest_do_request($goodReactivate);
+cloud_release_expect($goodReactivateResponse->get_status()===200&&!empty($goodReactivateResponse->get_data()['reactivated'])&&empty($goodReactivateResponse->get_data()['old_access_restored'])&&!empty($goodReactivateResponse->get_data()['reconnect_required']),'Operator reactivation HTTP contract failed');
+
+wp_set_current_user((int)$closureUser);
+$afterReactivateSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
+cloud_release_expect($afterReactivateSites->get_status()===200&&is_array($afterReactivateSites->get_data())&&count($afterReactivateSites->get_data())===0,'Reactivated account did not require fresh site reconnect');
+
 update_option('wpai_gateway_beta_users',array(),false);
 require_once ABSPATH.'wp-admin/includes/user.php';
 wp_delete_user((int)$closureUser);
