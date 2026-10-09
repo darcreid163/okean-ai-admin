@@ -212,9 +212,11 @@ $core->ensureAccount('closure-owner');
 breject(fn()=>$core->sites('closure-owner'),'account_unavailable');
 breject(fn()=>$core->closureInventory('closure-owner'),'account_unavailable');
 
-// Future operator recovery may re-enable the account row, but suspension must
-// never resurrect previously revoked bearer/OAuth/site access.
-$store->execute('UPDATE '.$store->table('accounts').' SET disabled=0 WHERE owner=?',['closure-owner']);
+// Future operator recovery uses the audited Core API. Reactivation restores
+// only the account row and never resurrects revoked bearer/OAuth/site access.
+$reactivated=$core->reactivateAccount('operator','closure-owner',$now+23);
+bcheck(!empty($reactivated['reactivated'])&&empty($reactivated['old_access_restored'])&&!empty($reactivated['reconnect_required'])&&!empty($reactivated['oauth_reauthorization_required']),'Operator reactivation contract wrong');
+breject(fn()=>$core->reactivateAccount('operator','closure-owner',$now+24),'account_already_active');
 $reopened=$core->closureInventory('closure-owner');
 bcheck(($reopened['active_sites']??-1)===0&&($reopened['active_tokens']??-1)===0&&($reopened['active_oauth_grants']??-1)===0&&($reopened['unused_oauth_codes']??-1)===0,'Re-enabled account resurrected suspended access state');
 breject(fn()=>$core->authenticate($closureBearer['access_token'],$now+23),'invalid_or_expired_token');
