@@ -13,12 +13,12 @@ $tables=[
 ];
 
 if($phase==='seed'){
-    cloud_upgrade_expect(defined('WPAI_CLOUD_VERSION')&&WPAI_CLOUD_VERSION==='0.3.5','Cloud upgrade baseline must be 0.3.5');
-    cloud_upgrade_expect(class_exists('WPAICloudGateway\\WordPress'),'0.3.5 gateway class missing');
+    cloud_upgrade_expect(defined('WPAI_CLOUD_VERSION')&&WPAI_CLOUD_VERSION==='0.3.6','Cloud upgrade baseline must be 0.3.6');
+    cloud_upgrade_expect(class_exists('WPAICloudGateway\\WordPress'),'0.3.6 gateway class missing');
     \WPAICloudGateway\WordPress::enable();
-    cloud_upgrade_expect(\WPAICloudGateway\Settings::enabled(),'0.3.5 gateway did not enable');
+    cloud_upgrade_expect(\WPAICloudGateway\Settings::enabled(),'0.3.6 gateway did not enable');
     $wrapped=(string)get_option('wpai_gateway_wrapped_keys_v1','');
-    cloud_upgrade_expect($wrapped!=='','0.3.5 gateway wrapped keys missing after enable');
+    cloud_upgrade_expect($wrapped!=='','0.3.6 gateway wrapped keys missing after enable');
 
     $owner='1';
     $site='reg_'.str_repeat('d',32);
@@ -36,21 +36,21 @@ if($phase==='seed'){
     $wpdb->query("DELETE FROM {$tables['accounts']} WHERE owner='1'");
 
     $wpdb->insert($tables['accounts'],['owner'=>$owner,'plan'=>'pro','disabled'=>0,'sequence'=>7]);
-    cloud_upgrade_expect($wpdb->last_error==='','Unable to seed 0.3.5 gateway account: '.$wpdb->last_error);
+    cloud_upgrade_expect($wpdb->last_error==='','Unable to seed 0.3.6 gateway account: '.$wpdb->last_error);
     $wpdb->insert($tables['sites'],[
         'id'=>$site,'owner'=>$owner,'home'=>'https://cloud-upgrade.example.com',
         'url_hash'=>hash('sha256','https://cloud-upgrade.example.com'),
         'plugin_site_id'=>'plugin-cloud-upgrade','installation_id'=>'install-cloud-upgrade',
         'token_sealed'=>$sealed,'status'=>'active','created_at'=>$now
     ]);
-    cloud_upgrade_expect($wpdb->last_error==='','Unable to seed 0.3.5 site: '.$wpdb->last_error);
+    cloud_upgrade_expect($wpdb->last_error==='','Unable to seed 0.3.6 site: '.$wpdb->last_error);
     $wpdb->insert($tables['tokens'],[
         'hash'=>hash('sha256',$bearer),'owner'=>$owner,
         'scopes'=>\WPAICloudGateway\Security::canonical(['mcp:read','mcp:write']),
         'site_ids'=>\WPAICloudGateway\Security::canonical([$site]),
         'expires_at'=>$now+3600,'revoked'=>0
     ]);
-    cloud_upgrade_expect($wpdb->last_error==='','Unable to seed 0.3.5 bearer: '.$wpdb->last_error);
+    cloud_upgrade_expect($wpdb->last_error==='','Unable to seed 0.3.6 bearer: '.$wpdb->last_error);
     $wpdb->insert($tables['grants'],[
         'id'=>$grant,'owner'=>$owner,'client'=>'cloud-upgrade-client',
         'resource'=>'https://wpaiadmin.ru/mcp',
@@ -58,22 +58,22 @@ if($phase==='seed'){
         'sites'=>\WPAICloudGateway\Security::canonical([$site]),
         'revoked'=>0,'expires'=>$now+7200
     ]);
-    cloud_upgrade_expect($wpdb->last_error==='','Unable to seed 0.3.5 OAuth grant: '.$wpdb->last_error);
+    cloud_upgrade_expect($wpdb->last_error==='','Unable to seed 0.3.6 OAuth grant: '.$wpdb->last_error);
 
     update_option('wpai_cloud_upgrade_expected',[
         'wrapped'=>$wrapped,'site'=>$site,'sealed'=>$sealed,
         'bearer_hash'=>hash('sha256',$bearer),'grant'=>$grant,
         'site_token_sha256'=>hash('sha256',$siteToken),
     ],false);
-    echo "PASS Cloud Core 0.3.5 upgrade seed\n";
+    echo "PASS Cloud Core 0.3.6 upgrade seed\n";
     return;
 }
 
 if($phase==='check'){
-    cloud_upgrade_expect(defined('WPAI_CLOUD_VERSION')&&WPAI_CLOUD_VERSION==='0.3.6','Cloud ZIP upgrade did not load 0.3.6');
+    cloud_upgrade_expect(defined('WPAI_CLOUD_VERSION')&&WPAI_CLOUD_VERSION==='0.3.7','Cloud ZIP upgrade did not load 0.3.7');
     $expected=get_option('wpai_cloud_upgrade_expected',[]);
     cloud_upgrade_expect(is_array($expected)&&!empty($expected['wrapped']),'Cloud upgrade expected fixture missing');
-    cloud_upgrade_expect(\WPAICloudGateway\Settings::enabled(),'Gateway enable state was lost across 0.3.5 -> 0.3.6');
+    cloud_upgrade_expect(\WPAICloudGateway\Settings::enabled(),'Gateway enable state was lost across 0.3.6 -> 0.3.6');
     cloud_upgrade_expect(hash_equals((string)$expected['wrapped'],(string)get_option('wpai_gateway_wrapped_keys_v1','')),'Wrapped gateway keys rotated across Cloud upgrade');
 
     $account=$wpdb->get_row($wpdb->prepare("SELECT plan,disabled,sequence FROM {$tables['accounts']} WHERE owner=%s",'1'),ARRAY_A);
@@ -97,7 +97,7 @@ if($phase==='check'){
     cloud_upgrade_expect(hash_equals($expected['site_token_sha256'],hash('sha256',$opened)),'Preserved site credential cannot be opened with preserved gateway key');
 
     delete_option('wpai_cloud_upgrade_expected');
-    echo "PASS real Cloud Core ZIP upgrade 0.3.5 -> 0.3.6 with keys/account/site/bearer/OAuth preserved\n";
+    echo "PASS real Cloud Core ZIP upgrade 0.3.6 -> 0.3.6 with keys/account/site/bearer/OAuth preserved\n";
     return;
 }
 throw new RuntimeException('Unknown WPAI_CLOUD_UPGRADE_PHASE');
