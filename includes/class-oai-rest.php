@@ -1086,10 +1086,19 @@ frame.addEventListener('load',function(){
   if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
   $meta=json_decode((string)$r['meta_data'],true); if(!is_array($meta))$meta=array();
 
-  // Crash-safe reconciliation for an interrupted lifecycle request. Never
-  // blindly repeat a live write while its previous outcome is unknown.
-  if($action==='apply' && $r['status']==='applying')return self::recover_inflight_apply($id,$r,$meta);
-  if($action==='rollback' && in_array($r['status'],array('rollback_pending','rolling_back'),true))return self::recover_inflight_rollback($id,$r,$meta);
+  // Crash-safe reconciliation is allowed only after an execution lease has
+  // expired. A second request must never "recover" an Apply/Rollback that is
+  // still actively executing in another PHP request.
+  if($action==='apply' && $r['status']==='applying'){
+   $lease=OAI_DB::operation_lease($id);
+   if($lease)return new WP_Error('oai_operation_busy','Apply is still executing; recovery is not yet allowed',array('status'=>409,'lease_expires_at'=>$lease['expires_at'],'action'=>$lease['action']));
+   return self::recover_inflight_apply($id,$r,$meta);
+  }
+  if($action==='rollback' && in_array($r['status'],array('rollback_pending','rolling_back'),true)){
+   $lease=OAI_DB::operation_lease($id);
+   if($lease)return new WP_Error('oai_operation_busy','Rollback is still executing; recovery is not yet allowed',array('status'=>409,'lease_expires_at'=>$lease['expires_at'],'action'=>$lease['action']));
+   return self::recover_inflight_rollback($id,$r,$meta);
+  }
 
   // A sandbox snapshot is valid only until its explicit expiry. Never approve
   // or apply an operation against a stale snapshot; rollback of an already
@@ -1156,10 +1165,16 @@ frame.addEventListener('load',function(){
    $pre_conflict=self::apply_conflict_check($r,$before,$meta);
    if(is_wp_error($pre_conflict))return self::record_apply_conflict($id,$r,$before,$pre_conflict,'approved');
 
+   // Acquire the execution lease before the lifecycle claim. This distinguishes
+   // an actively executing request from a genuinely abandoned "applying" state.
+   $execution_lease=OAI_DB::acquire_operation_lease($id,'apply');
+   if(is_wp_error($execution_lease))return $execution_lease;
+
    // Claim only after the preliminary check. Reject/second Apply can no longer
    // win once approved -> applying succeeds.
    $claimed=OAI_DB::transition($id,array('approved'),'applying','applying');
    if($claimed!==1){
+    OAI_DB::release_operation_lease($id,$execution_lease);
     $current_row=OAI_DB::get($id);
     return new WP_Error('oai_state_conflict','Operation state changed before Apply could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
    }
@@ -1168,7 +1183,11 @@ frame.addEventListener('load',function(){
    // read->claim race window. No live write has started yet, so a conflict is
    // a normal deterministic apply_failed outcome, never an uncertain write.
    $post_claim_conflict=self::apply_conflict_check($r,$before,$meta);
-   if(is_wp_error($post_claim_conflict))return self::record_apply_conflict($id,$r,$before,$post_claim_conflict,'applying');
+   if(is_wp_error($post_claim_conflict)){
+    $conflict_result=self::record_apply_conflict($id,$r,$before,$post_claim_conflict,'applying');
+    OAI_DB::release_operation_lease($id,$execution_lease);
+    return $conflict_result;
+   }
 
    try {
     if($r['type']==='woodmart_theme_setting'){
@@ -1188,14 +1207,20 @@ frame.addEventListener('load',function(){
    }
 
    if(is_wp_error($err)){
-    return self::recover_after_apply_failure($r,$before,$meta,$err);
+    $failure=self::recover_after_apply_failure($r,$before,$meta,$err);
+    OAI_DB::release_operation_lease($id,$execution_lease);
+    return $failure;
    }
 
    $verification_expected=$after;
    if($r['type']==='woocommerce_product' && is_array($err)){
     $changes=is_array($meta['changes']??null)?$meta['changes']:array();
     $runtime_guard=OAI_WooCommerce::runtime_matches_changes($err,$changes,is_array($before)?$before:array(),is_array($after)?$after:array());
-    if(is_wp_error($runtime_guard))return self::recover_after_apply_failure($r,$before,$meta,$runtime_guard);
+    if(is_wp_error($runtime_guard)){
+     $failure=self::recover_after_apply_failure($r,$before,$meta,$runtime_guard);
+     OAI_DB::release_operation_lease($id,$execution_lease);
+     return $failure;
+    }
     $verification_expected=$err;
     if(!OAI_Verify::same($after,$err)){
      $meta['runtime_normalized']=array('at'=>gmdate('c'),'requested_after'=>$after,'actual_after'=>$err);
@@ -1206,19 +1231,24 @@ frame.addEventListener('load',function(){
    self::refresh_verification_target($r['type'],$r['target'],$meta);
    $verification=OAI_Verify::operation($id,$verification_expected,'after',true);
    if(is_wp_error($verification) || empty($verification['verified'])){
-    return self::recover_after_apply_failure($r,$before,$meta,$verification);
+    $failure=self::recover_after_apply_failure($r,$before,$meta,$verification);
+    OAI_DB::release_operation_lease($id,$execution_lease);
+    return $failure;
    }
 
    // Independent second read after a successful verification closes the cache/race window.
    self::refresh_verification_target($r['type'],$r['target'],$meta);
    $verification2=OAI_Verify::operation($id,$verification_expected,'after',true);
    if(is_wp_error($verification2) || empty($verification2['verified'])){
-    return self::recover_after_apply_failure($r,$before,$meta,$verification2);
+    $failure=self::recover_after_apply_failure($r,$before,$meta,$verification2);
+    OAI_DB::release_operation_lease($id,$execution_lease);
+    return $failure;
    }
 
    OAI_DB::update($id,array('status'=>'applied','phase'=>'applied','applied_data'=>wp_json_encode($verification_expected,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION),'applied_at'=>current_time('mysql',true)));
    OAI_Audit::log('applied',array_merge($r,array('status'=>'applied')),array('verified'=>true,'verification'=>$verification2));
    OAI_Receipts::store($id,array('event'=>'apply','status'=>'applied','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
+   OAI_DB::release_operation_lease($id,$execution_lease);
   }
   elseif($action==='rollback'){
    // A failed rollback may be retried only for an operation that was applied.
@@ -1257,8 +1287,11 @@ frame.addEventListener('load',function(){
     return $rollback_conflict;
    }
 
+   $rollback_lease=OAI_DB::acquire_operation_lease($id,'rollback');
+   if(is_wp_error($rollback_lease))return $rollback_lease;
    $rollback_claim=OAI_DB::transition($id,array((string)$r['status']),'rollback_pending','rollback_pending');
    if($rollback_claim!==1){
+    OAI_DB::release_operation_lease($id,$rollback_lease);
     $current_row=OAI_DB::get($id);
     return new WP_Error('oai_state_conflict','Operation state changed before Rollback could claim it',array('status'=>409,'current_status'=>$current_row['status']??null));
    }
@@ -1274,17 +1307,22 @@ frame.addEventListener('load',function(){
     $failed=OAI_DB::get($id);
     OAI_Receipts::store($id,array('event'=>'rollback_conflict','status'=>'rollback_failed','at'=>gmdate('c'),'reason'=>'post_apply_change','details'=>$details),OAI_Proof::make($id));
     OAI_Audit::log('rollback_conflict',$failed?:array_merge($r,array('status'=>'rollback_failed')),array('reason'=>'post_apply_change','details'=>$details));
+    OAI_DB::release_operation_lease($id,$rollback_lease);
     return $post_claim_rollback_conflict;
    }
 
    $rolling_claim=OAI_DB::transition($id,array('rollback_pending'),'rolling_back','rolling_back');
-   if($rolling_claim!==1)return new WP_Error('oai_state_conflict','Rollback claim could not enter execution state',array('status'=>409));
+   if($rolling_claim!==1){
+    OAI_DB::release_operation_lease($id,$rollback_lease);
+    return new WP_Error('oai_state_conflict','Rollback claim could not enter execution state',array('status'=>409));
+   }
    try { $err=self::rollback_write($r['type'],$r['target'],$before,$meta); }
    catch(Throwable $e){ $err=new WP_Error('oai_rollback_exception',$e->getMessage(),array('status'=>500)); }
    if(is_wp_error($err)){
     OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
     OAI_Receipts::store($id,array('event'=>'rollback_failed','status'=>'rollback_failed','at'=>gmdate('c'),'error'=>$err->get_error_message()),OAI_Proof::make($id));
     OAI_Audit::log('rollback_failed',array_merge($r,array('status'=>'rollback_failed')),array('error'=>$err->get_error_message()));
+    OAI_DB::release_operation_lease($id,$rollback_lease);
     return $err;
    }
 
@@ -1294,6 +1332,7 @@ frame.addEventListener('load',function(){
     OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
     OAI_Receipts::store($id,array('event'=>'rollback_failed','status'=>'rollback_failed','at'=>gmdate('c'),'verification'=>$verification),OAI_Proof::make($id));
     OAI_Audit::log('rollback_failed',array_merge($r,array('status'=>'rollback_failed')),array('verification'=>$verification));
+    OAI_DB::release_operation_lease($id,$rollback_lease);
     return new WP_Error('oai_rollback_verify_failed','Rollback completed but verification failed',array('status'=>500,'verification'=>$verification));
    }
 
@@ -1303,12 +1342,14 @@ frame.addEventListener('load',function(){
     OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
     OAI_Receipts::store($id,array('event'=>'rollback_failed','status'=>'rollback_failed','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
     OAI_Audit::log('rollback_failed',array_merge($r,array('status'=>'rollback_failed')),array('verification'=>$verification2));
+    OAI_DB::release_operation_lease($id,$rollback_lease);
     return new WP_Error('oai_rollback_verify_failed','Rollback verification was not stable on the second authoritative read',array('status'=>500,'verification'=>$verification2));
    }
 
    OAI_DB::update($id,array('status'=>'rolled_back','phase'=>'rolled_back','rolled_back_at'=>current_time('mysql',true)));
    OAI_Audit::log('rolled_back',array_merge($r,array('status'=>'rolled_back')),array('verified'=>true,'verification'=>$verification2));
    OAI_Receipts::store($id,array('event'=>'rollback','status'=>'rolled_back','at'=>gmdate('c'),'verification'=>$verification2),OAI_Proof::make($id));
+   OAI_DB::release_operation_lease($id,$rollback_lease);
   }
   return self::row($id);
  }
