@@ -190,6 +190,15 @@ breject(fn()=>$closureOAuth->exchange([
     'grant_type'=>'refresh_token','client_id'=>$closureClient,'refresh_token'=>$closureRefresh,
     'resource'=>'https://wpaiadmin.ru/mcp'
 ],$now+22,fn($owner)=>true),'invalid_grant');
+$closureAuth=[
+    'client_id'=>$closureClient,
+    'redirect_uri'=>$closureRedirect,
+    'resource'=>'https://wpaiadmin.ru/mcp',
+    'challenge'=>Security::b64(hash('sha256',$closureVerifier,true)),
+    'scopes'=>['mcp:read'],
+    'state'=>'closure-state'
+];
+breject(fn()=>$closureOAuth->approve('closure-owner',$closureAuth,[$closureSite['id']],$now+22),'account_unavailable');
 $closureRefreshRow=$store->row('SELECT used FROM '.$store->table('oauth_refresh').' WHERE hash=?',[hash('sha256',$closureRefresh)]);
 bcheck((int)($closureRefreshRow['used']??0)===0,'Suspension-triggered refresh denial consumed refresh token unexpectedly');
 $closureAccount=$store->row('SELECT disabled FROM '.$store->table('accounts').' WHERE owner=?',['closure-owner']);
@@ -228,6 +237,7 @@ breject(fn()=>$closureOAuth->exchange([
     'grant_type'=>'refresh_token','client_id'=>$closureClient,'refresh_token'=>$closureRefresh,
     'resource'=>'https://wpaiadmin.ru/mcp'
 ],$now+23,fn($owner)=>true),'invalid_grant');
+breject(fn()=>$closureOAuth->approve('closure-owner',$closureAuth,[$closureSite['id']],$now+23),'invalid_site_consent');
 
 $site=$core->connect('boundary','https://boundary.example.com','fixture-boundary-admin-token-aaaaaaaa',$now);
 
