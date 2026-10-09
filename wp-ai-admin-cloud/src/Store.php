@@ -75,7 +75,8 @@ final class Store {
         // Refuse pre-existing nontransactional tables rather than pretending reservations are atomic.
         if ($this->mysql) foreach ($tableNames as $name) {
             $row=$this->row('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$this->prefix.$name]);
-            if (strtolower($row['ENGINE']??'')!=='innodb') throw new Fault('innodb_required',503);
+            if(!$row) throw new Fault('gateway_schema_incompatible',503);
+            if (strtolower((string)$row['ENGINE'])!=='innodb') throw new Fault('innodb_required',503);
         }
 
         // Validate the minimum schema even when the WordPress DB-version option
