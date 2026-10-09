@@ -21,9 +21,24 @@ final class Store {
     public function lock(): string { return $this->mysql?' FOR UPDATE':''; }
     public function ignore(): string { return $this->mysql?'INSERT IGNORE':'INSERT OR IGNORE'; }
     public function transaction(callable $fn): mixed {
+        // Core/OAuth operations may compose transactional primitives. If an
+        // outer transaction already exists, reuse it rather than attempting a
+        // second PDO BEGIN (which would fail and could break OAuth exchange).
+        // Exceptions still propagate to the outer owner, which performs the
+        // single rollback/commit for the whole logical operation.
+        if ($this->db->inTransaction()) return $fn();
+
         if ($this->mysql) $this->db->beginTransaction(); else $this->db->exec('BEGIN IMMEDIATE');
-        try { $value=$fn(); if ($this->mysql) $this->db->commit(); else $this->db->exec('COMMIT'); return $value; }
-        catch (\Throwable $e) { if ($this->mysql && $this->db->inTransaction()) $this->db->rollBack(); elseif (!$this->mysql) $this->db->exec('ROLLBACK'); throw $e; }
+        try {
+            $value=$fn();
+            if ($this->mysql) $this->db->commit(); else $this->db->exec('COMMIT');
+            return $value;
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) {
+                if ($this->mysql) $this->db->rollBack(); else $this->db->exec('ROLLBACK');
+            }
+            throw $e;
+        }
     }
     public function migrate(): void {
         $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
