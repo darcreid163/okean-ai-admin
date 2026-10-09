@@ -41,11 +41,19 @@ final class OAuth {
     public function approve(string $owner,array $auth,array $sites,int $now): string {
         // Revalidate the registered redirect and PKCE contract after the user consent POST.
         $verified=$this->authorization(['client_id'=>$auth['client_id'],'redirect_uri'=>$auth['redirect_uri'],'resource'=>$auth['resource'],'response_type'=>'code','code_challenge'=>$auth['challenge'],'code_challenge_method'=>'S256','scope'=>implode(' ',$auth['scopes']),'state'=>$auth['state']]);
-        $owned=array_column($this->core->sites($owner),'id');
-        if(!$sites||!array_is_list($sites)||count($sites)>Core::MAX_SITES||array_filter($sites,fn($s)=>!is_string($s))||array_diff($sites,$owned)||count(array_unique($sites))!==count($sites))throw new Fault('invalid_site_consent',403);
-        $code=Security::b64(random_bytes(32));
-        $this->store->execute('INSERT INTO '.$this->store->table('oauth_codes').' (hash,owner,client,redirect,resource,scopes,sites,challenge,expires) VALUES (?,?,?,?,?,?,?,?,?)',[hash('sha256',$code),$owner,$verified['client_id'],$verified['redirect_uri'],$this->resource,Security::canonical($verified['scopes']),Security::canonical($sites),$verified['challenge'],$now+300]);
-        $this->store->audit($owner,'','oauth_consent',hash('sha256',$code),$now);return $code;
+        return $this->store->transaction(function() use($owner,$verified,$sites,$now) {
+            // Serialize consent issuance with account suspension. Once the
+            // account row is locked as active, suspension cannot revoke access
+            // and then have a stale authorization code inserted afterward.
+            $this->core->assertActiveAccount($owner,true);
+            $owned=array_column($this->core->sites($owner),'id');
+            if(!$sites||!array_is_list($sites)||count($sites)>Core::MAX_SITES||array_filter($sites,fn($s)=>!is_string($s))||array_diff($sites,$owned)||count(array_unique($sites))!==count($sites))throw new Fault('invalid_site_consent',403);
+            $code=Security::b64(random_bytes(32));
+            $hash=hash('sha256',$code);
+            $this->store->execute('INSERT INTO '.$this->store->table('oauth_codes').' (hash,owner,client,redirect,resource,scopes,sites,challenge,expires) VALUES (?,?,?,?,?,?,?,?,?)',[$hash,$owner,$verified['client_id'],$verified['redirect_uri'],$this->resource,Security::canonical($verified['scopes']),Security::canonical($sites),$verified['challenge'],$now+300]);
+            $this->store->audit($owner,'','oauth_consent',$hash,$now);
+            return $code;
+        });
     }
     private function issue(array $grant,int $now): array {
         $scopes=json_decode($grant['scopes'],true);$sites=json_decode($grant['sites'],true);
