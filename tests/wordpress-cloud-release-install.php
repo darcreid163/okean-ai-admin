@@ -139,6 +139,14 @@ update_option('wpai_gateway_beta_users',array((int)$subscriber),false);
 $allowedSubscriberSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
 cloud_release_expect($allowedSubscriberSites->get_status()===200&&is_array($allowedSubscriberSites->get_data())&&count($allowedSubscriberSites->get_data())===0,'Explicit beta allowlist did not enable isolated subscriber tenant');
 
+$oversizedProvisioning=new WP_REST_Request('POST','/wpai-cloud/v1/tokens');
+$oversizedProvisioning->set_header('content-type','application/json');
+$oversizedProvisioning->set_body('{"pad":"'.str_repeat('x',131200).'"}');
+$oversizedProvisioningResponse=rest_do_request($oversizedProvisioning);
+cloud_release_expect($oversizedProvisioningResponse->get_status()===413&&(($oversizedProvisioningResponse->get_data()['error']??'')==='request_too_large'),'Oversized provisioning request was not rejected before payload validation');
+$oversizedProvisioningEncoded=wp_json_encode($oversizedProvisioningResponse->get_data());
+cloud_release_expect(!str_contains($oversizedProvisioningEncoded,'PDOException')&&!str_contains($oversizedProvisioningEncoded,'Stack trace')&&!str_contains($oversizedProvisioningEncoded,ABSPATH),'Oversized provisioning denial leaked internal diagnostics');
+
 // Already-issued Cloud bearer must be invalidated by owner eligibility loss.
 $subscriberCore=\WPAICloudGateway\WordPress::operatorCore();
 $subscriberCore->ensureAccount((string)$subscriber);
@@ -308,6 +316,18 @@ $badTokenType->set_body('{}');
 $badTokenResponse=rest_do_request($badTokenType);
 cloud_release_expect($badTokenResponse->get_status()===415&&($badTokenResponse->get_data()['error']??'')==='form_content_type_required','OAuth token endpoint accepted wrong content type');
 
+$oversizedRegister=new WP_REST_Request('POST','/wpai-cloud/v1/oauth/register');
+$oversizedRegister->set_header('content-type','application/json');
+$oversizedRegister->set_body('{"pad":"'.str_repeat('x',16400).'"}');
+$oversizedRegisterResponse=rest_do_request($oversizedRegister);
+cloud_release_expect($oversizedRegisterResponse->get_status()===413&&(($oversizedRegisterResponse->get_data()['error']??'')==='request_too_large'),'Oversized OAuth registration body was not rejected');
+
+$oversizedToken=new WP_REST_Request('POST','/wpai-cloud/v1/oauth/token');
+$oversizedToken->set_header('content-type','application/x-www-form-urlencoded');
+$oversizedToken->set_body('grant_type=refresh_token&client_id=x&refresh_token='.str_repeat('x',16400));
+$oversizedTokenResponse=rest_do_request($oversizedToken);
+cloud_release_expect($oversizedTokenResponse->get_status()===413&&(($oversizedTokenResponse->get_data()['error']??'')==='request_too_large'),'Oversized OAuth token body was not rejected');
+
 unset($_SERVER['HTTPS']);
 $httpRegister=new WP_REST_Request('POST','/wpai-cloud/v1/oauth/register');
 $httpRegister->set_header('content-type','application/json');
@@ -316,7 +336,7 @@ $httpRegisterResponse=rest_do_request($httpRegister);
 cloud_release_expect($httpRegisterResponse->get_status()===403&&($httpRegisterResponse->get_data()['error']??'')==='https_required','OAuth endpoint accepted non-HTTPS request');
 $_SERVER['HTTPS']='on';
 
-foreach([$badRegisterResponse,$badTokenResponse,$httpRegisterResponse] as $negative){
+foreach([$badRegisterResponse,$badTokenResponse,$oversizedRegisterResponse,$oversizedTokenResponse,$httpRegisterResponse] as $negative){
     $encoded=wp_json_encode($negative->get_data());
     cloud_release_expect(!str_contains($encoded,'PDOException')&&!str_contains($encoded,'Stack trace')&&!str_contains($encoded,ABSPATH),'OAuth denial leaked internal diagnostics');
 }
