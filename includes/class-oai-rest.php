@@ -1154,7 +1154,7 @@ frame.addEventListener('load',function(){
 
    // First conflict read avoids claiming an operation that is already stale.
    $pre_conflict=self::apply_conflict_check($r,$before,$meta);
-   if(is_wp_error($pre_conflict))return self::record_apply_conflict($id,$r,$before,$pre_conflict);
+   if(is_wp_error($pre_conflict))return self::record_apply_conflict($id,$r,$before,$pre_conflict,'approved');
 
    // Claim only after the preliminary check. Reject/second Apply can no longer
    // win once approved -> applying succeeds.
@@ -1168,7 +1168,7 @@ frame.addEventListener('load',function(){
    // read->claim race window. No live write has started yet, so a conflict is
    // a normal deterministic apply_failed outcome, never an uncertain write.
    $post_claim_conflict=self::apply_conflict_check($r,$before,$meta);
-   if(is_wp_error($post_claim_conflict))return self::record_apply_conflict($id,$r,$before,$post_claim_conflict);
+   if(is_wp_error($post_claim_conflict))return self::record_apply_conflict($id,$r,$before,$post_claim_conflict,'applying');
 
    try {
     if($r['type']==='woodmart_theme_setting'){
@@ -1238,10 +1238,15 @@ frame.addEventListener('load',function(){
    // The live target must still equal the state AI Admin itself verified after Apply.
    $rollback_conflict=self::rollback_conflict_check($r,$applied,$meta);
    if(is_wp_error($rollback_conflict)){
-    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
+    $conflict_claim=OAI_DB::transition($id,array((string)$r['status']),'rollback_failed','rollback_failed');
+    if($conflict_claim!==1){
+     $current_row=OAI_DB::get($id);
+     return new WP_Error('oai_state_conflict','Operation state changed while recording Rollback conflict',array('status'=>409,'current_status'=>$current_row['status']??null));
+    }
     $details=$rollback_conflict->get_error_data();
+    $failed=OAI_DB::get($id);
     OAI_Receipts::store($id,array('event'=>'rollback_conflict','status'=>'rollback_failed','at'=>gmdate('c'),'reason'=>'post_apply_change','details'=>$details),OAI_Proof::make($id));
-    OAI_Audit::log('rollback_conflict',array_merge($r,array('status'=>'rollback_failed')),array('reason'=>'post_apply_change','details'=>$details));
+    OAI_Audit::log('rollback_conflict',$failed?:array_merge($r,array('status'=>'rollback_failed')),array('reason'=>'post_apply_change','details'=>$details));
     return $rollback_conflict;
    }
 
@@ -1253,10 +1258,15 @@ frame.addEventListener('load',function(){
    // Close the pre-check -> claim race window before any destructive write.
    $post_claim_rollback_conflict=self::rollback_conflict_check($r,$applied,$meta);
    if(is_wp_error($post_claim_rollback_conflict)){
-    OAI_DB::update($id,array('status'=>'rollback_failed','phase'=>'rollback_failed'));
+    $conflict_claim=OAI_DB::transition($id,array('rollback_pending'),'rollback_failed','rollback_failed');
+    if($conflict_claim!==1){
+     $current_row=OAI_DB::get($id);
+     return new WP_Error('oai_state_conflict','Rollback state changed while recording post-claim conflict',array('status'=>409,'current_status'=>$current_row['status']??null));
+    }
     $details=$post_claim_rollback_conflict->get_error_data();
+    $failed=OAI_DB::get($id);
     OAI_Receipts::store($id,array('event'=>'rollback_conflict','status'=>'rollback_failed','at'=>gmdate('c'),'reason'=>'post_apply_change','details'=>$details),OAI_Proof::make($id));
-    OAI_Audit::log('rollback_conflict',array_merge($r,array('status'=>'rollback_failed')),array('reason'=>'post_apply_change','details'=>$details));
+    OAI_Audit::log('rollback_conflict',$failed?:array_merge($r,array('status'=>'rollback_failed')),array('reason'=>'post_apply_change','details'=>$details));
     return $post_claim_rollback_conflict;
    }
 
@@ -1306,12 +1316,17 @@ frame.addEventListener('load',function(){
   return new WP_Error('oai_conflict','Target changed since sandbox snapshot',array('status'=>409,'current'=>$current_now,'expected_before'=>$before));
  }
 
- private static function record_apply_conflict($id,$r,$before,$conflict){
+ private static function record_apply_conflict($id,$r,$before,$conflict,$expected_status){
   $details=is_wp_error($conflict)?$conflict->get_error_data():array();
   $current=is_array($details)&&array_key_exists('current',$details)?$details['current']:null;
-  OAI_DB::update($id,array('status'=>'apply_failed','phase'=>'apply_failed'));
+  $claimed=OAI_DB::transition($id,array((string)$expected_status),'apply_failed','apply_failed');
+  if($claimed!==1){
+   $current_row=OAI_DB::get($id);
+   return new WP_Error('oai_state_conflict','Operation state changed while recording Apply conflict',array('status'=>409,'current_status'=>$current_row['status']??null));
+  }
+  $failed=OAI_DB::get($id);
   OAI_Receipts::store($id,array('event'=>'apply_failed','status'=>'apply_failed','reason'=>'conflict','at'=>gmdate('c'),'current'=>$current,'expected_before'=>$before),OAI_Proof::make($id));
-  OAI_Audit::log('apply_failed',array_merge($r,array('status'=>'apply_failed')),array('reason'=>'conflict','current'=>$current,'expected_before'=>$before));
+  OAI_Audit::log('apply_failed',$failed?:array_merge($r,array('status'=>'apply_failed')),array('reason'=>'conflict','current'=>$current,'expected_before'=>$before));
   return is_wp_error($conflict)?$conflict:new WP_Error('oai_conflict','Target changed since sandbox snapshot',array('status'=>409,'current'=>$current,'expected_before'=>$before));
  }
 
