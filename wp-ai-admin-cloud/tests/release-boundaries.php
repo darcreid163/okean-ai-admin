@@ -98,13 +98,23 @@ $closureSiteToken='fixture-closure-site-token-aaaaaaaa';
 $closureSite=$core->connect('closure-owner','https://closure.example.com',$closureSiteToken,$now+20);
 $closureBearer=$core->mint('closure-owner',[$closureSite['id']],['mcp:read','mcp:write'],$now+20);
 $closureGrant='grant-'.str_repeat('c',16);
+$closureClient='client-closure';
+$closureRedirect='https://client.example/callback';
+$closureVerifier=str_repeat('v',43);
+$closureRefresh='closure-refresh-'.str_repeat('r',43);
+$store->execute('INSERT INTO '.$store->table('oauth_clients').' (id,name,redirects,created_at) VALUES (?,?,?,?)',[
+    $closureClient,'Closure client',Security::canonical([$closureRedirect]),$now+19
+]);
 $store->execute('INSERT INTO '.$store->table('oauth_grants').' (id,owner,client,resource,scopes,sites,revoked,expires) VALUES (?,?,?,?,?,?,0,?)',[
-    $closureGrant,'closure-owner','client-closure','https://wpaiadmin.ru/mcp',
+    $closureGrant,'closure-owner',$closureClient,'https://wpaiadmin.ru/mcp',
     Security::canonical(['mcp:read','mcp:write']),Security::canonical([$closureSite['id']]),$now+3600
 ]);
 $store->execute('INSERT INTO '.$store->table('oauth_codes').' (hash,owner,client,redirect,resource,scopes,sites,challenge,expires,used) VALUES (?,?,?,?,?,?,?,?,?,0)',[
-    hash('sha256','closure-code'),'closure-owner','client-closure','https://client.example/callback','https://wpaiadmin.ru/mcp',
-    Security::canonical(['mcp:read']),Security::canonical([$closureSite['id']]),str_repeat('a',43),$now+600
+    hash('sha256','closure-code'),'closure-owner',$closureClient,$closureRedirect,'https://wpaiadmin.ru/mcp',
+    Security::canonical(['mcp:read']),Security::canonical([$closureSite['id']]),Security::b64(hash('sha256',$closureVerifier,true)),$now+600
+]);
+$store->execute('INSERT INTO '.$store->table('oauth_refresh').' (hash,grant_id,used,expires) VALUES (?,?,0,?)',[
+    hash('sha256',$closureRefresh),$closureGrant,$now+3600
 ]);
 // Legacy revoked row with a leftover sealed credential must also be scrubbed.
 $legacyRevoked='reg_'.str_repeat('f',32);
@@ -129,6 +139,17 @@ $closureGrantRow=$store->row('SELECT revoked FROM '.$store->table('oauth_grants'
 bcheck((int)($closureGrantRow['revoked']??0)===1,'Suspension did not revoke OAuth grant');
 $closureCodeRow=$store->row('SELECT used FROM '.$store->table('oauth_codes').' WHERE hash=?',[hash('sha256','closure-code')]);
 bcheck((int)($closureCodeRow['used']??0)===1,'Suspension did not invalidate unused OAuth code');
+$closureOAuth=new WPAICloudGateway\OAuth($store,$core,'https://wpaiadmin.ru/mcp');
+breject(fn()=>$closureOAuth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$closureClient,'code'=>'closure-code',
+    'redirect_uri'=>$closureRedirect,'code_verifier'=>$closureVerifier,'resource'=>'https://wpaiadmin.ru/mcp'
+],$now+22,fn($owner)=>true),'invalid_grant');
+breject(fn()=>$closureOAuth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$closureClient,'refresh_token'=>$closureRefresh,
+    'resource'=>'https://wpaiadmin.ru/mcp'
+],$now+22,fn($owner)=>true),'invalid_grant');
+$closureRefreshRow=$store->row('SELECT used FROM '.$store->table('oauth_refresh').' WHERE hash=?',[hash('sha256',$closureRefresh)]);
+bcheck((int)($closureRefreshRow['used']??0)===0,'Suspension-triggered refresh denial consumed refresh token unexpectedly');
 $closureAccount=$store->row('SELECT disabled FROM '.$store->table('accounts').' WHERE owner=?',['closure-owner']);
 bcheck((int)($closureAccount['disabled']??0)===1,'Suspension did not disable core account');
 $core->ensureAccount('closure-owner');
