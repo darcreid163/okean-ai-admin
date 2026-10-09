@@ -203,6 +203,34 @@ catch(\WPAICloudGateway\Fault $e){ $deletedBearerRevoked=$e->reason==='account_u
 cloud_release_expect($deletedBearerRevoked,'Deleted central WordPress owner retained existing Cloud bearer access');
 update_option('wpai_gateway_beta_users',array(),false);
 
+// Self-service account suspension HTTP contract: preview -> explicit confirmation -> fail closed.
+$closureUser=wp_create_user('cloud-release-closure-'.wp_generate_password(8,false,false),'disposable-password','cloud-release-closure@example.test');
+cloud_release_expect(!is_wp_error($closureUser),'Unable to create account suspension HTTP fixture');
+update_option('wpai_gateway_beta_users',array((int)$closureUser),false);
+wp_set_current_user((int)$closureUser);
+$closurePreview=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/account/closure-preview'));
+cloud_release_expect($closurePreview->get_status()===200&&(($closurePreview->get_data()['destructive_delete_performed']??true)===false),'Closure preview failed or overstated deletion');
+
+$badSuspend=new WP_REST_Request('POST','/wpai-cloud/v1/account/suspend');
+$badSuspend->set_header('content-type','application/json');
+$badSuspend->set_body(wp_json_encode(array('confirm'=>'NO')));
+$badSuspendResponse=rest_do_request($badSuspend);
+cloud_release_expect($badSuspendResponse->get_status()===409&&(($badSuspendResponse->get_data()['error']??'')==='suspension_confirmation_required'),'Account suspension did not require exact confirmation');
+
+$goodSuspend=new WP_REST_Request('POST','/wpai-cloud/v1/account/suspend');
+$goodSuspend->set_header('content-type','application/json');
+$goodSuspend->set_body(wp_json_encode(array('confirm'=>'SUSPEND')));
+$goodSuspendResponse=rest_do_request($goodSuspend);
+cloud_release_expect($goodSuspendResponse->get_status()===200&&!empty($goodSuspendResponse->get_data()['suspended'])&&!empty($goodSuspendResponse->get_data()['access_revoked']),'Confirmed account suspension failed');
+
+$afterSuspendSites=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/sites'));
+cloud_release_expect($afterSuspendSites->get_status()===403&&(($afterSuspendSites->get_data()['error']??'')==='account_unavailable'),'Suspended owner retained Cloud Core site access');
+$repeatSuspend=rest_do_request($goodSuspend);
+cloud_release_expect($repeatSuspend->get_status()===403&&(($repeatSuspend->get_data()['error']??'')==='account_unavailable'),'Suspended account could invoke suspension flow again');
+update_option('wpai_gateway_beta_users',array(),false);
+require_once ABSPATH.'wp-admin/includes/user.php';
+wp_delete_user((int)$closureUser);
+
 wp_set_current_user(0);
 $bearerOnly=new WP_REST_Request('GET','/wpai-cloud/v1/sites');
 $bearerOnly->set_header('authorization','Bearer wpai_cloud_'.str_repeat('A',43));
