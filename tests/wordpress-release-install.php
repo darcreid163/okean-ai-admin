@@ -223,6 +223,23 @@ $recoveredRollbackReceipt=OAI_Receipts::build((int)$recoveryOp['id']);
 release_install_expect(($recoveredRollbackReceipt['receipt']['event']??'')==='rollback_recovered'&&($recoveredRollbackReceipt['receipt']['replayed_write']??true)===false,'Recovered Rollback receipt does not prove no replay');
 delete_option('wpai_release_recovery_fixture');
 
+// If an interrupted Apply cannot be reconciled to either before or after,
+// remain fail-closed and never replay a write.
+update_option('wpai_release_uncertain_fixture','before',false);
+$uncertainReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
+$uncertainReq->set_param('type','option_update');$uncertainReq->set_param('target','wpai_release_uncertain_fixture');$uncertainReq->set_param('new_data','after');
+$uncertainOp=OAI_REST::sandbox_create($uncertainReq);
+release_install_expect(!is_wp_error($uncertainOp)&&!empty($uncertainOp['id']),'Unable to create uncertain Apply fixture');
+$uncertainApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$uncertainOp['id'].'/approve');$uncertainApprove->set_header('X-WP-Nonce',$nonce);
+$uncertainApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$uncertainOp['id'].'/apply');$uncertainApply->set_header('X-WP-Nonce',$nonce);
+release_install_expect(!is_wp_error(OAI_REST::sandbox_action($uncertainApprove)),'Uncertain Apply fixture approval failed');
+release_install_expect(OAI_DB::transition((int)$uncertainOp['id'],array('approved'),'applying','applying')===1,'Unable to seed uncertain Apply state');
+update_option('wpai_release_uncertain_fixture','third-party-state',false);
+$uncertainResult=OAI_REST::sandbox_action($uncertainApply);
+release_install_expect(is_wp_error($uncertainResult)&&$uncertainResult->get_error_code()==='oai_apply_outcome_uncertain','Ambiguous interrupted Apply did not stay fail closed');
+release_install_expect((OAI_DB::get((int)$uncertainOp['id'])['status']??'')==='applying'&&(string)get_option('wpai_release_uncertain_fixture')==='third-party-state','Ambiguous Apply recovery mutated state');
+delete_option('wpai_release_uncertain_fixture');
+
 // Expired sandbox snapshots must never be approved or applied.
 update_option('wpai_release_expired_fixture','baseline',false);
 $expiredReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
