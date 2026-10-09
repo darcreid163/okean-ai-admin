@@ -170,6 +170,7 @@ release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApprove)),'Pr
 // Atomic lifecycle claim: only one contender can move approved -> applying.
 $activeApplyLease=OAI_DB::acquire_operation_lease((int)$proofOp['id'],'apply',120);
 release_install_expect(is_string($activeApplyLease)&&$activeApplyLease!=='','Unable to acquire active Apply execution lease fixture');
+release_install_expect(OAI_DB::release_operation_lease((int)$proofOp['id'],'wrong-token')===false,'Wrong token released active operation lease');
 $claim1=OAI_DB::transition((int)$proofOp['id'],array('approved'),'applying','applying');
 $claim2=OAI_DB::transition((int)$proofOp['id'],array('approved'),'applying','applying');
 release_install_expect($claim1===1&&$claim2===0,'Apply lifecycle claim was not single-winner atomic');
@@ -177,6 +178,10 @@ $applyBusy=OAI_REST::sandbox_action($proofApply);
 release_install_expect(is_wp_error($applyBusy)&&$applyBusy->get_error_code()==='oai_operation_busy','Active Apply execution was mistaken for a crashed request');
 release_install_expect((OAI_DB::get((int)$proofOp['id'])['status']??'')==='applying'&&(string)get_option('wpai_release_proof_fixture')==='baseline','Busy Apply retry changed lifecycle/live state');
 release_install_expect(OAI_DB::release_operation_lease((int)$proofOp['id'],$activeApplyLease)===true,'Unable to release active Apply execution lease fixture');
+$expiredLeaseKey='oai_operation_lease_'.(int)$proofOp['id'];
+add_option($expiredLeaseKey,array('token_hash'=>hash('sha256','expired-token'),'action'=>'apply','acquired_at'=>time()-300,'expires_at'=>time()-1),'',false);
+release_install_expect(OAI_DB::operation_lease((int)$proofOp['id'])===null,'Expired operation lease remained active');
+release_install_expect(get_option($expiredLeaseKey,null)===null,'Expired operation lease was not cleaned up');
 $applyRecoveryReady=OAI_REST::sandbox_action($proofApply);
 release_install_expect(is_wp_error($applyRecoveryReady)&&$applyRecoveryReady->get_error_code()==='oai_apply_recovery_ready','Interrupted Apply with unchanged live state did not reconcile to retry-safe approved');
 release_install_expect((OAI_DB::get((int)$proofOp['id'])['status']??'')==='approved'&&(string)get_option('wpai_release_proof_fixture')==='baseline','Apply recovery-ready path changed live state');
