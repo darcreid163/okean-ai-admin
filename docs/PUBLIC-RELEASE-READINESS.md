@@ -1,8 +1,8 @@
 # WP AI Admin — Public Release Readiness
 
 Status: **IN PROGRESS**  
-Baseline frozen on 2026-10-07: native **2.1.14**, Cloud Core **0.3.6**  
-Current public-release candidate: native **2.1.15**, Cloud Core **0.3.6**  
+Baseline frozen on 2026-10-07: native **2.1.14**, Cloud Core **0.3.7**  
+Current public-release candidate: native **2.1.15**, Cloud Core **0.3.7**  
 Canonical public MCP: **https://wpaiadmin.ru/mcp**
 
 This document is the release-gate checklist for moving WP AI Admin from approved-user beta toward public publication. It does not change the connection contract. Any connection-affecting change must still follow `docs/CHATGPT-CONNECTION-CONTRACT.md`.
@@ -265,7 +265,7 @@ A release candidate is publishable only when:
 ## Current next actions
 
 1. Resolve GitHub-hosted runner allocation blocker. First account-level checks: Actions usage/minutes, Actions budget/spending limit, valid payment method if quota is exhausted, and repository/account Actions policy. Keep `.github/workflows/runner-smoke.yml` until a real runner executes its steps.
-2. Once runner executes, run the exact **2.1.15 / Cloud Core 0.3.6** commit through Validate, Cloud Core checks, Public Release Sandbox and Runner Smoke; fix only real test failures from logs.
+2. Once runner executes, run the exact **2.1.15 / Cloud Core 0.3.7** commit through Validate, Cloud Core checks, Public Release Sandbox and Runner Smoke; fix only real test failures from logs.
 3. Run the final live mutation lifecycle acceptance against a dedicated disposable WordPress site.
 4. Run real two-account isolation and a clean external ChatGPT OAuth/onboarding walkthrough.
 5. Publish/approve Privacy Policy, Terms, subprocessors/data-flow disclosure and permanent deletion process. Revoke-first account suspension is now implemented; destructive data erasure remains intentionally pending retention-policy approval.
