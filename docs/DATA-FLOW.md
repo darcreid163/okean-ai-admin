@@ -173,3 +173,12 @@ Implemented release gates cover:
 - request-size and JSON-RPC boundaries;
 - no-store/nosniff response headers;
 - release artifact secret scanning.
+
+
+## Central account suspension
+
+Cloud Core implements a revoke-first account suspension flow separate from permanent deletion.
+
+The owner can first request a closure preview containing only counts of active sites/tokens/OAuth state and retained evidence. A confirmed suspension immediately disables the Core account, revokes bearer/OAuth access, revokes site registrations and clears sealed site credentials.
+
+Request ledger, audit and balance evidence are intentionally retained at this stage. The current release candidate therefore supports access revocation/account suspension, but still does not claim complete destructive account-data erasure.
