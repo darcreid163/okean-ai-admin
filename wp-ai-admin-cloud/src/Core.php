@@ -280,6 +280,22 @@ final class Core {
             return $receipt;
         });
     }
+    public function reactivateAccount(string $operator,string $owner,int $now): array {
+        return $this->store->transaction(function() use($operator,$owner,$now) {
+            $row=$this->store->row('SELECT owner,disabled FROM '.$this->store->table('accounts').' WHERE owner=?'.$this->store->lock(),[$owner]);
+            if(!$row) throw new Fault('account_unavailable',404);
+            if((int)$row['disabled']===0) throw new Fault('account_already_active',409);
+            $this->store->execute('UPDATE '.$this->store->table('accounts').' SET disabled=0,sequence=sequence+1 WHERE owner=?',[$owner]);
+            $this->store->audit($owner,'','operator_account_reactivated',hash('sha256',$operator),$now);
+            return [
+                'reactivated'=>true,
+                'old_access_restored'=>false,
+                'reconnect_required'=>true,
+                'oauth_reauthorization_required'=>true,
+            ];
+        });
+    }
+
     public function setPlan(string $operator,string $owner,string $plan,int $now): void {
         if (!isset($this->policy['plans'][$plan])) throw new Fault('unknown_plan');
         $this->store->transaction(function() use($operator,$owner,$plan,$now) {
