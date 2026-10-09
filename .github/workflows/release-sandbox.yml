@@ -251,7 +251,10 @@ jobs:
           php "$WPCLI" --path="$WP_DIR" core download
           php "$WPCLI" --path="$WP_DIR" config create --dbname=cloud_upgrade --dbuser=root --dbpass=cloud-upgrade-password --dbhost=127.0.0.1 --skip-check
           php "$WPCLI" --path="$WP_DIR" core install --url=https://cloud-upgrade.test --title='Cloud Upgrade' --admin_user=cloud-upgrade-admin --admin_password=disposable-cloud-upgrade-password --admin_email=cloud-upgrade@example.test --skip-email
-          php "$WPCLI" --path="$WP_DIR" plugin install "$GITHUB_WORKSPACE/releases/wp-ai-cloud-0.3.6/wp-ai-admin-cloud-0.3.6.zip" --activate
+          CLOUD_BASELINE="$GITHUB_WORKSPACE/releases/wp-ai-cloud-0.3.6/wp-ai-admin-cloud-0.3.6.zip"
+          test "$(git hash-object "$CLOUD_BASELINE")" = "6a078c53018aaedbbb6320b6f08380e425eb21bd"
+          test "$(stat -c %s "$CLOUD_BASELINE")" -eq 48094
+          php "$WPCLI" --path="$WP_DIR" plugin install "$CLOUD_BASELINE" --activate
           WPAI_CLOUD_UPGRADE_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-upgrade.php"
           CURRENT_ZIP="$(ls "$GITHUB_WORKSPACE"/cloud-upgrade-build/wp-ai-admin-cloud-*.zip | head -n1)"
           php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
@@ -296,7 +299,10 @@ jobs:
           php "$WPCLI" --path="$WP_DIR" core download
           php "$WPCLI" --path="$WP_DIR" config create --dbname=release_upgrade --dbuser=root --dbpass=release-upgrade-password --dbhost=127.0.0.1 --skip-check
           php "$WPCLI" --path="$WP_DIR" core install --url=http://release-upgrade.test --title='Release Upgrade' --admin_user=upgrade-admin --admin_password=disposable-upgrade-password --admin_email=upgrade@example.test --skip-email
-          php "$WPCLI" --path="$WP_DIR" plugin install "$GITHUB_WORKSPACE/releases/2.1.13/wp-ai-admin-2.1.13.zip" --activate
+          NATIVE_BASELINE="$GITHUB_WORKSPACE/releases/2.1.13/wp-ai-admin-2.1.13.zip"
+          test "$(git hash-object "$NATIVE_BASELINE")" = "e5efa15c5d785bbbc32acef0b7557117baf7a45e"
+          test "$(stat -c %s "$NATIVE_BASELINE")" -eq 244567
+          php "$WPCLI" --path="$WP_DIR" plugin install "$NATIVE_BASELINE" --activate
           OAI_RELEASE_UPGRADE_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-upgrade.php"
           CURRENT_ZIP="$(ls "$GITHUB_WORKSPACE"/dist/wp-ai-admin-*.zip | head -n1)"
           php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
