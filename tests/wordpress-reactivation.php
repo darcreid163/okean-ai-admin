@@ -18,11 +18,15 @@ if($phase==='seed'){
     react_expect(!is_wp_error($ai)&&OAI_AI_Lifecycle_Control::is_active(),'Unable to enable AI Lifecycle before deactivation');
     $ta=OAI_Test_Automation::enable(15,array(),array(),1);
     react_expect(!is_wp_error($ta)&&OAI_Test_Automation::is_active(),'Unable to enable Test Automation before deactivation');
+    $leaseId=987654;
+    $leaseToken=OAI_DB::acquire_operation_lease($leaseId,'apply',300);
+    react_expect(is_string($leaseToken)&&OAI_DB::operation_lease($leaseId)!==null,'Unable to seed active execution lease before deactivation');
     update_option('wpai_reactivation_expected',array(
         'site_id'=>$site,
         'installation_id'=>$installation,
         'mcp_token_hash'=>$hash,
         'license_id'=>$license['license_id']??'',
+        'lease_id'=>$leaseId,
     ),false);
     echo "PASS reactivation seed\n";
     return;
@@ -38,12 +42,15 @@ if($phase==='check'){
     react_expect(!empty($license['active'])&&($license['license_id']??'')===$expected['license_id'],'License changed across deactivation/reactivation');
     react_expect(!OAI_AI_Lifecycle_Control::is_active(),'AI Lifecycle survived plugin deactivation');
     react_expect(!OAI_Test_Automation::is_active(),'Test Automation survived plugin deactivation');
+    $leaseId=absint($expected['lease_id']??0);
+    react_expect($leaseId>0&&OAI_DB::operation_lease($leaseId)===null,'Execution lease survived plugin deactivation/reactivation');
+    react_expect(get_option('oai_operation_lease_'.$leaseId,null)===null,'Execution lease option survived plugin deactivation');
     $aiCfg=get_option(OAI_AI_Lifecycle_Control::OPTION,array());
     $taCfg=get_option(OAI_Test_Automation::OPTION,array());
     react_expect(($aiCfg['disabled_reason']??'')==='plugin_deactivated','AI Lifecycle deactivation reason not recorded');
     react_expect(($taCfg['disabled_reason']??'')==='plugin_deactivated','Test Automation deactivation reason not recorded');
     delete_option('wpai_reactivation_expected');
-    echo "PASS deactivation/reactivation preserved identity, credential and license with automation OFF\n";
+    echo "PASS deactivation/reactivation preserved identity, credential and license, cleared execution leases, and kept automation OFF\n";
     return;
 }
 
