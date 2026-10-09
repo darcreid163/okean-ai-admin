@@ -101,8 +101,8 @@ class OAI_DB {
   if($expires<=time()){delete_option($key);return null;}
   return array('action'=>sanitize_key((string)($lease['action']??'')),'acquired_at'=>absint($lease['acquired_at']??0),'expires_at'=>$expires);
  }
- public static function acquire_operation_lease($id,$action,$ttl=120){
-  $id=absint($id);$action=sanitize_key((string)$action);$ttl=max(30,min(300,absint($ttl)));
+ public static function acquire_operation_lease($id,$action,$ttl=300){
+  $id=absint($id);$action=sanitize_key((string)$action);$ttl=max(30,min(900,absint($ttl)));
   if(!$id||$action==='')return new WP_Error('oai_operation_lease_invalid','Invalid operation execution lease request',array('status'=>500));
   $key=self::operation_lease_key($id);
   for($attempt=0;$attempt<2;$attempt++){
