@@ -63,7 +63,8 @@ $toggleMethod=new ReflectionMethod('OAI_Admin','handle_mcp_toggle');$toggleMetho
 $_SERVER['REQUEST_METHOD']='POST';
 $_POST=array('oai_mcp_state'=>'disabled','_wpnonce'=>wp_create_nonce('oai_mcp_toggle'));
 $toggleOff=$toggleMethod->invoke(null);
-release_install_expect(!is_wp_error($toggleOff)&&empty($toggleOff['enabled'])&&!get_option('oai_mcp_enabled',true),'MCP disable handler failed');
+$toggleOffDebug=is_wp_error($toggleOff)?array('wp_error'=>$toggleOff->get_error_code(),'message'=>$toggleOff->get_error_message()):$toggleOff;
+release_install_expect(!is_wp_error($toggleOff)&&empty($toggleOff['enabled'])&&!get_option('oai_mcp_enabled',true),'MCP disable handler failed: result='.wp_json_encode($toggleOffDebug,JSON_UNESCAPED_SLASHES).' option='.wp_json_encode(get_option('oai_mcp_enabled','__missing__')).' user='.get_current_user_id().' can_manage='.(current_user_can('manage_options')?'1':'0').' nonce='.(wp_verify_nonce($_POST['_wpnonce']??'','oai_mcp_toggle')?'1':'0'));
 release_install_expect(!OAI_AI_Lifecycle_Control::is_active()&&!OAI_Test_Automation::is_active(),'MCP disable did not stop automation modes');
 release_install_expect(OAI_Platform::site_id()===$toggleSite&&OAI_Platform::installation_id()===$toggleInstallation,'MCP disable changed persistent site identity');
 release_install_expect((string)get_option('oai_mcp_token_hash','')===$toggleTokenHash,'MCP disable changed MCP credential hash');
