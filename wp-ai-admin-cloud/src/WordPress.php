@@ -89,6 +89,16 @@ final class WordPress {
         if (!is_ssl()) return new \WP_Error('cloud_https_required','HTTPS required',['status'=>403]);
         return true;
     }
+    private static function requireProvisioning(): void {
+        $permission=self::provisioningPermission();
+        if ($permission===true) return;
+        if (is_wp_error($permission)) {
+            $data=$permission->get_error_data();
+            $status=is_array($data)?(int)($data['status']??403):403;
+            throw new Fault((string)$permission->get_error_code(),$status);
+        }
+        throw new Fault('cloud_auth_required',401);
+    }
     private static function owner(): string { $id=(string)get_current_user_id(); Settings::account($id); self::core()->ensureAccount($id); self::core()->throttle($id,'provisioning',time(),30); return $id; }
     private static function body($req): array {
         if (strlen($req->get_body())>131072) throw new Fault('request_too_large',413);
@@ -96,7 +106,10 @@ final class WordPress {
     }
     public static function routes(): void {
         $route=function(string $path,string $method,callable $fn) {
-            register_rest_route('wpai-cloud/v1',$path,['methods'=>$method,'permission_callback'=>[self::class,'provisioningPermission'],'callback'=>fn($req)=>self::safe(fn()=>self::response($fn($req)))]);
+            register_rest_route('wpai-cloud/v1',$path,['methods'=>$method,'permission_callback'=>'__return_true','callback'=>fn($req)=>self::safe(function() use($fn,$req) {
+                self::requireProvisioning();
+                return self::response($fn($req));
+            })]);
         };
         $route('/sites','GET',fn($r)=>self::core()->sites(self::owner()));
         $route('/sites','POST',function($r) { $p=self::body($r); if (!is_string($p['home']??null)||!is_string($p['site_token']??null)) throw new Fault('home_and_site_token_required'); return self::core()->connect(self::owner(),$p['home'],$p['site_token'],time()); });
@@ -119,7 +132,11 @@ final class WordPress {
         self::oauthRoutes();
         register_rest_route('wpai-cloud/v1','/mcp',['methods'=>'POST,GET,DELETE','permission_callback'=>'__return_true','callback'=>[self::class,'mcp']]);
         $admin=function(string $path,callable $fn) {
-            register_rest_route('wpai-cloud/v1',$path,['methods'=>'POST','permission_callback'=>function(){ $p=self::provisioningPermission(); return $p===true?(current_user_can('manage_options')?true:new \WP_Error('cloud_admin_required','Cloud operator required',['status'=>403])):$p; },'callback'=>fn($r)=>self::safe(fn()=>self::response($fn($r)))]);
+            register_rest_route('wpai-cloud/v1',$path,['methods'=>'POST','permission_callback'=>'__return_true','callback'=>fn($r)=>self::safe(function() use($fn,$r) {
+                self::requireProvisioning();
+                if(!current_user_can('manage_options')) throw new Fault('cloud_admin_required',403);
+                return self::response($fn($r));
+            })]);
         };
         $admin('/accounts/(?P<owner>[0-9]+)/reactivate',function($r) {
             $p=self::body($r);
