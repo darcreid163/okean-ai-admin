@@ -344,7 +344,8 @@ bcheck($quotaCore->usage('quota-boundary',$now+100)['used']===2,'Successful call
 breject(fn()=>$quotaCore->call($quotaActor,$quotaSite['id'],'wp_get_site',[],'over-quota',$now+100),'monthly_quota_exhausted');
 
 // Same nonce with different fingerprint is rejected and never redispatched.
-$core2=fixtureCore($store,$transport,100);
+// Higher fixture quota keeps the ledger-cap test independent from billing limits.
+$core2=fixtureCore($store,$transport,200);
 $nonce='fingerprint-conflict';
 $first=$core2->call($actor,$site['id'],'operation_verify',['id'=>1],$nonce,$now);
 $execAfter=$transport->executions;
