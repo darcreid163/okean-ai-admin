@@ -23,10 +23,6 @@ if($phase==='seed'){
     $owner='1';
     $site='reg_'.str_repeat('d',32);
     $siteToken='cloud-upgrade-site-token-'.str_repeat('x',32);
-    do_action('rest_api_init');
-    $health=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'));
-    cloud_upgrade_expect($health->get_status()===200&&(($health->get_data()['version']??'')==='0.3.7')&&(($health->get_data()['configured']??false)===true),'Cloud health/version/configuration incorrect after ZIP upgrade');
-
     $keys=\WPAICloudGateway\Settings::keys();
     $vault=new \WPAICloudGateway\Vault($keys['vault']);
     $sealed=$vault->seal($siteToken,'site:'.$owner.':'.$site);
@@ -80,6 +76,9 @@ if($phase==='check'){
     require_once ABSPATH.'wp-admin/includes/plugin.php';
     cloud_upgrade_expect(is_plugin_active('wp-ai-admin-cloud/wp-ai-admin-cloud.php'),'Cloud Core plugin became inactive during ZIP upgrade');
     cloud_upgrade_expect(\WPAICloudGateway\Settings::enabled(),'Gateway enable state was lost across 0.3.6 -> 0.3.7');
+    do_action('rest_api_init');
+    $health=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'));
+    cloud_upgrade_expect($health->get_status()===200&&(($health->get_data()['version']??'')==='0.3.7')&&(($health->get_data()['configured']??false)===true),'Cloud health/version/configuration incorrect after ZIP upgrade');
     cloud_upgrade_expect((string)get_option('wpai_gateway_db_version','')==='2','Gateway schema version marker changed across Cloud upgrade');
     cloud_upgrade_expect((string)get_option('wpai_cloud_db_version','')===(string)WPAI_CLOUD_DB_VERSION,'Legacy Cloud schema version marker changed across Cloud upgrade');
     cloud_upgrade_expect(hash_equals((string)$expected['wrapped'],(string)get_option('wpai_gateway_wrapped_keys_v1','')),'Wrapped gateway keys rotated across Cloud upgrade');
