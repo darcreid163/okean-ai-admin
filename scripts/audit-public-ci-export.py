@@ -16,8 +16,8 @@ BLOCKED_PATH_WORDS = {"releases", "includes", "wp-ai-admin-cloud", "vendor", "no
 SUSPICIOUS = [
     re.compile(r"-----BEGIN [^-]*PRIVATE KEY-----", re.I),
     re.compile(r"(?i)(?:ghp_|github_pat_|sk-)[A-Za-z0-9_-]{20,}"),
-    re.compile(r"(?i)(?:password|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)\\s*[:=]\\s*['\\\"][^'\\\"]{8,}['\\\"]"),
-    re.compile(r"(?i)https?://(?:wpaiadmin\\.ru|okean\\.market)"),
+    re.compile(r"(?i)(?:password|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)\s*[:=]\s*['\\\"][^'\\\"]{8,}['\\\"]"),
+    re.compile(r"(?i)https?://(?:wpaiadmin\.ru|okean\.market)"),
 ]
 
 def audit(root: pathlib.Path) -> list[str]:
@@ -42,7 +42,7 @@ def audit(root: pathlib.Path) -> list[str]:
         in_allowed_dir = rel.startswith("tests/") or rel.startswith(".github/workflows/")
         if not (rel in ALLOWED_NAMES or in_allowed_dir):
             errors.append(f"{rel}: not in allowlist")
-        if p.suffix.lower() in BLOCKED_SUFFIXES or p.suffix.lower() not in ALLOWED_SUFFIXES:
+        if p.suffix.lower() in BLOCKED_SUFFIXES or (p.suffix.lower() not in ALLOWED_SUFFIXES and rel not in {".gitignore", "LICENSE"}):
             errors.append(f"{rel}: forbidden file type")
             continue
         try:
