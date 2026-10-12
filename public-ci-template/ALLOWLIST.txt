@@ -1,0 +1,34 @@
+# Public CI snapshot allowlist
+okean-ai-admin.php
+includes/
+starter-themes/
+wp-ai-admin-cloud/wp-ai-admin-cloud.php
+wp-ai-admin-cloud/includes/
+wp-ai-admin-cloud/src/
+wp-ai-admin-cloud/config/
+wp-ai-admin-cloud/README.md
+wp-ai-admin-cloud/tests/
+tests/
+scripts/build-release-candidate.sh
+README.md
+README.txt
+BUILD-SIGNATURE.txt
+BUILD_SIGNATURE.txt
+SECURITY.md
+CHANGELOG.md
+docs/CHATGPT-CONNECTION-CONTRACT.md
+docs/PUBLIC-ONBOARDING.md
+docs/PUBLIC-RELEASE-READINESS.md
+docs/DATA-FLOW.md
+docs/DATA-RETENTION.md
+docs/PROOF-SEMANTICS.md
+
+# Explicit deny patterns
+.git/
+.env
+*.pem
+*.key
+node_modules/
+coverage/
+vendor/bin/
+releases/
