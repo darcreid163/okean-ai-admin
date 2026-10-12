@@ -105,11 +105,19 @@ final class Core {
                 $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now]);
             } catch (\PDOException $e) {
                 // Another request may have registered the same canonical URL
-                // after our initial lookup but before this INSERT. Normalize the
-                // storage race to the public ownership-conflict contract instead
-                // of leaking a raw duplicate-key/SQL error.
-                $winner=$this->store->row('SELECT id,owner FROM '.$this->store->table('sites').' WHERE url_hash=?',[$hash]);
-                if ($winner) throw new Fault('site_already_registered',409);
+                // after our initial lookup but before this INSERT. On MySQL the
+                // winning row can still be uncommitted/invisible to this
+                // transaction, so do not rely on a follow-up SELECT. Normalize
+                // only duplicate-key integrity violations; propagate unrelated
+                // storage failures.
+                $driverCode=(int)($e->errorInfo[1]??0);
+                if ((string)$e->getCode()==='23000' && $driverCode===1062) {
+                    throw new Fault('site_already_registered',409);
+                }
+                // SQLite duplicate uniqueness is also an ownership race.
+                if ((string)$e->getCode()==='23000' || str_contains(strtolower($e->getMessage()),'unique constraint failed')) {
+                    throw new Fault('site_already_registered',409);
+                }
                 throw $e;
             }
             $this->store->audit($owner,$id,'site_connected','',$now);
