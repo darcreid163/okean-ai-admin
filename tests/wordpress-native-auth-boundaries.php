@@ -3,6 +3,10 @@
 function native_auth_expect($ok,$message){if(!$ok)throw new RuntimeException($message);}
 wp_set_current_user(1);
 add_filter('wp_is_application_passwords_available','__return_true');
+// wp_authenticate_application_password() intentionally authenticates only API
+// requests. This acceptance file runs under WP-CLI, so mark the isolated
+// process as REST to exercise the real WordPress Application Password path.
+if (!defined('REST_REQUEST')) define('REST_REQUEST', true);
 
 $adminId=get_current_user_id();
 $admin=get_user_by('id',$adminId);
