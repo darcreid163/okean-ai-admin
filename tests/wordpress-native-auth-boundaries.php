@@ -15,8 +15,8 @@ $subscriber->set_role('subscriber');
 
 $adminApp=WP_Application_Passwords::create_new_application_password($adminId,array('name'=>'WP AI Admin release auth test'));
 $subApp=WP_Application_Passwords::create_new_application_password($subscriberId,array('name'=>'WP AI Admin release auth test'));
-native_auth_expect(is_array($adminApp)&&isset($adminApp[1])&&is_string($adminApp[1]),'Unable to create admin Application Password');
-native_auth_expect(is_array($subApp)&&isset($subApp[1])&&is_string($subApp[1]),'Unable to create subscriber Application Password');
+native_auth_expect(is_array($adminApp)&&isset($adminApp[0])&&is_string($adminApp[0]),'Unable to create admin Application Password');
+native_auth_expect(is_array($subApp)&&isset($subApp[0])&&is_string($subApp[0]),'Unable to create subscriber Application Password');
 
 $makeBasic=function($user,$pass){
     $r=new WP_REST_Request('GET','/okean-ai/v1/status');
@@ -25,10 +25,10 @@ $makeBasic=function($user,$pass){
 };
 
 wp_set_current_user(0);
-$subReq=$makeBasic($subscriber->user_login,$subApp[1]);
+$subReq=$makeBasic($subscriber->user_login,$subApp[0]);
 native_auth_expect(OAI_REST::perm($subReq)===false,'Subscriber Application Password reached native admin API');
 
-$adminReq=$makeBasic($admin->user_login,$adminApp[1]);
+$adminReq=$makeBasic($admin->user_login,$adminApp[0]);
 native_auth_expect(OAI_REST::perm($adminReq)===true,'Admin Application Password was rejected');
 native_auth_expect(get_current_user_id()===$adminId,'Admin Application Password did not bind current user');
 
