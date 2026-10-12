@@ -11,6 +11,8 @@ if (!defined('REST_REQUEST')) define('REST_REQUEST', true);
 $adminId=get_current_user_id();
 $admin=get_user_by('id',$adminId);
 native_auth_expect($admin instanceof WP_User && user_can($admin,'manage_options'),'Admin fixture missing');
+$localLicense=OAI_License::activate_local_owner($adminId);
+native_auth_expect(!is_wp_error($localLicense)&&!empty($localLicense['active']),'Unable to activate local owner fixture');
 
 $subscriberId=wp_create_user('release-auth-subscriber-'.wp_generate_password(6,false,false),'disposable-password','release-auth-subscriber@example.test');
 native_auth_expect(!is_wp_error($subscriberId),'Unable to create subscriber auth fixture');
