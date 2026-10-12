@@ -3,13 +3,14 @@
 if (!defined('ABSPATH')) exit;
 
 class OAI_Operations_Cleanup {
- const ACTIVE_STATUSES=array('pending','approved','applying','rolling_back');
+ const ACTIVE_STATUSES=array('pending','approved','applying','rollback_pending','rolling_back');
  const TERMINAL_STATUSES=array('rolled_back','rejected','expired','cancelled','failed','apply_failed','rollback_failed','verification_failed');
 
  public static function self_test_contract(){
   return array(
    'dry_run_default'=>true,
    'active_statuses_protected'=>true,
+   'rollback_pending_protected'=>in_array('rollback_pending',self::ACTIVE_STATUSES,true),
    'applied_requires_explicit_opt_in'=>true,
    'audit_log_preserved'=>true,
    'failed_terminal_statuses_supported'=>true,

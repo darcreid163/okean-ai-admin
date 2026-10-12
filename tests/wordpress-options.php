@@ -39,26 +39,26 @@ if($phase==='plan'){
  $id=absint(get_option('oai_test_options_ci_operation'));
  oai_option_expect(!empty(OAI_Verify::operation($id)['verified']),'fresh-request rollback verify');
  oai_option_expect((int)get_option('thumbnail_size_w')===150,'native baseline restored');
- update_option('oai_test_options_conflict',1,false);
- $conflict=oai_option_ok(oai_option_plan('oai_test_options_conflict',2),'conflict planning');
+ update_option('release_ci_options_conflict',1,false);
+ $conflict=oai_option_ok(oai_option_plan('release_ci_options_conflict',2),'conflict planning');
  oai_option_ok(oai_option_action($conflict['id'],'approve'),'conflict approve');
- update_option('oai_test_options_conflict',3,false);
+ update_option('release_ci_options_conflict',3,false);
  $blocked=oai_option_action($conflict['id'],'apply');
  oai_option_expect(is_wp_error($blocked)&&$blocked->get_error_code()==='oai_conflict','apply must reject a newer value');
- oai_option_expect((int)get_option('oai_test_options_conflict')===3,'apply conflict must preserve newer value');
- $booleans=oai_option_ok(oai_option_plan('oai_test_options_boolean',false),'boolean planning');
+ oai_option_expect((int)get_option('release_ci_options_conflict')===3,'apply conflict must preserve newer value');
+ $booleans=oai_option_ok(oai_option_plan('release_ci_options_boolean',false),'boolean planning');
  oai_option_ok(oai_option_action($booleans['id'],'approve'),'boolean approve');
  oai_option_ok(oai_option_action($booleans['id'],'apply'),'boolean apply');
  oai_option_expect(!empty(OAI_Verify::operation($booleans['id'])['verified']),'boolean verify');
  oai_option_ok(oai_option_action($booleans['id'],'rollback'),'boolean rollback');
  oai_option_expect(!empty(OAI_Verify::operation($booleans['id'])['verified']),'missing baseline verify');
- update_option('oai_test_options_nested',array('count'=>1),false);
- $nested=oai_option_ok(oai_option_plan('oai_test_options_nested',array('count'=>2)),'nested planning');
+ update_option('release_ci_options_nested',array('count'=>1),false);
+ $nested=oai_option_ok(oai_option_plan('release_ci_options_nested',array('count'=>2)),'nested planning');
  oai_option_ok(oai_option_action($nested['id'],'approve'),'nested approve');
- update_option('oai_test_options_nested',array('count'=>'1'),false);
+ update_option('release_ci_options_nested',array('count'=>'1'),false);
  $blocked=oai_option_action($nested['id'],'apply');
  oai_option_expect(is_wp_error($blocked)&&$blocked->get_error_code()==='oai_conflict','nested type changes must remain conflicts');
- foreach(array('oai_test_options_ci_operation','oai_test_options_conflict','oai_test_options_nested') as $key)delete_option($key);
+ foreach(array('oai_test_options_ci_operation','release_ci_options_conflict','release_ci_options_nested') as $key)delete_option($key);
  // Yoast rebuilds logo cache keys during sanitize_option(). The values and
  // nested types remain identical, but strict PHP array equality sees order.
  oai_option_expect(class_exists('WPSEO_Option_Titles'),'Yoast must be active for this regression');

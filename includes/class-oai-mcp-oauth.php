@@ -519,6 +519,8 @@ class OAI_MCP_OAuth {
   if($row['client_id']!==$client_id || $row['redirect_uri']!==$redirect || !self::verify_pkce($verifier,$row['code_challenge'])) return self::json_error('invalid_grant','Authorization code validation failed');
   $expected_resource=rest_url('okean-ai/mcp');
   if($resource==='' || !hash_equals($expected_resource,$resource) || !hash_equals($expected_resource,(string)($row['resource']??''))) return self::json_error('invalid_target','Authorization request resource is not this MCP server');
+  $grant_user=get_user_by('id',(int)$row['user_id']);
+  if(!$grant_user || !user_can($grant_user,'manage_options')) return self::json_error('invalid_grant','The approving WordPress administrator is no longer authorized; reconnect and approve again');
   $claimed=$wpdb->query($wpdb->prepare('UPDATE '.self::codes_table().' SET used=1 WHERE id=%d AND used=0',(int)$row['id']));
   if($claimed!==1) return self::json_error('invalid_grant','Authorization code is expired or already used');
 
@@ -526,6 +528,8 @@ class OAI_MCP_OAuth {
  }
 
  private static function issue_tokens($user_id,$client_id,$scope,$resource=''){
+  $grant_user=get_user_by('id',absint($user_id));
+  if(!$grant_user || !user_can($grant_user,'manage_options')) return self::json_error('invalid_grant','The WordPress administrator authorization is no longer valid');
   // A successful administrator-approved OAuth exchange bootstraps a fresh local beta install.
   // Fresh installs previously issued valid OAuth tokens while MCP/license gates still blocked
   // tools/list, which ChatGPT reported as authentication success followed by discovery failure.
@@ -575,6 +579,8 @@ class OAI_MCP_OAuth {
   $stored_resource=(string)($row['resource']??'');
   if($stored_resource==='' || !hash_equals($expected_resource,$stored_resource)) return self::json_error('invalid_grant','The refresh token is bound to an invalid MCP resource; reconnect and authorize again');
   if($resource!=='' && !hash_equals($expected_resource,$resource)) return self::json_error('invalid_target','Token resource must be this MCP server');
+  $refresh_user=get_user_by('id',(int)$row['user_id']);
+  if(!$refresh_user || !user_can($refresh_user,'manage_options')) return self::json_error('invalid_grant','The WordPress administrator authorization is no longer valid; reconnect and approve again');
   $claimed=$wpdb->query($wpdb->prepare('UPDATE '.self::tokens_table().' SET revoked=1 WHERE id=%d AND revoked=0',(int)$row['id']));
   if($claimed!==1) return self::json_error('invalid_grant','Refresh token has already been rotated; reconnect and authorize again');
   return self::issue_tokens((int)$row['user_id'],$client_id,$scope,(string)($row['resource']??rest_url('okean-ai/mcp')));

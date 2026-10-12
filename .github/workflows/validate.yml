@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: validate-${{ github.ref }}
+  group: validate-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -24,6 +24,12 @@ jobs:
         php: ['8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v6
+      - name: Materialize retained 2.1.5 regression baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f releases/2.1.5/wp-ai-admin-2.1.5.zip
+          unzip -tq releases/2.1.5/wp-ai-admin-2.1.5.zip
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -140,6 +146,12 @@ jobs:
           --health-retries=5
     steps:
       - uses: actions/checkout@v6
+      - name: Verify retained 2.1.5 regression baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f releases/2.1.5/wp-ai-admin-2.1.5.zip
+          unzip -tq releases/2.1.5/wp-ai-admin-2.1.5.zip
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
