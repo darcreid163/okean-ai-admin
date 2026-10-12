@@ -1,5 +1,16 @@
 # Changelog
 
+## Private candidate reconciliation — 2026-10-12
+
+- Reconcile the entire private qualification candidate into the integration branch; retain integration-only files and historical archives.
+- Use Native build `2.1.15-release-reconciled-20261012` for these candidate bytes; versions remain Native 2.1.15 / Cloud Core 0.3.7.
+- Atomically compare-and-delete operation leases on expiry/release so stale readers cannot erase a replacement holder.
+- Serialize abandoned Apply/Rollback recovery with execution leases and atomic terminal-state claims.
+- Add real WordPress stale-read and concurrent recovery regression tests, including pre-fix reproductions.
+- Repair Quota/Idempotency test imports and use fresh authorization for the next billing month while testing expired-token denial.
+- Avoid treating an empty disposable database password as a leaked secret in schema-damage acceptance.
+- Pin ZIP timestamps to UTC for reproducibility across runner time zones.
+
 ## Cloud Core 0.3.7 — Release candidate — 2026-10-09
 
 - Add revoke-first central account suspension and closure preview.

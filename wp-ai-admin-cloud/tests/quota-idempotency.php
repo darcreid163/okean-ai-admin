@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require __DIR__.'/bootstrap.php';
 
-use WPAICloudGateway\{Fault};
+use WPAICloudGateway\{Fault,Security};
 
 $checks=0;
 function qcheck(bool $ok,string $message): void { global $checks; $checks++; if(!$ok) throw new RuntimeException($message); }
@@ -119,7 +119,10 @@ qcheck($afterBadPlan['plan']==='pro'&&$afterBadPlan['used']===1,'Rejected plan c
 $nextMonth=strtotime('2026-11-01 00:00:05 UTC');
 $nextUsage=$core->usage('plan-owner',$nextMonth);
 qcheck($nextUsage['period']==='2026-11'&&$nextUsage['used']===0&&$nextUsage['reserved']===0&&$nextUsage['remaining']===500,'New UTC month inherited previous balance');
-$core->call($planActor,$planSite['id'],'operation_apply',['id'=>10],'november-charge',$nextMonth);
+qreject(fn()=>$core->call($planActor,$planSite['id'],'operation_apply',['id'=>10],'november-charge',$nextMonth),'invalid_or_expired_token');
+$nextToken=$core->mint('plan-owner',[$planSite['id']],['mcp:read','mcp:write'],$nextMonth);
+$nextActor=$core->authenticate($nextToken['access_token'],$nextMonth);
+$core->call($nextActor,$planSite['id'],'operation_apply',['id'=>10],'november-charge',$nextMonth);
 $nextUsage2=$core->usage('plan-owner',$nextMonth);
 qcheck($nextUsage2['used']===1&&$nextUsage2['remaining']===499,'New-period charge accounting wrong');
 $oldUsage=$core->usage('plan-owner',$now+33);

@@ -1,10 +1,18 @@
 # WP AI Admin connection contract
-Contract version: **1.2**  
-Recorded: **2026-10-07**  
+Contract version: **1.3**  
+Recorded: **2026-10-12**  
 Supported baseline: native **2.1.14**, central **Cloud Core 0.3.6**; retained predecessor: native 2.1.12 / Core 0.3.5  
 Purpose: preserve working onboarding and authorization across future releases.
 
 This is the compatibility baseline, not a prohibition on improvements. Changes to the contract require an explicit versioned design, applicable data migration, updated tests and documentation, and the two-site acceptance flow below. Do not silently replace this flow with manual tokens or change persistent identities to make a failing connection appear successful.
+
+## Amendment 1.3 — 2026-10-12 (private release candidate)
+
+Native candidate 2.1.15 / Cloud Core candidate 0.3.7 preserve contract 1.2 endpoints, browser consent flows, persistent identities, keys and existing grants. Native build is `2.1.15-release-reconciled-20261012`. No ordinary-upgrade identity/key reset is introduced. New executable hardening includes administrator-demotion checks before native token exchange/refresh, control-plane option denial, single-winner lifecycle transitions, and execution/recovery leases. Deactivation turns autonomous modes OFF and clears leases while retaining credentials and license state. Central suspension remains revoke-first and reactivation requires fresh authorization; it does not restore revoked access.
+
+Lease expiry and release delete only the exact value originally read. Recovery acquires its own lease, reloads the operation and atomically claims terminal state, so a concurrent request cannot erase a newer holder or finalize the same abandoned operation twice. No data migration is needed for these option leases. Rollback to the prior supported code preserves identities and keys but loses the candidate's additional protections; do it only after stopping autonomous work and reconciling in-flight operations.
+
+Required added gates: `tests/wordpress-operation-lease-race.php` and `tests/wordpress-operation-recovery-race.php`, alongside real ZIP install/upgrade/reactivation and the existing OAuth, MCP, isolation, quota and schema gates. Automated Work results are recorded separately from the outstanding external ChatGPT/two-site acceptance; this amendment does not authorize production deployment or public enrollment.
 
 ## Amendment 1.2 — 2026-10-07
 

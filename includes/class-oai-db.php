@@ -93,13 +93,27 @@ class OAI_DB {
   return $wpdb->query($wpdb->prepare($sql,$args));
  }
  private static function operation_lease_key($id){return 'oai_operation_lease_'.absint($id);}
+ private static function delete_operation_lease_if_current($key,$expected){
+  global $wpdb;
+  // Expiry/release must not delete a new holder that replaced the value after
+  // this request read it. The options table provides a single atomic CAS.
+  $deleted=$wpdb->query($wpdb->prepare('DELETE FROM '.$wpdb->options.' WHERE option_name=%s AND BINARY option_value=BINARY %s',$key,maybe_serialize($expected)));
+  wp_cache_delete($key,'options');
+  wp_cache_delete('notoptions','options');
+  return $deleted===1;
+ }
  public static function operation_lease($id){
   $key=self::operation_lease_key($id);
-  $lease=get_option($key,null);
-  if(!is_array($lease)||empty($lease['token_hash']))return null;
-  $expires=absint($lease['expires_at']??0);
-  if($expires<=time()){delete_option($key);return null;}
-  return array('action'=>sanitize_key((string)($lease['action']??'')),'acquired_at'=>absint($lease['acquired_at']??0),'expires_at'=>$expires);
+  for($attempt=0;$attempt<2;$attempt++){
+   $lease=get_option($key,null);
+   if(!is_array($lease)||empty($lease['token_hash']))return null;
+   $expires=absint($lease['expires_at']??0);
+   if($expires>time())return array('action'=>sanitize_key((string)($lease['action']??'')),'acquired_at'=>absint($lease['acquired_at']??0),'expires_at'=>$expires);
+   if(self::delete_operation_lease_if_current($key,$lease))return null;
+  }
+  // Repeated contention or a database error must block recovery, not make an
+  // uncertain lease look absent. This conservative result contains no token.
+  return array('action'=>'busy','acquired_at'=>0,'expires_at'=>time()+30);
  }
  public static function acquire_operation_lease($id,$action,$ttl=300){
   $id=absint($id);$action=sanitize_key((string)$action);$ttl=max(30,min(900,absint($ttl)));
@@ -110,7 +124,7 @@ class OAI_DB {
    if(is_array($existing)&&!empty($existing['token_hash'])&&absint($existing['expires_at']??0)>time()){
     return new WP_Error('oai_operation_busy','Operation is already executing',array('status'=>409,'action'=>sanitize_key((string)($existing['action']??'')),'lease_expires_at'=>absint($existing['expires_at']??0)));
    }
-   if($existing!==null)delete_option($key);
+   if($existing!==null&&!self::delete_operation_lease_if_current($key,$existing))continue;
    $token=wp_generate_uuid4();
    $value=array('token_hash'=>hash('sha256',$token),'action'=>$action,'acquired_at'=>time(),'expires_at'=>time()+$ttl);
    if(add_option($key,$value,'',false))return $token;
@@ -123,7 +137,7 @@ class OAI_DB {
   if(!is_array($lease)||empty($lease['token_hash']))return false;
   $hash=hash('sha256',(string)$token);
   if(!hash_equals((string)$lease['token_hash'],$hash))return false;
-  return delete_option($key);
+  return self::delete_operation_lease_if_current($key,$lease);
  }
  public static function clear_operation_leases(){
   global $wpdb;

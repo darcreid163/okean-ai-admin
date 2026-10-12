@@ -1095,12 +1095,12 @@ frame.addEventListener('load',function(){
   if($action==='apply' && $r['status']==='applying'){
    $lease=OAI_DB::operation_lease($id);
    if($lease)return new WP_Error('oai_operation_busy','Apply is still executing; recovery is not yet allowed',array('status'=>409,'lease_expires_at'=>$lease['expires_at'],'action'=>$lease['action']));
-   return self::recover_inflight_apply($id,$r,$meta);
+   return self::recover_with_lease($id,'apply');
   }
   if($action==='rollback' && in_array($r['status'],array('rollback_pending','rolling_back'),true)){
    $lease=OAI_DB::operation_lease($id);
    if($lease)return new WP_Error('oai_operation_busy','Rollback is still executing; recovery is not yet allowed',array('status'=>409,'lease_expires_at'=>$lease['expires_at'],'action'=>$lease['action']));
-   return self::recover_inflight_rollback($id,$r,$meta);
+   return self::recover_with_lease($id,'rollback');
   }
 
   // A sandbox snapshot is valid only until its explicit expiry. Never approve
@@ -1382,6 +1382,18 @@ frame.addEventListener('load',function(){
   return is_wp_error($conflict)?$conflict:new WP_Error('oai_conflict','Target changed since sandbox snapshot',array('status'=>409,'current'=>$current,'expected_before'=>$before));
  }
 
+ private static function recover_with_lease($id,$action){
+  $lease=OAI_DB::acquire_operation_lease($id,$action.'_recovery');
+  if(is_wp_error($lease))return $lease;
+  try{
+   $r=OAI_DB::get($id);
+   $expected=$action==='apply'?array('applying'):array('rollback_pending','rolling_back');
+   if(!$r||!in_array($r['status'],$expected,true))return new WP_Error('oai_state_conflict','Operation state changed before recovery could claim it',array('status'=>409,'current_status'=>$r['status']??null));
+   $meta=json_decode((string)$r['meta_data'],true);if(!is_array($meta))$meta=array();
+   return $action==='apply'?self::recover_inflight_apply($id,$r,$meta):self::recover_inflight_rollback($id,$r,$meta);
+  }finally{OAI_DB::release_operation_lease($id,$lease);}
+ }
+
  private static function recover_inflight_apply($id,$r,$meta=array()){
   $after=json_decode((string)$r['after_data'],true);
   $before=json_decode((string)$r['before_data'],true);
@@ -1393,8 +1405,8 @@ frame.addEventListener('load',function(){
   self::refresh_verification_target($r['type'],$r['target'],$meta);
   $after_check2=OAI_Verify::operation($id,$after,'after',true);
   if(!is_wp_error($after_check)&&!is_wp_error($after_check2)&&!empty($after_check['verified'])&&!empty($after_check2['verified'])){
+   if(OAI_DB::transition($id,array('applying'),'applied','applied')!==1)return new WP_Error('oai_state_conflict','Completed Apply recovery lost its state claim',array('status'=>409));
    OAI_DB::update($id,array(
-    'status'=>'applied','phase'=>'applied',
     'applied_data'=>wp_json_encode($after,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION),
     'applied_at'=>current_time('mysql',true)
    ));
@@ -1433,7 +1445,8 @@ frame.addEventListener('load',function(){
   self::refresh_verification_target($r['type'],$r['target'],$meta);
   $before_check2=OAI_Verify::operation($id,$before,'rollback',true);
   if(!is_wp_error($before_check)&&!is_wp_error($before_check2)&&!empty($before_check['verified'])&&!empty($before_check2['verified'])){
-   OAI_DB::update($id,array('status'=>'rolled_back','phase'=>'rolled_back','rolled_back_at'=>current_time('mysql',true)));
+   if(OAI_DB::transition($id,array((string)$r['status']),'rolled_back','rolled_back')!==1)return new WP_Error('oai_state_conflict','Completed Rollback recovery lost its state claim',array('status'=>409));
+   OAI_DB::update($id,array('rolled_back_at'=>current_time('mysql',true)));
    $final=OAI_DB::get($id);
    OAI_Audit::log('rollback_recovered',$final,array('verified'=>true,'verification'=>$before_check2,'replayed_write'=>false));
    OAI_Receipts::store($id,array('event'=>'rollback_recovered','status'=>'rolled_back','at'=>gmdate('c'),'verification'=>$before_check2,'replayed_write'=>false),OAI_Proof::make($id));
