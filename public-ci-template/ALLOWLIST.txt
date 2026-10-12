@@ -8,6 +8,7 @@ wp-ai-admin-cloud/src/
 wp-ai-admin-cloud/config/
 wp-ai-admin-cloud/README.md
 wp-ai-admin-cloud/tests/
+public-client/
 tests/
 scripts/build-release-candidate.sh
 .github/workflows/runner-smoke.yml
@@ -35,4 +36,8 @@ docs/PROOF-SEMANTICS.md
 node_modules/
 coverage/
 vendor/bin/
-releases/
+# Only pinned historical regression artifacts are allowed from releases/
+releases/2.1.5/wp-ai-admin-2.1.5.zip
+releases/2.1.13/wp-ai-admin-2.1.13.zip
+releases/wp-ai-cloud-0.3.5/wp-ai-admin-cloud-0.3.5.zip
+releases/wp-ai-cloud-0.3.6/wp-ai-admin-cloud-0.3.6.zip
