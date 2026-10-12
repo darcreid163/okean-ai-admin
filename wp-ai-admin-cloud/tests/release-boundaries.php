@@ -249,7 +249,7 @@ breject(fn()=>$closureOAuth->exchange([
 breject(fn()=>$closureOAuth->approve('closure-owner',$closureAuth,[$closureSite['id']],$now+23),'invalid_site_consent');
 
 // Recovery requires a genuinely fresh registration and fresh authorization.
-$newClosureSite=$core->connect('closure-owner','https://closure.example.com','fixture-closure-site-token-fresh-bbbbbbbb',$now+24);
+$newClosureSite=$core->connect('closure-owner','https://closure.example.com','fixture-closure-site-token-fresh-bbbbbbbb',$now+24,true);
 bcheck(($newClosureSite['id']??'')!==$closureSite['id'],'Reactivation reused revoked site registration id');
 $oldClosureSiteRow=$store->row('SELECT status,token_sealed FROM '.$store->table('sites').' WHERE id=?',[$closureSite['id']]);
 bcheck(($oldClosureSiteRow['status']??'')==='revoked'&&($oldClosureSiteRow['token_sealed']??'')==='','Fresh reconnect resurrected old site row or credential');
