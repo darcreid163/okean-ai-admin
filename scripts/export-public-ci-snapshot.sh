@@ -31,6 +31,37 @@ done
 cp public-ci-template/README.md "$OUT/README-PUBLIC-CI.md"
 cp public-ci-template/ALLOWLIST.txt "$OUT/PUBLIC-CI-ALLOWLIST.txt"
 
+# Public snapshot uses main and must not fetch private-only historical branches.
+python3 - "$OUT" <<'PY'
+from pathlib import Path
+import sys
+root=Path(sys.argv[1])
+release=root/'.github/workflows/release-sandbox.yml'
+text=release.read_text()
+text=text.replace("      - codex/public-release-readiness", "      - main")
+release.write_text(text)
+
+validate=root/'.github/workflows/validate.yml'
+text=validate.read_text()
+old="""      - name: Materialize retained 2.1.5 regression baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p releases/2.1.5
+          git fetch --no-tags --depth=1 origin codex/wp-ai-admin-2.1.5-option-normalization
+          git show FETCH_HEAD:releases/2.1.5/wp-ai-admin-2.1.5.zip > releases/2.1.5/wp-ai-admin-2.1.5.zip
+          unzip -tq releases/2.1.5/wp-ai-admin-2.1.5.zip"""
+new="""      - name: Verify retained 2.1.5 regression baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f releases/2.1.5/wp-ai-admin-2.1.5.zip
+          unzip -tq releases/2.1.5/wp-ai-admin-2.1.5.zip"""
+if old not in text:
+    raise SystemExit("validate historical baseline block not found")
+validate.write_text(text.replace(old,new))
+PY
+
 # Guard against accidental sensitive/development content.
 if find "$OUT" -type f \( -name '.env' -o -name '*.pem' -o -name '*.key' \) | grep -q .; then
   echo "Sensitive file type present in public CI snapshot" >&2
