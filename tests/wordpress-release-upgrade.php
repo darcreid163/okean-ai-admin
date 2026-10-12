@@ -6,7 +6,9 @@ global $wpdb;
 $phase=getenv('OAI_RELEASE_UPGRADE_PHASE');
 
 if($phase==='seed'){
-    release_upgrade_expect(defined('OAI_VERSION')&&OAI_VERSION==='2.1.13','Upgrade baseline must be 2.1.13');
+    $baseline=getenv('OAI_RELEASE_BASELINE_VERSION')?:'2.1.13';
+    release_upgrade_expect(in_array($baseline,array('2.1.13','2.1.14'),true),'Unsupported upgrade baseline');
+    release_upgrade_expect(defined('OAI_VERSION')&&OAI_VERSION===$baseline,'Upgrade baseline version mismatch');
     $site=OAI_Platform::site_id();
     $installation=OAI_Platform::installation_id();
     $token=OAI_MCP::generate_token(1);
@@ -49,6 +51,7 @@ if($phase==='seed'){
     release_upgrade_expect($inserted!==false,'Baseline OAuth token insert failed');
 
     update_option('wpai_release_upgrade_expected',array(
+        'baseline_version'=>OAI_VERSION,
         'site_id'=>$site,
         'installation_id'=>$installation,
         'mcp_token_hash'=>$tokenHash,
@@ -106,7 +109,7 @@ if($phase==='seed'){
 
     delete_option('wpai_release_upgrade_operation');
     delete_option('wpai_release_upgrade_expected');
-    echo 'PASS real ZIP upgrade 2.1.13 -> '.OAI_VERSION.' with identity/OAuth/license/operation evidence preserved and automation reset'.PHP_EOL;
+    echo 'PASS real ZIP upgrade '.($expected['baseline_version']??'2.1.13').' -> '.OAI_VERSION.' with identity/OAuth/license/operation evidence preserved and automation reset'.PHP_EOL;
 }else{
     throw new RuntimeException('Unknown OAI_RELEASE_UPGRADE_PHASE');
 }

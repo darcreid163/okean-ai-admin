@@ -5,6 +5,8 @@ Baseline frozen on 2026-10-07: native **2.1.14**, Cloud Core **0.3.6**
 Current public-release candidate: native **2.1.15**, Cloud Core **0.3.7**  
 Canonical public MCP: **https://wpaiadmin.ru/mcp**
 
+Work qualification update, 2026-10-12: isolated SQLite/MySQL 8.0 and real WordPress 7.0.6/7.1.3 install, upgrade, reactivation, native lifecycle, OAuth, isolation, quota, schema and gateway gates have executed successfully. Native lease/recovery races found during qualification were reproduced and fixed with real WordPress regressions. Syntax was checked on PHP 8.2/8.3/8.4; full database/WordPress execution used PHP 8.3. Chromium navigation remains unqualified in Work because local UNIX socket creation is denied. GitHub-hosted green workflows and actual external ChatGPT/two-owner/two-site live acceptance remain separate outstanding gates. See the committed Work qualification report for exact scope, artifact provenance and exclusions; this is not public-release approval.
+
 This document is the release-gate checklist for moving WP AI Admin from approved-user beta toward public publication. It does not change the connection contract. Any connection-affecting change must still follow `docs/CHATGPT-CONNECTION-CONTRACT.md`.
 
 ## Release principle

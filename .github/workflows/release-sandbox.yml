@@ -331,6 +331,14 @@ jobs:
           CURRENT_ZIP="$(ls "$GITHUB_WORKSPACE"/dist/wp-ai-admin-*.zip | head -n1)"
           php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
           OAI_RELEASE_UPGRADE_PHASE=check php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-upgrade.php"
+          # Also qualify the exact private-main starting version requested for
+          # reconciliation, without dropping the retained 2.1.13 regression.
+          NATIVE_214="$GITHUB_WORKSPACE/releases/2.1.14/wp-ai-admin-2.1.14.zip"
+          echo "b03238f51cd53dd14316fdec35d2bff73548a86bb3d190e5167401afc395001e  $NATIVE_214" | sha256sum -c -
+          php "$WPCLI" --path="$WP_DIR" plugin install "$NATIVE_214" --force
+          OAI_RELEASE_BASELINE_VERSION=2.1.14 OAI_RELEASE_UPGRADE_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-upgrade.php"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
+          OAI_RELEASE_UPGRADE_PHASE=check php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-upgrade.php"
 
   fresh-release-install:
     runs-on: ubuntu-latest

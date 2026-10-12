@@ -1,6 +1,7 @@
 # WP AI Admin connection contract
-Contract version: **1.3**  
-Recorded: **2026-10-12**  
+Contract version: **1.3**
+
+Recorded: **2026-10-12**
 Supported baseline: native **2.1.14**, central **Cloud Core 0.3.6**; retained predecessor: native 2.1.12 / Core 0.3.5  
 Purpose: preserve working onboarding and authorization across future releases.
 
