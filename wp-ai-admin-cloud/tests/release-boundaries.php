@@ -326,9 +326,12 @@ bcheck($transport->executions===$before,'Oversized arguments reached upstream');
 breject(fn()=>$core->call($actor,$site['id'],'batch_create',['items'=>[]],'blocked-batch',$now),'batch_receipt_accounting_not_ready');
 
 // Quota charges only successful billable calls; failed upstream call consumes zero.
+// Earlier assertions in this same fixture may legitimately have successful
+// billable calls, so compare the failed call against its immediate baseline.
+$usedBeforeFailed=$core->usage('boundary',$now)['used'];
 $failed=$core->call($actor,$site['id'],'wp_get_site',['fail'=>true],'failed-no-charge',$now);
 bcheck($failed['state']==='failed'&&$failed['charged_units']===0,'Failed call charged quota');
-bcheck($core->usage('boundary',$now)['used']===0,'Failed call increased used quota');
+bcheck($core->usage('boundary',$now)['used']===$usedBeforeFailed,'Failed call increased used quota');
 $ok1=$core->call($actor,$site['id'],'wp_get_site',[],'billable-one',$now);
 $ok2=$core->call($actor,$site['id'],'wp_get_site',[],'billable-two',$now);
 bcheck($ok1['charged_units']===1&&$ok2['charged_units']===1,'Successful calls not charged once each');
