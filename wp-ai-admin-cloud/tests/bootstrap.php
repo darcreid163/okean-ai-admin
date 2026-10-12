@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-foreach (['Security','Transport','Store','Core','OAuth','Gateway'] as $name) require_once dirname(__DIR__).'/src/'.$name.'.php';
+foreach (['Security','Transport','Store','Core','Gateway'] as $name) require_once dirname(__DIR__).'/src/'.$name.'.php';
 
 final class FakeTransport implements \WPAICloudGateway\Transport {
     public int $executions=0;
