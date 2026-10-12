@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
+require_once dirname(__DIR__).'/src/OAuth.php';
 
 use WPAICloudGateway\OAuth;
 use WPAICloudGateway\Security;
