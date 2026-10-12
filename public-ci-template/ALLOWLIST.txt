@@ -10,6 +10,10 @@ wp-ai-admin-cloud/README.md
 wp-ai-admin-cloud/tests/
 tests/
 scripts/build-release-candidate.sh
+.github/workflows/runner-smoke.yml
+.github/workflows/validate.yml
+.github/workflows/wp-ai-cloud.yml
+.github/workflows/release-sandbox.yml
 README.md
 README.txt
 BUILD-SIGNATURE.txt
