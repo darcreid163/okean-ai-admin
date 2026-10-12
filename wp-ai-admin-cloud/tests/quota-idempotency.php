@@ -73,8 +73,8 @@ $reconciled=$core->reconcile('operator','reconcile-owner',$key,'failed',[
     'receipt_sha256'=>$evidenceHash
 ],$now+13);
 qcheck($reconciled['state']==='failed'&&$reconciled['charged_units']===0&&!empty($reconciled['reconciled']),'Failed reconciliation result wrong');
-$reconciledRow=$store->row('SELECT evidence_sealed,response_sealed FROM '.$store->table('requests').' WHERE owner=? AND request_key=?',['reconcile-owner',$key]);
-qcheck(is_array($reconciledRow)&&strlen((string)($reconciledRow['evidence_sealed']??''))>40,'Reconciliation evidence was not sealed');
+$reconciledRow=$store->row('SELECT reconciliation_evidence,response_sealed FROM '.$store->table('requests').' WHERE owner=? AND request_key=?',['reconcile-owner',$key]);
+qcheck(is_array($reconciledRow)&&strlen((string)($reconciledRow['reconciliation_evidence']??''))>40,'Reconciliation evidence was not sealed');
 $rawReconcileStorage=Security::canonical(array_merge([$reconciledRow],$store->rows('SELECT event,request_key FROM '.$store->table('audit').' WHERE owner=?',['reconcile-owner'])));
 qcheck(!str_contains($rawReconcileStorage,$evidenceNote)&&!str_contains($rawReconcileStorage,$evidenceHash),'Plaintext reconciliation evidence leaked into request/audit storage');
 $afterReconcile=$core->usage('reconcile-owner',$now+13);
