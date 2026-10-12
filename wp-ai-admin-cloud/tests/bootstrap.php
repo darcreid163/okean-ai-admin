@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
-if (!defined('WPAI_CLOUD_VERSION')) define('WPAI_CLOUD_VERSION', '0.3.6');
+if (!defined('WPAI_CLOUD_VERSION')) {
+    $entry = file_get_contents(dirname(__DIR__).'/wp-ai-admin-cloud.php');
+    if (!is_string($entry) || !preg_match("/define\('WPAI_CLOUD_VERSION',\s*'([^']+)'\)/", $entry, $match)) {
+        throw new RuntimeException('Unable to derive Cloud Core version');
+    }
+    define('WPAI_CLOUD_VERSION', $match[1]);
+}
 foreach (['Security','Transport','Store','Core','Gateway'] as $name) require_once dirname(__DIR__).'/src/'.$name.'.php';
 
 final class FakeTransport implements \WPAICloudGateway\Transport {
