@@ -42,7 +42,7 @@ def audit(root: pathlib.Path) -> list[str]:
         in_allowed_dir = rel.startswith("tests/") or rel.startswith(".github/workflows/")
         if not (rel in ALLOWED_NAMES or in_allowed_dir):
             errors.append(f"{rel}: not in allowlist")
-        if p.suffix.lower() in BLOCKED_SUFFIXES or (p.suffix.lower() not in ALLOWED_SUFFIXES and rel not in {".gitignore", "LICENSE"}):
+        if p.suffix.lower() in BLOCKED_SUFFIXES or (p.suffix.lower() not in ALLOWED_SUFFIXES and rel not in {'.gitignore', 'LICENSE'}):
             errors.append(f"{rel}: forbidden file type")
             continue
         try:
