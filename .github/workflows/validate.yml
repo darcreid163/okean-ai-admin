@@ -166,7 +166,9 @@ jobs:
         run: bash tests/wordpress-upgrade.sh
 
   publish-archive:
-    if: github.event_name != 'pull_request'
+    # Candidate branches are qualified and frozen independently. Never let a
+    # push overwrite their checked archive with a non-reproducible CI ZIP.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: [php-lint-and-archive, batch-mutex-concurrency, wordpress-boot-upgrade]
     runs-on: ubuntu-latest
     steps:
@@ -174,10 +176,7 @@ jobs:
       - name: Build checked installable ZIP
         run: |
           set -euo pipefail
-          mkdir -p dist/okean-ai-admin
-          cp -a okean-ai-admin.php includes starter-themes README.md README.txt BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
-          (cd dist && zip -qr okean-ai-admin.zip okean-ai-admin)
-          unzip -tq dist/okean-ai-admin.zip
+          bash scripts/build-release-candidate.sh
       - name: Publish installable ZIP to branch
         shell: bash
         run: |
@@ -185,7 +184,12 @@ jobs:
           VERSION="$(sed -n "s/^define('OAI_VERSION','\\([^']*\\)').*/\\1/p" okean-ai-admin.php | head -n1)"
           test -n "$VERSION"
           mkdir -p "releases/$VERSION"
-          cp dist/okean-ai-admin.zip "releases/$VERSION/wp-ai-admin-$VERSION.zip"
+          TARGET="releases/$VERSION/wp-ai-admin-$VERSION.zip"
+          if [[ -f "$TARGET" ]] && ! cmp -s "dist/wp-ai-admin-$VERSION.zip" "$TARGET"; then
+            echo 'Existing version has different archive bytes; use a new release version or the frozen source commit.'
+            exit 1
+          fi
+          cp "dist/wp-ai-admin-$VERSION.zip" "$TARGET"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "releases/$VERSION/wp-ai-admin-$VERSION.zip"
