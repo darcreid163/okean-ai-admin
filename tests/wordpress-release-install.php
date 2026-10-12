@@ -1,6 +1,11 @@
 <?php
 // Run via WP-CLI eval-file after installing the generated release ZIP on a fresh disposable WordPress.
 function release_install_expect($ok,$message){if(!$ok)throw new RuntimeException($message);}
+function release_action_request($id,$action){
+    $req=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.absint($id).'/'.$action);
+    $req->set_url_params(array('id'=>absint($id),'action'=>(string)$action));
+    return $req;
+}
 wp_set_current_user(1);
 
 release_install_expect(defined('OAI_VERSION') && OAI_VERSION==='2.1.15','Installed release version mismatch');
@@ -85,17 +90,17 @@ $humanReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
 $humanReq->set_param('type','option_update');$humanReq->set_param('target','wpai_release_human_gate');$humanReq->set_param('new_data','ai-value');
 $humanOp=OAI_REST::sandbox_create($humanReq);
 release_install_expect(!is_wp_error($humanOp)&&!empty($humanOp['id']),'Unable to create human-gate sandbox');
-$approveNoNonce=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$humanOp['id'].'/approve');
+$approveNoNonce=release_action_request($humanOp['id'],'approve');
 $approveDenied=OAI_REST::sandbox_action($approveNoNonce);
 release_install_expect(is_wp_error($approveDenied)&&$approveDenied->get_error_code()==='oai_human_approval_required','Approve succeeded without human/automation authorization');
 release_install_expect((OAI_DB::get((int)$humanOp['id'])['status']??'')==='pending'&&(string)get_option('wpai_release_human_gate')==='baseline','Denied Approve mutated operation or live state');
-$approveHuman=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$humanOp['id'].'/approve');$approveHuman->set_header('X-WP-Nonce',$nonce);
+$approveHuman=release_action_request($humanOp['id'],'approve');$approveHuman->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($approveHuman)),'Human-gate approval with nonce failed');
-$applyNoNonce=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$humanOp['id'].'/apply');
+$applyNoNonce=release_action_request($humanOp['id'],'apply');
 $applyDenied=OAI_REST::sandbox_action($applyNoNonce);
 release_install_expect(is_wp_error($applyDenied)&&$applyDenied->get_error_code()==='oai_human_approval_required','Apply succeeded without human/automation authorization');
 release_install_expect((OAI_DB::get((int)$humanOp['id'])['status']??'')==='approved'&&(string)get_option('wpai_release_human_gate')==='baseline','Denied Apply mutated operation or live state');
-$rejectHuman=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$humanOp['id'].'/reject');$rejectHuman->set_header('X-WP-Nonce',$nonce);
+$rejectHuman=release_action_request($humanOp['id'],'reject');$rejectHuman->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($rejectHuman)),'Human-gate fixture cleanup reject failed');
 delete_option('wpai_release_human_gate');
 
@@ -105,10 +110,10 @@ $make=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
 $make->set_param('type','option_update');$make->set_param('target','wpai_release_apply_conflict');$make->set_param('new_data','ai-value');
 $op=OAI_REST::sandbox_create($make);
 release_install_expect(!is_wp_error($op)&&!empty($op['id']),'Unable to create apply-conflict sandbox');
-$approve=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op['id'].'/approve');$approve->set_header('X-WP-Nonce',$nonce);
+$approve=release_action_request($op['id'],'approve');$approve->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($approve)),'Apply-conflict fixture approval failed');
 update_option('wpai_release_apply_conflict','external-newer',false);
-$apply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op['id'].'/apply');$apply->set_header('X-WP-Nonce',$nonce);
+$apply=release_action_request($op['id'],'apply');$apply->set_header('X-WP-Nonce',$nonce);
 $applyConflict=OAI_REST::sandbox_action($apply);
 release_install_expect(is_wp_error($applyConflict)&&$applyConflict->get_error_code()==='oai_conflict','Stale sandbox Apply did not fail closed');
 release_install_expect((string)get_option('wpai_release_apply_conflict')==='external-newer','Stale Apply overwrote newer external state');
@@ -124,12 +129,12 @@ $make2=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
 $make2->set_param('type','option_update');$make2->set_param('target','wpai_release_rollback_conflict');$make2->set_param('new_data','ai-applied');
 $op2=OAI_REST::sandbox_create($make2);
 release_install_expect(!is_wp_error($op2)&&!empty($op2['id']),'Unable to create rollback-conflict sandbox');
-$approve2=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op2['id'].'/approve');$approve2->set_header('X-WP-Nonce',$nonce);
-$apply2=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op2['id'].'/apply');$apply2->set_header('X-WP-Nonce',$nonce);
+$approve2=release_action_request($op2['id'],'approve');$approve2->set_header('X-WP-Nonce',$nonce);
+$apply2=release_action_request($op2['id'],'apply');$apply2->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($approve2)),'Rollback-conflict fixture approval failed');
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($apply2))&&(string)get_option('wpai_release_rollback_conflict')==='ai-applied','Rollback-conflict fixture Apply failed');
 update_option('wpai_release_rollback_conflict','external-after-apply',false);
-$rollback2=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$op2['id'].'/rollback');$rollback2->set_header('X-WP-Nonce',$nonce);
+$rollback2=release_action_request($op2['id'],'rollback');$rollback2->set_header('X-WP-Nonce',$nonce);
 $rollbackConflict=OAI_REST::sandbox_action($rollback2);
 release_install_expect(is_wp_error($rollbackConflict)&&$rollbackConflict->get_error_code()==='oai_rollback_conflict','Rollback over newer state did not fail closed');
 release_install_expect((string)get_option('wpai_release_rollback_conflict')==='external-after-apply','Rollback destroyed newer external state');
@@ -165,8 +170,8 @@ $staleExpiry=OAI_DB::transition((int)$proofOp['id'],array('pending'),'expired','
 release_install_expect($expiryRace===1&&$staleExpiry===0,'Expiry lifecycle claim was not single-winner atomic');
 OAI_DB::update((int)$proofOp['id'],array('status'=>'pending','phase'=>'awaiting_approval'));
 
-$proofApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/approve');$proofApprove->set_header('X-WP-Nonce',$nonce);
-$proofApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/apply');$proofApply->set_header('X-WP-Nonce',$nonce);
+$proofApprove=release_action_request($proofOp['id'],'approve');$proofApprove->set_header('X-WP-Nonce',$nonce);
+$proofApply=release_action_request($proofOp['id'],'apply');$proofApply->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($proofApprove)),'Proof fixture approval failed');
 // Atomic lifecycle claim: only one contender can move approved -> applying.
 $activeApplyLease=OAI_DB::acquire_operation_lease((int)$proofOp['id'],'apply',120);
@@ -193,7 +198,7 @@ release_install_expect(($applyProof['proof_kind']??'')==='execution'&&($applyPro
 release_install_expect(preg_match('/^[a-f0-9]{64}$/',(string)($applyProof['hash']??''))===1&&($applyProof['build_id']??'')===OAI_BUILD_ID,'Apply proof hash/build binding invalid');
 release_install_expect(($applyReceipt['operation_id']??'')===($proofOp['operation_id']??'')&&!empty($applyReceipt['verified'])&&(($applyReceipt['proof']['hash']??'')===($applyProof['hash']??'')),'Apply receipt not bound to Apply proof');
 
-$proofRollback=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$proofOp['id'].'/rollback');$proofRollback->set_header('X-WP-Nonce',$nonce);
+$proofRollback=release_action_request($proofOp['id'],'rollback');$proofRollback->set_header('X-WP-Nonce',$nonce);
 // Atomic lifecycle claim: only one contender can move applied -> rollback_pending.
 $activeRollbackLease=OAI_DB::acquire_operation_lease((int)$proofOp['id'],'rollback',120);
 release_install_expect(is_string($activeRollbackLease)&&$activeRollbackLease!=='','Unable to acquire active Rollback execution lease fixture');
@@ -222,8 +227,8 @@ $recoveryReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
 $recoveryReq->set_param('type','option_update');$recoveryReq->set_param('target','wpai_release_recovery_fixture');$recoveryReq->set_param('new_data','after');
 $recoveryOp=OAI_REST::sandbox_create($recoveryReq);
 release_install_expect(!is_wp_error($recoveryOp)&&!empty($recoveryOp['id']),'Unable to create interrupted-write recovery fixture');
-$recoveryApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$recoveryOp['id'].'/approve');$recoveryApprove->set_header('X-WP-Nonce',$nonce);
-$recoveryApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$recoveryOp['id'].'/apply');$recoveryApply->set_header('X-WP-Nonce',$nonce);
+$recoveryApprove=release_action_request($recoveryOp['id'],'approve');$recoveryApprove->set_header('X-WP-Nonce',$nonce);
+$recoveryApply=release_action_request($recoveryOp['id'],'apply');$recoveryApply->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($recoveryApprove)),'Interrupted-write recovery fixture approval failed');
 release_install_expect(OAI_DB::transition((int)$recoveryOp['id'],array('approved'),'applying','applying')===1,'Unable to seed interrupted Apply state');
 update_option('wpai_release_recovery_fixture','after',false); // Simulate write completed before request/process died.
@@ -232,7 +237,7 @@ release_install_expect(!is_wp_error($recoveredApply)&&($recoveredApply['status']
 $recoveredApplyReceipt=OAI_Receipts::build((int)$recoveryOp['id']);
 release_install_expect(($recoveredApplyReceipt['receipt']['event']??'')==='apply_recovered'&&($recoveredApplyReceipt['receipt']['replayed_write']??true)===false,'Recovered Apply receipt does not prove no replay');
 
-$recoveryRollback=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$recoveryOp['id'].'/rollback');$recoveryRollback->set_header('X-WP-Nonce',$nonce);
+$recoveryRollback=release_action_request($recoveryOp['id'],'rollback');$recoveryRollback->set_header('X-WP-Nonce',$nonce);
 release_install_expect(OAI_DB::transition((int)$recoveryOp['id'],array('applied'),'rolling_back','rolling_back')===1,'Unable to seed interrupted Rollback state');
 update_option('wpai_release_recovery_fixture','before',false); // Simulate rollback completed before request/process died.
 $recoveredRollback=OAI_REST::sandbox_action($recoveryRollback);
@@ -248,8 +253,8 @@ $uncertainReq=new WP_REST_Request('POST','/okean-ai/v1/sandbox');
 $uncertainReq->set_param('type','option_update');$uncertainReq->set_param('target','wpai_release_uncertain_fixture');$uncertainReq->set_param('new_data','after');
 $uncertainOp=OAI_REST::sandbox_create($uncertainReq);
 release_install_expect(!is_wp_error($uncertainOp)&&!empty($uncertainOp['id']),'Unable to create uncertain Apply fixture');
-$uncertainApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$uncertainOp['id'].'/approve');$uncertainApprove->set_header('X-WP-Nonce',$nonce);
-$uncertainApply=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$uncertainOp['id'].'/apply');$uncertainApply->set_header('X-WP-Nonce',$nonce);
+$uncertainApprove=release_action_request($uncertainOp['id'],'approve');$uncertainApprove->set_header('X-WP-Nonce',$nonce);
+$uncertainApply=release_action_request($uncertainOp['id'],'apply');$uncertainApply->set_header('X-WP-Nonce',$nonce);
 release_install_expect(!is_wp_error(OAI_REST::sandbox_action($uncertainApprove)),'Uncertain Apply fixture approval failed');
 release_install_expect(OAI_DB::transition((int)$uncertainOp['id'],array('approved'),'applying','applying')===1,'Unable to seed uncertain Apply state');
 update_option('wpai_release_uncertain_fixture','third-party-state',false);
@@ -265,7 +270,7 @@ $expiredReq->set_param('type','option_update');$expiredReq->set_param('target','
 $expiredOp=OAI_REST::sandbox_create($expiredReq);
 release_install_expect(!is_wp_error($expiredOp)&&!empty($expiredOp['id']),'Unable to create expiry fixture');
 OAI_DB::update((int)$expiredOp['id'],array('expires_at'=>gmdate('Y-m-d H:i:s',time()-60)));
-$expiredApprove=new WP_REST_Request('POST','/okean-ai/v1/sandbox/'.$expiredOp['id'].'/approve');$expiredApprove->set_header('X-WP-Nonce',$nonce);
+$expiredApprove=release_action_request($expiredOp['id'],'approve');$expiredApprove->set_header('X-WP-Nonce',$nonce);
 $expiredResult=OAI_REST::sandbox_action($expiredApprove);
 release_install_expect(is_wp_error($expiredResult)&&$expiredResult->get_error_code()==='oai_expired','Expired sandbox was not rejected');
 release_install_expect((string)get_option('wpai_release_expired_fixture')==='baseline','Expired sandbox changed live state');
