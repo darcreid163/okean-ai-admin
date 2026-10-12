@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
-use WPAICloudGateway\{Core,Fault,Transport};
+use WPAICloudGateway\{Core,Fault,Transport,Security};
 
 $checks=0;
 function bcheck(bool $ok,string $m):void{global $checks;$checks++;if(!$ok)throw new RuntimeException($m);}
