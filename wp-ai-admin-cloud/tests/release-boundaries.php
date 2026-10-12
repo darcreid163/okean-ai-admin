@@ -253,7 +253,7 @@ breject(fn()=>$closureOAuth->approve('closure-owner',$closureAuth,[$closureSite[
 $newClosureSite=$core->connect('closure-owner','https://closure.example.com','fixture-closure-site-token-fresh-bbbbbbbb',$now+24,true);
 bcheck(($newClosureSite['id']??'')!==$closureSite['id'],'Reactivation reused revoked site registration id');
 $oldClosureSiteRow=$store->row('SELECT status,token_sealed FROM '.$store->table('sites').' WHERE id=?',[$closureSite['id']]);
-bcheck(($oldClosureSiteRow['status']??'')==='revoked'&&($oldClosureSiteRow['token_sealed']??'')==='','Fresh reconnect resurrected old site row or credential');
+bcheck($oldClosureSiteRow===null || (($oldClosureSiteRow['status']??'')==='revoked'&&($oldClosureSiteRow['token_sealed']??'')===''),'Fresh reconnect resurrected old site registration or credential');
 
 $newClosureBearer=$core->mint('closure-owner',[$newClosureSite['id']],['mcp:read'],$now+24);
 $newClosureActor=$core->authenticate($newClosureBearer['access_token'],$now+24);
