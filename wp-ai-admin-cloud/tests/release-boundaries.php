@@ -325,17 +325,23 @@ bcheck($transport->executions===$before,'Oversized arguments reached upstream');
 // Batch mutations are blocked until receipt accounting is ready.
 breject(fn()=>$core->call($actor,$site['id'],'batch_create',['items'=>[]],'blocked-batch',$now),'batch_receipt_accounting_not_ready');
 
-// Quota charges only successful billable calls; failed upstream call consumes zero.
-// Earlier assertions in this same fixture may legitimately have successful
-// billable calls, so compare the failed call against its immediate baseline.
-$usedBeforeFailed=$core->usage('boundary',$now)['used'];
-$failed=$core->call($actor,$site['id'],'wp_get_site',['fail'=>true],'failed-no-charge',$now);
+// Quota charges only successful billable calls; failed upstream calls cost
+// zero. Use a fresh tenant so earlier scope/catalog assertions cannot pollute
+// the accounting baseline.
+$quotaCore=fixtureCore($store,$transport,2);
+$quotaCore->ensureAccount('quota-boundary');
+$quotaSite=$quotaCore->connect('quota-boundary','https://quota-boundary.example.com','fixture-quota-boundary-token-aaaaaaaa',$now+100);
+$quotaToken=$quotaCore->mint('quota-boundary',[$quotaSite['id']],['mcp:read'],$now+100);
+$quotaActor=$quotaCore->authenticate($quotaToken['access_token'],$now+100);
+bcheck($quotaCore->usage('quota-boundary',$now+100)['used']===0,'Fresh quota fixture did not start at zero');
+$failed=$quotaCore->call($quotaActor,$quotaSite['id'],'wp_get_site',['fail'=>true],'failed-no-charge',$now+100);
 bcheck($failed['state']==='failed'&&$failed['charged_units']===0,'Failed call charged quota');
-bcheck($core->usage('boundary',$now)['used']===$usedBeforeFailed,'Failed call increased used quota');
-$ok1=$core->call($actor,$site['id'],'wp_get_site',[],'billable-one',$now);
-$ok2=$core->call($actor,$site['id'],'wp_get_site',[],'billable-two',$now);
+bcheck($quotaCore->usage('quota-boundary',$now+100)['used']===0,'Failed call increased used quota');
+$ok1=$quotaCore->call($quotaActor,$quotaSite['id'],'wp_get_site',[],'billable-one',$now+100);
+$ok2=$quotaCore->call($quotaActor,$quotaSite['id'],'wp_get_site',[],'billable-two',$now+100);
 bcheck($ok1['charged_units']===1&&$ok2['charged_units']===1,'Successful calls not charged once each');
-breject(fn()=>$core->call($actor,$site['id'],'wp_get_site',[],'over-quota',$now),'monthly_quota_exhausted');
+bcheck($quotaCore->usage('quota-boundary',$now+100)['used']===2,'Successful calls did not consume exactly two quota units');
+breject(fn()=>$quotaCore->call($quotaActor,$quotaSite['id'],'wp_get_site',[],'over-quota',$now+100),'monthly_quota_exhausted');
 
 // Same nonce with different fingerprint is rejected and never redispatched.
 $core2=fixtureCore($store,$transport,100);
