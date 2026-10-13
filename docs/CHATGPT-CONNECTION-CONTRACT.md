@@ -7,6 +7,10 @@ Purpose: preserve working onboarding and authorization across future releases.
 
 This is the compatibility baseline, not a prohibition on improvements. Changes to the contract require an explicit versioned design, applicable data migration, updated tests and documentation, and the two-site acceptance flow below. Do not silently replace this flow with manual tokens or change persistent identities to make a failing connection appear successful.
 
+## QA qualification note — 2026-10-13
+
+The separate 2.1.15 QA37 package uses build `2.1.15-qa37-20261013`; it does not replace the frozen 2.1.15 release archive. The different build resets previously enabled autonomous modes on first bootstrap, including an update from the prior 2.1.15 candidate. Native/site/installation identities, stored credentials, licenses and Cloud Core 0.3.7 remain unchanged. Endpoint and consent contracts remain version 1.3. Same-version candidate upgrade is covered by `tests/wordpress-release-upgrade.php` with `OAI_RELEASE_BASELINE_VERSION=2.1.15`; public release and deployment readiness are separate gates.
+
 ## Amendment 1.3 — 2026-10-12 (private release candidate)
 
 Native candidate 2.1.15 / Cloud Core candidate 0.3.7 preserve contract 1.2 endpoints, browser consent flows, persistent identities, keys and existing grants. Native build is `2.1.15-release-reconciled-20261012`. No ordinary-upgrade identity/key reset is introduced. New executable hardening includes administrator-demotion checks before native token exchange/refresh, control-plane option denial, single-winner lifecycle transitions, and execution/recovery leases. Deactivation turns autonomous modes OFF and clears leases while retaining credentials and license state. Central suspension remains revoke-first and reactivation requires fresh authorization; it does not restore revoked access.

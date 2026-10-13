@@ -8,7 +8,7 @@
  */
 if (!defined('ABSPATH')) exit;
 define('OAI_VERSION','2.1.15');
-define('OAI_BUILD_ID','2.1.15-release-reconciled-20261012');
+define('OAI_BUILD_ID','2.1.15-qa37-20261013');
 define('OAI_DB_VERSION',23);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
