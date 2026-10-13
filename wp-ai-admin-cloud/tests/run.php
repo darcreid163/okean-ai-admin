@@ -54,6 +54,8 @@ $core->throttle('1','test_rate',$now,2); $core->throttle('1','test_rate',$now,2)
 rejects(fn()=>$core->throttle('1','test_rate',$now,2),'rate_limit_exceeded');
 $core->throttle('1','test_rate',$now+60,2);
 check(count($core->ledger('1'))===4,'Ledger missing successful, failed or uncertain requests');
+$pendingLedger=array_values(array_filter($core->ledger('1'),static fn($event)=>$event['state']==='uncertain'));
+check(count($pendingLedger)===1 && $pendingLedger[0]['charged_units']===null,'Uncertain usage must remain unbilled and visibly pending');
 rejects(fn()=>$core->reconcile('operator','1',$one['request_key'],'succeeded',['note'=>'A checked operator receipt note.','receipt_sha256'=>str_repeat('a',64)],$now),'request_not_reconcilable');
 $pendingKey=hash('sha256','1|timeout-1');
 rejects(fn()=>$core->reconcile('operator','1',$pendingKey,'failed',[],$now),'operator_receipt_evidence_required');
@@ -92,7 +94,7 @@ foreach($history as $event) {
 }
 check(in_array(1,$byState['succeeded']??[],true),'Successful tool charge missing from history');
 check(in_array(0,$byState['failed']??[],true),'Failed tool charge missing from history');
-check(in_array(null,$byState['uncertain']??[],true),'Uncertain outcome was silently treated as zero');
+check(!isset($byState['uncertain']) && count($byState['failed']??[])===3,'Reconciled history did not settle pending request');
 $wrongHistory=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>20,'method'=>'tools/call','params'=>['name'=>'cloud_usage_history','arguments'=>['limit'=>'100']]],$now);
 check(!empty($wrongHistory['result']['isError']),'History accepted invalid limit type');
 
