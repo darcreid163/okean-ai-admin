@@ -284,7 +284,11 @@ final class Core {
             $charge=null;
             if(in_array($state,['succeeded','failed'],true)) {
                 if(!is_string($row['response_sealed']) || $row['response_sealed']==='') throw new Fault('billing_receipt_missing',503);
-                $receipt=json_decode($this->vault->open($row['response_sealed'],'response:'.$owner.':'.$row['request_key']),true,64,JSON_THROW_ON_ERROR);
+                try {
+                    $receipt=json_decode($this->vault->open($row['response_sealed'],'response:'.$owner.':'.$row['request_key']),true,64,JSON_THROW_ON_ERROR);
+                } catch (\Throwable $e) {
+                    throw new Fault('billing_receipt_invalid',503);
+                }
                 if(!is_array($receipt) || !is_int($receipt['charged_units']??null) || $receipt['charged_units']<0) throw new Fault('billing_receipt_invalid',503);
                 $charge=$receipt['charged_units'];
             }
