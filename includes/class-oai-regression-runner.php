@@ -34,7 +34,7 @@ class OAI_Regression_Runner {
  private static function stage(&$scenario,$name,$value){$scenario['stages'][$name]=$value;}
  private static function lifecycle($name,$op,$tool,$client_id,$user_id){
   $scenario=array('name'=>$name,'status'=>'FAIL','operation_id'=>null,'baseline_restored'=>false,'stages'=>array());
-  if(is_wp_error($op)){$scenario['error']=self::err($op);self::stage($scenario,'create','FAIL');return $scenario;}
+  if(is_wp_error($op)){$scenario['error']=self::err($op);self::stage($scenario,'create','FAIL');$scenario['baseline_restored']=true;$scenario['cleanup_effective']=true;return $scenario;}
   $id=self::tag($op,$tool,$client_id,$user_id);
   if(is_wp_error($id)){$scenario['error']=self::err($id);self::stage($scenario,'tag','FAIL');return $scenario;}
   $scenario['operation_id']=$id;self::stage($scenario,'create','PASS');self::stage($scenario,'tag','PASS');
