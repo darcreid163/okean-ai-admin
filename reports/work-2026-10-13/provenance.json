@@ -1,0 +1,23 @@
+{
+  "source_commit": "3ae9e4f7c749f7eb447772fcd131a1c0ca67cc36",
+  "source_tree": "893e75784b113f9b44f7328d7f88e002f7bc48ee",
+  "native_version": "2.1.15",
+  "native_build_id": "2.1.15-qa37-20261013",
+  "cloud_version": "0.3.7",
+  "qa_only": true,
+  "reproducible": true,
+  "artifacts": [
+    {
+      "filename": "wp-ai-admin-2.1.15-qa37-3ae9e4f.zip",
+      "sha256": "9dbb1e2d7d4a108350231f561dadef76a37d4e7a93e26baea70f1ddcea16cf48",
+      "entries": 85,
+      "bytes": 244728
+    },
+    {
+      "filename": "wp-ai-admin-cloud-0.3.7-qa37-3ae9e4f.zip",
+      "sha256": "24c801c36907ea1067ebe9221b8f18922d4bd1ecad7044e74a8edd0884133275",
+      "entries": 19,
+      "bytes": 48572
+    }
+  ]
+}
