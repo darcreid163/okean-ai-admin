@@ -1,6 +1,6 @@
 WP AI Admin Build Metadata (not a cryptographic signature)
 Version: 2.1.15
-Build ID: 2.1.15-release-reconciled-20261012
+Build ID: 2.1.15-qa38-20261013
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
 Purpose: public-release hardening; atomic lifecycle claims, crash-safe Apply/Rollback reconciliation, control-plane option protection, OAuth demotion checks, deactivation safety, and expanded release qualification

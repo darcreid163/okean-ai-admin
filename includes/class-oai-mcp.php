@@ -216,7 +216,7 @@ class OAI_MCP {
    ,'system.test_automation_status'=>array('type'=>'object','additionalProperties'=>false)
    ,'system.regression_run'=>array(
      'type'=>'object',
-     'required'=>array('content_post_id','elementor_post_id','elementor_widget_id','product_id'),
+     'description'=>'Uses managed QA fixtures from the current administrator-enabled session when IDs are omitted.',
      'properties'=>array(
       'content_post_id'=>array('type'=>'integer','minimum'=>1),
       'elementor_post_id'=>array('type'=>'integer','minimum'=>1),
@@ -235,7 +235,7 @@ class OAI_MCP {
     )
    ,'system.regression_matrix'=>array(
      'type'=>'object',
-     'required'=>array('content_post_id','elementor_post_id','elementor_widget_id','product_id'),
+     'description'=>'Uses managed QA fixtures from the current administrator-enabled session when IDs are omitted.',
      'properties'=>array(
       'content_post_id'=>array('type'=>'integer','minimum'=>1),
       'elementor_post_id'=>array('type'=>'integer','minimum'=>1),

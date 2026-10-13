@@ -21,6 +21,7 @@ function wp_json_encode($v){return json_encode($v);}
 class OAI_DB {public static $rows=array();public static function insert($r){$id=count(self::$rows)+1;$r['id']=$id;self::$rows[$id]=$r;return $id;}public static function get($id){return self::$rows[$id];}}
 class OAI_Audit {public static function log($event,$row){}}
 class OAI_Lifecycle {public static function descriptor($type,$target,$before,$meta){return $meta;}public static function decorate($r){return $r;}}
+require dirname(__DIR__).'/includes/class-oai-operations.php';
 require dirname(__DIR__).'/includes/class-oai-rest.php';
 function expect($ok,$message){if(!$ok)throw new RuntimeException($message);}
 class Request {private $args;public function __construct($key,$value){$this->args=array('type'=>'option_update','target'=>$key,'value'=>$value);}public function get_param($key){return $this->args[$key]??null;}}

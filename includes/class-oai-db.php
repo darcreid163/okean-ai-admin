@@ -31,7 +31,10 @@ class OAI_DB {
  workspace_id varchar(64) NULL,
  rollback_data longtext NULL,
  expires_at datetime NULL,
- PRIMARY KEY (id), UNIQUE KEY operation_id (operation_id), KEY status (status), KEY created_at (created_at)
+ PRIMARY KEY  (id),
+ UNIQUE KEY operation_id (operation_id),
+ KEY status (status),
+ KEY created_at (created_at)
 ) $charset;"; dbDelta($sql);
  $a=self::audit_table();
  $q=self::quota_table();
@@ -41,7 +44,9 @@ class OAI_DB {
  channel varchar(32) NOT NULL,
  units bigint(20) unsigned NOT NULL DEFAULT 1,
  created_at datetime NOT NULL,
- PRIMARY KEY (request_key), KEY created_at (created_at), KEY channel (channel)
+ PRIMARY KEY  (request_key),
+ KEY created_at (created_at),
+ KEY channel (channel)
  ) $charset;";
  dbDelta($qesql);
  $qsql="CREATE TABLE $q (
@@ -49,7 +54,7 @@ class OAI_DB {
  period_key varchar(32) NOT NULL,
  used bigint(20) unsigned NOT NULL DEFAULT 0,
  updated_at datetime NOT NULL,
- PRIMARY KEY (plan,period_key)
+ PRIMARY KEY  (plan,period_key)
  ) $charset;";
  dbDelta($qsql);
  $asql="CREATE TABLE $a (
@@ -62,7 +67,10 @@ class OAI_DB {
  target text NULL,
  details longtext NULL,
  created_at datetime NOT NULL,
- PRIMARY KEY (id), KEY operation_id (operation_id), KEY event (event), KEY created_at (created_at)
+ PRIMARY KEY  (id),
+ KEY operation_id (operation_id),
+ KEY event (event),
+ KEY created_at (created_at)
  ) $charset;";
  dbDelta($asql); update_option('oai_db_version',OAI_DB_VERSION); if(class_exists('OAI_MCP_OAuth')) OAI_MCP_OAuth::install(); self::migrate_token(); }
  public static function maybe_upgrade(){

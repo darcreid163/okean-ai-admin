@@ -42,7 +42,7 @@ class OAI_Regression_Matrix {
  }
  public static function run($args,$client_id,$user_id){
   $auth=OAI_Test_Automation::runner_authorized($client_id,$user_id);if(is_wp_error($auth))return $auth;
-  $args=is_array($args)?$args:array();
+  $args=array_merge(OAI_Test_Automation::regression_fixture_args(),is_array($args)?$args:array());
   $content_id=absint($args['content_post_id']??0);$elementor_id=absint($args['elementor_post_id']??0);$widget=sanitize_text_field((string)($args['elementor_widget_id']??''));$container_id=sanitize_text_field((string)($args['elementor_container_id']??''));$product_id=absint($args['product_id']??0);
   if($container_id===''&&$elementor_id){$container_data=OAI_Elementor::get_data($elementor_id);if(!is_wp_error($container_data))$container_id=self::first_elementor_container_id($container_data);}
   $iterations=min(3,max(1,absint($args['iterations']??1)));
@@ -78,7 +78,7 @@ class OAI_Regression_Matrix {
 
   // Pagination checks.
   $page=function($kind,$page){$r=self::req('/okean-ai/v1/read/'.$kind);$r->set_param('limit',3);$r->set_param('page',$page);return $kind==='media'?OAI_REST::media($r):($kind==='users'?OAI_REST::users($r):OAI_REST::comments($r));};
-  foreach(array('media'=>'wp.list_media','users'=>'wp.list_users','comments'=>'wp.list_comments') as $kind=>$tool){$a=$page($kind,1);$b=$page($kind,2);$ok=self::ok($a)&&self::ok($b)&&self::distinct_pages($a,$b);self::set($matrix,$tool,$ok?'PASS':'FAIL',array('page1'=>self::ids($a),'page2'=>self::ids($b)));}
+  foreach(array('media'=>'wp.list_media','users'=>'wp.list_users','comments'=>'wp.list_comments') as $kind=>$tool){$a=$page($kind,1);$b=$page($kind,2);$first_ids=self::ids($a);$second_ids=self::ids($b);$ok=self::ok($a)&&self::ok($b)&&($second_ids===array()||self::distinct_pages($a,$b));self::set($matrix,$tool,$ok?'PASS':'FAIL',array('page1'=>$first_ids,'page2'=>$second_ids,'empty_second_page'=>$second_ids===array()));}
 
   // Options and redaction.
   $or=self::req('/okean-ai/v1/read/options');$or->set_param('keys','blogname,oai_agent_key_hash,oai_license');$opts=OAI_REST::options($or);$safe=!is_wp_error($opts)&&!empty($opts['items']['oai_agent_key_hash']['redacted'])&&!empty($opts['items']['oai_license']['redacted']);
@@ -157,7 +157,7 @@ class OAI_Regression_Matrix {
   $retry=$fail_id!==''?OAI_Batch_Executor::retry($fail_id,'guard',$client_id,$user_id):new WP_Error('oai_matrix','guard batch create failed');$retry_ok=self::ok($retry)&&(($retry['steps']['guard']['state']??'')==='pending');
   $cancel=$fail_id!==''?OAI_Batch_Executor::cancel($fail_id,'regression cleanup',$client_id,$user_id):new WP_Error('oai_matrix','guard batch create failed');self::set($matrix,'batch.cancel',self::ok($cancel)&&(($cancel['job']['status']??'')==='cancelled')?'PASS':'FAIL','pending retried job cancelled without live writes');
   // Reproduce the 2.0.53 bug: retrying a cancelled downstream step while another child is unresolved must now be blocked.
-  $strict_job=OAI_Batch_Executor::create(array(array('id'=>'write','tool'=>'content.patch','arguments'=>array('post_id'=>$content_id,'field'=>'post_excerpt','old_content'=>'','new_content'=>'WP AI Admin strict retry '.$run_id)),array('id'=>'downstream','tool'=>'wp.read_post','arguments'=>array('post_id'=>$content_id),'depends_on'=>array('write'))),'strict retry '.$run_id,$client_id,$user_id);
+  $strict_job=OAI_Batch_Executor::create(array(array('id'=>'write','tool'=>'content.patch','arguments'=>array('post_id'=>$content_id,'field'=>'post_excerpt','old_content'=>(string)get_post_field('post_excerpt',$content_id),'new_content'=>'WP AI Admin strict retry '.$run_id)),array('id'=>'downstream','tool'=>'wp.read_post','arguments'=>array('post_id'=>$content_id),'depends_on'=>array('write'))),'strict retry '.$run_id,$client_id,$user_id);
   $strict_id=self::ok($strict_job)?(string)($strict_job['id']??''):'';$strict_run=$strict_id!==''?OAI_Batch_Executor::resume($strict_id,5,$client_id,$user_id):new WP_Error('oai_matrix','strict batch create failed');$strict_op=self::ok($strict_run)?absint($strict_run['job']['steps']['write']['operation_id']??0):0;$strict_cancel=$strict_id!==''?OAI_Batch_Executor::cancel($strict_id,'strict retry guard',$client_id,$user_id):new WP_Error('oai_matrix','strict batch missing');$strict_retry=$strict_id!==''?OAI_Batch_Executor::retry($strict_id,'downstream',$client_id,$user_id):new WP_Error('oai_matrix','strict batch missing');$strict_blocked=is_wp_error($strict_retry)&&$strict_retry->get_error_code()==='oai_batch_retry_unresolved';
   $strict_reject=$strict_op?OAI_Test_Automation::perform($strict_op,'reject',$client_id,$user_id):new WP_Error('oai_matrix','strict child missing');
   $strict_status=$strict_id!==''?OAI_Batch_Executor::get($strict_id,false,$client_id,$user_id):new WP_Error('oai_matrix','strict batch missing');

@@ -7,7 +7,7 @@ $phase=getenv('OAI_RELEASE_UPGRADE_PHASE');
 
 if($phase==='seed'){
     $baseline=getenv('OAI_RELEASE_BASELINE_VERSION')?:'2.1.13';
-    release_upgrade_expect(in_array($baseline,array('2.1.13','2.1.14'),true),'Unsupported upgrade baseline');
+    release_upgrade_expect(in_array($baseline,array('2.1.13','2.1.14','2.1.15'),true),'Unsupported upgrade baseline');
     release_upgrade_expect(defined('OAI_VERSION')&&OAI_VERSION===$baseline,'Upgrade baseline version mismatch');
     $site=OAI_Platform::site_id();
     $installation=OAI_Platform::installation_id();
@@ -67,7 +67,7 @@ if($phase==='seed'){
     echo 'PASS release ZIP upgrade seed: '.OAI_VERSION.PHP_EOL;
 }elseif($phase==='check'){
     release_upgrade_expect(defined('OAI_VERSION')&&OAI_VERSION==='2.1.15','Release ZIP upgrade did not load 2.1.15');
-    release_upgrade_expect(defined('OAI_BUILD_ID')&&OAI_BUILD_ID==='2.1.15-release-reconciled-20261012','Release ZIP upgrade loaded unexpected build ID');
+    release_upgrade_expect(defined('OAI_BUILD_ID')&&OAI_BUILD_ID==='2.1.15-qa38-20261013','Release ZIP upgrade loaded unexpected build ID');
     require_once ABSPATH.'wp-admin/includes/plugin.php';
     release_upgrade_expect(is_plugin_active('okean-ai-admin/okean-ai-admin.php'),'Native plugin became inactive during ZIP upgrade');
     release_upgrade_expect((int)get_option('oai_db_version',0)===(int)OAI_DB_VERSION,'Native DB schema version marker changed across ZIP upgrade');

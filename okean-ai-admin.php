@@ -8,7 +8,7 @@
  */
 if (!defined('ABSPATH')) exit;
 define('OAI_VERSION','2.1.15');
-define('OAI_BUILD_ID','2.1.15-release-reconciled-20261012');
+define('OAI_BUILD_ID','2.1.15-qa38-20261013');
 define('OAI_DB_VERSION',23);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
@@ -27,6 +27,7 @@ require_once OAI_DIR.'includes/class-oai-lifecycle.php';
 require_once OAI_DIR.'includes/class-oai-surfaces.php';
 require_once OAI_DIR.'includes/class-oai-security.php';
 require_once OAI_DIR.'includes/class-oai-audit.php';
+require_once OAI_DIR.'includes/class-oai-qa-fixtures.php';
 require_once OAI_DIR.'includes/class-oai-test-automation.php';
 require_once OAI_DIR.'includes/class-oai-ai-lifecycle-control.php';
 require_once OAI_DIR.'includes/class-oai-files.php';

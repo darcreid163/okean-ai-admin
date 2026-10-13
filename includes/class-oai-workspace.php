@@ -20,7 +20,7 @@ class OAI_Workspace {
   if(!is_dir($root)) wp_mkdir_p($root);
   return is_dir($root)?$root:false;
  }
- private static function id(){return 'ws-'.gmdate('Ymd-His').'-'.wp_rand(1000,9999);}
+ private static function id(){return OAI_Operations::new_id('ws');}
  public static function list_workspaces(){
   $root=self::ensure_root(); if(!$root)return array('items'=>array());
   $items=array();
@@ -38,8 +38,8 @@ class OAI_Workspace {
   $id=self::id(); $base=$root.'/'.$id; wp_mkdir_p($base);
   $theme=array('stylesheet'=>get_stylesheet(),'template'=>get_template(),'name'=>wp_get_theme()->get('Name'),'version'=>wp_get_theme()->get('Version'));
   $meta=array('id'=>$id,'created_at'=>gmdate('c'),'active'=>true,'theme'=>$theme,'clone_theme'=>(bool)$clone_theme);
+  $theme_dir=$base.'/theme';if(!wp_mkdir_p($theme_dir)){self::remove_tree($base);return new WP_Error('oai_workspace_dir','Could not initialize the isolated theme directory',array('status'=>500));}
   if($clone_theme){
-   $theme_dir=$base.'/theme'; wp_mkdir_p($theme_dir);
    $source=trailingslashit(get_stylesheet_directory());
    $ok=self::copy_tree($source,$theme_dir);
    if(is_wp_error($ok)){ self::remove_tree($base); return $ok; }
