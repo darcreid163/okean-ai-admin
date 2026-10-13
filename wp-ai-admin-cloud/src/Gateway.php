@@ -14,7 +14,7 @@ final class Gateway {
         return [
             $tool('cloud_sites_list','List only connected sites allowed by this access token.',[],[],true),
             $tool('cloud_usage','Show central monthly quota and pending reservations.',[],[],true),
-            $tool('cloud_usage_history','List authenticated account billing entries for sites selected in this OAuth grant; includes verified charges without tool inputs/outputs.',['limit'=>['type'=>'integer']],[],true),
+            $tool('cloud_usage_history','List authenticated account billing entries for sites selected in this OAuth grant; includes verified charges without tool inputs/outputs.',['limit'=>['type'=>'integer','minimum'=>1,'maximum'=>100]],[],true),
             $tool('cloud_site_tools_list','Get the complete tool catalog of an explicitly selected site. Identical features on all plans.',['site_id'=>$site],['site_id'],true),
             $tool('cloud_site_tool_call','Execute a site tool through its local security and approval lifecycle. A successful single call costs one action; failed calls, operation verification, receipts and rollback cost zero even when the monthly quota is exhausted. Never retry an uncertain write with a new idempotency_key. Batch execution is unavailable until receipt-based accounting is implemented.',
                 ['site_id'=>$site,'tool'=>['type'=>'string'],'arguments'=>['type'=>'object'],'idempotency_key'=>['type'=>'string','description'=>'Stable unique ID of this logical action, reused verbatim for retries; different actions require different IDs.']],['site_id','tool','arguments','idempotency_key'],false)
