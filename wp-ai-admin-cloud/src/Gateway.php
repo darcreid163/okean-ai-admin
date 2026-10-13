@@ -14,6 +14,7 @@ final class Gateway {
         return [
             $tool('cloud_sites_list','List only connected sites allowed by this access token.',[],[],true),
             $tool('cloud_usage','Show central monthly quota and pending reservations.',[],[],true),
+            $tool('cloud_usage_history','List authenticated account billing entries for sites selected in this OAuth grant; includes verified charges without tool inputs/outputs.',['limit'=>['type'=>'integer']],[],true),
             $tool('cloud_site_tools_list','Get the complete tool catalog of an explicitly selected site. Identical features on all plans.',['site_id'=>$site],['site_id'],true),
             $tool('cloud_site_tool_call','Execute a site tool through its local security and approval lifecycle. A successful single call costs one action; failed calls, operation verification, receipts and rollback cost zero even when the monthly quota is exhausted. Never retry an uncertain write with a new idempotency_key. Batch execution is unavailable until receipt-based accounting is implemented.',
                 ['site_id'=>$site,'tool'=>['type'=>'string'],'arguments'=>['type'=>'object'],'idempotency_key'=>['type'=>'string','description'=>'Stable unique ID of this logical action, reused verbatim for retries; different actions require different IDs.']],['site_id','tool','arguments','idempotency_key'],false)
@@ -48,12 +49,14 @@ final class Gateway {
             foreach ($definition['inputSchema']['required'] as $key) if (!array_key_exists($key,$args)) throw new Fault('missing_argument');
             foreach ($properties as $key=>$rule) if (array_key_exists($key,$args)) {
                 if ($rule['type']==='string' && !is_string($args[$key])) throw new Fault('invalid_argument_type');
+                if ($rule['type']==='integer' && (!is_int($args[$key]) || $args[$key]<1 || $args[$key]>100)) throw new Fault('invalid_argument_type');
                 if ($rule['type']==='object' && (!is_array($args[$key]) || ($args[$key]!==[] && array_is_list($args[$key])))) throw new Fault('invalid_argument_type');
             }
             if (!in_array('mcp:read',$actor['scopes'],true)) throw new Fault('read_scope_required',403);
             $value=match($name) {
                 'cloud_sites_list'=>array_values(array_filter($this->core->sites($actor['owner']),fn($s)=>in_array($s['id'],$actor['site_ids'],true))),
                 'cloud_usage'=>$this->core->usage($actor['owner'],$now),
+                'cloud_usage_history'=>$this->core->ledger($actor['owner'],$args['limit']??50,$actor['site_ids']),
                 'cloud_site_tools_list'=>$this->core->catalog($actor,$args['site_id'],$now),
                 'cloud_site_tool_call'=>$this->core->call($actor,$args['site_id'],$args['tool'],$args['arguments'],$args['idempotency_key'],$now)
             };
