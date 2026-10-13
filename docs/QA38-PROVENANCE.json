@@ -1,0 +1,12 @@
+{
+  "native_archive": "wp-ai-admin-2.1.15-qa38-617ae30.zip",
+  "native_sha256": "9e16f889d2b78f0f2b7156243c4f11fb6242e980a7c83c5aa25861e492274fb5",
+  "native_size": 250587,
+  "native_file_count": 86,
+  "source_commit": "617ae304fb95ed0832c32a9d5f250fe2d8001c99",
+  "build_id": "2.1.15-qa38-20261013",
+  "byte_match_source": true,
+  "reproducible": true,
+  "core_sources_identical_to_qa37": true,
+  "core_upgrade_needed": false
+}
