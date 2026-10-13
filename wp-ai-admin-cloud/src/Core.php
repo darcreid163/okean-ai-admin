@@ -263,9 +263,36 @@ final class Core {
             $this->store->execute('DELETE FROM '.$this->store->table('rate').' WHERE owner=? AND slot<?',[$owner,$slot-1440]);
         });
     }
-    public function ledger(string $owner,int $limit=50): array {
+    /**
+     * Authoritative billing history; no prompts, tool arguments, responses, or telemetry.
+     * Optional site allowlist enforces each OAuth grant's explicitly selected sites.
+     * Uncertain requests have null charged_units until receipt-based reconciliation.
+     */
+    public function ledger(string $owner,int $limit=50,?array $allowedSiteIds=null): array {
         $this->account($owner); $limit=max(1,min(100,$limit));
-        return $this->store->rows('SELECT request_key,site_id,period,tool,state,policy_version,created_at,updated_at FROM '.$this->store->table('requests').' WHERE owner=? ORDER BY created_at DESC LIMIT '.$limit,[$owner]);
+        $sql='SELECT request_key,site_id,period,tool,state,policy_version,response_sealed,created_at,updated_at FROM '.$this->store->table('requests').' WHERE owner=?';
+        $params=[$owner];
+        if ($allowedSiteIds!==null) {
+            $allowedSiteIds=array_values(array_unique(array_filter($allowedSiteIds,static fn($id)=>is_string($id)&&$id!=='')));
+            if (!$allowedSiteIds) return [];
+            $sql.=' AND site_id IN ('.implode(',',array_fill(0,count($allowedSiteIds),'?')).')';
+            array_push($params,...$allowedSiteIds);
+        }
+        $rows=$this->store->rows($sql.' ORDER BY created_at DESC,request_key DESC LIMIT '.$limit,$params);
+        foreach($rows as &$row) {
+            $state=(string)$row['state'];
+            $charge=null;
+            if(in_array($state,['succeeded','failed'],true)) {
+                if(!is_string($row['response_sealed']) || $row['response_sealed']==='') throw new Fault('billing_receipt_missing',503);
+                $receipt=json_decode($this->vault->open($row['response_sealed'],'response:'.$owner.':'.$row['request_key']),true,64,JSON_THROW_ON_ERROR);
+                if(!is_array($receipt) || !is_int($receipt['charged_units']??null) || $receipt['charged_units']<0) throw new Fault('billing_receipt_invalid',503);
+                $charge=$receipt['charged_units'];
+            }
+            unset($row['response_sealed']);
+            $row['charged_units']=$charge;
+        }
+        unset($row);
+        return $rows;
     }
     /** Trusted operator only: the HTTP adapter requires manage_options. No customer may assert their own billing outcome. */
     public function reconcile(string $operator,string $owner,string $key,string $outcome,array $evidence,int $now): array {
