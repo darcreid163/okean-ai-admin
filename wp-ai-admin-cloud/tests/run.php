@@ -80,7 +80,21 @@ check($bad['result']['isError']===true,'Unexpected routing argument accepted');
 $visible=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>1,'method'=>'tools/call','params'=>['name'=>'cloud_sites_list','arguments'=>[]]],$now);
 // Direct handle accepts a trusted actor; the HTTP adapter reauthenticates before every method.
 check(count(json_decode($visible['result']['content'][0]['text'],true))===1,'Token site filter leaked');
-check(count(Gateway::tools())===4,'Gateway catalog');
+check(count(Gateway::tools())===5,'Gateway catalog');
+$historyReply=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>19,'method'=>'tools/call','params'=>['name'=>'cloud_usage_history','arguments'=>['limit'=>50]]],$now);
+$history=json_decode($historyReply['result']['content'][0]['text']??'null',true);
+check(is_array($history)&&count($history)===4,'Usage history missing owner site events');
+$byState=[];
+foreach($history as $event) {
+    check($event['site_id']===$site['id'],'Usage history leaked another site');
+    check(!array_key_exists('response_sealed',$event)&&!array_key_exists('upstream',$event),'Usage history exposed tool data');
+    $byState[$event['state']][]=$event['charged_units'];
+}
+check(in_array(1,$byState['succeeded']??[],true),'Successful tool charge missing from history');
+check(in_array(0,$byState['failed']??[],true),'Failed tool charge missing from history');
+check(in_array(null,$byState['uncertain']??[],true),'Uncertain outcome was silently treated as zero');
+$wrongHistory=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>20,'method'=>'tools/call','params'=>['name'=>'cloud_usage_history','arguments'=>['limit'=>'100']]],$now);
+check(!empty($wrongHistory['result']['isError']),'History accepted invalid limit type');
 
 foreach(['127.0.0.1','10.0.0.1','192.168.1.1','169.254.169.254','100.64.0.1','198.18.0.1','192.0.2.1','224.0.0.1','::1','fe80::1','fc00::1','::ffff:127.0.0.1','2001:db8::1','2001:20::1','2002:7f00:1::','3fff::1'] as $ip) check(!Security::publicIp($ip),'Unsafe IP accepted: '.$ip);
 check(Security::publicIp('8.8.8.8') && Security::publicIp('2606:4700:4700::1111'),'Public IP rejected');
