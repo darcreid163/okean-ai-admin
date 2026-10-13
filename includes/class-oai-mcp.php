@@ -40,7 +40,7 @@ class OAI_MCP {
   }
   $parts=preg_split('/\s+/',trim($auth)); if(count($parts)!==2||strtolower($parts[0])!=='bearer')return new WP_Error('oai_mcp_auth','Bearer token or WordPress Application Password required',array('status'=>401));
   $paired=class_exists('OAI_Gateway_Pairing')?OAI_Gateway_Pairing::authenticate($parts[1]):false;
-  if($paired){self::$auth_context=array('user_id'=>(int)$paired['user']->ID,'client_id'=>$paired['client_id'],'scope'=>$paired['scope']);wp_set_current_user((int)$paired['user']->ID);return OAI_Rate_Limit::check('mcp',120,60);}
+  if($paired){self::$auth_context=array('user_id'=>(int)$paired['user']->ID,'client_id'=>$paired['client_id'],'scope'=>$paired['scope'],'quota_authority'=>'central_gateway');wp_set_current_user((int)$paired['user']->ID);return OAI_Rate_Limit::check('mcp',120,60);}
   $oauth=class_exists('OAI_MCP_OAuth')?OAI_MCP_OAuth::authenticate_access_token($parts[1]):false;
   if($oauth){ self::$auth_context=array('user_id'=>(int)$oauth['user']->ID,'client_id'=>(string)$oauth['client_id'],'scope'=>(string)$oauth['scope']); wp_set_current_user((int)$oauth['user']->ID); return OAI_Rate_Limit::check('mcp',120,60); }
   if(!self::token_hash()||!hash_equals(self::token_hash(),hash('sha256',$parts[1])))return new WP_Error('oai_mcp_auth','Invalid MCP token',array('status'=>401));
@@ -91,7 +91,10 @@ class OAI_MCP {
    if(!$write && !self::has_scope('mcp:read')) return self::scope_error($id,'mcp:read');
    // One quota unit represents one user-visible MCP tool request. Internal
    // resolver steps are not charged separately.
-   if(class_exists('OAI_Quota')){
+   // Central Gateway paired calls are already metered transactionally by Cloud Core.
+   // Never debit an independent Native quota for the same commercial operation.
+   // Legacy direct MCP clients retain their existing local quota behavior.
+   if(class_exists('OAI_Quota') && (self::$auth_context['quota_authority']??'')!=='central_gateway'){
     $arguments=is_array($params['arguments']??null)?$params['arguments']:array();
     $fingerprint=wp_json_encode(array('method'=>'tools/call','tool'=>$tool_name,'arguments'=>$arguments),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
     $request_id=(string)($id??'');

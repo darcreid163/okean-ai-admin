@@ -54,6 +54,8 @@ $core->throttle('1','test_rate',$now,2); $core->throttle('1','test_rate',$now,2)
 rejects(fn()=>$core->throttle('1','test_rate',$now,2),'rate_limit_exceeded');
 $core->throttle('1','test_rate',$now+60,2);
 check(count($core->ledger('1'))===4,'Ledger missing successful, failed or uncertain requests');
+$pendingLedger=array_values(array_filter($core->ledger('1'),static fn($event)=>$event['state']==='uncertain'));
+check(count($pendingLedger)===1 && $pendingLedger[0]['charged_units']===null,'Uncertain usage must remain unbilled and visibly pending');
 rejects(fn()=>$core->reconcile('operator','1',$one['request_key'],'succeeded',['note'=>'A checked operator receipt note.','receipt_sha256'=>str_repeat('a',64)],$now),'request_not_reconcilable');
 $pendingKey=hash('sha256','1|timeout-1');
 rejects(fn()=>$core->reconcile('operator','1',$pendingKey,'failed',[],$now),'operator_receipt_evidence_required');
@@ -80,7 +82,21 @@ check($bad['result']['isError']===true,'Unexpected routing argument accepted');
 $visible=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>1,'method'=>'tools/call','params'=>['name'=>'cloud_sites_list','arguments'=>[]]],$now);
 // Direct handle accepts a trusted actor; the HTTP adapter reauthenticates before every method.
 check(count(json_decode($visible['result']['content'][0]['text'],true))===1,'Token site filter leaked');
-check(count(Gateway::tools())===4,'Gateway catalog');
+check(count(Gateway::tools())===5,'Gateway catalog');
+$historyReply=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>19,'method'=>'tools/call','params'=>['name'=>'cloud_usage_history','arguments'=>['limit'=>50]]],$now);
+$history=json_decode($historyReply['result']['content'][0]['text']??'null',true);
+check(is_array($history)&&count($history)===4,'Usage history missing owner site events');
+$byState=[];
+foreach($history as $event) {
+    check($event['site_id']===$site['id'],'Usage history leaked another site');
+    check(!array_key_exists('response_sealed',$event)&&!array_key_exists('upstream',$event),'Usage history exposed tool data');
+    $byState[$event['state']][]=$event['charged_units'];
+}
+check(in_array(1,$byState['succeeded']??[],true),'Successful tool charge missing from history');
+check(in_array(0,$byState['failed']??[],true),'Failed tool charge missing from history');
+check(!isset($byState['uncertain']) && count($byState['failed']??[])===3,'Reconciled history did not settle pending request');
+$wrongHistory=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>20,'method'=>'tools/call','params'=>['name'=>'cloud_usage_history','arguments'=>['limit'=>'100']]],$now);
+check(!empty($wrongHistory['result']['isError']),'History accepted invalid limit type');
 
 foreach(['127.0.0.1','10.0.0.1','192.168.1.1','169.254.169.254','100.64.0.1','198.18.0.1','192.0.2.1','224.0.0.1','::1','fe80::1','fc00::1','::ffff:127.0.0.1','2001:db8::1','2001:20::1','2002:7f00:1::','3fff::1'] as $ip) check(!Security::publicIp($ip),'Unsafe IP accepted: '.$ip);
 check(Security::publicIp('8.8.8.8') && Security::publicIp('2606:4700:4700::1111'),'Public IP rejected');
