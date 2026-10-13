@@ -1,0 +1,583 @@
+name: Public Release Sandbox
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'wp-ai-admin-cloud/**'
+      - 'tests/**'
+      - '.github/workflows/release-sandbox.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-sandbox-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  tenant-isolation-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sodium, curl
+          coverage: none
+      - name: Tenant isolation release sandbox
+        run: php wp-ai-admin-cloud/tests/tenant-isolation.php
+
+  tenant-isolation-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: release-sandbox-password
+          MYSQL_DATABASE: release_sandbox
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -prelease-sandbox-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, sodium, curl
+          coverage: none
+      - name: Tenant isolation release sandbox
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_sandbox
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-sandbox-password
+        run: php wp-ai-admin-cloud/tests/tenant-isolation.php
+      - name: Concurrent cross-tenant site ownership race
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_sandbox
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-sandbox-password
+        run: php wp-ai-admin-cloud/tests/site-connect-concurrency.php
+      - name: Suspension versus bearer mint race
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_sandbox
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-sandbox-password
+        run: php wp-ai-admin-cloud/tests/suspension-token-concurrency.php
+      - name: Suspension versus OAuth consent race
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_sandbox
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-sandbox-password
+        run: php wp-ai-admin-cloud/tests/suspension-consent-concurrency.php
+      - name: Suspension versus OAuth exchange race
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_sandbox
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-sandbox-password
+        run: php wp-ai-admin-cloud/tests/suspension-exchange-concurrency.php
+      - name: In-flight tool call versus suspension accounting
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_sandbox
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-sandbox-password
+        run: php wp-ai-admin-cloud/tests/suspension-inflight-concurrency.php
+
+  release-boundaries:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: release-boundary-password
+          MYSQL_DATABASE: release_boundary
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -prelease-boundary-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Release abuse boundaries on SQLite
+        run: php wp-ai-admin-cloud/tests/release-boundaries.php
+      - name: Reconnect identity pinning on SQLite
+        run: php wp-ai-admin-cloud/tests/site-reconnect-identity.php
+      - name: Quota, idempotency and reconciliation on SQLite
+        run: php wp-ai-admin-cloud/tests/quota-idempotency.php
+      - name: Token/session lifecycle on SQLite
+        run: php wp-ai-admin-cloud/tests/token-lifecycle.php
+      - name: Gateway JSON-RPC protocol boundaries on SQLite
+        run: php wp-ai-admin-cloud/tests/gateway-protocol.php
+      - name: Foundation compatibility proof on SQLite
+        run: php wp-ai-admin-cloud/tests/foundation-proof.php
+      - name: Gateway schema integrity on SQLite
+        run: php wp-ai-admin-cloud/tests/schema-integrity.php
+      - name: Release abuse boundaries on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/release-boundaries.php
+      - name: Reconnect identity pinning on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/site-reconnect-identity.php
+      - name: Quota, idempotency and reconciliation on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/quota-idempotency.php
+      - name: Token/session lifecycle on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/token-lifecycle.php
+      - name: Gateway JSON-RPC protocol boundaries on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/gateway-protocol.php
+      - name: Foundation compatibility proof on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/foundation-proof.php
+      - name: Gateway schema integrity on MySQL
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=release_boundary
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: release-boundary-password
+        run: php wp-ai-admin-cloud/tests/schema-integrity.php
+
+  existing-release-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sodium, curl
+          coverage: none
+      - name: Browser pairing isolation
+        run: php tests/browser-pairing.php
+      - name: Shared-plan and OAuth isolation
+        run: php wp-ai-admin-cloud/tests/multisite-account.php
+      - name: Core gateway regression
+        run: php wp-ai-admin-cloud/tests/run.php
+      - name: OAuth regression
+        run: php wp-ai-admin-cloud/tests/oauth.php
+
+
+  cloud-core-fresh-install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: cloud-fresh-password
+          MYSQL_DATABASE: cloud_fresh
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pcloud-fresh-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Build canonical release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-install scripts/build-release-candidate.sh
+      - name: Fresh WordPress Cloud Core install
+        shell: bash
+        run: |
+          set -euo pipefail
+          WP_DIR="$RUNNER_TEMP/wpai-cloud-fresh-${{ matrix.php }}"
+          WPCLI="$RUNNER_TEMP/wp-cli-cloud-${{ matrix.php }}.phar"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$WPCLI"
+          mkdir -p "$WP_DIR"
+          php "$WPCLI" --path="$WP_DIR" core download
+          php "$WPCLI" --path="$WP_DIR" config create --dbname=cloud_fresh --dbuser=root --dbpass=cloud-fresh-password --dbhost=127.0.0.1 --skip-check
+          php "$WPCLI" --path="$WP_DIR" core install --url=https://cloud-fresh.test --title='Cloud Fresh' --admin_user=cloud-admin --admin_password=disposable-cloud-password --admin_email=cloud@example.test --skip-email
+          ZIP="$(ls "$GITHUB_WORKSPACE"/cloud-install/wp-ai-admin-cloud-*.zip | head -n1)"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$ZIP" --activate
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-install.php"
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-schema-damage.php"
+
+  cloud-core-upgrade:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: cloud-upgrade-password
+          MYSQL_DATABASE: cloud_upgrade
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pcloud-upgrade-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Build canonical release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-upgrade-build scripts/build-release-candidate.sh
+      - name: Upgrade installed Cloud Core 0.3.6 to generated 0.3.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          WP_DIR="$RUNNER_TEMP/wpai-cloud-upgrade"
+          WPCLI="$RUNNER_TEMP/wp-cli-cloud-upgrade.phar"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$WPCLI"
+          mkdir -p "$WP_DIR"
+          php "$WPCLI" --path="$WP_DIR" core download
+          php "$WPCLI" --path="$WP_DIR" config create --dbname=cloud_upgrade --dbuser=root --dbpass=cloud-upgrade-password --dbhost=127.0.0.1 --skip-check
+          php "$WPCLI" --path="$WP_DIR" core install --url=https://cloud-upgrade.test --title='Cloud Upgrade' --admin_user=cloud-upgrade-admin --admin_password=disposable-cloud-upgrade-password --admin_email=cloud-upgrade@example.test --skip-email
+          CLOUD_BASELINE="$GITHUB_WORKSPACE/releases/wp-ai-cloud-0.3.6/wp-ai-admin-cloud-0.3.6.zip"
+          test "$(git hash-object "$CLOUD_BASELINE")" = "6a078c53018aaedbbb6320b6f08380e425eb21bd"
+          test "$(stat -c %s "$CLOUD_BASELINE")" -eq 48094
+          php "$WPCLI" --path="$WP_DIR" plugin install "$CLOUD_BASELINE" --activate
+          WPAI_CLOUD_UPGRADE_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-upgrade.php"
+          CURRENT_ZIP="$(ls "$GITHUB_WORKSPACE"/cloud-upgrade-build/wp-ai-admin-cloud-*.zip | head -n1)"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
+          WPAI_CLOUD_UPGRADE_PHASE=check php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-cloud-release-upgrade.php"
+
+  release-zip-upgrade:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: release-upgrade-password
+          MYSQL_DATABASE: release_upgrade
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -prelease-upgrade-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Build canonical release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-dist scripts/build-release-candidate.sh
+      - name: Upgrade installed 2.1.13 with generated ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          WP_DIR="$RUNNER_TEMP/wpai-release-upgrade"
+          WPCLI="$RUNNER_TEMP/wp-cli-upgrade.phar"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$WPCLI"
+          mkdir -p "$WP_DIR"
+          php "$WPCLI" --path="$WP_DIR" core download
+          php "$WPCLI" --path="$WP_DIR" config create --dbname=release_upgrade --dbuser=root --dbpass=release-upgrade-password --dbhost=127.0.0.1 --skip-check
+          php "$WPCLI" --path="$WP_DIR" core install --url=http://release-upgrade.test --title='Release Upgrade' --admin_user=upgrade-admin --admin_password=disposable-upgrade-password --admin_email=upgrade@example.test --skip-email
+          NATIVE_BASELINE="$GITHUB_WORKSPACE/releases/2.1.13/wp-ai-admin-2.1.13.zip"
+          test "$(git hash-object "$NATIVE_BASELINE")" = "e5efa15c5d785bbbc32acef0b7557117baf7a45e"
+          test "$(stat -c %s "$NATIVE_BASELINE")" -eq 244567
+          php "$WPCLI" --path="$WP_DIR" plugin install "$NATIVE_BASELINE" --activate
+          OAI_RELEASE_UPGRADE_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-upgrade.php"
+          CURRENT_ZIP="$(ls "$GITHUB_WORKSPACE"/dist/wp-ai-admin-*.zip | head -n1)"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
+          OAI_RELEASE_UPGRADE_PHASE=check php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-upgrade.php"
+          # Also qualify the exact private-main starting version requested for
+          # reconciliation, without dropping the retained 2.1.13 regression.
+          NATIVE_214="$GITHUB_WORKSPACE/releases/2.1.14/wp-ai-admin-2.1.14.zip"
+          echo "b03238f51cd53dd14316fdec35d2bff73548a86bb3d190e5167401afc395001e  $NATIVE_214" | sha256sum -c -
+          php "$WPCLI" --path="$WP_DIR" plugin install "$NATIVE_214" --force
+          OAI_RELEASE_BASELINE_VERSION=2.1.14 OAI_RELEASE_UPGRADE_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-upgrade.php"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$CURRENT_ZIP" --force
+          OAI_RELEASE_UPGRADE_PHASE=check php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-upgrade.php"
+
+  fresh-release-install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: site-baseline
+            wp: '7.0.6'
+            php: '8.3'
+          - profile: latest-php82
+            wp: latest
+            php: '8.2'
+          - profile: latest-php83
+            wp: latest
+            php: '8.3'
+          - profile: latest-php84
+            wp: latest
+            php: '8.4'
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: fresh-install-password
+          MYSQL_DATABASE: fresh_release
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pfresh-install-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Build canonical release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-dist scripts/build-release-candidate.sh
+      - name: Fresh WordPress install from generated ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          WP_DIR="$RUNNER_TEMP/wpai-fresh-release"
+          WPCLI="$RUNNER_TEMP/wp-cli.phar"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$WPCLI"
+          mkdir -p "$WP_DIR"
+          php "$WPCLI" --path="$WP_DIR" core download --version="${{ matrix.wp }}"
+          php "$WPCLI" --path="$WP_DIR" config create --dbname=fresh_release --dbuser=root --dbpass=fresh-install-password --dbhost=127.0.0.1 --skip-check
+          php "$WPCLI" --path="$WP_DIR" core install --url=http://fresh-release.test --title='Fresh Release' --admin_user=release-admin --admin_password=disposable-release-password --admin_email=release@example.test --skip-email
+          ZIP="$(ls "$GITHUB_WORKSPACE"/dist/wp-ai-admin-*.zip | head -n1)"
+          php "$WPCLI" --path="$WP_DIR" plugin install "$ZIP" --activate
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-release-install.php"
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-operations-cleanup.php"
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-quota-retention.php"
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-native-auth-boundaries.php"
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-operation-lease-race.php"
+          php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-operation-recovery-race.php"
+          OAI_REACTIVATION_PHASE=seed php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-reactivation.php"
+          php "$WPCLI" --path="$WP_DIR" plugin deactivate okean-ai-admin
+          php "$WPCLI" --path="$WP_DIR" plugin activate okean-ai-admin
+          OAI_REACTIVATION_PHASE=check php "$WPCLI" --path="$WP_DIR" eval-file "$GITHUB_WORKSPACE/tests/wordpress-reactivation.php"
+
+  release-hardening:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Secret and private-key guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -E -- '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----' -- ':!tests/**' ':!**/tests/**'; then
+            echo 'Private key material detected in tracked release source'; exit 1
+          fi
+          if git grep -n -E -- '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{32,})' -- ':!tests/**' ':!**/tests/**'; then
+            echo 'Credential-like token detected in tracked release source'; exit 1
+          fi
+          echo 'No release-source private keys or common credential tokens detected'
+      - name: Version and build metadata consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEADER_VERSION="$(sed -n 's/^ \* Version: //p' okean-ai-admin.php | head -n1)"
+          CONST_VERSION="$(sed -n "s/^define('OAI_VERSION','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          BUILD_ID="$(sed -n "s/^define('OAI_BUILD_ID','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          SIG_VERSION="$(sed -n 's/^Version: //p' BUILD-SIGNATURE.txt | head -n1)"
+          SIG_BUILD="$(sed -n 's/^Build ID: //p' BUILD-SIGNATURE.txt | head -n1)"
+          SIG2_VERSION="$(sed -n 's/^Version: //p' BUILD_SIGNATURE.txt | head -n1)"
+          SIG2_BUILD="$(sed -n 's/^Build ID: //p' BUILD_SIGNATURE.txt | head -n1)"
+          test -n "$HEADER_VERSION" -a "$HEADER_VERSION" = "$CONST_VERSION"
+          test "$CONST_VERSION" = "$SIG_VERSION"
+          test "$CONST_VERSION" = "$SIG2_VERSION"
+          test "$BUILD_ID" = "$SIG_BUILD"
+          test "$BUILD_ID" = "$SIG2_BUILD"
+          cmp -s BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt
+          echo "Metadata consistent: version=$CONST_VERSION build=$BUILD_ID"
+          CLOUD_HEADER_VERSION="$(sed -n 's/^ \* Version: //p' wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          CLOUD_CONST_VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          test -n "$CLOUD_HEADER_VERSION" -a "$CLOUD_HEADER_VERSION" = "$CLOUD_CONST_VERSION"
+          grep -Fq "WP AI Admin Cloud Core $CLOUD_CONST_VERSION" wp-ai-admin-cloud/README.md
+          echo "Cloud metadata consistent: version=$CLOUD_CONST_VERSION"
+      - name: Security, changelog and retention release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f SECURITY.md
+          test -f CHANGELOG.md
+          test -f docs/DATA-RETENTION.md
+          test -f docs/DATA-FLOW.md
+          test -f docs/PROOF-SEMANTICS.md
+          grep -Fq "WP AI Admin native: 2.1.15" SECURITY.md
+          grep -Fq "## 2.1.15" CHANGELOG.md
+          grep -Fq "current release candidate intentionally has no automatic destructive uninstall routine" docs/DATA-RETENTION.md
+          grep -Fq "autonomous modes remain OFF" docs/DATA-RETENTION.md
+          grep -Fq "sealed response storage" docs/DATA-FLOW.md
+          grep -Fq "does not claim that Cloud Core is a zero-retention relay" docs/DATA-FLOW.md
+          grep -Fq "automatic payment activation is not complete" docs/DATA-FLOW.md
+          grep -Fq "local integrity proof" docs/PROOF-SEMANTICS.md
+          grep -Fq "not a remote digital signature" docs/PROOF-SEMANTICS.md
+          grep -Fq "commercial_entitlement_enforced = false" docs/PROOF-SEMANTICS.md
+          if grep -Eqi 'uninstall.*(deletes all|complete data erasure|removes all data)' README.md README.txt docs/PUBLIC-ONBOARDING.md; then
+            echo "Release documentation overstates uninstall/data erasure behavior"; exit 1
+          fi
+          echo "Security/changelog/data-retention metadata present; license remains a deliberate separate decision"
+      - name: Public onboarding contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=docs/PUBLIC-ONBOARDING.md
+          test -f "$FILE"
+          grep -Fq "https://wpaiadmin.ru/wpai-cloud/connect" "$FILE"
+          grep -Fq "https://wpaiadmin.ru/mcp" "$FILE"
+          grep -Fq "OAuth Authorization Code + PKCE S256" "$FILE"
+          grep -Fq "explicitly select the site or sites" "$FILE"
+          grep -Fq "create a sandbox operation first" "$FILE"
+          grep -Fq "Revoke access" "$FILE"
+          grep -Fq "Direct live writes are disabled" "$FILE"
+          grep -Fq "Human approval is the production default" "$FILE"
+          if grep -Eqi 'required.*(PowerShell|SSH|Application Password|manual token|copied token)' "$FILE"; then
+            echo "Normal onboarding still requires a manual/CLI credential path"; exit 1
+          fi
+          echo "Public onboarding contract present and browser-first"
+      - name: Outbound transport SSRF/TLS static contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=wp-ai-admin-cloud/src/Transport.php
+          grep -Fq "CURLOPT_RESOLVE" "$FILE"
+          grep -Fq "CURLOPT_PROXY=>''" "$FILE"
+          grep -Fq "CURLOPT_FOLLOWLOCATION=>false" "$FILE"
+          grep -Fq "CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS" "$FILE"
+          grep -Fq "CURLOPT_REDIR_PROTOCOLS=>CURLPROTO_HTTPS" "$FILE"
+          grep -Fq "CURLOPT_SSL_VERIFYPEER=>true" "$FILE"
+          grep -Fq "CURLOPT_SSL_VERIFYHOST=>2" "$FILE"
+          grep -Fq "1048576" "$FILE"
+          grep -Fq "Security::requirePublicAddresses" "$FILE"
+          echo "Outbound transport pinning/TLS/size-limit contract present"
+      - name: Build canonical release candidate twice and prove reproducibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-release-candidate.sh
+          NATIVE_OUT=dist CLOUD_OUT=cloud-dist scripts/build-release-candidate.sh
+          NATIVE_OUT=dist-rebuild CLOUD_OUT=cloud-rebuild scripts/build-release-candidate.sh
+          VERSION="$(sed -n "s/^define('OAI_VERSION','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          CLOUD_VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          SHA="$(sha256sum "dist/wp-ai-admin-$VERSION.zip" | awk '{print $1}')"
+          SHA2="$(sha256sum "dist-rebuild/wp-ai-admin-$VERSION.zip" | awk '{print $1}')"
+          CLOUD_SHA="$(sha256sum "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | awk '{print $1}')"
+          CLOUD_SHA2="$(sha256sum "cloud-rebuild/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | awk '{print $1}')"
+          test "$SHA" = "$SHA2"
+          test "$CLOUD_SHA" = "$CLOUD_SHA2"
+          cmp -s "dist/wp-ai-admin-$VERSION.zip" "dist-rebuild/wp-ai-admin-$VERSION.zip"
+          cmp -s "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" "cloud-rebuild/wp-ai-admin-cloud-$CLOUD_VERSION.zip"
+          cmp -s dist/PROVENANCE.txt dist-rebuild/PROVENANCE.txt
+
+          BUILD_ID="$(sed -n "s/^define('OAI_BUILD_ID','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          grep -Fxq "commit=$GITHUB_SHA" dist/PROVENANCE.txt
+          grep -Fxq "version=$VERSION" dist/PROVENANCE.txt
+          grep -Fxq "build_id=$BUILD_ID" dist/PROVENANCE.txt
+          grep -Fxq "sha256=$SHA" dist/PROVENANCE.txt
+          grep -Fxq "cloud_version=$CLOUD_VERSION" dist/PROVENANCE.txt
+          grep -Fxq "cloud_sha256=$CLOUD_SHA" dist/PROVENANCE.txt
+
+          NATIVE_BOOT="$(unzip -p "dist/wp-ai-admin-$VERSION.zip" okean-ai-admin/okean-ai-admin.php)"
+          CLOUD_BOOT="$(unzip -p "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" wp-ai-admin-cloud/wp-ai-admin-cloud.php)"
+          printf '%s' "$NATIVE_BOOT" | grep -Fq "Version: $VERSION"
+          printf '%s' "$NATIVE_BOOT" | grep -Fq "define('OAI_VERSION','$VERSION');"
+          printf '%s' "$NATIVE_BOOT" | grep -Fq "define('OAI_BUILD_ID','$BUILD_ID');"
+          printf '%s' "$CLOUD_BOOT" | grep -Fq "Version: $CLOUD_VERSION"
+          printf '%s' "$CLOUD_BOOT" | grep -Fq "define('WPAI_CLOUD_VERSION', '$CLOUD_VERSION');"
+
+          test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
+          test "$(unzip -Z1 "dist/wp-ai-admin-$VERSION.zip" | grep -Ec '(^|/)\.git')" -eq 0
+          test "$(unzip -Z1 "cloud-dist/wp-ai-admin-cloud-$CLOUD_VERSION.zip" | grep -Ec '(^|/)tests?/')" -eq 0
+      - name: Scan built ZIP payloads for release-only content and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          NATIVE_ZIP="$(ls dist/wp-ai-admin-*.zip | head -n1)"
+          CLOUD_ZIP="$(ls cloud-dist/wp-ai-admin-cloud-*.zip | head -n1)"
+          test -n "$NATIVE_ZIP" -a -n "$CLOUD_ZIP"
+
+          # Native and Cloud Core are separate installables.
+          test "$(unzip -Z1 "$NATIVE_ZIP" | grep -Ec '^okean-ai-admin/')" -gt 0
+          test "$(unzip -Z1 "$NATIVE_ZIP" | grep -Ec '(^|/)wp-ai-admin-cloud(/|$)')" -eq 0
+          test "$(unzip -Z1 "$NATIVE_ZIP" | grep -Ec '^okean-ai-admin/okean-ai-admin\.php$')" -eq 1
+
+          test "$(unzip -Z1 "$CLOUD_ZIP" | grep -Ec '^wp-ai-admin-cloud/')" -gt 0
+          test "$(unzip -Z1 "$CLOUD_ZIP" | grep -Ec '(^|/)okean-ai-admin(/|$)')" -eq 0
+          test "$(unzip -Z1 "$CLOUD_ZIP" | grep -Ec '^wp-ai-admin-cloud/wp-ai-admin-cloud\.php$')" -eq 1
+
+          for ZIP in "$NATIVE_ZIP" "$CLOUD_ZIP"; do
+            echo "Scanning $ZIP"
+            if unzip -Z1 "$ZIP" | grep -E '(^|/)(tests?|\.git|node_modules|vendor/bin|coverage|\.env)(/|$)'; then
+              echo "Development-only path found in $ZIP"; exit 1
+            fi
+            TMP="$(mktemp -d)"
+            unzip -qq "$ZIP" -d "$TMP"
+            if grep -RIlE --binary-files=without-match -- '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{32,}' "$TMP"; then
+              echo "Credential-like material found inside release ZIP"; rm -rf "$TMP"; exit 1
+            fi
+            if grep -RIl --binary-files=without-match -- 'fixture-[A-Za-z0-9_-]*token|disposable-.*password|release-sandbox-password' "$TMP"; then
+              echo "Test fixture credential marker found inside release ZIP"; rm -rf "$TMP"; exit 1
+            fi
+            rm -rf "$TMP"
+          done
+      - name: Upload release provenance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-release-provenance
+          path: |
+            dist/wp-ai-admin-*.zip
+            cloud-dist/wp-ai-admin-cloud-*.zip
+            dist/PROVENANCE.txt
+          if-no-files-found: error

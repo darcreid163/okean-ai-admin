@@ -26,9 +26,56 @@ final class Core {
         if (!$s) throw new Fault('site_unavailable',404);
         return $s;
     }
+    public function assertActiveAccount(string $owner,bool $lock=false): void {
+        $this->account($owner,$lock);
+    }
     public function sites(string $owner): array {
         $this->account($owner);
         return $this->store->rows('SELECT id,home,plugin_site_id,installation_id,status,created_at FROM '.$this->store->table('sites').' WHERE owner=? AND status=? ORDER BY created_at',[$owner,'active']);
+    }
+    public function closureInventory(string $owner): array {
+        $this->account($owner);
+        $count=function(string $table,string $where,array $args) {
+            $row=$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table($table).' WHERE '.$where,$args);
+            return (int)($row['n']??0);
+        };
+        return [
+            'owner'=>$owner,
+            'active_sites'=>$count('sites','owner=? AND status=?',[$owner,'active']),
+            'active_tokens'=>$count('tokens','owner=? AND revoked=0',[$owner]),
+            'active_oauth_grants'=>$count('oauth_grants','owner=? AND revoked=0',[$owner]),
+            'unused_oauth_codes'=>$count('oauth_codes','owner=? AND used=0',[$owner]),
+            'retained_requests'=>$count('requests','owner=?',[$owner]),
+            'retained_audit'=>$count('audit','owner=?',[$owner]),
+            'retained_balances'=>$count('balances','owner=?',[$owner]),
+            'action'=>'suspend_first_delete_later_under_retention_policy',
+            'destructive_delete_performed'=>false,
+        ];
+    }
+    public function suspendAccount(string $owner,int $now): array {
+        return $this->store->transaction(function() use($owner,$now) {
+            $before=$this->closureInventory($owner);
+            $this->account($owner,true);
+            // Clear credentials from every historical registration for this owner,
+            // including legacy rows already marked revoked.
+            $this->store->execute('UPDATE '.$this->store->table('sites').' SET status=?,token_sealed=? WHERE owner=?',['revoked','',$owner]);
+            $this->store->execute('UPDATE '.$this->store->table('tokens').' SET revoked=1 WHERE owner=?',[$owner]);
+            $this->store->execute('UPDATE '.$this->store->table('oauth_grants').' SET revoked=1 WHERE owner=?',[$owner]);
+            $this->store->execute('UPDATE '.$this->store->table('oauth_codes').' SET used=1 WHERE owner=? AND used=0',[$owner]);
+            $this->store->execute('UPDATE '.$this->store->table('accounts').' SET disabled=1,sequence=sequence+1 WHERE owner=?',[$owner]);
+            $this->store->audit($owner,'','account_suspended','',$now);
+            return [
+                'suspended'=>true,
+                'access_revoked'=>true,
+                'site_credentials_cleared'=>true,
+                'destructive_delete_performed'=>false,
+                'retained_evidence'=>[
+                    'requests'=>$before['retained_requests'],
+                    'audit'=>$before['retained_audit']+1,
+                    'balances'=>$before['retained_balances'],
+                ],
+            ];
+        });
     }
     public function connect(string $owner,string $home,string $token,int $now,bool $replace=false): array {
         $this->account($owner); $home=Security::home($home);
@@ -54,7 +101,25 @@ final class Core {
             }
             if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=?',[$owner])['n']>=self::MAX_SITES) throw new Fault('pilot_site_count_limit',409);
             $id='reg_'.bin2hex(random_bytes(16));
-            $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now]);
+            try {
+                $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now]);
+            } catch (\PDOException $e) {
+                // Another request may have registered the same canonical URL
+                // after our initial lookup but before this INSERT. On MySQL the
+                // winning row can still be uncommitted/invisible to this
+                // transaction, so do not rely on a follow-up SELECT. Normalize
+                // only duplicate-key integrity violations; propagate unrelated
+                // storage failures.
+                $driverCode=(int)($e->errorInfo[1]??0);
+                if ((string)$e->getCode()==='23000' && $driverCode===1062) {
+                    throw new Fault('site_already_registered',409);
+                }
+                // SQLite duplicate uniqueness is also an ownership race.
+                if ((string)$e->getCode()==='23000' || str_contains(strtolower($e->getMessage()),'unique constraint failed')) {
+                    throw new Fault('site_already_registered',409);
+                }
+                throw $e;
+            }
             $this->store->audit($owner,$id,'site_connected','',$now);
             return ['id'=>$id,'home'=>$home,'plugin_site_id'=>$pluginSite,'installation_id'=>$installation,'status'=>'active'];
         });
@@ -68,14 +133,21 @@ final class Core {
         });
     }
     public function mint(string $owner,array $siteIds,array $scopes,int $now,int $ttl=3600): array {
-        $this->account($owner);
         if (!$siteIds || count($siteIds)>self::MAX_SITES || !array_is_list($siteIds) || !array_is_list($scopes) || count($scopes)>2 || array_filter($siteIds,fn($v)=>!is_string($v)) || array_filter($scopes,fn($v)=>!is_string($v))) throw new Fault('invalid_token_policy');
         if (count(array_unique($siteIds,SORT_STRING))!==count($siteIds) || !in_array('mcp:read',$scopes,true) || array_diff($scopes,['mcp:read','mcp:write']) || count(array_unique($scopes))!==count($scopes) || $ttl<60 || $ttl>3600) throw new Fault('invalid_token_policy');
-        foreach ($siteIds as $id) $this->ownedSite($owner,Security::identifier($id));
-        $token='wpai_cloud_'.Security::b64(random_bytes(32));
-        $this->store->execute('INSERT INTO '.$this->store->table('tokens').' (hash,owner,scopes,site_ids,expires_at) VALUES (?,?,?,?,?)',[hash('sha256',$token),$owner,Security::canonical($scopes),Security::canonical($siteIds),$now+$ttl]);
-        $this->store->audit($owner,'','token_issued',hash('sha256',$token),$now);
-        return ['access_token'=>$token,'token_type'=>'Bearer','expires_in'=>$ttl,'scope'=>implode(' ',$scopes),'site_ids'=>$siteIds];
+
+        // Serialize bearer issuance with account suspension. Without the account
+        // row lock, a mint that read "active" just before suspension could
+        // insert a fresh non-revoked token after the suspension's bulk revoke.
+        return $this->store->transaction(function() use($owner,$siteIds,$scopes,$now,$ttl) {
+            $this->account($owner,true);
+            foreach ($siteIds as $id) $this->ownedSite($owner,Security::identifier($id));
+            $token='wpai_cloud_'.Security::b64(random_bytes(32));
+            $hash=hash('sha256',$token);
+            $this->store->execute('INSERT INTO '.$this->store->table('tokens').' (hash,owner,scopes,site_ids,expires_at) VALUES (?,?,?,?,?)',[$hash,$owner,Security::canonical($scopes),Security::canonical($siteIds),$now+$ttl]);
+            $this->store->audit($owner,'','token_issued',$hash,$now);
+            return ['access_token'=>$token,'token_type'=>'Bearer','expires_in'=>$ttl,'scope'=>implode(' ',$scopes),'site_ids'=>$siteIds];
+        });
     }
     public function authenticate(string $token,int $now): array {
         if (!preg_match('/^wpai_cloud_[A-Za-z0-9_-]{43}$/D',$token)) throw new Fault('bearer_required',401);
@@ -199,7 +271,11 @@ final class Core {
     public function reconcile(string $operator,string $owner,string $key,string $outcome,array $evidence,int $now): array {
         if (!preg_match('/^[a-f0-9]{64}$/D',$key) || !in_array($outcome,['succeeded','failed'],true) || !is_string($evidence['note']??null) || strlen($evidence['note'])<20 || strlen($evidence['note'])>2000 || !is_string($evidence['receipt_sha256']??null) || !preg_match('/^[a-f0-9]{64}$/D',$evidence['receipt_sha256'])) throw new Fault('operator_receipt_evidence_required');
         return $this->store->transaction(function() use($operator,$owner,$key,$outcome,$evidence,$now) {
-            $this->store->row('SELECT owner FROM '.$this->store->table('accounts').' WHERE owner=?'.$this->store->lock(),[$owner]);
+            // Trusted reconciliation is deliberately allowed for a suspended
+            // account so an uncertain pre-suspension request can release/settle
+            // its reservation. This path never restores account/site/token access.
+            $account=$this->store->row('SELECT owner,disabled FROM '.$this->store->table('accounts').' WHERE owner=?'.$this->store->lock(),[$owner]);
+            if(!$account) throw new Fault('account_unavailable',403);
             $row=$this->store->row('SELECT * FROM '.$this->store->table('requests').' WHERE owner=? AND request_key=?'.$this->store->lock(),[$owner,$key]);
             // Dispatching requests may still be in flight. Operator reconciliation is restricted to explicit uncertain outcomes.
             if (!$row || $row['state']!=='uncertain') throw new Fault('request_not_reconcilable',409);
@@ -212,6 +288,22 @@ final class Core {
             return $receipt;
         });
     }
+    public function reactivateAccount(string $operator,string $owner,int $now): array {
+        return $this->store->transaction(function() use($operator,$owner,$now) {
+            $row=$this->store->row('SELECT owner,disabled FROM '.$this->store->table('accounts').' WHERE owner=?'.$this->store->lock(),[$owner]);
+            if(!$row) throw new Fault('account_unavailable',404);
+            if((int)$row['disabled']===0) throw new Fault('account_already_active',409);
+            $this->store->execute('UPDATE '.$this->store->table('accounts').' SET disabled=0,sequence=sequence+1 WHERE owner=?',[$owner]);
+            $this->store->audit($owner,'','operator_account_reactivated',hash('sha256',$operator),$now);
+            return [
+                'reactivated'=>true,
+                'old_access_restored'=>false,
+                'reconnect_required'=>true,
+                'oauth_reauthorization_required'=>true,
+            ];
+        });
+    }
+
     public function setPlan(string $operator,string $owner,string $plan,int $now): void {
         if (!isset($this->policy['plans'][$plan])) throw new Fault('unknown_plan');
         $this->store->transaction(function() use($operator,$owner,$plan,$now) {

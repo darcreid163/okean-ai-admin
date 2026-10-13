@@ -7,6 +7,8 @@ namespace WPAICloudGateway {
     final class Settings {
         public static function eligible(string $owner): bool {return ($_COOKIE['fixture_access']??'')!=='blocked';}
         public static function account(string $owner): void {}
+        public static function endpoint(): string {return home_url('/mcp');}
+        public static function sseEndpoint(): string {return home_url('/sse');}
     }
     final class Core {
         public const MAX_SITES=50;
@@ -54,6 +56,8 @@ namespace WPAICloudGateway {
 }
 namespace {
     function home_url(string $path=''): string {return 'http://'.$_SERVER['HTTP_HOST'].$path;}
+    function rest_url(string $path=''): string {return home_url('/wp-json/'.ltrim($path,'/'));}
+    function wp_json_encode(mixed $value,int $flags=0,int $depth=512): string|false {return json_encode($value,$flags,$depth);}
     function is_ssl(): bool {return true;} // Production still requires real HTTPS.
     function nocache_headers(): void {header('Cache-Control: no-store');}
     function status_header(int $code): void {http_response_code($code);}

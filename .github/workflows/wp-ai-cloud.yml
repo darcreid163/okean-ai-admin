@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: cloud-core-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   browser-navigation:
     runs-on: ubuntu-latest
@@ -83,21 +86,24 @@ jobs:
           php wp-ai-admin-cloud/tests/oauth.php
           php wp-ai-admin-cloud/tests/multisite-account.php
 
-      - name: Package Cloud Core 0.3.6 test build
+      - name: Package current Cloud Core test build
         if: matrix.php == '8.3'
         run: |
           rm -rf build
           mkdir -p build/wp-ai-admin-cloud
           cp -R wp-ai-admin-cloud/* build/wp-ai-admin-cloud/
           rm -rf build/wp-ai-admin-cloud/tests
-          (cd build && zip -qr ../wp-ai-admin-cloud-0.3.6.zip wp-ai-admin-cloud)
+          VERSION="$(sed -n "s/^define('WPAI_CLOUD_VERSION', '\([^']*\)').*/\1/p" wp-ai-admin-cloud/wp-ai-admin-cloud.php | head -n1)"
+          test -n "$VERSION"
+          (cd build && zip -qr "../wp-ai-admin-cloud-$VERSION.zip" wp-ai-admin-cloud)
+          echo "WPAI_CLOUD_TEST_ZIP=wp-ai-admin-cloud-$VERSION.zip" >> "$GITHUB_ENV"
           zip -qr public-client-0.3.2.zip public-client -x "*/__pycache__/*" "*.pyc"
-      - name: Upload Cloud Core 0.3.6 test build
+      - name: Upload current Cloud Core test build
         if: matrix.php == '8.3'
         uses: actions/upload-artifact@v4
         with:
-          name: wp-ai-admin-cloud-0.3.6-test
+          name: wp-ai-admin-cloud-current-test
           path: |
-            wp-ai-admin-cloud-0.3.6.zip
+            ${{ env.WPAI_CLOUD_TEST_ZIP }}
             public-client-0.3.2.zip
           if-no-files-found: error

@@ -2,13 +2,13 @@
 /**
  * Plugin Name: WP AI Admin
  * Description: Universal AI Admin for WordPress with sandbox, diff, preview, approval, verification, rollback, Elementor, WooCommerce, Gutenberg, files and MCP.
- * Version: 2.1.14
+ * Version: 2.1.15
  * Author: Андриянов Н.Г.
  * Copyright: Андриянов Н.Г.
  */
 if (!defined('ABSPATH')) exit;
-define('OAI_VERSION','2.1.14');
-define('OAI_BUILD_ID','2.1.14-native-consent-return-20261007');
+define('OAI_VERSION','2.1.15');
+define('OAI_BUILD_ID','2.1.15-release-reconciled-20261012');
 define('OAI_DB_VERSION',23);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
@@ -82,6 +82,12 @@ require_once OAI_DIR.'includes/class-oai-regression-history.php';
 require_once OAI_DIR.'includes/class-oai-security-fuzz.php';
 require_once OAI_DIR.'includes/class-oai-admin.php';
 register_activation_hook(__FILE__, array('OAI_DB','install'));
+function oai_deactivation_safety_reset(){
+ if(class_exists('OAI_AI_Lifecycle_Control'))OAI_AI_Lifecycle_Control::disable(0,'plugin_deactivated');
+ if(class_exists('OAI_Test_Automation'))OAI_Test_Automation::disable('plugin_deactivated',0);
+ if(class_exists('OAI_DB'))OAI_DB::clear_operation_leases();
+}
+register_deactivation_hook(__FILE__,'oai_deactivation_safety_reset');
 add_action('plugins_loaded', array('OAI_DB','maybe_upgrade'));
 add_action('plugins_loaded', function(){
  if(class_exists('OAI_AI_Lifecycle_Control'))OAI_AI_Lifecycle_Control::reset_stale_build();

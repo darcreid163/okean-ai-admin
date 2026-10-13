@@ -1,0 +1,1152 @@
+{
+  "source_commit": "64bf281411163a4b1f9de1bee0722c8b89308b07",
+  "candidate_commit": "3d5ecab2fceb233a3ab7a736e60795bde0518ae9",
+  "native_version": "2.1.15",
+  "cloud_version": "0.3.7",
+  "native_build": "2.1.15-release-reconciled-20261012",
+  "php_syntax": [
+    {
+      "name": "php-8.2-syntax",
+      "status": "PASS",
+      "files": 153,
+      "failures": []
+    },
+    {
+      "name": "php-8.3-syntax",
+      "status": "PASS",
+      "files": 153,
+      "failures": []
+    },
+    {
+      "name": "php-8.4-syntax",
+      "status": "PASS",
+      "files": 153,
+      "failures": []
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "native-upgrade-bootstrap",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.02,
+      "summary": "Upgrade bootstrap safety tests passed"
+    },
+    {
+      "name": "native-control-plane-entitlements",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.02,
+      "summary": "PASS: signed entitlement, tamper, binding, expiry, sequence, key, contract and policy negatives"
+    },
+    {
+      "name": "native-elementor-single-source",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.02,
+      "summary": "PASS: one source, precise edits, conflict guards, created-draft scope, serialized creation input and MCP object-array schema"
+    },
+    {
+      "name": "native-option-normalization",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.02,
+      "summary": "Option normalization planning tests passed"
+    },
+    {
+      "name": "native-woocommerce-stock-rounding",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.02,
+      "summary": "WooCommerce stock rounding contract OK"
+    },
+    {
+      "name": "native-browser-pairing",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.03,
+      "summary": "PASS 42 browser pairing assertions; two sites, PKCE, owner binding, replay, revocation and native MCP read"
+    },
+    {
+      "name": "sqlite-version-contract",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.03,
+      "summary": "PASS cloud version contract: 0.3.7"
+    },
+    {
+      "name": "sqlite-run",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.26,
+      "summary": "PASS 125 assertions; driver=sqlite; concurrency=10 workers/3 slots; client V1 verifier=accepted"
+    },
+    {
+      "name": "sqlite-compatibility",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.04,
+      "summary": "PASS 76 compatibility assertions; original 11 Core tables preserved; driver=sqlite"
+    },
+    {
+      "name": "sqlite-oauth",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.23,
+      "summary": "PASS 57 OAuth assertions; PKCE/audience/site consent/refresh replay/shared AI quota; driver=sqlite"
+    },
+    {
+      "name": "sqlite-multisite-account",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.05,
+      "summary": "PASS 33 multisite shared-plan/OAuth/capacity assertions; driver=sqlite"
+    },
+    {
+      "name": "sqlite-release-boundaries",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.07,
+      "summary": "PASS 136 release boundary assertions; driver=sqlite"
+    },
+    {
+      "name": "sqlite-site-reconnect-identity",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.08,
+      "summary": "PASS 7 reconnect identity assertions; driver=sqlite"
+    },
+    {
+      "name": "sqlite-quota-idempotency",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.03,
+      "summary": "PASS 35 quota/idempotency/reconciliation assertions; driver=sqlite"
+    },
+    {
+      "name": "sqlite-token-lifecycle",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.07,
+      "summary": "PASS 14 token/session lifecycle assertions; driver=sqlite"
+    },
+    {
+      "name": "sqlite-gateway-protocol",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.02,
+      "summary": "PASS 17 gateway JSON-RPC protocol assertions; driver=sqlite"
+    },
+    {
+      "name": "sqlite-foundation-proof",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.02,
+      "summary": "PASS 19 foundation proof assertions; driver=sqlite"
+    },
+    {
+      "name": "sqlite-schema-integrity",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.03,
+      "summary": "PASS 4 gateway schema integrity assertions; driver=sqlite"
+    },
+    {
+      "name": "sqlite-tenant-isolation",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.03,
+      "summary": "PASS 40 tenant-isolation assertions; driver=sqlite"
+    },
+    {
+      "name": "frontend-session",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.2,
+      "summary": "OK"
+    },
+    {
+      "name": "public-client",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.08,
+      "summary": "OK"
+    },
+    {
+      "name": "legacy-cloud",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.1,
+      "summary": "PASS 107 assertions; driver=sqlite; concurrency=10 workers/3 slots; client V1 verifier=accepted"
+    }
+  ],
+  "mysql8": [
+    {
+      "name": "mysql-run",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.57,
+      "summary": "PASS 125 assertions; driver=mysql; concurrency=10 workers/3 slots; client V1 verifier=accepted"
+    },
+    {
+      "name": "mysql-compatibility",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.44,
+      "summary": "PASS 76 compatibility assertions; original 11 Core tables preserved; driver=mysql"
+    },
+    {
+      "name": "mysql-oauth",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.3,
+      "summary": "PASS 57 OAuth assertions; PKCE/audience/site consent/refresh replay/shared AI quota; driver=mysql"
+    },
+    {
+      "name": "mysql-multisite-account",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.28,
+      "summary": "PASS 33 multisite shared-plan/OAuth/capacity assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-release-boundaries",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.15,
+      "summary": "PASS 138 release boundary assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-site-reconnect-identity",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.07,
+      "summary": "PASS 7 reconnect identity assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-quota-idempotency",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.12,
+      "summary": "PASS 35 quota/idempotency/reconciliation assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-token-lifecycle",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.07,
+      "summary": "PASS 14 token/session lifecycle assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-gateway-protocol",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.05,
+      "summary": "PASS 17 gateway JSON-RPC protocol assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-foundation-proof",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.22,
+      "summary": "PASS 19 foundation proof assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-schema-integrity",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.46,
+      "summary": "PASS 5 gateway schema integrity assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-tenant-isolation",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.1,
+      "summary": "PASS 40 tenant-isolation assertions; driver=mysql"
+    },
+    {
+      "name": "mysql-site-connect-concurrency",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.15,
+      "summary": "PASS concurrent site ownership race: winner=race-a, denied=11"
+    },
+    {
+      "name": "mysql-suspension-token-concurrency",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.17,
+      "summary": "PASS suspension/token race: minted_before_suspend=1, denied_after_suspend=14, active_tokens=0"
+    },
+    {
+      "name": "mysql-suspension-consent-concurrency",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.25,
+      "summary": "PASS suspension/consent race: approved_before_suspend=1, denied_after_suspend=14, unused_codes=0"
+    },
+    {
+      "name": "mysql-suspension-exchange-concurrency",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.25,
+      "summary": "PASS suspension/exchange race: exchanged_before_suspend=1, denied=14, active_tokens=0"
+    },
+    {
+      "name": "mysql-suspension-inflight-concurrency",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.1,
+      "summary": "PASS in-flight call settles accounting after suspension without restoring access"
+    },
+    {
+      "name": "mysql-native-batch-mutex-concurrency",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 3.06,
+      "summary": "PASS: one contender rejected; lock released for next request"
+    },
+    {
+      "name": "mysql-native-oauth-schema-upgrade",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.09,
+      "summary": "PASS: incomplete migration retries; successful upgrade runs once and retains OAuth client"
+    }
+  ],
+  "wordpress": {
+    "706": [
+      {
+        "name": "native_706-config-create",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Generated 'wp-config.php' file."
+      },
+      {
+        "name": "native_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.11,
+        "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.11,
+        "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_706-core-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 10.05,
+        "summary": "Success: WordPress installed successfully."
+      },
+      {
+        "name": "native_706-plugin-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.75,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "wordpress-release-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.72,
+        "summary": "PASS fresh release ZIP install: WP 7.0.6, plugin 2.1.15, tools 116, self-test 77/77, fuzz 220/220"
+      },
+      {
+        "name": "wordpress-mcp-onboarding",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.62,
+        "summary": "PASS: MCP administrator consent, CSRF, malformed input, automation separation and identity/OAuth retention"
+      },
+      {
+        "name": "wordpress-operations-cleanup",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.45,
+        "summary": "PASS native operation cleanup safety"
+      },
+      {
+        "name": "wordpress-quota-retention",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.4,
+        "summary": "PASS native quota event retention"
+      },
+      {
+        "name": "wordpress-native-auth-boundaries",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.67,
+        "summary": "PASS native Application Password / bearer / MCP demotion boundaries"
+      },
+      {
+        "name": "wordpress-admin-navigation",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.42,
+        "summary": "PASS 34 real WordPress admin navigation checks; WP 7.0.6, native 2.1.15"
+      },
+      {
+        "name": "wordpress-browser-pairing",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.74,
+        "summary": "PASS 33 real WordPress browser pairing checks; WP 7.0.6, native 2.1.15"
+      },
+      {
+        "name": "wordpress-operation-lease-race",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.43,
+        "summary": "PASS operation lease acquisition/release/expiry stale-read interleavings preserve the competing holder"
+      },
+      {
+        "name": "wordpress-operation-recovery-race",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.87,
+        "summary": "PASS concurrent Apply/Rollback recovery has one holder, no replay and no leaked lease"
+      },
+      {
+        "name": "reactivation-seed",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.37,
+        "summary": "PASS reactivation seed"
+      },
+      {
+        "name": "reactivation-deactivate",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.48,
+        "summary": "Success: Deactivated 1 of 1 plugins."
+      },
+      {
+        "name": "reactivation-activate",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.42,
+        "summary": "Success: Activated 1 of 1 plugins."
+      },
+      {
+        "name": "reactivation-check",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.43,
+        "summary": "PASS deactivation/reactivation preserved identity, credential and license, cleared execution leases, and kept automation OFF"
+      },
+      {
+        "name": "cloud_706-config-create",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Generated 'wp-config.php' file."
+      },
+      {
+        "name": "cloud_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.11,
+        "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_706-core-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 9.96,
+        "summary": "Success: WordPress installed successfully."
+      },
+      {
+        "name": "cloud_706-plugin-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.73,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "wordpress-cloud-release-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 1.11,
+        "summary": "PASS fresh Cloud Core ZIP install+enable: WP 7.0.6, PHP 8.3.6, cloud 0.3.7, plans 5"
+      },
+      {
+        "name": "wordpress-cloud-schema-damage",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.4,
+        "summary": "PASS Cloud current-version schema damage fails closed without diagnostic leak"
+      },
+      {
+        "name": "native_upgrade_706-config-create",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Generated 'wp-config.php' file."
+      },
+      {
+        "name": "native_upgrade_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.12,
+        "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_upgrade_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_upgrade_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_upgrade_706-core-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 9.8,
+        "summary": "Success: WordPress installed successfully."
+      },
+      {
+        "name": "native_upgrade_706-plugin-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.67,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "native-upgrade-seed",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.44,
+        "summary": "PASS release ZIP upgrade seed: 2.1.13"
+      },
+      {
+        "name": "native-upgrade-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.61,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "native-upgrade-check",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.5,
+        "summary": "PASS real ZIP upgrade 2.1.13 -> 2.1.15 with identity/OAuth/license/operation evidence preserved and automation reset"
+      },
+      {
+        "name": "cloud_upgrade_706-config-create",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.12,
+        "summary": "Success: Generated 'wp-config.php' file."
+      },
+      {
+        "name": "cloud_upgrade_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.11,
+        "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_upgrade_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.09,
+        "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_upgrade_706-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_upgrade_706-core-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 9.82,
+        "summary": "Success: WordPress installed successfully."
+      },
+      {
+        "name": "cloud_upgrade_706-plugin-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.69,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "cloud-upgrade-seed",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.47,
+        "summary": "PASS Cloud Core 0.3.6 upgrade seed"
+      },
+      {
+        "name": "cloud-upgrade-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.62,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "cloud-upgrade-check",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.36,
+        "summary": "PASS real Cloud Core ZIP upgrade 0.3.6 -> 0.3.7 with keys/account/site/bearer/OAuth preserved"
+      }
+    ],
+    "713": [
+      {
+        "name": "native_713-config-create",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.11,
+        "summary": "Success: Generated 'wp-config.php' file."
+      },
+      {
+        "name": "native_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.11,
+        "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_713-core-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 10.41,
+        "summary": "Success: WordPress installed successfully."
+      },
+      {
+        "name": "native_713-plugin-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.85,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "wordpress-release-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.85,
+        "summary": "PASS fresh release ZIP install: WP 7.1.3, plugin 2.1.15, tools 116, self-test 77/77, fuzz 220/220"
+      },
+      {
+        "name": "wordpress-mcp-onboarding",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.39,
+        "summary": "PASS: MCP administrator consent, CSRF, malformed input, automation separation and identity/OAuth retention"
+      },
+      {
+        "name": "wordpress-operations-cleanup",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.93,
+        "summary": "PASS native operation cleanup safety"
+      },
+      {
+        "name": "wordpress-quota-retention",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.49,
+        "summary": "PASS native quota event retention"
+      },
+      {
+        "name": "wordpress-native-auth-boundaries",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.54,
+        "summary": "PASS native Application Password / bearer / MCP demotion boundaries"
+      },
+      {
+        "name": "wordpress-admin-navigation",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.55,
+        "summary": "PASS 34 real WordPress admin navigation checks; WP 7.1.3, native 2.1.15"
+      },
+      {
+        "name": "wordpress-browser-pairing",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.82,
+        "summary": "PASS 33 real WordPress browser pairing checks; WP 7.1.3, native 2.1.15"
+      },
+      {
+        "name": "wordpress-operation-lease-race",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.41,
+        "summary": "PASS operation lease acquisition/release/expiry stale-read interleavings preserve the competing holder"
+      },
+      {
+        "name": "wordpress-operation-recovery-race",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.45,
+        "summary": "PASS concurrent Apply/Rollback recovery has one holder, no replay and no leaked lease"
+      },
+      {
+        "name": "reactivation-seed",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.47,
+        "summary": "PASS reactivation seed"
+      },
+      {
+        "name": "reactivation-deactivate",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.43,
+        "summary": "Success: Deactivated 1 of 1 plugins."
+      },
+      {
+        "name": "reactivation-activate",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.44,
+        "summary": "Success: Activated 1 of 1 plugins."
+      },
+      {
+        "name": "reactivation-check",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.42,
+        "summary": "PASS deactivation/reactivation preserved identity, credential and license, cleared execution leases, and kept automation OFF"
+      },
+      {
+        "name": "cloud_713-config-create",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.09,
+        "summary": "Success: Generated 'wp-config.php' file."
+      },
+      {
+        "name": "cloud_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.09,
+        "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.09,
+        "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_713-core-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 9.95,
+        "summary": "Success: WordPress installed successfully."
+      },
+      {
+        "name": "cloud_713-plugin-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.7,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "wordpress-cloud-release-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.97,
+        "summary": "PASS fresh Cloud Core ZIP install+enable: WP 7.1.3, PHP 8.3.6, cloud 0.3.7, plans 5"
+      },
+      {
+        "name": "wordpress-cloud-schema-damage",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.36,
+        "summary": "PASS Cloud current-version schema damage fails closed without diagnostic leak"
+      },
+      {
+        "name": "native_upgrade_713-config-create",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.11,
+        "summary": "Success: Generated 'wp-config.php' file."
+      },
+      {
+        "name": "native_upgrade_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_upgrade_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.1,
+        "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_upgrade_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.11,
+        "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "native_upgrade_713-core-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 10.05,
+        "summary": "Success: WordPress installed successfully."
+      },
+      {
+        "name": "native_upgrade_713-plugin-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.85,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "native-upgrade-seed",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.4,
+        "summary": "PASS release ZIP upgrade seed: 2.1.13"
+      },
+      {
+        "name": "native-upgrade-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.65,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "native-upgrade-check",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.39,
+        "summary": "PASS real ZIP upgrade 2.1.13 -> 2.1.15 with identity/OAuth/license/operation evidence preserved and automation reset"
+      },
+      {
+        "name": "cloud_upgrade_713-config-create",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.12,
+        "summary": "Success: Generated 'wp-config.php' file."
+      },
+      {
+        "name": "cloud_upgrade_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.12,
+        "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_upgrade_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.28,
+        "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_upgrade_713-config-set",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.2,
+        "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+      },
+      {
+        "name": "cloud_upgrade_713-core-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 10.22,
+        "summary": "Success: WordPress installed successfully."
+      },
+      {
+        "name": "cloud_upgrade_713-plugin-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.69,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "cloud-upgrade-seed",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.39,
+        "summary": "PASS Cloud Core 0.3.6 upgrade seed"
+      },
+      {
+        "name": "cloud-upgrade-install",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.57,
+        "summary": "Success: Installed 1 of 1 plugins."
+      },
+      {
+        "name": "cloud-upgrade-check",
+        "status": "PASS",
+        "exit": 0,
+        "seconds": 0.36,
+        "summary": "PASS real Cloud Core ZIP upgrade 0.3.6 -> 0.3.7 with keys/account/site/bearer/OAuth preserved"
+      }
+    ]
+  },
+  "extra_wordpress": [
+    {
+      "name": "native_214_upgrade-config-create",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.1,
+      "summary": "Success: Generated 'wp-config.php' file."
+    },
+    {
+      "name": "native_214_upgrade-config-set",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.1,
+      "summary": "Success: Added the constant 'WP_HTTP_BLOCK_EXTERNAL' to the 'wp-config.php' file with the raw value 'true'."
+    },
+    {
+      "name": "native_214_upgrade-config-set",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.11,
+      "summary": "Success: Added the constant 'DISABLE_WP_CRON' to the 'wp-config.php' file with the raw value 'true'."
+    },
+    {
+      "name": "native_214_upgrade-config-set",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.14,
+      "summary": "Success: Added the constant 'AUTOMATIC_UPDATER_DISABLED' to the 'wp-config.php' file with the raw value 'true'."
+    },
+    {
+      "name": "native_214_upgrade-core-install",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 10.06,
+      "summary": "Success: WordPress installed successfully."
+    },
+    {
+      "name": "native_214_upgrade-plugin-install",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.68,
+      "summary": "Success: Installed 1 of 1 plugins."
+    },
+    {
+      "name": "native-214-upgrade-seed",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.4,
+      "summary": "PASS release ZIP upgrade seed: 2.1.14"
+    },
+    {
+      "name": "native-214-upgrade-install",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.64,
+      "summary": "Success: Installed 1 of 1 plugins."
+    },
+    {
+      "name": "native-214-upgrade-check",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0.39,
+      "summary": "PASS real ZIP upgrade 2.1.14 -> 2.1.15 with identity/OAuth/license/operation evidence preserved and automation reset"
+    },
+    {
+      "name": "optional-woocommerce-install",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 2.36,
+      "summary": "Success: Installed 1 of 1 plugins."
+    },
+    {
+      "name": "optional-elementor-install",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.83,
+      "summary": "Success: Installed 1 of 1 plugins."
+    },
+    {
+      "name": "optional-yoast-install",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 2.43,
+      "summary": "Success: Installed 1 of 1 plugins."
+    },
+    {
+      "name": "optional-options-plan",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.15,
+      "summary": "Real WordPress option lifecycle passed: plan, WP 7.0.6, PHP 8.3.6"
+    },
+    {
+      "name": "optional-options-apply",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.06,
+      "summary": "Real WordPress option lifecycle passed: apply, WP 7.0.6, PHP 8.3.6"
+    },
+    {
+      "name": "optional-options-rollback",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.06,
+      "summary": "Real WordPress option lifecycle passed: rollback, WP 7.0.6, PHP 8.3.6"
+    },
+    {
+      "name": "optional-options-verify",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.17,
+      "summary": "Real WordPress option lifecycle passed: verify, WP 7.0.6, PHP 8.3.6"
+    },
+    {
+      "name": "optional-options-yoast-cold-verify",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.07,
+      "summary": "Real WordPress option lifecycle passed: yoast-cold-verify, WP 7.0.6, PHP 8.3.6"
+    },
+    {
+      "name": "optional-woodmart-plan",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.09,
+      "summary": "Woodmart native MCP 1.0.1 / minimal theme fixture plan: PASS"
+    },
+    {
+      "name": "optional-woodmart-apply",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.07,
+      "summary": "Woodmart native MCP 1.0.1 / minimal theme fixture apply: PASS"
+    },
+    {
+      "name": "optional-woodmart-rollback",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.2,
+      "summary": "Woodmart native MCP 1.0.1 / minimal theme fixture rollback: PASS"
+    },
+    {
+      "name": "optional-woodmart-verify",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.33,
+      "summary": "Woodmart native MCP 1.0.1 / minimal theme fixture verify: PASS"
+    },
+    {
+      "name": "optional-selftest",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.09,
+      "summary": "PASS optional plugin runtime self-test 78/78"
+    },
+    {
+      "name": "optional-plugins-versions",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1.11,
+      "summary": "woodmart-native-fixture\t\tmust-use"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "wp-ai-admin-2.1.15.zip",
+      "sha256": "b3ca981439827f90ed206433acad86e5fe4c5589beca359b7d107fa8880b1f77",
+      "files": 85,
+      "integrity": "PASS",
+      "secret_scan": "PASS",
+      "installed_source_correspondence": "PASS",
+      "forbidden_paths": []
+    },
+    {
+      "name": "wp-ai-admin-cloud-0.3.7.zip",
+      "sha256": "04b5060cbce9234b8d6b4bb5ac8531446df90606b252d378bf258e765e520705",
+      "files": 19,
+      "integrity": "PASS",
+      "secret_scan": "PASS",
+      "installed_source_correspondence": "PASS",
+      "forbidden_paths": []
+    }
+  ],
+  "skip": [
+    {
+      "gate": "Chromium cross-origin navigation and native consent navigation",
+      "reason": "Local AF_UNIX socket creation is denied (EPERM); browser aborts before any page test."
+    },
+    {
+      "gate": "Full SQLite/MySQL/WordPress runtime matrix on PHP 8.2 and 8.4",
+      "reason": "These runtimes were compiled for syntax validation only; full executable qualification used PHP 8.3.6."
+    },
+    {
+      "gate": "External ChatGPT / two-owner / two-production-site live acceptance",
+      "reason": "Outside this isolated task; production installations and operations were explicitly prohibited."
+    }
+  ],
+  "final_failures": 0
+}

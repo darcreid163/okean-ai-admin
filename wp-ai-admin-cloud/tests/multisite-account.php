@@ -16,6 +16,10 @@ $core->ensureAccount('71');$core->ensureAccount('72');$core->setPlan('operator',
 $sites=[];
 foreach(['https://wpaiadmin.ru','https://okean.market','https://third.example.com'] as $home)$sites[]=$core->connect('71',$home,'fixture-multisite-admin-token-'.hash('sha256',$home),$now);
 $other=$core->connect('72','https://other.example.com','fixture-other-admin-token-aaaaaaaa',$now);
+// A canonical WordPress site may belong to only one central account at a time. This is a tenant-isolation boundary, not a reconnect flow.
+rejects(fn()=>$core->connect('72','https://wpaiadmin.ru','fixture-cross-owner-token-aaaaaaaa',$now+1,true),'site_already_registered');
+check(count($core->sites('72'))===1,'Cross-owner registration attempt changed second tenant site list');
+check(count($core->sites('71'))===3,'Cross-owner registration attempt changed original tenant ownership');
 check(count($core->sites('71'))===3,'One account must hold three sites');
 check($core->usage('71',$now)['plan']==='pro'&&$core->usage('71',$now)['limit']===500,'Plan must belong to account');
 check($core->usage('71',$now)['used']===0,'Registration must not consume action quota');

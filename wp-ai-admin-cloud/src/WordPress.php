@@ -29,12 +29,17 @@ final class WordPress {
     public static function boot(string $file): void {
         add_action('rest_api_init',[self::class,'routes']);
         add_action('template_redirect',[Surface::class,'serve'],-10);
+        add_filter('rest_post_dispatch',[self::class,'secureRestHeaders'],10,3);
         add_filter('rest_pre_serve_request',[self::class,'emptyNotification'],10,4);
         add_action('wpai_gateway_pair_cleanup',static function($key){if(is_string($key)&&preg_match('/^wpai_pair_request_[a-f0-9]{64}$/D',$key))delete_option($key);});
     }
     private static function migrate(): void {
-        if ((string)get_option('wpai_gateway_db_version','')==='2') return;
-        self::database()->migrate();
+        $store=self::database();
+        if ((string)get_option('wpai_gateway_db_version','')==='2') {
+            $store->assertSchema();
+            return;
+        }
+        $store->migrate();
         update_option('wpai_gateway_db_version','2',false);
     }
     public static function statusPage(): void { Admin::page(); }
@@ -62,6 +67,14 @@ final class WordPress {
     public static function configured(): bool {
         try { if (!self::ready()) return false; self::core(); return true; } catch (\Throwable $e) { return false; }
     }
+    public static function secureRestHeaders($result,$server,$request) {
+        $route=is_object($request)&&method_exists($request,'get_route')?(string)$request->get_route():'';
+        if(str_starts_with($route,'/wpai-cloud/v1/') && is_object($result) && method_exists($result,'header')){
+            $result->header('Cache-Control','no-store');
+            $result->header('X-Content-Type-Options','nosniff');
+        }
+        return $result;
+    }
     private static function response(mixed $value,int $status=200): \WP_REST_Response {
         return new \WP_REST_Response($value,$status,['Cache-Control'=>'no-store','Content-Type'=>'application/json; charset=utf-8','X-Content-Type-Options'=>'nosniff']);
     }
@@ -76,6 +89,16 @@ final class WordPress {
         if (!is_ssl()) return new \WP_Error('cloud_https_required','HTTPS required',['status'=>403]);
         return true;
     }
+    private static function requireProvisioning(): void {
+        $permission=self::provisioningPermission();
+        if ($permission===true) return;
+        if (is_wp_error($permission)) {
+            $data=$permission->get_error_data();
+            $status=is_array($data)?(int)($data['status']??403):403;
+            throw new Fault((string)$permission->get_error_code(),$status);
+        }
+        throw new Fault('cloud_auth_required',401);
+    }
     private static function owner(): string { $id=(string)get_current_user_id(); Settings::account($id); self::core()->ensureAccount($id); self::core()->throttle($id,'provisioning',time(),30); return $id; }
     private static function body($req): array {
         if (strlen($req->get_body())>131072) throw new Fault('request_too_large',413);
@@ -83,7 +106,10 @@ final class WordPress {
     }
     public static function routes(): void {
         $route=function(string $path,string $method,callable $fn) {
-            register_rest_route('wpai-cloud/v1',$path,['methods'=>$method,'permission_callback'=>[self::class,'provisioningPermission'],'callback'=>fn($req)=>self::safe(fn()=>self::response($fn($req)))]);
+            register_rest_route('wpai-cloud/v1',$path,['methods'=>$method,'permission_callback'=>'__return_true','callback'=>fn($req)=>self::safe(function() use($fn,$req) {
+                self::requireProvisioning();
+                return self::response($fn($req));
+            })]);
         };
         $route('/sites','GET',fn($r)=>self::core()->sites(self::owner()));
         $route('/sites','POST',function($r) { $p=self::body($r); if (!is_string($p['home']??null)||!is_string($p['site_token']??null)) throw new Fault('home_and_site_token_required'); return self::core()->connect(self::owner(),$p['home'],$p['site_token'],time()); });
@@ -93,14 +119,33 @@ final class WordPress {
         $route('/usage','GET',fn($r)=>self::core()->usage(self::owner(),time()));
         $route('/connection-check','GET',function($r) { $home=$r['home']; if(!is_string($home)||strlen($home)>512)throw new Fault('invalid_site_input'); return self::pairing()->checkSite(self::owner(),$home,time()); });
         $route('/ledger','GET',fn($r)=>self::core()->ledger(self::owner()));
+        $route('/account/closure-preview','GET',fn($r)=>self::core()->closureInventory(self::owner()));
+        $route('/account/suspend','POST',function($r) {
+            $p=self::body($r);
+            if (($p['confirm']??null)!=='SUSPEND') throw new Fault('suspension_confirmation_required',409);
+            $owner=self::owner();
+            return self::core()->suspendAccount($owner,time());
+        });
         register_rest_route('wpai-cloud/v1','/pairing/request',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn($r)=>self::safe(fn()=>self::response(self::pairing()->descriptor(is_string($r['state'])?$r['state']:'',time())))]);
         $route('/sites/(?P<id>reg_[a-f0-9]{32})/foundation','GET',fn($r)=>self::core()->foundation(self::owner(),$r['id'],time()));
-        register_rest_route('wpai-cloud/v1','/health',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn()=>self::response(['service'=>'wp-ai-cloud','version'=>'0.3.6','configured'=>self::configured(),'mode'=>'approved_beta','public_mcp_url'=>Settings::endpoint(),'public_sse_url'=>Settings::sseEndpoint(),'oauth_implementation'=>'beta_pkce_s256','providers'=>['chatgpt'=>'beta','qwen'=>'beta_sse_and_http','claude'=>'planned','deepseek'=>'planned'],'schema'=>'gateway_v1_separate_from_core_v1','oauth'=>self::configured(),'batch_accounting'=>false,'billing'=>false,'commercial_client_entitlements'=>false])]);
+        register_rest_route('wpai-cloud/v1','/health',['methods'=>'GET','permission_callback'=>'__return_true','callback'=>fn()=>self::response(['service'=>'wp-ai-cloud','version'=>WPAI_CLOUD_VERSION,'configured'=>self::configured(),'mode'=>'approved_beta','public_mcp_url'=>Settings::endpoint(),'public_sse_url'=>Settings::sseEndpoint(),'oauth_implementation'=>'beta_pkce_s256','providers'=>['chatgpt'=>'beta','qwen'=>'beta_sse_and_http','claude'=>'planned','deepseek'=>'planned'],'schema'=>'gateway_v1_separate_from_core_v1','oauth'=>self::configured(),'batch_accounting'=>false,'billing'=>false,'commercial_client_entitlements'=>false])]);
         self::oauthRoutes();
         register_rest_route('wpai-cloud/v1','/mcp',['methods'=>'POST,GET,DELETE','permission_callback'=>'__return_true','callback'=>[self::class,'mcp']]);
         $admin=function(string $path,callable $fn) {
-            register_rest_route('wpai-cloud/v1',$path,['methods'=>'POST','permission_callback'=>function(){ $p=self::provisioningPermission(); return $p===true?(current_user_can('manage_options')?true:new \WP_Error('cloud_admin_required','Cloud operator required',['status'=>403])):$p; },'callback'=>fn($r)=>self::safe(fn()=>self::response($fn($r)))]);
+            register_rest_route('wpai-cloud/v1',$path,['methods'=>'POST','permission_callback'=>'__return_true','callback'=>fn($r)=>self::safe(function() use($fn,$r) {
+                self::requireProvisioning();
+                if(!current_user_can('manage_options')) throw new Fault('cloud_admin_required',403);
+                return self::response($fn($r));
+            })]);
         };
+        $admin('/accounts/(?P<owner>[0-9]+)/reactivate',function($r) {
+            $p=self::body($r);
+            if(($p['confirm']??null)!=='REACTIVATE') throw new Fault('reactivation_confirmation_required',409);
+            self::owner();
+            $target=(string)$r['owner'];
+            if(!Settings::eligible($target)) throw new Fault('target_account_ineligible',409);
+            return self::core()->reactivateAccount((string)get_current_user_id(),$target,time());
+        });
         $admin('/accounts/(?P<owner>[0-9]+)/plan',function($r) { $p=self::body($r); if (!is_string($p['plan']??null)) throw new Fault('plan_required'); self::owner(); self::core()->setPlan((string)get_current_user_id(),$r['owner'],$p['plan'],time()); return ['updated'=>true]; });
         $admin('/accounts/(?P<owner>[0-9]+)/requests/(?P<key>[a-f0-9]{64})/reconcile',function($r) { $p=self::body($r); if(!is_string($p['outcome']??null)||!is_array($p['evidence']??null)) throw new Fault('operator_receipt_evidence_required'); self::owner(); return self::core()->reconcile((string)get_current_user_id(),$r['owner'],$r['key'],$p['outcome'],$p['evidence'],time()); });
     }

@@ -148,7 +148,9 @@ class OAI_Platform {
    &&strpos($main_source,'OAI_Test_Automation::reset_stale_build')!==false
    &&strpos($admin_guard_source,'oai_runtime_build_id')!==false
    &&strpos($admin_guard_source,'OAI_BUILD_CHANGED_THIS_REQUEST')!==false
-   &&strpos($ai_source,"'disabled_reason'=>'manual'")!==false
+   &&strpos($ai_source,"\$reason='manual'")!==false
+   &&strpos($ai_source,"'disabled_reason'=>sanitize_key")!==false
+   &&strpos($ai_source,"?:'manual'")!==false
    &&strpos($ai_source,"'owner_user_id'=>0")!==false
    &&strpos($ta_source,"'disabled_reason'=>sanitize_key")!==false
    &&strpos($ta_source,"'allowed_post_ids'=>array()")!==false
@@ -299,8 +301,11 @@ class OAI_Platform {
   $add('test_automation.gutenberg_fixture_newlines',is_string($fixture_content)&&strpos($fixture_content,"\n\n<!-- wp:paragraph")!==false&&strpos($fixture_content,'\\n\\n')===false);
   $write_probe=OAI_Security::resolve_path_for_write('child_theme',OAI_Test_Automation::FILE_PREFIX.'nested/probe.txt');
   $add('security.test_file_write_path',!is_wp_error($write_probe)&&strpos(str_replace('\\','/',(string)$write_probe),'/'.trim(OAI_Test_Automation::FILE_PREFIX,'/').'/nested/probe.txt')!==false);
-  $woo_norm_ok=false;
-  if(function_exists('wc_stock_amount')&&function_exists('wc_format_decimal')&&method_exists('OAI_WooCommerce','runtime_matches_changes')){
+  $active_plugins=(array)get_option('active_plugins',array());
+  $woo_declared=in_array('woocommerce/woocommerce.php',$active_plugins,true);
+  $woo_runtime=class_exists('WooCommerce');
+  $woo_norm_ok=!$woo_declared;
+  if($woo_declared&&$woo_runtime&&function_exists('wc_stock_amount')&&function_exists('wc_format_decimal')&&method_exists('OAI_WooCommerce','runtime_matches_changes')){
    $before_probe=array('id'=>1,'sku'=>'T','name'=>'T','status'=>'publish','regular_price'=>'','sale_price'=>'','price'=>'','stock'=>0,'stock_status'=>'outofstock','manage_stock'=>true);
    $actual_probe=$before_probe;$actual_probe['stock']=1;$actual_probe['stock_status']='instock';
    $woo_norm=OAI_WooCommerce::runtime_matches_changes($actual_probe,array('stock_quantity'=>1),$before_probe);
@@ -308,7 +313,7 @@ class OAI_Platform {
    $woo_bad=OAI_WooCommerce::runtime_matches_changes($bad_probe,array('stock_quantity'=>1),$before_probe);
    $woo_norm_ok=($woo_norm===true)&&is_wp_error($woo_bad)&&$woo_bad->get_error_code()==='oai_woo_runtime';
   }
-  $add('woocommerce.runtime_normalization_guard',$woo_norm_ok);
+  $add('woocommerce.runtime_normalization_guard',$woo_norm_ok,array('optional'=>true,'declared_active'=>$woo_declared,'runtime_loaded'=>$woo_runtime));
   $redacted=OAI_Read::option_value('oai_bearer_token','synthetic-secret-probe');
   $add('security.option_redaction',!empty($redacted['redacted'])&&($redacted['value']??'')==='[REDACTED]');
   $hash=OAI_Read::option_value('oai_agent_key_hash','synthetic-hash-probe');
@@ -372,8 +377,10 @@ class OAI_Platform {
   $add('catalog.exported_tools',count($def_names)===count($all)&&!array_diff($all,$def_names),array('exported_count'=>count($def_names),'missing'=>array_values(array_diff($all,$def_names))));
   $add('navigation.gutenberg_outline_tool',in_array('gutenberg.get_outline',$def_names,true));
   $add('navigation.feature_state',in_array(self::content_navigation_state(),array('experimental','enabled','disabled'),true),array('state'=>self::content_navigation_state()));
-  $add('woocommerce.runtime',class_exists('WooCommerce'),array('active'=>class_exists('WooCommerce')));
-  $add('elementor.runtime',defined('ELEMENTOR_VERSION')||did_action('elementor/loaded'),array('version'=>defined('ELEMENTOR_VERSION')?ELEMENTOR_VERSION:null));
+  $elementor_declared=in_array('elementor/elementor.php',$active_plugins,true);
+  $elementor_runtime=defined('ELEMENTOR_VERSION')||did_action('elementor/loaded');
+  $add('woocommerce.runtime',!$woo_declared||$woo_runtime,array('optional'=>true,'declared_active'=>$woo_declared,'runtime_loaded'=>$woo_runtime));
+  $add('elementor.runtime',!$elementor_declared||$elementor_runtime,array('optional'=>true,'declared_active'=>$elementor_declared,'runtime_loaded'=>$elementor_runtime,'version'=>defined('ELEMENTOR_VERSION')?ELEMENTOR_VERSION:null));
   $sample=get_posts(array('post_type'=>'page','post_status'=>'any','numberposts'=>1,'fields'=>'ids'));
   if($sample){
    $cmd=OAI_Command_Registry::resolve('post get '.absint($sample[0]));
