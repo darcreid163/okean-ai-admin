@@ -41,7 +41,7 @@ gpcheck(($init['result']['protocolVersion']??'')==='2025-11-25','Unsupported MCP
 gpcheck(($init['result']['serverInfo']['name']??'')==='wp-ai-admin-cloud','Initialize server identity changed');
 
 $tools=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>3,'method'=>'tools/list','params'=>[]],$now);
-gpcheck(count($tools['result']['tools']??[])===4,'Gateway tools/list must expose exactly four central tools');
+gpcheck(count($tools['result']['tools']??[])===5,'Gateway tools/list must expose exactly five central tools');
 
 $badName=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>4,'method'=>'tools/call','params'=>['name'=>'not_a_tool','arguments'=>[]]],$now);
 gpcheck(!empty($badName['result']['isError'])&&str_contains($badName['result']['content'][0]['text']??'','unknown_gateway_tool'),'Unknown gateway tool was not returned as MCP tool error');
@@ -57,6 +57,10 @@ gpcheck(!empty($badType['result']['isError'])&&str_contains($badType['result']['
 
 $usage=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>8,'method'=>'tools/call','params'=>['name'=>'cloud_usage','arguments'=>[]]],$now);
 gpcheck(empty($usage['result']['isError'])&&str_contains($usage['result']['content'][0]['text']??'','"plan":"free"'),'cloud_usage tool failed through gateway');
+$history=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>81,'method'=>'tools/call','params'=>['name'=>'cloud_usage_history','arguments'=>[]]],$now);
+gpcheck(empty($history['result']['isError']) && json_decode($history['result']['content'][0]['text']??'null',true)===[],'Empty authenticated usage history failed');
+$badLimit=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>82,'method'=>'tools/call','params'=>['name'=>'cloud_usage_history','arguments'=>['limit'=>101]]],$now);
+gpcheck(!empty($badLimit['result']['isError']),'Out of range history limit accepted');
 
 $listSites=$gateway->handle($actor,['jsonrpc'=>'2.0','id'=>9,'method'=>'tools/call','params'=>['name'=>'cloud_sites_list','arguments'=>[]]],$now);
 gpcheck(empty($listSites['result']['isError'])&&str_contains($listSites['result']['content'][0]['text']??'',$site['id']),'cloud_sites_list omitted allowed site');
