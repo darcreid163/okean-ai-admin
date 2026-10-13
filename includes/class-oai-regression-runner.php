@@ -150,7 +150,7 @@ class OAI_Regression_Runner {
   return self::lifecycle('elementor_page_layout',OAI_P0::elementor_page_layout(array('post_id'=>$post_id,'page_template'=>$next)),'elementor.patch_page_layout',$client_id,$user_id);
  }
  private static function option_scenario($run_id,$client_id,$user_id){
-  $key='oai_test_matrix_'.substr(md5($run_id),0,10);
+  $key='wp_ai_admin_test_matrix_'.substr(md5($run_id),0,10);
   $req=new WP_REST_Request('POST','/okean-ai/v1/sandbox');$req->set_param('type','option_update');$req->set_param('target',$key);$req->set_param('value','WP AI Admin '.$run_id);
   return self::lifecycle('option_update',OAI_REST::sandbox_create($req),'wp.option_update_sandbox',$client_id,$user_id);
  }
