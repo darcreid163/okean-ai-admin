@@ -293,7 +293,7 @@ class OAI_Regression_Runner {
  }
  public static function run($args,$client_id,$user_id){
   $auth=OAI_Test_Automation::runner_authorized($client_id,$user_id);if(is_wp_error($auth))return $auth;
-  $args=is_array($args)?$args:array();
+  $args=array_merge(OAI_Test_Automation::regression_fixture_args(),is_array($args)?$args:array());
   $content_id=absint($args['content_post_id']??0);$elementor_id=absint($args['elementor_post_id']??0);$widget=sanitize_text_field((string)($args['elementor_widget_id']??''));$container_id=sanitize_text_field((string)($args['elementor_container_id']??''));$product_id=absint($args['product_id']??0);$gutenberg_id=absint($args['gutenberg_post_id']??0);if(!$gutenberg_id&&class_exists('OAI_Test_Automation'))$gutenberg_id=OAI_Test_Automation::managed_gutenberg_fixture_id();
   if(!$content_id||!$elementor_id||$widget===''||!$product_id)return new WP_Error('oai_regression_args','content_post_id, elementor_post_id, elementor_widget_id and product_id are required',array('status'=>400));
   $include_file=!array_key_exists('include_file',$args)||!empty($args['include_file']);$include_reject=!array_key_exists('include_reject',$args)||!empty($args['include_reject']);$include_elementor_settings=!array_key_exists('include_elementor_settings',$args)||!empty($args['include_elementor_settings']);$include_elementor_create=!array_key_exists('include_elementor_create',$args)||!empty($args['include_elementor_create']);$include_elementor_create_patch_many=!array_key_exists('include_elementor_create_patch_many',$args)||!empty($args['include_elementor_create_patch_many']);$include_p0=!empty($args['include_p0']);

@@ -42,7 +42,7 @@ class OAI_Regression_Matrix {
  }
  public static function run($args,$client_id,$user_id){
   $auth=OAI_Test_Automation::runner_authorized($client_id,$user_id);if(is_wp_error($auth))return $auth;
-  $args=is_array($args)?$args:array();
+  $args=array_merge(OAI_Test_Automation::regression_fixture_args(),is_array($args)?$args:array());
   $content_id=absint($args['content_post_id']??0);$elementor_id=absint($args['elementor_post_id']??0);$widget=sanitize_text_field((string)($args['elementor_widget_id']??''));$container_id=sanitize_text_field((string)($args['elementor_container_id']??''));$product_id=absint($args['product_id']??0);
   if($container_id===''&&$elementor_id){$container_data=OAI_Elementor::get_data($elementor_id);if(!is_wp_error($container_data))$container_id=self::first_elementor_container_id($container_data);}
   $iterations=min(3,max(1,absint($args['iterations']??1)));

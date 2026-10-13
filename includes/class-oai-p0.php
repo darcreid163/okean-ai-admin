@@ -10,7 +10,7 @@ class OAI_P0 {
  private static function op($type,$target,$before,$after,$meta=array(),$before_exists=true){
   $diff=OAI_Operations::diff($before,$after);
   if(empty($diff['changed']))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409));
-  $op='OAI-'.gmdate('Ymd-His').'-'.wp_rand(1000,9999);
+  $op=OAI_Operations::new_id();
   $meta=array_merge(array('before_exists'=>(bool)$before_exists,'after_exists'=>true),$meta);
   $descriptor=OAI_Lifecycle::descriptor($type,$target,$before,$meta);
   $meta['rollback_descriptor']=$descriptor;

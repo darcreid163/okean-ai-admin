@@ -22,6 +22,8 @@ $qa_options_before=$wpdb->get_col("SELECT option_name FROM {$wpdb->options} WHER
 $existing=get_posts(array('post_type'=>array('product','product_variation','page','attachment','nav_menu_item'),'post_status'=>'any','numberposts'=>-1,'fields'=>'ids'));
 try{
  qa_ok(OAI_Test_Automation::enable(30,array($content,$elementor),array($product),1),'enable QA');
+ $managed_ids=array_column(OAI_Test_Automation::status()['managed_fixtures'],'id');
+ foreach($managed_ids as $managed_id)foreach(get_posts(array('post_type'=>'product_variation','post_parent'=>$managed_id,'post_status'=>'any','numberposts'=>-1,'fields'=>'ids')) as $child)$managed_ids[]=$child;
  $self=OAI_Platform::self_test();if(!empty($self['failed']))throw new RuntimeException('Self test failed');file_put_contents($out.'/self-test.json',wp_json_encode($self,JSON_PRETTY_PRINT));
  $args=array('content_post_id'=>$content,'elementor_post_id'=>$elementor,'elementor_widget_id'=>'f1e2d3c','elementor_container_id'=>'a1b2c3d','product_id'=>$product,'include_p0'=>true,'include_file'=>false);
  $report=qa_ok(OAI_Regression_Runner::run($args,'qa37-isolated-client',1),'regression');
@@ -34,7 +36,7 @@ try{
  $before['elementor']=json_decode($before['elementor'],true);$after['elementor']=json_decode($after['elementor'],true);
  if($before!==$after)throw new RuntimeException('Decoded input fixture snapshot mismatch');
  $now=get_posts(array('post_type'=>array('product','product_variation','page','attachment','nav_menu_item'),'post_status'=>'any','numberposts'=>-1,'fields'=>'ids'));
- $extra=array_values(array_diff($now,$existing,array(OAI_Test_Automation::managed_gutenberg_fixture_id())));file_put_contents($out.'/qa37-residue.json',wp_json_encode(array('extra_post_ids'=>$extra,'snapshots_equal'=>$before===$after,'raw_storage_equal'=>$raw_storage_equal),JSON_PRETTY_PRINT));
+ $extra=array_values(array_diff($now,$existing,$managed_ids,array(OAI_Test_Automation::managed_gutenberg_fixture_id())));file_put_contents($out.'/qa37-residue.json',wp_json_encode(array('extra_post_ids'=>$extra,'snapshots_equal'=>$before===$after,'raw_storage_equal'=>$raw_storage_equal),JSON_PRETTY_PRINT));
  if($extra)throw new RuntimeException('Regression left new post artifacts');
  if($report['status']!=='PASS')throw new RuntimeException('QA37 regression has failed scenarios');
  $matrix=qa_ok(OAI_Regression_Matrix::run($args,'qa37-isolated-client',1),'matrix');file_put_contents($out.'/qa37-matrix.json',wp_json_encode($matrix,JSON_PRETTY_PRINT));

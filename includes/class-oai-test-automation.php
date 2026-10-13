@@ -59,46 +59,48 @@ class OAI_Test_Automation {
   return "<!-- wp:heading {\"level\":2} --><h2 class=\"wp-block-heading\">WP AI Admin Gutenberg Fixture</h2><!-- /wp:heading -->\n\n<!-- wp:paragraph --><p>Baseline paragraph for reversible Gutenberg regression tests.</p><!-- /wp:paragraph -->";
  }
 
- private static function create_gutenberg_fixture($owner,$session_id){
-  $post_id=wp_insert_post(array(
-   'post_type'=>'page','post_status'=>'draft','post_author'=>absint($owner),
-   'post_title'=>self::GUTENBERG_FIXTURE_TITLE,
-   'post_content'=>self::gutenberg_fixture_content()
-  ),true);
-  if(is_wp_error($post_id))return $post_id;
-  update_post_meta($post_id,'_wpai_test_fixture','gutenberg_regression');
-  update_post_meta($post_id,'_wpai_test_session_id',(string)$session_id);
-  return absint($post_id);
+ private static function gutenberg_baseline($id){
+  $p=get_post($id);if(!$p)return '';
+  $json=wp_json_encode(array($p->post_type,$p->post_status,(int)$p->post_author,$p->post_title,$p->post_content,$p->post_excerpt,$p->post_name,(int)$p->menu_order));
+  return is_string($json)?hash('sha256',$json):'';
  }
-
- private static function find_reusable_gutenberg_fixture(){
-  $q=new WP_Query(array(
-   'post_type'=>'page','post_status'=>array('draft','private'),'posts_per_page'=>20,
-   'orderby'=>'ID','order'=>'DESC','fields'=>'ids','no_found_rows'=>true,
-   'meta_key'=>'_wpai_test_fixture','meta_value'=>'gutenberg_regression'
-  ));
-  foreach((array)$q->posts as $id){
-   $post=get_post(absint($id));
-   if($post && in_array((string)$post->post_status,array('draft','private'),true))return absint($id);
+ private static function gutenberg_intact($id,$owner){
+  $p=get_post($id);if(!$p||$p->post_type!=='page'||!in_array($p->post_status,array('draft','private'),true)||(int)$p->post_author!==absint($owner))return false;
+  if((string)get_post_meta($id,'_wpai_test_fixture',true)!=='gutenberg_regression')return false;
+  $tag=(int)get_post_meta($id,'_wpai_qa_fixture_owner',true);if($tag&&$tag!==absint($owner))return false;
+  $hash=(string)get_post_meta($id,'_wpai_qa_gutenberg_baseline',true);
+  if($hash==='')return $p->post_title===self::GUTENBERG_FIXTURE_TITLE&&$p->post_content===self::gutenberg_fixture_content()&&$p->post_excerpt==='';
+  $now=self::gutenberg_baseline($id);return $now!==''&&hash_equals($hash,$now);
+ }
+ private static function create_gutenberg_fixture($owner,$session_id){
+  try{
+   $post_id=wp_insert_post(array('post_type'=>'page','post_status'=>'draft','post_author'=>absint($owner),'post_title'=>self::GUTENBERG_FIXTURE_TITLE,'post_content'=>self::gutenberg_fixture_content(),
+    'meta_input'=>array('_wpai_test_fixture'=>'gutenberg_regression','_wpai_test_session_id'=>(string)$session_id,'_wpai_qa_fixture_owner'=>absint($owner))),true);
+   if(is_wp_error($post_id))return $post_id;
+   $baseline=self::gutenberg_baseline($post_id);if($baseline==='')throw new RuntimeException('baseline_invalid');
+   update_post_meta($post_id,'_wpai_qa_gutenberg_baseline',$baseline);return absint($post_id);
+  }catch(Throwable $e){
+   $ids=get_posts(array('post_type'=>'page','post_status'=>array('draft','private'),'author'=>absint($owner),'numberposts'=>-1,'fields'=>'ids','meta_query'=>array(array('key'=>'_wpai_test_fixture','value'=>'gutenberg_regression'),array('key'=>'_wpai_test_session_id','value'=>(string)$session_id),array('key'=>'_wpai_qa_fixture_owner','value'=>absint($owner)))));
+   foreach($ids as $id)wp_delete_post($id,true);
+   return new WP_Error('oai_qa_gutenberg_create','Managed Gutenberg QA fixture could not be prepared',array('status'=>500));
+  }
+ }
+ private static function find_reusable_gutenberg_fixture($owner){
+  $ids=get_posts(array('post_type'=>'page','post_status'=>array('draft','private'),'author'=>absint($owner),'numberposts'=>-1,'fields'=>'ids','orderby'=>'ID','order'=>'DESC','meta_key'=>'_wpai_test_fixture','meta_value'=>'gutenberg_regression'));
+  foreach($ids as $id)if(get_post_meta($id,'_wpai_test_session_id',true)===''&&self::gutenberg_intact($id,$owner)){
+   return absint($id);
   }
   return 0;
  }
-
  private static function ensure_gutenberg_fixture($owner,$session_id){
-  $post_id=self::find_reusable_gutenberg_fixture();
-  if(!$post_id)return self::create_gutenberg_fixture($owner,$session_id);
-  $updated=wp_update_post(array(
-   'ID'=>$post_id,'post_status'=>'draft','post_author'=>absint($owner),
-   'post_title'=>self::GUTENBERG_FIXTURE_TITLE,
-   'post_content'=>self::gutenberg_fixture_content()
-  ),true);
-  if(is_wp_error($updated))return $updated;
-  update_post_meta($post_id,'_wpai_test_fixture','gutenberg_regression');
-  update_post_meta($post_id,'_wpai_test_session_id',(string)$session_id);
-  return absint($post_id);
+  $id=self::find_reusable_gutenberg_fixture($owner);if($id){
+   update_post_meta($id,'_wpai_qa_fixture_owner',absint($owner));update_post_meta($id,'_wpai_qa_gutenberg_baseline',self::gutenberg_baseline($id));update_post_meta($id,'_wpai_test_session_id',(string)$session_id);return absint($id);
+  }
+  return self::create_gutenberg_fixture($owner,$session_id);
  }
 
  private static function release_gutenberg_fixture($cfg){
+  if(class_exists('OAI_QA_Fixtures'))OAI_QA_Fixtures::release(absint($cfg['owner_user_id']??0),(string)($cfg['session_id']??''));
   $id=absint($cfg['managed_gutenberg_fixture_id']??0);
   if(!$id)return true;
   // Build resets run on plugins_loaded. Post-save listeners from other
@@ -131,14 +133,7 @@ class OAI_Test_Automation {
   if((string)get_post_meta($id,'_wpai_test_fixture',true)!=='gutenberg_regression')return false;
   $session=(string)get_post_meta($id,'_wpai_test_session_id',true);
   if($session!=='' && !empty($cfg['session_id']) && !hash_equals((string)$cfg['session_id'],$session))return false;
-  if(!in_array((string)$post->post_status,array('draft','private','trash'),true))return false;
-  if((string)$post->post_status==='trash')wp_untrash_post($id);
-  $updated=wp_update_post(array(
-   'ID'=>$id,'post_status'=>'draft','post_title'=>self::GUTENBERG_FIXTURE_TITLE,
-   'post_content'=>self::gutenberg_fixture_content()
-  ),true);
-  if(is_wp_error($updated))return false;
-  update_post_meta($id,'_wpai_test_fixture','gutenberg_regression');
+  if(!self::gutenberg_intact($id,absint($cfg['owner_user_id']??0)))return false;
   delete_post_meta($id,'_wpai_test_session_id');
   return true;
  }
@@ -150,14 +145,26 @@ class OAI_Test_Automation {
  }
 
  public static function enable($ttl_minutes,$post_ids=array(),$product_ids=array(),$owner_user_id=0){
+  $callback=function()use($ttl_minutes,$post_ids,$product_ids,$owner_user_id){return self::enable_locked($ttl_minutes,$post_ids,$product_ids,$owner_user_id);};
+  return class_exists('OAI_QA_Fixtures')?OAI_QA_Fixtures::with_provision_lock($owner_user_id,$callback):call_user_func($callback);
+ }
+ private static function enable_locked($ttl_minutes,$post_ids,$product_ids,$owner_user_id){
   $ttl=self::sanitize_ttl($ttl_minutes);
   $owner=absint($owner_user_id);
   if(!$owner || !user_can($owner,'manage_options'))return new WP_Error('oai_test_admin','An administrator is required to enable Test Automation Mode',array('status'=>403));
-  $old=self::raw();if(!empty($old['managed_gutenberg_fixture_id']))self::release_gutenberg_fixture($old);
+  foreach(self::parse_ids($post_ids) as $id){$p=get_post($id);if(!$p||!in_array((string)$p->post_status,array('draft','private'),true))return new WP_Error('oai_test_post_scope','Only draft/private posts may be explicitly enrolled for QA',array('status'=>403));}
+  foreach(self::parse_ids($product_ids) as $id){$p=get_post($id);if(!$p||$p->post_type!=='product'||!in_array((string)$p->post_status,array('draft','private'),true))return new WP_Error('oai_test_product_scope','Only draft/private products may be explicitly enrolled for QA',array('status'=>403));}
+  $old=self::raw();$inactive=$old;$inactive['enabled']=false;self::save($inactive);self::$request_context=null;
+  self::release_gutenberg_fixture($old);
   $now=time();$session_id='tas_'.wp_generate_uuid4();
   $fixture=self::ensure_gutenberg_fixture($owner,$session_id);
   if(is_wp_error($fixture))return new WP_Error('oai_test_gutenberg_fixture','Could not create the managed Gutenberg regression fixture: '.$fixture->get_error_message(),array('status'=>500));
+  $managed=class_exists('OAI_QA_Fixtures')?OAI_QA_Fixtures::prepare($owner,$session_id):array('fixtures'=>array(),'skipped'=>array());
+  if(is_wp_error($managed)){self::release_gutenberg_fixture(array('managed_gutenberg_fixture_id'=>$fixture,'owner_user_id'=>$owner,'session_id'=>$session_id));return $managed;}
+  if(class_exists('OAI_QA_Fixtures')&&!OAI_QA_Fixtures::provision_owned()){self::release_gutenberg_fixture(array('managed_gutenberg_fixture_id'=>$fixture,'owner_user_id'=>$owner,'session_id'=>$session_id));return new WP_Error('oai_qa_fixtures_busy','The QA provisioning lease is no longer current',array('status'=>409));}
   $allowed_posts=self::parse_ids($post_ids);$allowed_posts[]=$fixture;$allowed_posts=self::parse_ids($allowed_posts);
+  if(!empty($managed['fixtures']['elementor']))$allowed_posts[]=absint($managed['fixtures']['elementor']);
+  $allowed_products=self::parse_ids($product_ids);foreach(array('simple_product','variable_product') as $kind)if(!empty($managed['fixtures'][$kind]))$allowed_products[]=absint($managed['fixtures'][$kind]);
   $cfg=array(
    'enabled'=>true,
    'session_id'=>$session_id,
@@ -165,10 +172,12 @@ class OAI_Test_Automation {
    'expires_at'=>$now+($ttl*MINUTE_IN_SECONDS),
    'owner_user_id'=>$owner,
    'bound_client_id_hash'=>'',
-   'allowed_post_ids'=>$allowed_posts,
-   'allowed_product_ids'=>self::parse_ids($product_ids),
+   'allowed_post_ids'=>self::parse_ids($allowed_posts),
+   'allowed_product_ids'=>self::parse_ids($allowed_products),
    'session_created_post_ids'=>array(),
    'managed_gutenberg_fixture_id'=>$fixture,
+   'managed_fixtures'=>$managed['fixtures'],
+   'fixture_skips'=>$managed['skipped'],
    'file_prefix'=>self::FILE_PREFIX,
    'action_count'=>0,
    'max_actions'=>self::MAX_ACTIONS,
@@ -270,6 +279,9 @@ class OAI_Test_Automation {
    'allowed_product_ids'=>self::parse_ids($cfg['allowed_product_ids']??array()),
    'session_created_post_ids'=>self::parse_ids($cfg['session_created_post_ids']??array()),
    'managed_gutenberg_fixture_id'=>self::managed_gutenberg_fixture_id(),
+   'managed_fixtures'=>class_exists('OAI_QA_Fixtures')?OAI_QA_Fixtures::inventory(absint($cfg['owner_user_id']??0)):array(),
+   'fixture_skips'=>(array)($cfg['fixture_skips']??array()),
+   'regression_fixture_args'=>self::regression_fixture_args(),
    'file_prefix'=>(string)($cfg['file_prefix']??self::FILE_PREFIX),
    'action_count'=>absint($cfg['action_count']??0),
    'max_actions'=>absint($cfg['max_actions']??self::MAX_ACTIONS),
@@ -293,15 +305,20 @@ class OAI_Test_Automation {
   return absint(self::$request_context['id']??0)===absint($id) && (string)(self::$request_context['action']??'')===(string)$action && !empty(self::$request_context['authorized']);
  }
  public static function clear_request_context(){self::$request_context=null;}
+ public static function regression_fixture_args(){
+  $cfg=self::raw();if(!self::is_active())return array();
+  $args=class_exists('OAI_QA_Fixtures')?OAI_QA_Fixtures::regression_args(absint($cfg['owner_user_id']??0),(string)($cfg['session_id']??'')):array();
+  $gutenberg=self::managed_gutenberg_fixture_id();if($gutenberg){$args['content_post_id']=$gutenberg;$args['gutenberg_post_id']=$gutenberg;}
+  return $args;
+ }
 
  private static function row_meta($row){$meta=json_decode((string)($row['meta_data']??''),true);return is_array($meta)?$meta:array();}
  private static function title_is_test($post){if(!$post)return false;$title=wp_strip_all_tags((string)$post->post_title);$ru=function_exists('mb_stripos')?mb_stripos($title,'тест')!==false:(strpos($title,'ТЕСТ')!==false||strpos($title,'тест')!==false);return $ru || stripos($title,'test')!==false;}
  private static function post_allowed($post_id,$cfg){
   $post_id=absint($post_id);if(!$post_id)return false;
+  $post=get_post($post_id);if(!$post||!in_array((string)$post->post_status,array('draft','private'),true))return false;
   $allowed=self::parse_ids($cfg['allowed_post_ids']??array());
-  if(in_array($post_id,$allowed,true))return true;
-  $post=get_post($post_id);if(!$post)return false;
-  return in_array((string)$post->post_status,array('draft','private'),true) && self::title_is_test($post);
+  return in_array($post_id,$allowed,true);
  }
  private static function allow_created_post($post_id,$session_id){
   $post_id=absint($post_id);if(!$post_id)return false;
@@ -314,7 +331,7 @@ class OAI_Test_Automation {
   update_post_meta($post_id,'_wpai_test_created_draft_session',(string)$session_id);
   return true;
  }
- private static function product_allowed($product_id,$cfg){$product_id=absint($product_id);return $product_id>0&&in_array($product_id,self::parse_ids($cfg['allowed_product_ids']??array()),true);}
+ private static function product_allowed($product_id,$cfg){$product_id=absint($product_id);$post=$product_id?get_post($product_id):false;return $post&&$post->post_type==='product'&&in_array((string)$post->post_status,array('draft','private'),true)&&in_array($product_id,self::parse_ids($cfg['allowed_product_ids']??array()),true);}
  private static function file_allowed($target,$cfg){
   $parts=explode(':',(string)$target,2);if(count($parts)!==2)return false;
   $scope=sanitize_key($parts[0]);$path=ltrim(str_replace('\\','/',(string)$parts[1]),'/');
