@@ -122,18 +122,25 @@ class OAI_Regression_Runner {
   $scenario['baseline_restored']=$ok;self::stage($scenario,'cleanup',$ok?'PASS':'FAIL');
   return $ok;
  }
- private static function woo_create_scenario($run_id,$client_id,$user_id){
-  $snapshot=OAI_WooCommerce::create_draft(array(
-   'type'=>'variable','name'=>'WP AI Admin TEST — '.$run_id,'catalog_visibility'=>'hidden',
-   'variations'=>array(
+ private static function woo_create_scenario($run_id,$client_id,$user_id,$kind='variable'){
+  // Each regression creates its own hidden draft product. The normal sandbox
+  // lifecycle must verify and delete this exact artifact before continuing.
+  $simple=$kind==='simple';
+  $name=$simple?'woocommerce_simple_create':'woocommerce_create';
+  $data=array('type'=>$simple?'simple':'variable','name'=>'WP AI Admin TEST — '.$kind.' — '.$run_id,'catalog_visibility'=>'hidden','status'=>'draft');
+  if($simple){
+   $data['regular_price']='19.00';$data['manage_stock']=true;$data['stock_quantity']=3;$data['stock_status']='instock';
+  }else{
+   $data['variations']=array(
     array('regular_price'=>'13.00','manage_stock'=>true,'stock_quantity'=>2,'stock_status'=>'instock'),
     array('regular_price'=>'27.00','manage_stock'=>true,'stock_quantity'=>4,'stock_status'=>'instock')
-   )
-  ));
-  if(is_wp_error($snapshot))return array('name'=>'woocommerce_create','status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($snapshot),'stages'=>array('create'=>'FAIL'));
+   );
+  }
+  $snapshot=OAI_WooCommerce::create_draft($data);
+  if(is_wp_error($snapshot))return array('name'=>$name,'status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($snapshot),'stages'=>array('create'=>'FAIL'));
   $op=OAI_P0::op_for_created_product($snapshot);
-  if(is_wp_error($op))return array('name'=>'woocommerce_create','status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($op),'stages'=>array('create'=>'FAIL','cleanup'=>'PASS'));
-  return self::lifecycle('woocommerce_create',$op,'woocommerce.create_product_sandbox',$client_id,$user_id);
+  if(is_wp_error($op))return array('name'=>$name,'status'=>'FAIL','baseline_restored'=>false,'error'=>self::err($op),'stages'=>array('create'=>'FAIL'),'reason'=>'Created draft could not enter rollback lifecycle; manual artifact reconciliation required');
+  return self::lifecycle($name,$op,'woocommerce.create_product_sandbox',$client_id,$user_id);
  }
  private static function elementor_container_scenario($post_id,$container_id,$run_id,$client_id,$user_id){
   if($container_id==='')return array('name'=>'elementor_container','status'=>'SKIP','baseline_restored'=>true,'reason'=>'elementor_container_id not supplied');
@@ -388,7 +395,9 @@ class OAI_Regression_Runner {
   if(!$report['stopped_early']&&$gutenberg_id)$report['scenarios'][]=self::gutenberg_scenario($gutenberg_id,$run_id,$client_id,$user_id);
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
 
-  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::woo_create_scenario($run_id,$client_id,$user_id);
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::woo_create_scenario($run_id,$client_id,$user_id,'simple');
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::woo_create_scenario($run_id,$client_id,$user_id,'variable');
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
   if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::elementor_container_scenario($elementor_id,$container_id,$run_id,$client_id,$user_id);
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
