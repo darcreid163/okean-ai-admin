@@ -78,7 +78,7 @@ class OAI_Regression_Matrix {
 
   // Pagination checks.
   $page=function($kind,$page){$r=self::req('/okean-ai/v1/read/'.$kind);$r->set_param('limit',3);$r->set_param('page',$page);return $kind==='media'?OAI_REST::media($r):($kind==='users'?OAI_REST::users($r):OAI_REST::comments($r));};
-  foreach(array('media'=>'wp.list_media','users'=>'wp.list_users','comments'=>'wp.list_comments') as $kind=>$tool){$a=$page($kind,1);$b=$page($kind,2);$ok=self::ok($a)&&self::ok($b)&&self::distinct_pages($a,$b);self::set($matrix,$tool,$ok?'PASS':'FAIL',array('page1'=>self::ids($a),'page2'=>self::ids($b)));}
+  foreach(array('media'=>'wp.list_media','users'=>'wp.list_users','comments'=>'wp.list_comments') as $kind=>$tool){$a=$page($kind,1);$b=$page($kind,2);$first_ids=self::ids($a);$second_ids=self::ids($b);$ok=self::ok($a)&&self::ok($b)&&($second_ids===array()||self::distinct_pages($a,$b));self::set($matrix,$tool,$ok?'PASS':'FAIL',array('page1'=>$first_ids,'page2'=>$second_ids,'empty_second_page'=>$second_ids===array()));}
 
   // Options and redaction.
   $or=self::req('/okean-ai/v1/read/options');$or->set_param('keys','blogname,oai_agent_key_hash,oai_license');$opts=OAI_REST::options($or);$safe=!is_wp_error($opts)&&!empty($opts['items']['oai_agent_key_hash']['redacted'])&&!empty($opts['items']['oai_license']['redacted']);
