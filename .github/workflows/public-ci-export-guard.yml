@@ -1,0 +1,26 @@
+name: Public CI Export Guard
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/audit-public-ci-export.py'
+      - 'tests/test_public_ci_export.py'
+      - '.github/workflows/public-ci-export-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Compile auditor and tests
+        run: python -m py_compile scripts/audit-public-ci-export.py tests/test_public_ci_export.py
+      - name: Run positive and negative fixtures
+        run: python -m unittest discover -s tests -p test_public_ci_export.py -v
