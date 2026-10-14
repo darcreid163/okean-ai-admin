@@ -1,0 +1,43 @@
+# Public CI snapshot allowlist
+okean-ai-admin.php
+includes/
+starter-themes/
+wp-ai-admin-cloud/wp-ai-admin-cloud.php
+wp-ai-admin-cloud/includes/
+wp-ai-admin-cloud/src/
+wp-ai-admin-cloud/config/
+wp-ai-admin-cloud/README.md
+wp-ai-admin-cloud/tests/
+public-client/
+tests/
+scripts/build-release-candidate.sh
+.github/workflows/runner-smoke.yml
+.github/workflows/validate.yml
+.github/workflows/wp-ai-cloud.yml
+.github/workflows/release-sandbox.yml
+README.md
+README.txt
+BUILD-SIGNATURE.txt
+BUILD_SIGNATURE.txt
+SECURITY.md
+CHANGELOG.md
+docs/CHATGPT-CONNECTION-CONTRACT.md
+docs/PUBLIC-ONBOARDING.md
+docs/PUBLIC-RELEASE-READINESS.md
+docs/DATA-FLOW.md
+docs/DATA-RETENTION.md
+docs/PROOF-SEMANTICS.md
+
+# Explicit deny patterns
+.git/
+.env
+*.pem
+*.key
+node_modules/
+coverage/
+vendor/bin/
+# Only pinned historical regression artifacts are allowed from releases/
+releases/2.1.5/wp-ai-admin-2.1.5.zip
+releases/2.1.13/wp-ai-admin-2.1.13.zip
+releases/wp-ai-cloud-0.3.5/wp-ai-admin-cloud-0.3.5.zip
+releases/wp-ai-cloud-0.3.6/wp-ai-admin-cloud-0.3.6.zip

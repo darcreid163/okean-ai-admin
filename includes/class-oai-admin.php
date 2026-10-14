@@ -42,7 +42,11 @@ class OAI_Admin {
   $state=$_POST['oai_mcp_state'];
   if(!is_string($state)||!in_array($state,array('enabled','disabled'),true))return new WP_Error('oai_mcp_state','Invalid MCP state',array('status'=>400));
   $enabled=$state==='enabled';
-  update_option('oai_mcp_enabled',$enabled,false);
+  // update_option(false) does not create a missing option because WordPress
+  // treats the missing/default false value as unchanged. Persist the explicit
+  // disabled state so a later read with a different default cannot re-enable MCP.
+  if(get_option('oai_mcp_enabled',null)===null)add_option('oai_mcp_enabled',$enabled,'',false);
+  else update_option('oai_mcp_enabled',$enabled,false);
   if(!$enabled){
    if(class_exists('OAI_AI_Lifecycle_Control'))OAI_AI_Lifecycle_Control::disable(get_current_user_id());
    if(class_exists('OAI_Test_Automation'))OAI_Test_Automation::disable('mcp_disabled',get_current_user_id());

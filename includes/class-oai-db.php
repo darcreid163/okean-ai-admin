@@ -82,6 +82,57 @@ class OAI_DB {
  public static function insert($data){global $wpdb; $t=self::table(); $ok=$wpdb->insert($t,$data); if(!$ok) return new WP_Error('oai_db','Could not create operation',array('status'=>500,'db_error'=>$wpdb->last_error)); return (int)$wpdb->insert_id;}
  public static function get($id){global $wpdb; return $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE id=%d',$id),ARRAY_A);}
  public static function update($id,$data){global $wpdb; return $wpdb->update(self::table(),$data,array('id'=>$id));}
+ public static function transition($id,$from,$status,$phase=null){
+  global $wpdb;
+  $from=array_values(array_filter(array_map('sanitize_key',(array)$from)));
+  $status=sanitize_key((string)$status);
+  if(!$from||$status==='')return false;
+  $placeholders=implode(',',array_fill(0,count($from),'%s'));
+  $sql='UPDATE '.self::table().' SET status=%s, phase=%s WHERE id=%d AND status IN ('.$placeholders.')';
+  $args=array_merge(array($status,sanitize_key((string)($phase??$status)),absint($id)),$from);
+  return $wpdb->query($wpdb->prepare($sql,$args));
+ }
+ private static function operation_lease_key($id){return 'oai_operation_lease_'.absint($id);}
+ public static function operation_lease($id){
+  $key=self::operation_lease_key($id);
+  $lease=get_option($key,null);
+  if(!is_array($lease)||empty($lease['token_hash']))return null;
+  $expires=absint($lease['expires_at']??0);
+  if($expires<=time()){delete_option($key);return null;}
+  return array('action'=>sanitize_key((string)($lease['action']??'')),'acquired_at'=>absint($lease['acquired_at']??0),'expires_at'=>$expires);
+ }
+ public static function acquire_operation_lease($id,$action,$ttl=300){
+  $id=absint($id);$action=sanitize_key((string)$action);$ttl=max(30,min(900,absint($ttl)));
+  if(!$id||$action==='')return new WP_Error('oai_operation_lease_invalid','Invalid operation execution lease request',array('status'=>500));
+  $key=self::operation_lease_key($id);
+  for($attempt=0;$attempt<2;$attempt++){
+   $existing=get_option($key,null);
+   if(is_array($existing)&&!empty($existing['token_hash'])&&absint($existing['expires_at']??0)>time()){
+    return new WP_Error('oai_operation_busy','Operation is already executing',array('status'=>409,'action'=>sanitize_key((string)($existing['action']??'')),'lease_expires_at'=>absint($existing['expires_at']??0)));
+   }
+   if($existing!==null)delete_option($key);
+   $token=wp_generate_uuid4();
+   $value=array('token_hash'=>hash('sha256',$token),'action'=>$action,'acquired_at'=>time(),'expires_at'=>time()+$ttl);
+   if(add_option($key,$value,'',false))return $token;
+  }
+  $active=self::operation_lease($id);
+  return new WP_Error('oai_operation_busy','Operation execution lease could not be acquired',array('status'=>409,'action'=>$active['action']??null,'lease_expires_at'=>$active['expires_at']??null));
+ }
+ public static function release_operation_lease($id,$token){
+  $key=self::operation_lease_key($id);$lease=get_option($key,null);
+  if(!is_array($lease)||empty($lease['token_hash']))return false;
+  $hash=hash('sha256',(string)$token);
+  if(!hash_equals((string)$lease['token_hash'],$hash))return false;
+  return delete_option($key);
+ }
+ public static function clear_operation_leases(){
+  global $wpdb;
+  $pattern=$wpdb->esc_like('oai_operation_lease_').'%';
+  $keys=$wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 1000",$pattern));
+  $deleted=0;
+  foreach((array)$keys as $key)if(is_string($key)&&str_starts_with($key,'oai_operation_lease_')&&delete_option($key))$deleted++;
+  return $deleted;
+ }
  public static function all($limit=200){global $wpdb; return $wpdb->get_results($wpdb->prepare('SELECT * FROM '.self::table().' ORDER BY id DESC LIMIT %d',$limit),ARRAY_A);}
  public static function count_all(){global $wpdb; return (int)$wpdb->get_var('SELECT COUNT(*) FROM '.self::table());}
  public static function page($limit=50,$offset=0){global $wpdb;$limit=max(1,min(200,(int)$limit));$offset=max(0,(int)$offset);return $wpdb->get_results($wpdb->prepare('SELECT * FROM '.self::table().' ORDER BY id DESC LIMIT %d OFFSET %d',$limit,$offset),ARRAY_A);}

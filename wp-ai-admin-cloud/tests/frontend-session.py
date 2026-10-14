@@ -66,6 +66,34 @@ class FrontendSession(unittest.TestCase):
         self.assertIn('wordpress_logged_in_fixture', cookies)
         self.assertNotIn('wordpress_admin_fixture', cookies)
 
+    def test_oauth_discovery_metadata_headers_and_contract(self):
+        status, headers, body = self.request('/.well-known/oauth-protected-resource/mcp')
+        self.assertEqual(status, 200)
+        self.assertIn('no-store', headers.get('Cache-Control','').lower())
+        self.assertEqual(headers.get('X-Content-Type-Options','').lower(), 'nosniff')
+        resource = json.loads(body)
+        self.assertEqual(resource['resource'], self.base + '/mcp')
+        self.assertEqual(resource['authorization_servers'], [self.base + '/wpai-cloud'])
+        self.assertIn('mcp:read', resource['scopes_supported'])
+        self.assertIn('mcp:write', resource['scopes_supported'])
+
+        status, headers, body = self.request('/.well-known/oauth-authorization-server/wpai-cloud')
+        self.assertEqual(status, 200)
+        self.assertIn('no-store', headers.get('Cache-Control','').lower())
+        self.assertEqual(headers.get('X-Content-Type-Options','').lower(), 'nosniff')
+        auth = json.loads(body)
+        self.assertEqual(auth['issuer'], self.base + '/wpai-cloud')
+        self.assertEqual(auth['authorization_endpoint'], self.base + '/wpai-cloud/oauth/authorize')
+        self.assertEqual(auth['token_endpoint'], self.base + '/wp-json/wpai-cloud/v1/oauth/token')
+        self.assertEqual(auth['registration_endpoint'], self.base + '/wp-json/wpai-cloud/v1/oauth/register')
+        self.assertEqual(auth['code_challenge_methods_supported'], ['S256'])
+        self.assertEqual(auth['token_endpoint_auth_methods_supported'], ['none'])
+
+        status, headers, _ = self.request('/.well-known/oauth-protected-resource/mcp', data=b'')
+        self.assertEqual(status, 405)
+        self.assertIn('no-store', headers.get('Cache-Control','').lower())
+        self.assertEqual(headers.get('X-Content-Type-Options','').lower(), 'nosniff')
+
     def test_anonymous_portal_login_has_no_reauth(self):
         status, headers, _ = self.request('/wpai-cloud/connect?redirect_to=https://evil.example')
         self.assertEqual(status, 302)
