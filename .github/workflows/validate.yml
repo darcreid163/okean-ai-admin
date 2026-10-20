@@ -54,6 +54,8 @@ jobs:
         run: php tests/control-plane-entitlements.php
       - name: Elementor single source and fragment edits
         run: php tests/elementor-single-source.php
+      - name: Elementor schema/save isolated lifecycle regression
+        run: php tests/elementor-schema-save-stage1.php
       - name: Option normalization and rollback planning
         run: php tests/option-normalization.php
       - name: WooCommerce integer stock rounding
