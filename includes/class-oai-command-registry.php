@@ -3,6 +3,8 @@
 if (!defined('ABSPATH')) exit;
 class OAI_Command_Registry {
  public static function all(){return array(
+  'ability list'=>array('family'=>'ability','handler'=>'ability_list','read'=>true,'execution_mode'=>'read_only'),
+  'ability get'=>array('family'=>'ability','handler'=>'ability_get','read'=>true,'execution_mode'=>'read_only','args'=>array(1,1)),
   'core version'=>array('family'=>'core','handler'=>'core','read'=>true,'execution_mode'=>'read_only','allowed_flags'=>array('format')),
   'core check-update'=>array('family'=>'core','handler'=>'core_check_update','read'=>true,'execution_mode'=>'read_only'),
   'plugin list'=>array('family'=>'plugin','handler'=>'plugin_list','read'=>true,'execution_mode'=>'read_only','allowed_flags'=>array('format')),

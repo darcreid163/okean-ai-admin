@@ -288,6 +288,15 @@ check($r['count'] === 4 && $r['tables'][0] === 'wp_posts' && $r['rows_returned']
 $r = ok_result('db prefix');
 check($r['prefix'] === 'wp_' && $r['base_prefix'] === 'wp_', 'db prefix');
 
+/* ------------------------------ Abilities read-only bridge contract --- */
+require_once dirname(__DIR__).'/includes/class-oai-abilities.php';
+check(!is_wp_error(OAI_Command_Registry::resolve('ability list')), 'Ability catalog command must resolve');
+check(!is_wp_error(OAI_Command_Registry::resolve('ability get example/read')), 'Ability info command must resolve');
+rejects(fn() => OAI_Command_Registry::resolve('ability get'), 'oai_cli_args');
+check(ok_result('ability list') === array(), 'Abilities fail closed if API is unavailable');
+rejects(fn() => run('ability get example/read'), 'oai_ability_unavailable');
+rejects(fn() => OAI_Command_Registry::resolve('ability run example/read'), 'oai_cli_not_allowed');
+
 /* ------------------------------------------------------------------- catalog --- */
 
 // Registry security contract: every canonical command has a stable name and
