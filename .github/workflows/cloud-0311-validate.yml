@@ -1,0 +1,65 @@
+name: Combined Cloud Core 0.3.11 validation
+on:
+  push:
+    branches: [main, 'integration/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cloud-0311-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  cloud-contracts:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-test-only
+          MYSQL_DATABASE: wpai_cloud_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci-test-only"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    defaults:
+      run:
+        working-directory: wp-ai-admin-cloud
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite, pdo_mysql, mysqli, sodium, curl
+          coverage: none
+      - name: Cloud PHP lint
+        shell: bash
+        run: find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Source SHA and standalone policy contract
+        run: |
+          php tests/recovered-runtime-hashes.php
+          php tests/policy-preflight-static.php
+      - name: SQLite migration OAuth, tenant isolation, billing Batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          for t in run compatibility quota-migration-v4 batch-accounting-v2 multisite-account oauth cross-account-isolation tier-a; do
+            echo "=== SQLite $t ==="
+            php "tests/$t.php"
+          done
+      - name: MySQL migration OAuth, tenant isolation, billing Batch
+        shell: bash
+        env:
+          TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=wpai_cloud_test
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: ci-test-only
+        run: |
+          set -euo pipefail
+          for t in run compatibility quota-migration-v4 batch-accounting-v2 multisite-account oauth cross-account-isolation tier-a; do
+            echo "=== MySQL $t ==="
+            php "tests/$t.php"
+          done

@@ -21,8 +21,17 @@ jobs:
           coverage: none
       - name: PHP lint
         run: find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
-      - name: Publication gate (boundary, contract, disclosure)
-        run: php tests/repository-boundary.php
+      - name: Public combined-source security boundary
+        run: php tests/monorepo-security-gate.php
+      - name: Native-only publication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/wpai-public-native"
+          mkdir -p "$ROOT/tests"
+          cp -a okean-ai-admin.php includes starter-themes README.md README.txt LICENSE THIRD-PARTY.md AGENTS.md MIGRATION-STATUS.md BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt .gitignore "$ROOT/"
+          cp tests/repository-boundary.php "$ROOT/tests/"
+          php "$ROOT/tests/repository-boundary.php"
       - name: Elementor schema/save lifecycle
         run: php tests/elementor-schema-save-stage1.php
       - name: Elementor schema/save adversarial gaps (Issue #3)

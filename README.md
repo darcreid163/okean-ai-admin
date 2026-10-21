@@ -1,31 +1,41 @@
-# WP AI Admin — public integration candidate
+# WP AI Admin — unified public development candidate
 
-**Native:** 2.1.17 (build `2.1.17-usage-batch-v1-20261019`, DB schema 24). **Private Cloud Core:** 0.3.11 (Gateway schema 4). This public integration branch is NOT an authorized production release.
+**Current integrated candidate:** Native **2.1.17** (DB schema 24; build `2.1.17-usage-batch-v1-20261019`) + Cloud Core **0.3.11** (Gateway schema 4). This branch is **not** an approved production release.
 
-## Canonical boundaries
+## Temporary public development architecture
 
-- This repository `darcreid163/okean-ai-admin` is the *public* integration/CI workspace for validated Native sources and synthetic tests. Do not add private Cloud runtime, secrets or production customer data.
-- `darcreid163/wp-ai-admin` is the public Native release destination; recovery PR #21 has the archived Native 2.1.17 source and independent CI.
-- `darcreid163/wp-ai-admin-cloud-core` remains the *private* source of truth for Cloud Core 0.3.11 (recovery PR #12). OAuth, billing, ledger and server implementation stay there.
-- `darcreid163/universal-mcp-platform` is independent future work, not a release dependency.
+As explicitly directed by the maintainer, `darcreid163/okean-ai-admin` is temporarily the **PUBLIC** single integration repository with GitHub-hosted CI for both Native and Cloud. The current 0.3.11 Cloud source and synthetic tests are included in `wp-ai-admin-cloud/`. Production keys, credentials, accounts, private database snapshots and deployment configuration are prohibited.
 
-Old bundled `wp-ai-admin-cloud/` (0.3.6) and `wp-ai-cloud/` (0.1.0) and committed ZIPs are removed **from this candidate tree**, not from public Git history. Their historic exposure cannot be retracted merely by later making this repo private.
+**Irreversible visibility warning:** all source committed to a public Git branch is publicly accessible. Making this repository private later does NOT retract clones, forks or historic downloads. This includes the 0.3.11 server algorithms. Treat this as an explicit temporary development exposure, not a secret-preserving mirror.
 
-## Commercial policy (approved contract; do not infer live activation)
+## Target repositories after release qualification
 
-| Plan | Quota |
-|---|---|
-| Free | 100/month |
-| Pro | 500/day |
-| Business | 2000/day |
-| BusinessPro | 5000/day |
+- [`darcreid163/wp-ai-admin`](https://github.com/darcreid163/wp-ai-admin) — public **Native-only** WordPress plugin, GPL/licensing notices, final installable ZIP.
+- [`darcreid163/wp-ai-admin-cloud-core`](https://github.com/darcreid163/wp-ai-admin-cloud-core) — private **Cloud Core-only** implementation, billing, OAuth and Gateway distribution.
+- `darcreid163/okean-ai-admin` — temporary shared CI/integration; make private only with the owner's separately performed visibility change after release acceptance.
+- `darcreid163/universal-mcp-platform` — unrelated future product; never mix its code into the release.
 
-Successful reads and Sandbox calls cost one; successful batch child object costs one; idempotent retries and rollback do not double-charge. The central Cloud Ledger is the only billing authority. No automatic payments. Do not enable central Batch or migrate customer quotas until private Cloud CI and staging pass.
+## One current runtime per component
 
-## Safety / release
+The old `wp-ai-cloud` pilot 0.1.0 and former bundled Cloud Core 0.3.6 are **not** current source in this branch. There is only one `wp-ai-admin-cloud/`: verified 0.3.11 recovered source. Historic commits still exist.
 
-READ → PLAN → SANDBOX → APPROVAL → APPLY → VERIFY → RECEIPT/PROOF → ROLLBACK. No unapproved direct live writes. Full-document Elementor writes remain gated. PHP 8.2–8.4, WordPress, WooCommerce/Gutenberg, migration, OAuth, tenant isolation, signed evidence, quota atomicity, staging upgrade/rollback and Beget file hashes must pass before publishing or upgrading a site.
+## Commercial contract
 
-[Current release state](docs/RELEASE-STATE-2026-10-21.md) · [Repository boundaries](docs/REPOSITORY-BOUNDARIES.md) · [Native recovery gates](docs/RELEASE-MAIN-GATE-NATIVE-2026-10-21.md)
+| Plan | Successful actions | Quota period |
+|---|---:|---|
+| Free | 100 | month |
+| Pro | 500 | day |
+| Business | 2,000 | day |
+| BusinessPro | 5,000 | day |
 
-Historic documents reflect historic states and are superseded where inconsistent with this status.
+Successful reads/Sandbox calls count; every successful Batch object is one action; failed calls/rollback/idempotent retry are not billed again. **Gateway Ledger is sole charging authority, no telemetry charging, no automatic payment debit.** These are required rules; the live v2 tariff migration and Batch activation are not assumed complete.
+
+## Safe development and release
+
+`READ → PLAN → SANDBOX → APPROVAL → APPLY → VERIFY → RECEIPT/PROOF → ROLLBACK`. No direct live writes. No unregistered full-document Elementor mutations, paid plan conversion, subscription state migrations or site installation without staging and explicit approval.
+
+Run hosted [Native CI](.github/workflows/native-validate.yml) and [Cloud CI](.github/workflows/cloud-0311-validate.yml), including PHP 8.2/8.3/8.4, MySQL and SQLite, OAuth isolation, Billing/Batch, WordPress smoke and upgrade. Candidate Native ZIP MUST exclude `wp-ai-admin-cloud/`. No CI workflow may use production secrets.
+
+[One current audit](docs/RELEASE-STATE-2026-10-21.md) · [Migration / release checklist](MIGRATION-STATUS.md) · [Repository policies](docs/REPOSITORY-BOUNDARIES.md).
+
+Historical dated release notes are preserved as references, not active installation instructions.
