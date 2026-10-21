@@ -59,7 +59,7 @@ $receipt=$core->batchReceipt($actor,$site['id'],$key,$now);
 batchCheck($receipt['charged_units']===2&&$receipt['site_id']===$site['id'],'Receipt mismatch');
 $reordered=$items;
 $reordered[0]['arguments']=['alpha'=>true,'meta'=>['a'=>1,'z'=>2]];
-batchCheck(WPAICloudGateway\\Security::canonical($items)===WPAICloudGateway\\Security::canonical($reordered),'Canonical JSON changed with nested object key order');
+batchCheck(WPAICloudGateway\Security::canonical($items)===WPAICloudGateway\Security::canonical($reordered),'Canonical JSON changed with nested object key order');
 $replay=$core->batchCall($actor,$site['id'],$reordered,'batch-3',false,$now);
 batchCheck($replay['charged_units']===2&&$transport->executions===3,'Idempotency retry re-dispatched objects');
 $different=$items;$different[0]['arguments']=['fail'=>true];
