@@ -30,5 +30,5 @@ if (PHP_VERSION_ID < 80200) {
 }
 
 // Gateway storage is separate from the preserved Cloud Core v1 schema.
-foreach (['Security','Transport','Store','QuotaPolicy','BatchAccounting','Core','Gateway','Settings','OAuth','Pairing','Sse','Surface','Admin','WordPress'] as $component) require_once WPAI_CLOUD_DIR . 'src/' . $component . '.php';
+foreach (['Security','Transport','Store','QuotaPolicy','BatchAccounting','Core','Skills','Unsplash','MediaPolicy','Gateway','Settings','OAuth','Pairing','Sse','Surface','Admin','WordPress'] as $component) require_once WPAI_CLOUD_DIR . 'src/' . $component . '.php';
 \WPAICloudGateway\WordPress::boot(__FILE__);
