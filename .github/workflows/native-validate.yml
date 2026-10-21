@@ -49,6 +49,18 @@ jobs:
 
   wordpress-smoke:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: pinned-compat
+            wp: '7.0.6'
+            elementor: '4.3.3'
+            woo: '11.1.2'
+          - profile: latest-compat
+            wp: latest
+            elementor: latest
+            woo: latest
     services:
       mysql:
         image: mysql:8.0
@@ -68,7 +80,11 @@ jobs:
           php-version: '8.3'
           extensions: mysqli, pdo_mysql, curl, sodium
           coverage: none
-      - name: Real WordPress + Elementor activation
+      - name: Real WordPress + Elementor, WooCommerce and Gutenberg acceptance
+        env:
+          WP_TEST_VERSION: ${{ matrix.wp }}
+          ELEMENTOR_TEST_VERSION: ${{ matrix.elementor }}
+          WOO_TEST_VERSION: ${{ matrix.woo }}
         run: bash tests/wordpress-native-smoke.sh
 
   build-artifact:
