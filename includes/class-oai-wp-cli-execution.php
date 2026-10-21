@@ -3,6 +3,8 @@
 if (!defined('ABSPATH')) exit;
 class OAI_WP_CLI_Execution {
  public static function execute($resolved){if(empty($resolved['read']))return new WP_Error('oai_cli_write_requires_lifecycle','Write WP-CLI commands must go through sandbox → approval → apply lifecycle',array('status'=>409,'execution_model'=>'sandbox_then_approval','handler'=>$resolved['handler']??null,'canonical'=>$resolved['canonical']??null));$h=$resolved['handler'];$a=$resolved['args'];$f=$resolved['flags'];switch($h){
+  case 'ability_list':return OAI_Abilities::discover(100);
+  case 'ability_get':return OAI_Abilities::info((string)$a[0]);
   case 'core':return array('version'=>get_bloginfo('version'),'command'=>'core version');
   case 'plugin_list':require_once ABSPATH.'wp-admin/includes/plugin.php';$all=get_plugins();$rows=array();foreach($all as $file=>$data)$rows[]=array('plugin'=>$file,'name'=>$data['Name'],'version'=>$data['Version'],'active'=>is_plugin_active($file));return self::format($rows,$f);
   case 'theme_list':$rows=array();foreach(wp_get_themes() as $stylesheet=>$t)$rows[]=array('stylesheet'=>$stylesheet,'name'=>$t->get('Name'),'version'=>$t->get('Version'),'active'=>$stylesheet===get_option('stylesheet'));return self::format($rows,$f);
