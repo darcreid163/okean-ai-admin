@@ -84,7 +84,7 @@ check($bad['result']['isError']===true,'Unexpected routing argument accepted');
 $visible=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>1,'method'=>'tools/call','params'=>['name'=>'cloud_sites_list','arguments'=>[]]],$now);
 // Direct handle accepts a trusted actor; the HTTP adapter reauthenticates before every method.
 check(count(json_decode($visible['result']['content'][0]['text'],true))===1,'Token site filter leaked');
-check(array_column(Gateway::tools(),'name')===['cloud_sites_list','cloud_usage','cloud_usage_history','cloud_site_batch_call','cloud_site_batch_receipt','cloud_site_tools_list','cloud_site_tool_call'],'Gateway catalog');
+check(array_column(Gateway::tools(),'name')===['cloud_skills_list','cloud_skill_load','cloud_media_search_images','cloud_sites_list','cloud_usage','cloud_usage_history','cloud_site_batch_call','cloud_site_batch_receipt','cloud_site_tools_list','cloud_site_tool_call'],'Gateway catalog');
 
 foreach(['127.0.0.1','10.0.0.1','192.168.1.1','169.254.169.254','100.64.0.1','198.18.0.1','192.0.2.1','224.0.0.1','::1','fe80::1','fc00::1','::ffff:127.0.0.1','2001:db8::1','2001:20::1','2002:7f00:1::','3fff::1'] as $ip) check(!Security::publicIp($ip),'Unsafe IP accepted: '.$ip);
 check(Security::publicIp('8.8.8.8') && Security::publicIp('2606:4700:4700::1111'),'Public IP rejected');
