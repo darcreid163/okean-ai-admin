@@ -2,13 +2,13 @@
 
 ## Verified repository audit
 
-- `okean-ai-admin` PUBLIC: original `main` contained Native **2.1.14**, Cloud **0.3.6** and `wp-ai-cloud` pilot **0.1.0**. The dedicated integration PR #46 upgrades a single Native runtime to **2.1.17**, a single Cloud runtime to **0.3.11**, and keeps old duplicates out of working HEAD.
+- `okean-ai-admin` PUBLIC: original `main` contained Native **2.1.14**, Cloud **0.3.6** and `wp-ai-cloud` pilot **0.1.0**. Unified PR #47 upgrades a single Native runtime to **2.1.17**, a single Cloud runtime from recovered **0.3.11** to an explicitly marked **0.3.12-dev** Gateway candidate, and keeps old duplicates out of working HEAD.
 - `wp-ai-admin` PUBLIC: `main` Native **2.1.16**, PR #21 verified recovery Native 2.1.17.
 - `wp-ai-admin-cloud-core` PRIVATE: current source of restored 0.3.11 in PR #12, historical `main` older. Duplicate Billing alternative #9 is closed, not canonical.
 - `universal-mcp-platform` PRIVATE: independent project, do not merge.
 - Historic `wp-ai-admin-release-ci` not returned in owned-repo inventory.
 
-**Source fingerprints:** both public Native runtime 83/83 SHA-identical to recovery candidate; Cloud runtime imported from exact private recovery HEAD with pinned 20-file archive SHA-256 contract. This is a new public snapshot; installed runtime hash comparisons remain separate.
+**Source fingerprints:** both public Native runtime 83/83 SHA-identical to recovery candidate; Cloud runtime starts from the exact recovered 0.3.11 manifest; 18 unchanged files remain SHA-256 identical, while only Gateway and plugin bootstrap are deliberately modified under 0.3.12-dev. The original 20-file manifest remains immutable. This is a new public snapshot; installed runtime hash comparisons remain separate.
 
 ## Work disposition
 
@@ -20,11 +20,11 @@ Free 100/month; Pro 500/day; Business 2000/day; BusinessPro 5000/day. Successful
 
 ## Critical gates
 
-1. Combined PR exact SHA GitHub CI Native/Cloud PHP/WordPress, SQLite/MySQL.
+1. Unified PR #47 exact SHA GitHub CI Native/Cloud PHP/WordPress, SQLite/MySQL. First both suites passed at SHA 3bf4b815; subsequent docs-only changes must be verified again.
 2. OAuth, tenancy, migrations, signed Proof/Receipt, inconclusive write reconciliation and retry.
 3. Elementor/Gutenberg/Woo/Media/Menu staging e2e tests with rollback and Site ID preservation.
 4. Beget installed-file parity, account backups and production acceptance.
 5. Split final approved versions into public Native and private Cloud release repos without copying Cloud code into the public Native package.
-6. Maintainer approves final main merge, visibility change and production installation.
+6. Main consolidation is authorized by the owner's request for one development repo; runtime deployment, visibility changes, payment activation and final split still require separate approval.
 
 **Risk recorded:** because owner selected temporary PUBLIC all-source development, Cloud 0.3.11 source becomes publicly inspectable and this disclosure cannot be undone by changing repository visibility later. No real secrets/data intentionally committed.

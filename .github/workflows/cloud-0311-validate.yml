@@ -1,4 +1,4 @@
-name: Combined Cloud Core 0.3.11 validation
+name: Cloud Core 0.3.12-dev validation (restored 0.3.11 baseline)
 on:
   push:
     branches: [main, 'integration/**']

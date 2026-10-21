@@ -4,7 +4,7 @@
 
 - Combined integration working candidate: **Native 2.1.17** (`OAI_DB_VERSION=24`), **Cloud Core 0.3.11** as the restored baseline (Gateway schema **4**); **unreleased Cloud 0.3.12-dev** as the explicitly changed candidate.
 - Archived Native ZIP SHA-256: `4bf534f3a30344fa94cf599d526477887ed89175e494d32b6b35e5a05f1cc1ac`; Cloud ZIP SHA-256: `b83ebc098b5ef3e22b7f083df8d26849c233839b226d516725c027984de82793`.
-- Both registered production sites most recently reported Native 2.1.17 / 116 tools through read-only MCP; installed byte hashes remain unverified.
+- Site-installed Native versions must be rechecked before deployment; historical checks differed between sites. Installed file hashes remain unverified.
 - Canonical endpoints and identity preservation are unchanged. Do not use GitHub Actions credentials to access production.
 
 ## Mandatory merge gates
