@@ -46,11 +46,18 @@ jobs:
       - name: SQLite migration OAuth, tenant isolation, billing Batch
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          failed=0
           for t in run compatibility quota-migration-v4 batch-accounting-v2 multisite-account oauth cross-account-isolation tier-a; do
             echo "=== SQLite $t ==="
-            php "tests/$t.php"
+            if php "tests/$t.php"; then
+              echo "PASS SQLite $t"
+            else
+              echo "FAIL SQLite $t"
+              failed=1
+            fi
           done
+          exit "$failed"
       - name: MySQL migration OAuth, tenant isolation, billing Batch
         shell: bash
         env:
@@ -58,8 +65,15 @@ jobs:
           TEST_MYSQL_USER: root
           TEST_MYSQL_PASSWORD: ci-test-only
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          failed=0
           for t in run compatibility quota-migration-v4 batch-accounting-v2 multisite-account oauth cross-account-isolation tier-a; do
             echo "=== MySQL $t ==="
-            php "tests/$t.php"
+            if php "tests/$t.php"; then
+              echo "PASS MySQL $t"
+            else
+              echo "FAIL MySQL $t"
+              failed=1
+            fi
           done
+          exit "$failed"
