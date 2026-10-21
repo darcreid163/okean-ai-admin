@@ -39,6 +39,7 @@ batchCheck($core->batchAvailable(),'Enabled test batch policy still disabled');
 $preUsage=$core->usage('1',$now);
 $preExecutions=$transport->executions;
 batchReject(fn()=>$core->batchCall($actor,$other['id'],$items,'foreign-site-denied',false,$now),'scope_or_site_denied');
+batchReject(fn()=>$core->batchCall($readOnly,$sameOwnerSite['id'],$items,'ungranted-site-denied',false,$now),'scope_or_site_denied');
 batchReject(fn()=>$core->batchCall($foreign,$site['id'],$items,'foreign-actor-denied',false,$now),'scope_or_site_denied');
 batchReject(fn()=>$core->batchCall($readOnly,$site['id'],[
     ['id'=>'write','tool'=>'woocommerce_update_product_sandbox','arguments'=>['product_id'=>1,'regular_price'=>'12.00']],
