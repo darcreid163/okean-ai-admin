@@ -18,7 +18,7 @@ $store->migrate();
 try {
 $transport=new FakeTransport();
 $policy=json_decode((string)file_get_contents(dirname(__DIR__).'/config/plans.json'),true,32,JSON_THROW_ON_ERROR);
-$policy['plans']['free']=3;
+$policy['plans']['free']=4;
 $policy['batch']=BatchAccounting::POLICY;QuotaPolicy::validate($policy);
 $pair=sodium_crypto_sign_keypair();
 $core=new Core($store,new Vault(str_repeat('k',32)),$transport,$policy,new Signer(sodium_crypto_sign_secretkey($pair)));
@@ -56,6 +56,15 @@ $unknown=$core->batchCall($actor,$site['id'],[['id'=>'uncertain','tool'=>'wp_get
 batchCheck($unknown['pending_units']===1&&$unknown['charged_units']===0,'Unknown outcome was charged or released');
 batchCheck($core->usage('1',$now)['used']===2&&$core->usage('1',$now)['reserved']===1,'Uncertain outcome lost reservation');
 batchReject(fn()=>$core->batchCall($actor,$site['id'],[['id'=>'uncertain','tool'=>'wp_get_site','arguments'=>['uncertain'=>true]]],'batch-unknown',false,$now),'batch_outcome_pending_reconciliation');
+// Reserve the last unit with a genuinely uncertain request. The batch
+// implementation reserves every child up front, not only successful children.
+$moreUnknown=$core->batchCall($actor,$site['id'],[
+    ['id'=>'another-uncertain','tool'=>'wp_get_site','arguments'=>['uncertain'=>true]],
+],'batch-unknown-two',false,$now);
+batchCheck($moreUnknown['pending_units']===1&&$moreUnknown['charged_units']===0,
+    'Second unknown outcome lost its reservation');
+batchCheck($core->usage('1',$now)['used']===2&&$core->usage('1',$now)['reserved']===2,
+    'Unknown reservation must not silently settle');
 batchReject(fn()=>$core->call($actor,$site['id'],'wp_get_site',[],'beyond-limit',$now),'monthly_quota_exhausted');
 batchReject(fn()=>BatchAccounting::items([['id'=>'one','tool'=>'woocommerce_update_product_sandbox','arguments'=>['changes'=>['variations'=>[['id'=>3]]]]]]),'batch_multiple_targets_not_allowed');
 echo 'PASS '.$checks.' Batch v2 receipt/idempotency/tenant/uncertain/quota assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
