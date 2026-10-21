@@ -54,6 +54,18 @@ batchCheck($first['charged_units']===2&&$first['pending_units']===0,'Batch charg
 batchCheck($first['summary']['succeeded']===2&&$first['summary']['failed']===1,'Batch per-step receipt incorrect');
 batchCheck($core->usage('1',$now)['used']===2&&$core->usage('1',$now)['reserved']===0,'Batch settlement not atomic');
 batchCheck($transport->executions===3,'Each batch object must be dispatched exactly once');
+// Successful steps must be charged once, even when a second identical request
+// arrives with an alternate dot/underscore tool spelling.
+$usedAfterFirst=$core->usage('1',$now)['used'];
+$alternate=$items;
+$alternate[0]['tool']='wp.get_site';
+$alternate[2]['tool']='wp.get_site';
+$aliasRetry=$core->batchCall($actor,$site['id'],$alternate,'batch-3',false,$now);
+batchCheck($aliasRetry['charged_units']===2 &&
+    $core->usage('1',$now)['used']===$usedAfterFirst &&
+    $transport->executions===3,
+    'Canonical tool alias retry double-charged or re-dispatched the batch');
+
 $key=hash('sha256','1|batch-3');
 $receipt=$core->batchReceipt($actor,$site['id'],$key,$now);
 batchCheck($receipt['charged_units']===2&&$receipt['site_id']===$site['id'],'Receipt mismatch');
