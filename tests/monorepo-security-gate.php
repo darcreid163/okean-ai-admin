@@ -7,7 +7,7 @@ declare(strict_types=1);
 $root=dirname(__DIR__);$issues=[];$php=static fn(string $f)=>is_file($root.'/'.$f)?file_get_contents($root.'/'.$f):'';
 $n=$php('okean-ai-admin.php');$c=$php('wp-ai-admin-cloud/wp-ai-admin-cloud.php');
 if(!str_contains($n,"define('OAI_VERSION','2.1.17')"))$issues[]='Native must be 2.1.17';
-if(!str_contains($c,"0.3.11"))$issues[]='Cloud must be 0.3.11';
+if(!str_contains($c,"define('WPAI_CLOUD_VERSION', '0.3.12-dev')"))$issues[]='Unreleased Cloud candidate must be 0.3.12-dev; archived 0.3.11 remains immutable';
 if(!is_file($root.'/wp-ai-admin-cloud/config/plans.json'))$issues[]='Cloud quota policy missing';
 if(is_dir($root.'/wp-ai-cloud'))$issues[]='duplicate legacy gateway directory';
 if(is_dir($root.'/releases'))$issues[]='committed release binaries directory';
@@ -31,4 +31,4 @@ foreach($it as $file){
     foreach($patterns as $i=>$pattern)if(preg_match($pattern,$content))$issues[]='credential-like pattern '.$i.' in '.$path;
 }
 if($issues){fwrite(STDERR,"PUBLIC SOURCE GATE FAILED\n".implode("\n",$issues)."\n");exit(1);}
-echo "PASS: single Native 2.1.17 / Cloud 0.3.11 candidate, no old gateway, no archive or secret signatures\n";
+echo "PASS: single Native 2.1.17 / versioned Cloud 0.3.12-dev candidate, no old gateway, no archive or secret signatures\n";
