@@ -290,6 +290,23 @@ check($r['prefix'] === 'wp_' && $r['base_prefix'] === 'wp_', 'db prefix');
 
 /* ------------------------------------------------------------------- catalog --- */
 
+// Registry security contract: every canonical command has a stable name and
+// a matching read/write execution policy before future MCP tool expansion.
+$seenCanonical = array();
+foreach (OAI_Command_Registry::all() as $command => $entry) {
+    $canonical = implode(' ', array_filter(explode(' ', strtolower(trim($command))), 'strlen'));
+    check($command === $canonical, 'noncanonical registry name: ' . $command);
+    check(!isset($seenCanonical[$canonical]), 'duplicate canonical command: ' . $command);
+    $seenCanonical[$canonical] = true;
+    check(is_string($entry['handler'] ?? null) && $entry['handler'] !== '', 'missing handler: ' . $command);
+    if (!empty($entry['read'])) {
+        check(($entry['execution_mode'] ?? '') === 'read_only', 'read command with unsafe mode: ' . $command);
+    } else {
+        check(($entry['execution_mode'] ?? '') === 'plan_only' && !empty($entry['approval']),
+            'write command without mandatory plan and approval: ' . $command);
+    }
+}
+
 $audit = OAI_Command_Registry::handler_audit();
 check($audit['ok'] === true, 'every read command must have a handler: ' . implode(',', $audit['missing_handlers']));
 check($audit['registered'] >= 38, 'expanded catalog size: ' . $audit['registered']);
