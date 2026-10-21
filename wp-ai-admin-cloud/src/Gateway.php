@@ -4,7 +4,24 @@ namespace WPAICloudGateway;
 
 final class Gateway {
     public const VERSIONS=['2025-03-26','2025-06-18','2025-11-25'];
-    public function __construct(private readonly Core $core) {}
+    public function __construct(
+        private readonly Core $core,
+        private readonly ?Skills $skills=null,
+        private readonly ?Unsplash $unsplash=null
+    ) {}
+    private function skillLibrary(): Skills {
+        return $this->skills ?? Skills::fromConfig(dirname(__DIR__).'/config/skills.php');
+    }
+    private function mediaSearch(array $args): array {
+        $provider=$this->unsplash;
+        if ($provider===null && defined('WP_AI_CLOUD_UNSPLASH_ACCESS_KEY')) {
+            $key=constant('WP_AI_CLOUD_UNSPLASH_ACCESS_KEY');
+            if (!is_string($key)) throw new Fault('unsplash_disabled',503);
+            $provider=new Unsplash($key);
+        }
+        if ($provider===null) throw new Fault('unsplash_disabled',503);
+        return $provider->search($args['query'],$args['per_page']??10);
+    }
     public static function tools(): array {
         $site=['type'=>'string','description'=>'Explicit registered site ID; never inferred from a global active site.'];
         $tool=function(string $name,string $description,array $properties,array $required,bool $read):array {
@@ -12,6 +29,9 @@ final class Gateway {
                 'securitySchemes'=>[['type'=>'oauth2','scopes'=>$read?['mcp:read']:['mcp:read','mcp:write']]],'annotations'=>['readOnlyHint'=>$read,'destructiveHint'=>!$read,'idempotentHint'=>true,'openWorldHint'=>false]];
         };
         return [
+            $tool('cloud_skills_list','List closed server-side AI workflows. Read-only; human approval is still needed for writes.',[],[],true),
+            $tool('cloud_skill_load','Read one server-side workflow, not a command to execute.',['skill_id'=>['type'=>'string']],['skill_id'],true),
+            $tool('cloud_media_search_images','Search licensed image metadata through an optional server-side Unsplash key. Never sends the key to a site.',['query'=>['type'=>'string'],'per_page'=>['type'=>'integer','minimum'=>1,'maximum'=>20]],['query'],true),
             $tool('cloud_sites_list','List only connected sites allowed by this access token.',[],[],true),
             $tool('cloud_usage','Show the shared account quota, UTC day or month window and pending reservations.',[],[],true),
             $tool('cloud_usage_history','List authenticated account billing entries for sites selected in this OAuth grant; includes verified charges without tool inputs/outputs.',['limit'=>['type'=>'integer','minimum'=>1,'maximum'=>100]],[],true),
@@ -60,6 +80,9 @@ final class Gateway {
             }
             if (!in_array('mcp:read',$actor['scopes'],true)) throw new Fault('read_scope_required',403);
             $value=match($name) {
+                'cloud_skills_list'=>['skills'=>$this->skillLibrary()->listing()],
+                'cloud_skill_load'=>$this->skillLibrary()->load($args['skill_id']),
+                'cloud_media_search_images'=>$this->mediaSearch($args),
                 'cloud_sites_list'=>array_values(array_filter($this->core->sites($actor['owner']),fn($s)=>in_array($s['id'],$actor['site_ids'],true))),
                 'cloud_usage'=>$this->core->usage($actor['owner'],$now),
                 'cloud_usage_history'=>$this->core->ledger($actor['owner'],$args['limit']??50,$actor['site_ids']),
