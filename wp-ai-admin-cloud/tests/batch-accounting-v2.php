@@ -30,7 +30,7 @@ $actor=$core->authenticate($core->mint('1',[$site['id']],['mcp:read','mcp:write'
 $readOnly=$core->authenticate($core->mint('1',[$site['id']],['mcp:read'],$now)['access_token'],$now);
 $foreign=$core->authenticate($core->mint('2',[$other['id']],['mcp:read'],$now)['access_token'],$now);
 $items=[
-    ['id'=>'a','tool'=>'wp_get_site','arguments'=>[]],
+    ['id'=>'a','tool'=>'wp_get_site','arguments'=>['meta'=>['z'=>2,'a'=>1],'alpha'=>true]],
     ['id'=>'b','tool'=>'wp_get_site','arguments'=>['fail'=>true]],
     ['id'=>'c','tool'=>'wp_get_site','arguments'=>[]],
 ];
@@ -57,7 +57,10 @@ batchCheck($transport->executions===3,'Each batch object must be dispatched exac
 $key=hash('sha256','1|batch-3');
 $receipt=$core->batchReceipt($actor,$site['id'],$key,$now);
 batchCheck($receipt['charged_units']===2&&$receipt['site_id']===$site['id'],'Receipt mismatch');
-$replay=$core->batchCall($actor,$site['id'],$items,'batch-3',false,$now);
+$reordered=$items;
+$reordered[0]['arguments']=['alpha'=>true,'meta'=>['a'=>1,'z'=>2]];
+batchCheck(WPAICloudGateway\Security::canonical($items)===WPAICloudGateway\Security::canonical($reordered),'Canonical JSON changed with nested object key order');
+$replay=$core->batchCall($actor,$site['id'],$reordered,'batch-3',false,$now);
 batchCheck($replay['charged_units']===2&&$transport->executions===3,'Idempotency retry re-dispatched objects');
 $different=$items;$different[0]['arguments']=['fail'=>true];
 batchReject(fn()=>$core->batchCall($actor,$site['id'],$different,'batch-3',false,$now),'idempotency_conflict');
