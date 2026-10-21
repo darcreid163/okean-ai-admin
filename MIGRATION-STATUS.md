@@ -1,4 +1,4 @@
-# WP AI Admin — publication and installation: BLOCKED
+# WP AI Admin — PUBLICATION BLOCKED (publication and installation)
 
 ## Version authority
 
