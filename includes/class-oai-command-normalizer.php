@@ -12,7 +12,7 @@ class OAI_Command_Normalizer {
   if($family==='cron'&&isset($a[1],$a[2])){$verb='event';$subverb=sanitize_key($a[2]);$args=array_slice($a,3);}else{$args=array_slice($a,2);}
   if($family==='db'&&$verb==='query'){$args=array_slice($a,2);}
   if($family==='cache'&&$verb==='purge'){$args=array_slice($a,2);}
-  return array('family'=>$family,'verb'=>$verb,'subverb'=>$subverb,'args'=>$args,'flags'=>$flags,'raw'=>$command);
+  return array('family'=>$family,'verb'=>$verb,'subverb'=>$subverb,'args'=>$args,'flags'=>$flags,'raw'=>$command,'tokens'=>$a);
  }
  private static function from_array($x){$family=sanitize_key((string)($x['family']??$x['command_family']??''));$verb=sanitize_key((string)($x['verb']??''));$args=is_array($x['args']??null)?array_values($x['args']):array();$flags=is_array($x['flags']??null)?$x['flags']:array();return array('family'=>$family,'verb'=>$verb,'subverb'=>sanitize_key((string)($x['subverb']??'')),'args'=>$args,'flags'=>$flags,'raw'=>$x);}
 }

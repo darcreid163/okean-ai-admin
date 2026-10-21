@@ -40,7 +40,7 @@ class OAI_MCP {
   }
   $parts=preg_split('/\s+/',trim($auth)); if(count($parts)!==2||strtolower($parts[0])!=='bearer')return new WP_Error('oai_mcp_auth','Bearer token or WordPress Application Password required',array('status'=>401));
   $paired=class_exists('OAI_Gateway_Pairing')?OAI_Gateway_Pairing::authenticate($parts[1]):false;
-  if($paired){self::$auth_context=array('user_id'=>(int)$paired['user']->ID,'client_id'=>$paired['client_id'],'scope'=>$paired['scope']);wp_set_current_user((int)$paired['user']->ID);return OAI_Rate_Limit::check('mcp',120,60);}
+  if($paired){self::$auth_context=array('user_id'=>(int)$paired['user']->ID,'client_id'=>$paired['client_id'],'scope'=>$paired['scope'],'quota_authority'=>'central_gateway');wp_set_current_user((int)$paired['user']->ID);return OAI_Rate_Limit::check('mcp',120,60);}
   $oauth=class_exists('OAI_MCP_OAuth')?OAI_MCP_OAuth::authenticate_access_token($parts[1]):false;
   if($oauth){ self::$auth_context=array('user_id'=>(int)$oauth['user']->ID,'client_id'=>(string)$oauth['client_id'],'scope'=>(string)$oauth['scope']); wp_set_current_user((int)$oauth['user']->ID); return OAI_Rate_Limit::check('mcp',120,60); }
   if(!self::token_hash()||!hash_equals(self::token_hash(),hash('sha256',$parts[1])))return new WP_Error('oai_mcp_auth','Invalid MCP token',array('status'=>401));
@@ -63,7 +63,7 @@ class OAI_MCP {
  }
  private static function tool_requires_write($name,$args){
   if(in_array($name,array('woodmart_update_setting_sandbox','wp_option_update_sandbox','system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_import_url_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
-  if($name==='wordpress.execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
+  if($name==='wordpress_execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
   return false;
  }
 
@@ -89,16 +89,22 @@ class OAI_MCP {
     if(is_wp_error($license)) return self::response($id,null,array('code'=>-32030,'message'=>$license->get_error_message(),'data'=>$license->get_error_data()));
    }
    if(!$write && !self::has_scope('mcp:read')) return self::scope_error($id,'mcp:read');
+   if($tool_name==='batch_resume' && class_exists('OAI_Quota') && !OAI_Quota::is_engineering_access())
+    return self::response($id,null,array('code'=>-32029,'message'=>'Use the centrally metered per-object batch endpoint; legacy Native resume has no per-object accounting'));
    // One quota unit represents one user-visible MCP tool request. Internal
    // resolver steps are not charged separately.
    if(class_exists('OAI_Quota')){
+    $callback=static function()use($id,$params){return self::call_tool($id,$params);};
+    if((self::$auth_context['quota_authority']??'')==='central_gateway')return OAI_Quota::without_local_metering($callback);
     $arguments=is_array($params['arguments']??null)?$params['arguments']:array();
     $fingerprint=wp_json_encode(array('method'=>'tools/call','tool'=>$tool_name,'arguments'=>$arguments),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
     $request_id=(string)($id??'');
     if($request_id==='') $request_id=hash('sha256',$fingerprint);
-    $request_key=OAI_Quota::request_key('mcp',$request_id,$fingerprint);
-    $quota=OAI_Quota::consume_request($request_key,'mcp',1);
-    if(is_wp_error($quota)) return self::response($id,null,array('code'=>-32029,'message'=>$quota->get_error_message(),'data'=>$quota->get_error_data()));
+    $request_key=OAI_Quota::request_key('mcp',$request_id,$fingerprint,(string)(self::$auth_context['client_id']??'direct'));
+    $result=OAI_Quota::run_metered($request_key,'mcp',$fingerprint,$callback,OAI_Quota::units($tool_name),OAI_Quota::legacy_request_key('mcp',$request_id,$fingerprint));
+    if(is_wp_error($result)) return self::response($id,null,array('code'=>-32029,'message'=>$result->get_error_message(),'data'=>$result->get_error_data()));
+    if(is_array($result)&&!empty($result['_oai_quota_replay']))return self::response($id,array('content'=>array(array('type'=>'text','text'=>wp_json_encode($result))),'isError'=>$result['state']!=='succeeded'));
+    return $result;
    }
    return self::call_tool($id,$params);
   }
@@ -216,7 +222,7 @@ class OAI_MCP {
    ,'system.test_automation_status'=>array('type'=>'object','additionalProperties'=>false)
    ,'system.regression_run'=>array(
      'type'=>'object',
-     'required'=>array('content_post_id','elementor_post_id','elementor_widget_id','product_id'),
+     'description'=>'Uses managed QA fixtures from the current administrator-enabled session when IDs are omitted.',
      'properties'=>array(
       'content_post_id'=>array('type'=>'integer','minimum'=>1),
       'elementor_post_id'=>array('type'=>'integer','minimum'=>1),
@@ -235,7 +241,7 @@ class OAI_MCP {
     )
    ,'system.regression_matrix'=>array(
      'type'=>'object',
-     'required'=>array('content_post_id','elementor_post_id','elementor_widget_id','product_id'),
+     'description'=>'Uses managed QA fixtures from the current administrator-enabled session when IDs are omitted.',
      'properties'=>array(
       'content_post_id'=>array('type'=>'integer','minimum'=>1),
       'elementor_post_id'=>array('type'=>'integer','minimum'=>1),
@@ -380,7 +386,7 @@ class OAI_MCP {
   $tools[]=self::tool('operation.reject','Reject requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations.', $schemas['operation.reject'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.approve','Approval requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.apply','Apply requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations and still runs conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
-  $tools[]=self::tool('system.operations_cleanup','Safely inspect or delete terminal operation ledger rows. Dry-run is default. Active pending/approved/applying/rolling_back operations are always protected. Applied rows require explicit include_applied=true. Audit log is preserved.',$schemas['system.operations_cleanup'],array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('system.operations_cleanup','Safely inspect or delete terminal operation ledger rows. Dry-run is default. Active pending/approved/applying/rollback_pending/rolling_back operations are always protected. Applied rows require explicit include_applied=true. Audit log is preserved.',$schemas['system.operations_cleanup'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.rollback','Rollback requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations and still runs rollback conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
   return $tools;
  }

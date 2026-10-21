@@ -40,7 +40,7 @@ class OAI_Read {
    $out[]=array(
     'name'=>$name,'label'=>$obj->label,'public'=>(bool)$obj->public,
     'hierarchical'=>(bool)$obj->hierarchical,
-    'supports'=>array_values((array)$obj->supports),
+    'supports'=>array_keys(get_all_post_type_supports($name)),
     'rest_base'=>isset($obj->rest_base)?$obj->rest_base:null
    );
   }

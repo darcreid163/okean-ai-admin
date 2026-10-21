@@ -45,6 +45,7 @@ class OAI_Woodmart {
  }
  private static function writable($field){
   $type=$field->args['type']??'';
+  if(in_array($type,array('select','buttons'),true)&&!is_array($field->args['options']??null))return false;
   return !self::restricted($field) && in_array($type,self::TYPES,true)
    && in_array($type,apply_filters('woodmart_ai_writable_field_types',self::native_types()),true);
  }
@@ -95,6 +96,9 @@ class OAI_Woodmart {
  }
  public static function get($req){return self::get_setting((string)$req->get_param('id'));}
  public static function get_setting($id){
+  try{return self::get_setting_checked($id);}catch(Throwable $e){return new WP_Error('oai_woodmart_schema','Native setting descriptor is unavailable',array('status'=>409));}
+ }
+ private static function get_setting_checked($id){
   $field=self::field($id);if(is_wp_error($field))return $field;
   if(self::restricted($field))return new WP_Error('oai_woodmart_restricted','This setting is excluded from the adapter',array('status'=>403));
   self::refresh();
@@ -134,12 +138,17 @@ class OAI_Woodmart {
    foreach($colors as $state=>$color)if(!in_array($state,array('idle','hover','active','focus'),true)||!is_string($color)||!preg_match('/^(?:#[a-f0-9]{3}|#[a-f0-9]{6}|#[a-f0-9]{8}|(?:rgba?|hsla?)\([0-9.,%\s+\-]+\)|transparent)$/iD',$color))return new WP_Error('oai_woodmart_value','Invalid color value or state',array('status'=>422));
   }
   if(in_array($type,array('typography','background'),true)&&!is_array($input))return new WP_Error('oai_woodmart_value','This setting requires an object',array('status'=>422));
-  if(in_array($type,array('select','buttons'),true)&&(!is_scalar($input)||!array_key_exists((string)$input,$field->args['options']??array())))return new WP_Error('oai_woodmart_value','Choose a declared setting option',array('status'=>422));
+  if(in_array($type,array('select','buttons'),true)){
+   $options=$field->args['options']??null;
+   if(!is_array($options))return new WP_Error('oai_woodmart_schema','Declared setting choices are unavailable; this field is read-only',array('status'=>409));
+   if(!is_scalar($input)||!array_key_exists((string)$input,$options))return new WP_Error('oai_woodmart_value','Choose a declared setting option',array('status'=>422));
+  }
   if($type==='switcher'&&!in_array($input,array('0','1','yes',0,1),true))return new WP_Error('oai_woodmart_value','Switcher requires 0, 1 or yes',array('status'=>422));
   if($type==='range'&&(!is_numeric($input)||(isset($field->args['min'])&&$field->args['min']!==''&&(float)$input<(float)$field->args['min'])||(isset($field->args['max'])&&$field->args['max']!==''&&(float)$input>(float)$field->args['max'])))return new WP_Error('oai_woodmart_value','Range value is outside declared bounds',array('status'=>422));
   if(in_array($type,array('text_input','textarea'),true)&&!is_string($input))return new WP_Error('oai_woodmart_value','Text settings require a string',array('status'=>422));
-  return \XTS\AI_Abilities\Theme_Settings\Devices_Value::is_devices_type($type)
-   ?\XTS\AI_Abilities\Theme_Settings\Devices_Value::encode($input,$field->args,$current):$field->sanitize($input);
+  try{return \XTS\AI_Abilities\Theme_Settings\Devices_Value::is_devices_type($type)
+   ?\XTS\AI_Abilities\Theme_Settings\Devices_Value::encode($input,$field->args,$current):$field->sanitize($input);}
+  catch(Throwable $e){return new WP_Error('oai_woodmart_value','Native setting validation failed; no write is permitted',array('status'=>422));}
  }
  private static function roundtrip($options){
   $normalized=OAI_REST::normalize_option_snapshot(self::OPTION,$options);
@@ -148,6 +157,9 @@ class OAI_Woodmart {
   return true;
  }
  public static function plan($id,$input){
+  try{return self::plan_checked($id,$input);}catch(Throwable $e){return new WP_Error('oai_woodmart_schema','Native setting validation is unavailable; no write is permitted',array('status'=>409));}
+ }
+ private static function plan_checked($id,$input){
   $field=self::field($id);if(is_wp_error($field))return $field;
   if(!self::writable($field))return new WP_Error('oai_woodmart_readonly','This setting is not writable through the adapter',array('status'=>403));
   $options=self::options(self::stored(self::OPTION));if(is_wp_error($options))return $options;

@@ -1,8 +1,0 @@
-{
-  "version": "pilot-2026-10-02",
-  "period": "calendar_month_utc",
-  "status": "preliminary",
-  "plans": {"free": 100, "pro": 500, "power": 2000, "agency": 5000, "scale": 10000},
-  "billing": "successful_single_tool_call",
-  "batch": "disabled_until_receipt_accounting_contract"
-}

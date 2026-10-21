@@ -1,9 +1,9 @@
 WP AI Admin Build Metadata (not a cryptographic signature)
-Version: 2.1.14
-Build ID: 2.1.14-native-consent-return-20261007
+Version: 2.1.17
+Build ID: 2.1.17-usage-batch-v1-20261019
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
-Purpose: restore native dashboard navigation and connection links; retain browser pairing and all native 2.1.11 fixes
+Purpose: public-release hardening; atomic lifecycle claims, crash-safe Apply/Rollback reconciliation, control-plane option protection, OAuth demotion checks, deactivation safety, and expanded release qualification
 Expected catalog: 116 tools
 Inherited self-test checks: 79 (runtime retest required after installation)
 Security fuzz at 10 iterations: 220 (runtime retest required after installation)
