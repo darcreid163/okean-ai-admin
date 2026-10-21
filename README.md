@@ -34,7 +34,7 @@ Successful reads/Sandbox calls count; every successful Batch object is one actio
 
 `READ → PLAN → SANDBOX → APPROVAL → APPLY → VERIFY → RECEIPT/PROOF → ROLLBACK`. No direct live writes. No unregistered full-document Elementor mutations, paid plan conversion, subscription state migrations or site installation without staging and explicit approval.
 
-Run hosted [Native CI](.github/workflows/native-validate.yml) and [Cloud CI](.github/workflows/cloud-0311-validate.yml), including PHP 8.2/8.3/8.4, MySQL and SQLite, OAuth isolation, Billing/Batch, WordPress smoke and upgrade. Candidate Native ZIP MUST exclude `wp-ai-admin-cloud/`. No CI workflow may use production secrets.
+Run hosted [Native CI](.github/workflows/native-validate.yml) and [Cloud CI](.github/workflows/cloud-validate.yml), including PHP 8.2/8.3/8.4, MySQL and SQLite, OAuth isolation, Billing/Batch, WordPress smoke and upgrade. Candidate Native ZIP MUST exclude `wp-ai-admin-cloud/`. No CI workflow may use production secrets.
 
 [One current audit](docs/RELEASE-STATE-2026-10-21.md) · [Migration / release checklist](MIGRATION-STATUS.md) · [Repository policies](docs/REPOSITORY-BOUNDARIES.md).
 
@@ -44,7 +44,7 @@ Historical dated release notes are preserved as references, not active installat
 
 **Основная разработка только здесь:** `integration/unified-monorepo-runner-20261021`. Native и Cloud хранятся и проверяются вместе, без копирования старых деревьев Cloud 0.1.0/0.3.6. Отдельные репозитории служат источниками исторически проверенных изменений; переносить туда готовые компоненты будем после релизных тестов.
 
-**CI:** `.github/workflows/native-validate.yml` (PHP 8.2–8.4, реальный WordPress, ZIP Native без Cloud) и `.github/workflows/cloud-0311-validate.yml` (PHP 8.2–8.4, SQLite/MySQL, OAuth, tenant, Batch, Skills/Media). Оба используют доступный GitHub-hosted `ubuntu-latest`, собственного runner не требуется. Рабочий кандидат Cloud 0.3.12-dev **не установлен** на production 0.3.11.
+**CI:** `.github/workflows/native-validate.yml` (PHP 8.2–8.4, реальный WordPress, ZIP Native без Cloud) и `.github/workflows/cloud-validate.yml` (PHP 8.2–8.4, SQLite/MySQL, OAuth, tenant, Batch, Skills/Media). Оба используют доступный GitHub-hosted `ubuntu-latest`, собственного runner не требуется. Рабочий кандидат Cloud 0.3.12-dev **не установлен** на production 0.3.11.
 
 **Важное предупреждение:** репозиторий фактически PUBLIC. Исходники уже могли быть скопированы третьими лицами. Делать закрытым после выпуска не означает устранить прежнее раскрытие. Никогда не коммитить секреты/production DB, приватные ключи или платежные данные. Для защиты новых внутренних алгоритмов предпочтительна приватность *сейчас*, а не позднее.
 
