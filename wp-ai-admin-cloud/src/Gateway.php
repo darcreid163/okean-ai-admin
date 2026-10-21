@@ -4,7 +4,24 @@ namespace WPAICloudGateway;
 
 final class Gateway {
     public const VERSIONS=['2025-03-26','2025-06-18','2025-11-25'];
-    public function __construct(private readonly Core $core) {}
+    public function __construct(
+        private readonly Core $core,
+        private readonly ?Skills $skills=null,
+        private readonly ?Unsplash $unsplash=null
+    ) {}
+    private function skillLibrary(): Skills {
+        return $this->skills ?? Skills::fromConfig(dirname(__DIR__).'/config/skills.php');
+    }
+    private function mediaSearch(array $args): array {
+        $provider=$this->unsplash;
+        if ($provider===null && defined('WP_AI_CLOUD_UNSPLASH_ACCESS_KEY')) {
+            $key=constant('WP_AI_CLOUD_UNSPLASH_ACCESS_KEY');
+            if (!is_string($key)) throw new Fault('unsplash_disabled',503);
+            $provider=new Unsplash($key);
+        }
+        if ($provider===null) throw new Fault('unsplash_disabled',503);
+        return $provider->search($args['query'],$args['per_page']??10);
+    }
     public static function tools(): array {
         $site=['type'=>'string','description'=>'Explicit registered site ID; never inferred from a global active site.'];
         $tool=function(string $name,string $description,array $properties,array $required,bool $read):array {
@@ -12,10 +29,18 @@ final class Gateway {
                 'securitySchemes'=>[['type'=>'oauth2','scopes'=>$read?['mcp:read']:['mcp:read','mcp:write']]],'annotations'=>['readOnlyHint'=>$read,'destructiveHint'=>!$read,'idempotentHint'=>true,'openWorldHint'=>false]];
         };
         return [
+            $tool('cloud_skills_list','List closed server-side AI workflows. Read-only; human approval is still needed for writes.',[],[],true),
+            $tool('cloud_skill_load','Read one server-side workflow, not a command to execute.',['skill_id'=>['type'=>'string']],['skill_id'],true),
+            $tool('cloud_media_search_images','Search licensed image metadata through an optional server-side Unsplash key. Never sends the key to a site.',['query'=>['type'=>'string'],'per_page'=>['type'=>'integer','minimum'=>1,'maximum'=>20]],['query'],true),
             $tool('cloud_sites_list','List only connected sites allowed by this access token.',[],[],true),
-            $tool('cloud_usage','Show central monthly quota and pending reservations.',[],[],true),
+            $tool('cloud_usage','Show the shared account quota, UTC day or month window and pending reservations.',[],[],true),
+            $tool('cloud_usage_history','List authenticated account billing entries for sites selected in this OAuth grant; includes verified charges without tool inputs/outputs.',['limit'=>['type'=>'integer','minimum'=>1,'maximum'=>100]],[],true),
+            $tool('cloud_site_batch_call','Run up to 20 existing Native read or sandbox item calls. Reserve the upper bound first; each successful item costs one action and failed/cancelled items cost zero. Sandbox approval/apply remains separate. Server opt-in is required. Reuse idempotency_key on retries; do not resubmit an uncertain item.',
+                ['site_id'=>$site,'items'=>['type'=>'array','minItems'=>1,'maxItems'=>20,'items'=>['type'=>'object','properties'=>['id'=>['type'=>'string'],'tool'=>['type'=>'string'],'arguments'=>['type'=>'object']],'required'=>['id','tool','arguments'],'additionalProperties'=>false]],'idempotency_key'=>['type'=>'string'],'stop_on_error'=>['type'=>'boolean']],['site_id','items','idempotency_key'],false),
+            $tool('cloud_site_batch_receipt','Read confirmed per-item charges and held unknown outcomes for a batch in an authorized site. Free at capacity. Does not execute or retry any Native tool.',
+                ['site_id'=>$site,'request_key'=>['type'=>'string']],['site_id','request_key'],true),
             $tool('cloud_site_tools_list','Get the complete tool catalog of an explicitly selected site. Identical features on all plans.',['site_id'=>$site],['site_id'],true),
-            $tool('cloud_site_tool_call','Execute a site tool through its local security and approval lifecycle. A successful single call costs one action; failed calls, operation verification, receipts and rollback cost zero even when the monthly quota is exhausted. Never retry an uncertain write with a new idempotency_key. Batch execution is unavailable until receipt-based accounting is implemented.',
+            $tool('cloud_site_tool_call','Execute a site tool through its local security and approval lifecycle. A successful single call costs one action; failed calls, operation verification, receipts and rollback cost zero even when the quota is exhausted. Never retry an uncertain write with a new idempotency_key. Legacy Native batch execution is gated; use cloud_site_batch_call only when object-v1 server policy is enabled.',
                 ['site_id'=>$site,'tool'=>['type'=>'string'],'arguments'=>['type'=>'object'],'idempotency_key'=>['type'=>'string','description'=>'Stable unique ID of this logical action, reused verbatim for retries; different actions require different IDs.']],['site_id','tool','arguments','idempotency_key'],false)
         ];
     }
@@ -33,7 +58,7 @@ final class Gateway {
         if ($method==='initialize') {
             $requested=$p['protocolVersion']??'';
             $version=in_array($requested,self::VERSIONS,true)?$requested:'2025-11-25';
-            return $reply(['protocolVersion'=>$version,'capabilities'=>['tools'=>['listChanged'=>false]],'serverInfo'=>['name'=>'wp-ai-admin-cloud','title'=>'https://wpaiadmin.ru/mcp','version'=>'0.3.6'],'instructions'=>'Multi-client beta gateway. One account and shared plan can hold up to 50 sites. Streamable HTTP is primary; legacy SSE is available for Qwen Responses API. Always select site_id explicitly. For an uncertain outcome reconcile the existing action before issuing another mutation. OAuth onboarding uses a WordPress account and explicit site consent. Newly added sites need reauthorization. Batch receipt accounting is pending.']);
+            return $reply(['protocolVersion'=>$version,'capabilities'=>['tools'=>['listChanged'=>false]],'serverInfo'=>['name'=>'wp-ai-admin-cloud','title'=>'https://wpaiadmin.ru/mcp','version'=>\WPAI_CLOUD_VERSION],'instructions'=>'Multi-client beta gateway. One account and shared plan can hold up to 50 sites. Streamable HTTP is primary; legacy SSE is available for Qwen Responses API. Always select site_id explicitly. For an uncertain outcome reconcile the existing action before issuing another mutation. OAuth onboarding uses a WordPress account and explicit site consent. Newly added sites need reauthorization. Bounded gateway batch is available only under explicit object-v1 server policy; Native resumable batch controls remain gated.']);
         }
         if ($method==='ping') return $reply((object)[]);
         if ($method==='tools/list') return $reply(['tools'=>self::tools()]);
@@ -48,16 +73,25 @@ final class Gateway {
             foreach ($definition['inputSchema']['required'] as $key) if (!array_key_exists($key,$args)) throw new Fault('missing_argument');
             foreach ($properties as $key=>$rule) if (array_key_exists($key,$args)) {
                 if ($rule['type']==='string' && !is_string($args[$key])) throw new Fault('invalid_argument_type');
+                if ($rule['type']==='integer' && (!is_int($args[$key]) || $args[$key]<1 || $args[$key]>100)) throw new Fault('invalid_argument_type');
+                if ($rule['type']==='array' && (!is_array($args[$key]) || !array_is_list($args[$key]))) throw new Fault('invalid_argument_type');
+                if ($rule['type']==='boolean' && !is_bool($args[$key])) throw new Fault('invalid_argument_type');
                 if ($rule['type']==='object' && (!is_array($args[$key]) || ($args[$key]!==[] && array_is_list($args[$key])))) throw new Fault('invalid_argument_type');
             }
             if (!in_array('mcp:read',$actor['scopes'],true)) throw new Fault('read_scope_required',403);
             $value=match($name) {
+                'cloud_skills_list'=>['skills'=>$this->skillLibrary()->listing()],
+                'cloud_skill_load'=>$this->skillLibrary()->load($args['skill_id']),
+                'cloud_media_search_images'=>$this->mediaSearch($args),
                 'cloud_sites_list'=>array_values(array_filter($this->core->sites($actor['owner']),fn($s)=>in_array($s['id'],$actor['site_ids'],true))),
                 'cloud_usage'=>$this->core->usage($actor['owner'],$now),
+                'cloud_usage_history'=>$this->core->ledger($actor['owner'],$args['limit']??50,$actor['site_ids']),
+                'cloud_site_batch_call'=>$this->core->batchCall($actor,$args['site_id'],$args['items'],$args['idempotency_key'],$args['stop_on_error']??false,$now),
+                'cloud_site_batch_receipt'=>$this->core->batchReceipt($actor,$args['site_id'],$args['request_key'],$now),
                 'cloud_site_tools_list'=>$this->core->catalog($actor,$args['site_id'],$now),
                 'cloud_site_tool_call'=>$this->core->call($actor,$args['site_id'],$args['tool'],$args['arguments'],$args['idempotency_key'],$now)
             };
-            $failed=$name==='cloud_site_tool_call' && ($value['state']??'')==='failed';
+            $failed=in_array($name,['cloud_site_tool_call','cloud_site_batch_call'],true) && in_array(($value['state']??''),['failed','uncertain'],true);
             return $reply(['content'=>[['type'=>'text','text'=>Security::canonical($value)]],'isError'=>$failed]);
         } catch(Fault $e) {
             $result=['content'=>[['type'=>'text','text'=>Security::canonical(['error'=>$e->reason,'status'=>$e->status])]],'isError'=>true];

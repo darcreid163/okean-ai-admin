@@ -3,6 +3,21 @@ set -euo pipefail
 TASK_REPO_DIR="$PWD"
 TASK_WP_DIR="$RUNNER_TEMP/wp-upgrade-site"
 TASK_CLI_FILE="$RUNNER_TEMP/wp-cli.phar"
+
+# Publication gate 4: the legacy upgrade scenario needs three private fixtures that are
+# deliberately not part of this repository (2.1.5 and 2.1.11 archives, Woodmart MCP 1.0.1).
+# Skipping is explicit and loud; OAI_REQUIRE_PRIVATE_FIXTURES=1 turns the skip into a failure
+# for a maintainer who does have the private fixtures mounted.
+if [[ "${OAI_REQUIRE_PRIVATE_FIXTURES:-0}" != "1" ]]; then
+ for task_required in releases/2.1.5/wp-ai-admin-2.1.5.zip releases/2.1.11/wp-ai-admin-2.1.11.zip tests/fixtures/woodmart-mcp-1.0.1.zip; do
+  if [[ ! -f "$TASK_REPO_DIR/$task_required" ]]; then
+   echo "SKIP legacy upgrade scenario: missing private fixture $task_required" >&2
+   echo "Set OAI_REQUIRE_PRIVATE_FIXTURES=1 to require these fixtures and fail instead." >&2
+   exit 0
+  fi
+ done
+fi
+
 curl -fsSL --retry 3 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$TASK_CLI_FILE"
 mkdir -p "$TASK_WP_DIR"
 task_wp() { php "$TASK_CLI_FILE" --path="$TASK_WP_DIR" "$@"; }

@@ -72,7 +72,7 @@ final class Admin {
             catch (\Throwable $e) { $output=['error'=>'gateway_service_unavailable']; }
         }
         echo '<hr><h2>Gateway — тестовый режим</h2><p>Сервер '.(WordPress::configured()?'настроен':'выключен или требует настройки').'. MCP: <code>'.esc_html(Settings::endpoint()).'</code></p>';
-        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и коммерческие разрешения клиента ещё не включены. Тарифы читаются из Cloud Core; журнал gateway хранится отдельно.</p>';
+        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и коммерческие разрешения клиента ещё не включены. Новые тарифы: Free 100 в месяц, Pro 500, Biznes 2000, BiznesPro 5000 в сутки (UTC). Старые назначения сохраняют месячные условия до явного перевода. Платежи и ручной сброс не реализованы; журнал gateway хранится отдельно.</p>';
         if ($output!==null) echo '<pre style="white-space:pre-wrap">'.esc_html(wp_json_encode($output,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)).'</pre>';
         if ($secret!==null) {
             echo '<p><strong>Токен gateway показывается один раз. Срок — 1 час.</strong></p><textarea readonly autocomplete="off" rows="2" cols="90">'.esc_textarea($secret).'</textarea>';

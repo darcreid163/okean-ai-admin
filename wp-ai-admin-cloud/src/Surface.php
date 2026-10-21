@@ -27,9 +27,12 @@ final class Surface {
     public static function serve(): void {
         $path=parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH);$kind=self::routeKind(is_string($path)?$path:'');
         if(!$kind)return;
+        // Every public Cloud surface, including early denials, is non-cacheable
+        // and protected against MIME sniffing.
+        nocache_headers();
+        header('X-Content-Type-Options: nosniff');
         // Preserve the local WP AI Admin OAuth discovery on the main domain.
         if(!is_ssl()){status_header(403);exit;}
-        nocache_headers();
         if($kind==='mcp') { rest_get_server()->serve_request('/wpai-cloud/v1/mcp');exit; }
         if($kind==='sse') { Sse::open();exit; }
         if($kind==='sse_messages') { Sse::messages();exit; }
@@ -81,6 +84,7 @@ final class Surface {
                 'private_site_address_blocked'=>'Адрес сайта не является публичным. Нужен доступный в интернете HTTPS-сайт.',
                 'public_https_site_required','invalid_site_host','invalid_site_path'=>'Введите полный адрес WordPress-сайта вида https://example.ru без пути входа и параметров.',
                 'pilot_site_count_limit'=>'Достигнут тестовый лимит регистраций сайтов для этого аккаунта.',
+                'site_already_registered'=>'Этот WordPress-сайт уже подключён к другому аккаунту WP AI Admin. Для защиты от перехвата сайта повторное подключение другим аккаунтом запрещено. Используйте другой тестовый сайт либо сначала отключите сайт в аккаунте-владельце.',
                 default=>$e->reason
             };
             echo '<p>'.esc_html($message).'</p><p>Код ошибки: <code>'.esc_html($e->reason).'</code></p>';
@@ -101,7 +105,12 @@ final class Surface {
         if(($_SERVER['REQUEST_METHOD']??'GET')==='POST') {
             check_admin_referer('wpai_beta_connect','wpai_nonce');
             $mode=$_POST['connect_mode']??'';
-            if($mode==='check') {
+            if($mode==='disconnect') {
+                $siteId=$_POST['site_id']??null;
+                if(!is_string($siteId)||strlen($siteId)>160)throw new Fault('invalid_site_selection');
+                $core->disconnect($owner,wp_unslash($siteId),time());
+                echo '<p role="status">Сайт отключён, доступ отозван.</p>';
+            }elseif($mode==='check') {
                 $home=$_POST['home']??null;if(!is_string($home)||strlen($home)>512)throw new Fault('invalid_site_input');
                 $check=WordPress::pairing()->checkSite($owner,wp_unslash($home),time());
                 echo '<p>Связь с сайтом подтверждена: <strong>'.esc_html($check['site_url']).'</strong>. Версия плагина: '.esc_html($check['plugin_version']).'. Теперь нажмите «Подключить автоматически» и подтвердите доступ на сайте.</p>';
@@ -116,12 +125,20 @@ final class Surface {
             }
         }
         $sites=$core->sites($owner);$usage=$core->usage($owner,time());
-        echo '<h2>Мои сайты</h2><p>Один аккаунт и один тариф для всех подключённых сайтов. Действия списываются из общего лимита аккаунта.</p><p>Тариф: <strong>'.esc_html(strtoupper($usage['plan'])).'</strong> · Лимит: '.(int)$usage['limit'].' · Использовано: '.(int)$usage['used'].' · В обработке: '.(int)$usage['reserved'].' · Осталось: '.(int)$usage['remaining'].'</p><p>Подключено сайтов: <strong>'.count($sites).'</strong>. В тестовом режиме доступно до '.Core::MAX_SITES.' регистраций на аккаунт; отдельная подписка для каждого сайта не требуется.</p>';
+        echo '<h2>Обзор аккаунта</h2><p>Один аккаунт и один тариф для всех подключённых сайтов. Действия списываются из общего лимита аккаунта.</p><p>Тариф: <strong>'.esc_html(strtoupper($usage['plan'])).'</strong> · Лимит: '.(int)$usage['limit'].' · Использовано: '.(int)$usage['used'].' · В обработке: '.(int)$usage['reserved'].' · Осталось: '.(int)$usage['remaining'].'</p><p>Подключено сайтов: <strong>'.count($sites).'</strong>. В тестовом режиме доступно до '.Core::MAX_SITES.' регистраций на аккаунт; отдельная подписка для каждого сайта не требуется.</p>';
+        $periodLabel=$usage['period_kind']===QuotaPolicy::DAY?'сутки':'месяц';
+        echo '<p>Период учёта: '.esc_html($periodLabel).' (UTC). Следующий период: '.esc_html($usage['period_end_utc']).'. Неиспользованные действия не переносятся.</p>';
+        if ($usage['legacy_terms']) echo '<p>Сохранены прежние месячные условия. Перевод на новый тариф выполняется отдельно.</p>';
         if($sites){
-            echo '<table><thead><tr><th>Сайт</th><th>ID подключения</th></tr></thead><tbody>';
-            foreach($sites as $s)echo '<tr><td>'.esc_html($s['home']).'</td><td><code>'.esc_html($s['id']).'</code></td></tr>';
+            echo '<h2>Мои сайты</h2><table style="width:100%;border-collapse:collapse"><thead><tr><th>Сайт</th><th>Подключение</th><th>Действие</th></tr></thead><tbody>';
+            foreach($sites as $s) {
+                echo '<tr><td>'.esc_html($s['home']).'</td><td><code>'.esc_html($s['id']).'</code></td><td><form method="post">';
+                wp_nonce_field('wpai_beta_connect','wpai_nonce');
+                echo '<input type="hidden" name="site_id" value="'.esc_attr($s['id']).'"><button type="submit" name="connect_mode" value="disconnect">Отключить</button></form></td></tr>';
+            }
             echo '</tbody></table><p>После добавления нового сайта повторите авторизацию WP AI Admin в ChatGPT и отметьте все нужные сайты.</p>';
         }
+        echo '<h2>Подключение ChatGPT</h2><p>Используйте центральный MCP: <code>'.esc_html(Settings::endpoint()).'</code>. При авторизации выберите нужные сайты.</p><h2>История действий</h2><p>История операций доступна в журнале Cloud Gateway и на подключённых сайтах.</p>';
         echo '<h2>Добавить сайт</h2><p>Укажите адрес, войдите на этом сайте как администратор и подтвердите подключение. Сайт появится в этом кабинете автоматически.</p>';
         echo '<form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
         echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><button type="submit" name="connect_mode" value="automatic">Подключить автоматически</button> <button type="submit" name="connect_mode" value="check">Проверить связь</button></form>';

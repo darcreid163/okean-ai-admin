@@ -63,8 +63,12 @@ $before=$transport->executions;
 $reconciledRetry=$core->call($actor,$site['id'],'wp_get_site',['uncertain'=>true],'timeout-1',$now);
 check($reconciledRetry['reconciled']===true && $transport->executions===$before,'Reconciled action redispatched');
 $core->setPlan('operator','1','pro',$now);
-check($core->usage('1',$now)['limit']===500 && $core->usage('1',$now)['used']===1,'Upgrade erased usage or wrong quota');
+$proUsage=$core->usage('1',$now);
+check($proUsage['limit']===500 && $proUsage['used']===0 && $proUsage['period_kind']===WPAICloudGateway\QuotaPolicy::DAY,'Upgraded Pro must start in its own daily UTC quota window');
+$oldBalance=$store->row('SELECT used,reserved FROM '.$store->table('balances').' WHERE owner=? AND period=?',['1',gmdate('Y-m',$now)]);
+check($oldBalance !== null && (int)$oldBalance['used']===1 && (int)$oldBalance['reserved']===0,'Upgrade modified historical Free monthly balance');
 $core->setPlan('operator','1','free',$now);
+check($core->usage('1',$now)['used']===1 && $core->usage('1',$now)['period_kind']===WPAICloudGateway\QuotaPolicy::MONTH,'Returning to Free lost historical monthly consumption');
 rejects(fn()=>$core->setPlan('operator','1','unlimited',$now),'unknown_plan');
 $core->revokeToken('1',hash('sha256',$read['access_token']),$now);
 rejects(fn()=>$core->authenticate($read['access_token'],$now),'invalid_or_expired_token');
@@ -80,7 +84,7 @@ check($bad['result']['isError']===true,'Unexpected routing argument accepted');
 $visible=$gateway->handle($readActor,['jsonrpc'=>'2.0','id'=>1,'method'=>'tools/call','params'=>['name'=>'cloud_sites_list','arguments'=>[]]],$now);
 // Direct handle accepts a trusted actor; the HTTP adapter reauthenticates before every method.
 check(count(json_decode($visible['result']['content'][0]['text'],true))===1,'Token site filter leaked');
-check(count(Gateway::tools())===4,'Gateway catalog');
+check(array_column(Gateway::tools(),'name')===['cloud_skills_list','cloud_skill_load','cloud_media_search_images','cloud_sites_list','cloud_usage','cloud_usage_history','cloud_site_batch_call','cloud_site_batch_receipt','cloud_site_tools_list','cloud_site_tool_call'],'Gateway catalog');
 
 foreach(['127.0.0.1','10.0.0.1','192.168.1.1','169.254.169.254','100.64.0.1','198.18.0.1','192.0.2.1','224.0.0.1','::1','fe80::1','fc00::1','::ffff:127.0.0.1','2001:db8::1','2001:20::1','2002:7f00:1::','3fff::1'] as $ip) check(!Security::publicIp($ip),'Unsafe IP accepted: '.$ip);
 check(Security::publicIp('8.8.8.8') && Security::publicIp('2606:4700:4700::1111'),'Public IP rejected');
@@ -146,7 +150,7 @@ $core->ensureAccount('parallel'); $pSite=$core->connect('parallel','https://para
 $pToken=$core->mint('parallel',[$pSite['id']],['mcp:read'],$now);
 $command=[PHP_BINARY,'-n','-d','extension_dir='.ini_get('extension_dir')];
 $modules=['pdo','pdo_sqlite','sodium']; if(getenv('TEST_MYSQL_DSN')) array_push($modules,'mysqlnd','pdo_mysql');
-foreach($modules as $module) if(is_file(ini_get('extension_dir').'/'.$module.'.'.PHP_SHLIB_SUFFIX)) array_push($command,'-d','extension='.$module);
+foreach($modules as $module) foreach([$module.'.'.PHP_SHLIB_SUFFIX,'php_'.$module.'.'.PHP_SHLIB_SUFFIX] as $file) if(is_file(ini_get('extension_dir').'/'.$file)){array_push($command,'-d','extension='.$file);break;}
 array_push($command,__DIR__.'/worker.php',$database,$pSite['id'],(string)$now);
 $workers=[]; putenv('CLOUD_TEST_TOKEN='.$pToken['access_token']);
 $executionLog=tempnam(sys_get_temp_dir(),'wpai-executions-'); putenv('CLOUD_TEST_EXECUTION_LOG='.$executionLog);

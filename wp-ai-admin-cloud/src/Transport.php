@@ -5,11 +5,48 @@ namespace WPAICloudGateway;
 interface Transport { public function rpc(string $home, string $token, array $request): array; }
 interface PairingTransport { public function pairing(string $home,string $action,array $request=[]): array; }
 
+/** Method-specific validation shared by HTTPS and Core's transport boundary. */
+final class RpcReply {
+    public static function validate(array $reply,array $request): void {
+        if (($reply['jsonrpc']??null)!=='2.0' || !array_key_exists('id',$reply) || $reply['id']!==($request['id']??null) || (array_key_exists('error',$reply)===array_key_exists('result',$reply))) self::invalid();
+        if (array_key_exists('error',$reply)) {
+            $error=$reply['error'];
+            if (!is_array($error) || !is_int($error['code']??null) || !is_string($error['message']??null)) self::invalid();
+            return;
+        }
+        if (!is_array($reply['result'])) self::invalid();
+        if (($request['method']??'')!=='tools/call') return;
+        $result=$reply['result'];
+        if (array_key_exists('isError',$result) && !is_bool($result['isError'])) self::invalid();
+        if (!isset($result['content']) || !is_array($result['content']) || !array_is_list($result['content'])) self::invalid();
+        foreach ($result['content'] as $block) {
+            if (!is_array($block) || !is_string($block['type']??null)) self::invalid();
+            switch ($block['type']) {
+                case 'text':
+                    if (!is_string($block['text']??null)) self::invalid();
+                    break;
+                case 'image': case 'audio':
+                    if (!is_string($block['data']??null) || !is_string($block['mimeType']??null)) self::invalid();
+                    break;
+                case 'resource_link':
+                    if (!is_string($block['uri']??null) || !is_string($block['name']??null)) self::invalid();
+                    break;
+                case 'resource':
+                    $resource=$block['resource']??null;
+                    if (!is_array($resource) || !is_string($resource['uri']??null) || (!is_string($resource['text']??null) && !is_string($resource['blob']??null))) self::invalid();
+                    break;
+                default: self::invalid();
+            }
+        }
+    }
+    private static function invalid(): never { throw new Fault('upstream_outcome_unknown',502); }
+}
+
 final class HttpsTransport implements Transport,PairingTransport {
     public function rpc(string $home, string $token, array $request): array {
         if (!preg_match('/^[A-Za-z0-9._~-]{20,512}$/D', $token)) throw new Fault('invalid_site_token');
         $result=$this->request($home,'/wp-json/okean-ai/mcp','POST',$request,$token);
-        if (!is_array($result) || ($result['jsonrpc']??'')!=='2.0' || ($result['id']??null)!==($request['id']??null) || (isset($result['error']) === isset($result['result']))) throw new Fault('upstream_outcome_unknown',502);
+        RpcReply::validate($result,$request);
         return $result;
     }
     public function pairing(string $home,string $action,array $request=[]): array {

@@ -85,26 +85,52 @@ class OAI_Files {
   }
   return array('scope'=>$scope,'query'=>$q,'count'=>count($out),'items'=>$out);
  }
- public static function write($scope,$path,$content,$expected_sha256=''){
+ private static function target_lock($file){
+  // Separate lock inode survives file replacement and coordinates Native
+  // write/delete across different operations targeting the same local path.
+  $path=rtrim(sys_get_temp_dir(),DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'wpai-file-'.hash('sha256',$file).'.lock';
+  if(is_link($path))return new WP_Error('oai_file_lock','Unsafe target lock',array('status'=>503));
+  $handle=@fopen($path,'c');
+  if($handle===false)return new WP_Error('oai_file_lock','Target lock unavailable',array('status'=>503));
+  @chmod($path,0600);
+  if(!flock($handle,LOCK_EX|LOCK_NB)){fclose($handle);return new WP_Error('oai_file_busy','Another file operation is running',array('status'=>409));}
+  return $handle;
+ }
+ private static function release_target_lock($handle){flock($handle,LOCK_UN);fclose($handle);}
+ public static function write($scope,$path,$content,$expected_sha256='',$expected_exists=null){
   $file=OAI_Security::resolve_path_for_write($scope,$path); if(is_wp_error($file))return $file;
   if(strlen($content)>5*1024*1024)return new WP_Error('oai_file_large','Write limit is 5 MB',array('status'=>413));
-  $fs=self::fs(); $old=is_file($file)?($fs?$fs->get_contents($file):file_get_contents($file)):''; $old_hash=hash('sha256',(string)$old);
-  if($expected_sha256!=='' && !hash_equals($expected_sha256,$old_hash))return new WP_Error('oai_conflict','File changed since snapshot',array('status'=>409,'current_sha256'=>$old_hash));
   $guard=OAI_Security::php_guard($file,$content); if(!$guard['ok'])return new WP_Error('oai_php_guard','PHP safety check failed',$guard);
-  $dir=dirname($file); if(!is_dir($dir) && !wp_mkdir_p($dir))return new WP_Error('oai_dir','Could not create directory',array('status'=>500));
+  $fs=self::fs();
   if(!$fs)return new WP_Error('oai_filesystem','WordPress Filesystem unavailable',array('status'=>500));
-  $backup=$old!==''?$old:null; $ok=$fs->put_contents($file,$content,FS_CHMOD_FILE); if(!$ok)return new WP_Error('oai_write','File write failed',array('status'=>500));
-  return array('ok'=>true,'before_sha256'=>$old_hash,'after_sha256'=>hash('sha256',$content),'backup'=>$backup,'bytes'=>strlen($content),'path'=>$path);
+  if(($fs->method??'')!=='direct')return new WP_Error('oai_filesystem','Guarded file changes require the local direct filesystem',array('status'=>503));
+  $lock=self::target_lock($file);if(is_wp_error($lock))return $lock;
+  try{
+   clearstatcache(true,$file);$exists=is_file($file);
+   if($expected_exists!==null && $exists!==(bool)$expected_exists)return new WP_Error('oai_conflict','File existence changed since snapshot',array('status'=>409));
+   $old=$exists?$fs->get_contents($file):'';
+   if($old===false)return new WP_Error('oai_read','Could not read file before write',array('status'=>500));
+   $old_hash=hash('sha256',(string)$old);
+   if($expected_sha256!=='' && !hash_equals($expected_sha256,$old_hash))return new WP_Error('oai_conflict','File changed since snapshot',array('status'=>409,'current_sha256'=>$old_hash));
+   $dir=dirname($file); if(!is_dir($dir) && !wp_mkdir_p($dir))return new WP_Error('oai_dir','Could not create directory',array('status'=>500));
+   $backup=$exists?$old:null; $ok=$fs->put_contents($file,$content,FS_CHMOD_FILE); if(!$ok)return new WP_Error('oai_write','File write failed',array('status'=>500));
+   return array('ok'=>true,'before_sha256'=>$old_hash,'after_sha256'=>hash('sha256',$content),'backup'=>$backup,'bytes'=>strlen($content),'path'=>$path);
+  }finally{self::release_target_lock($lock);}
  }
  public static function delete($scope,$path,$expected_sha256=''){
   $file=OAI_Security::resolve_path($scope,$path); if(is_wp_error($file))return $file;
-  if(!is_file($file))return new WP_Error('oai_not_file','File not found',array('status'=>404));
   $fs=self::fs(); if(!$fs)return new WP_Error('oai_filesystem','WordPress Filesystem unavailable',array('status'=>500));
-  $data=$fs->get_contents($file); if($data===false)return new WP_Error('oai_read','Could not read file before delete',array('status'=>500));
-  $current=hash('sha256',(string)$data);
-  if($expected_sha256!=='' && !hash_equals($expected_sha256,$current))return new WP_Error('oai_conflict','File changed since snapshot',array('status'=>409,'current_sha256'=>$current));
-  if(!$fs->delete($file,false,'f'))return new WP_Error('oai_delete','File delete failed',array('status'=>500));
-  return array('ok'=>true,'before_sha256'=>$current,'path'=>$path);
+  if(($fs->method??'')!=='direct')return new WP_Error('oai_filesystem','Guarded file changes require the local direct filesystem',array('status'=>503));
+  $lock=self::target_lock($file);if(is_wp_error($lock))return $lock;
+  try{
+   clearstatcache(true,$file);
+   if(!is_file($file))return new WP_Error('oai_not_file','File not found',array('status'=>404));
+   $data=$fs->get_contents($file); if($data===false)return new WP_Error('oai_read','Could not read file before delete',array('status'=>500));
+   $current=hash('sha256',(string)$data);
+   if($expected_sha256!=='' && !hash_equals($expected_sha256,$current))return new WP_Error('oai_conflict','File changed since snapshot',array('status'=>409,'current_sha256'=>$current));
+   if(!$fs->delete($file,false,'f'))return new WP_Error('oai_delete','File delete failed',array('status'=>500));
+   return array('ok'=>true,'before_sha256'=>$current,'path'=>$path);
+  }finally{self::release_target_lock($lock);}
  }
  private static function fs(){ global $wp_filesystem; if(!empty($wp_filesystem))return $wp_filesystem; if(!function_exists('WP_Filesystem'))require_once ABSPATH.'wp-admin/includes/file.php'; if(!WP_Filesystem())return false; return $wp_filesystem; }
 }

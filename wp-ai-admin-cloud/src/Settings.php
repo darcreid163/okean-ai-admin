@@ -60,7 +60,20 @@ final class Settings {
             if (isset($plans[$r['slug']]) || (int)$r['batch_objects_per_action']!==5 || (int)$r['failed_actions_billable']!==0 || (int)$r['rollback_billable']!==0 || (int)$r['verify_billable']!==0) throw new Fault('core_plan_policy_incompatible',503);
             $plans[$r['slug']]=(int)$r['monthly_actions'];
         }
-        return ['version'=>'core-v1-'.substr(hash('sha256',Security::canonical($rows??[])),0,24),'period'=>'calendar_month_utc','billing'=>'successful_single_tool_call','batch'=>'disabled_until_receipt_accounting_contract','plans'=>$plans];
+        $batch=in_array(get_option('wpai_gateway_batch_object_v1',false),[true,1,'1'],true);
+        $policy=self::catalogPolicy();
+        $policy['legacy_plans']=$plans;
+        $policy['batch']=$batch?BatchAccounting::POLICY:'disabled_until_receipt_accounting_contract';
+        $policy['version']='tariffs-v2-'.substr(hash('sha256',Security::canonical([$policy,$rows??[]])),0,24);
+        QuotaPolicy::validate($policy);
+        return $policy;
+    }
+    public static function catalogPolicy(): array {
+        try { $policy=json_decode((string)file_get_contents(dirname(__DIR__).'/config/plans.json'),true,16,JSON_THROW_ON_ERROR); }
+        catch (\Throwable $e) { throw new Fault('invalid_quota_policy',503); }
+        if (!is_array($policy) || ($policy['period']??'')!=='per_plan_utc') throw new Fault('invalid_quota_policy',503);
+        QuotaPolicy::validate($policy);
+        return $policy;
     }
     public static function account(string $owner): void {
         global $wpdb;

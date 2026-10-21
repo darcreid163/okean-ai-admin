@@ -41,11 +41,19 @@ final class OAuth {
     public function approve(string $owner,array $auth,array $sites,int $now): string {
         // Revalidate the registered redirect and PKCE contract after the user consent POST.
         $verified=$this->authorization(['client_id'=>$auth['client_id'],'redirect_uri'=>$auth['redirect_uri'],'resource'=>$auth['resource'],'response_type'=>'code','code_challenge'=>$auth['challenge'],'code_challenge_method'=>'S256','scope'=>implode(' ',$auth['scopes']),'state'=>$auth['state']]);
-        $owned=array_column($this->core->sites($owner),'id');
-        if(!$sites||!array_is_list($sites)||count($sites)>Core::MAX_SITES||array_filter($sites,fn($s)=>!is_string($s))||array_diff($sites,$owned)||count(array_unique($sites))!==count($sites))throw new Fault('invalid_site_consent',403);
-        $code=Security::b64(random_bytes(32));
-        $this->store->execute('INSERT INTO '.$this->store->table('oauth_codes').' (hash,owner,client,redirect,resource,scopes,sites,challenge,expires) VALUES (?,?,?,?,?,?,?,?,?)',[hash('sha256',$code),$owner,$verified['client_id'],$verified['redirect_uri'],$this->resource,Security::canonical($verified['scopes']),Security::canonical($sites),$verified['challenge'],$now+300]);
-        $this->store->audit($owner,'','oauth_consent',hash('sha256',$code),$now);return $code;
+        return $this->store->transaction(function() use($owner,$verified,$sites,$now) {
+            // Serialize consent issuance with account suspension. Once the
+            // account row is locked as active, suspension cannot revoke access
+            // and then have a stale authorization code inserted afterward.
+            $this->core->assertActiveAccount($owner,true);
+            $owned=array_column($this->core->sites($owner),'id');
+            if(!$sites||!array_is_list($sites)||count($sites)>Core::MAX_SITES||array_filter($sites,fn($s)=>!is_string($s))||array_diff($sites,$owned)||count(array_unique($sites))!==count($sites))throw new Fault('invalid_site_consent',403);
+            $code=Security::b64(random_bytes(32));
+            $hash=hash('sha256',$code);
+            $this->store->execute('INSERT INTO '.$this->store->table('oauth_codes').' (hash,owner,client,redirect,resource,scopes,sites,challenge,expires) VALUES (?,?,?,?,?,?,?,?,?)',[$hash,$owner,$verified['client_id'],$verified['redirect_uri'],$this->resource,Security::canonical($verified['scopes']),Security::canonical($sites),$verified['challenge'],$now+300]);
+            $this->store->audit($owner,'','oauth_consent',$hash,$now);
+            return $code;
+        });
     }
     private function issue(array $grant,int $now): array {
         $scopes=json_decode($grant['scopes'],true);$sites=json_decode($grant['sites'],true);
@@ -66,8 +74,15 @@ final class OAuth {
             foreach(['code','redirect_uri','code_verifier','resource'] as $k)if(!is_string($p[$k]??null))throw new Fault('invalid_request');
             if(!preg_match('/^[A-Za-z0-9._~-]{43,128}$/D',$p['code_verifier']))throw new Fault('invalid_grant');
             return $this->store->transaction(function()use($p,$now,$eligible){
-                $c=$this->store->row('SELECT * FROM '.$this->store->table('oauth_codes').' WHERE hash=?'.$this->store->lock(),[hash('sha256',$p['code'])]);
-                if(!$c||(int)$c['used']!==0||(int)$c['expires']<=$now||$c['client']!==$p['client_id']||$c['redirect']!==$p['redirect_uri']||$c['resource']!==$p['resource']||$c['resource']!==$this->resource||!hash_equals($c['challenge'],Security::b64(hash('sha256',$p['code_verifier'],true))))throw new Fault('invalid_grant');
+                $hash=hash('sha256',$p['code']);
+                // Discover owner without a row lock, then establish the global
+                // account-first lock order shared with suspension/connect/mint.
+                $probe=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_codes').' WHERE hash=?',[$hash]);
+                if(!$probe)throw new Fault('invalid_grant');
+                try { $this->core->assertActiveAccount((string)$probe['owner'],true); }
+                catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
+                $c=$this->store->row('SELECT * FROM '.$this->store->table('oauth_codes').' WHERE hash=?'.$this->store->lock(),[$hash]);
+                if(!$c||$c['owner']!==$probe['owner']||(int)$c['used']!==0||(int)$c['expires']<=$now||$c['client']!==$p['client_id']||$c['redirect']!==$p['redirect_uri']||$c['resource']!==$p['resource']||$c['resource']!==$this->resource||!hash_equals($c['challenge'],Security::b64(hash('sha256',$p['code_verifier'],true))))throw new Fault('invalid_grant');
                 if(!$eligible($c['owner']))throw new Fault('access_denied',403);
                 $grant=['id'=>bin2hex(random_bytes(16)),'owner'=>$c['owner'],'client'=>$c['client'],'resource'=>$c['resource'],'scopes'=>$c['scopes'],'sites'=>$c['sites'],'expires'=>$now+2592000];
                 $this->store->execute('UPDATE '.$this->store->table('oauth_codes').' SET used=1 WHERE hash=?',[$c['hash']]);
@@ -78,10 +93,19 @@ final class OAuth {
         if(($p['grant_type']??'')!=='refresh_token'||!is_string($p['refresh_token']??null))throw new Fault('unsupported_grant_type');
         // Returning the error marker commits replay revocation rather than rolling it back.
         $result=$this->store->transaction(function()use($p,$now,$eligible){
-            $r=$this->store->row('SELECT * FROM '.$this->store->table('oauth_refresh').' WHERE hash=?'.$this->store->lock(),[hash('sha256',$p['refresh_token'])]);
-            if(!$r)throw new Fault('invalid_grant');
+            $hash=hash('sha256',$p['refresh_token']);
+            // Establish the same account-first lock order used by suspension.
+            $probeRefresh=$this->store->row('SELECT grant_id FROM '.$this->store->table('oauth_refresh').' WHERE hash=?',[$hash]);
+            if(!$probeRefresh)throw new Fault('invalid_grant');
+            $probeGrant=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_grants').' WHERE id=?',[$probeRefresh['grant_id']]);
+            if(!$probeGrant)throw new Fault('invalid_grant');
+            try { $this->core->assertActiveAccount((string)$probeGrant['owner'],true); }
+            catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
+
+            $r=$this->store->row('SELECT * FROM '.$this->store->table('oauth_refresh').' WHERE hash=?'.$this->store->lock(),[$hash]);
+            if(!$r||$r['grant_id']!==$probeRefresh['grant_id'])throw new Fault('invalid_grant');
             $g=$this->store->row('SELECT * FROM '.$this->store->table('oauth_grants').' WHERE id=?'.$this->store->lock(),[$r['grant_id']]);
-            if(!$g||$g['client']!==$p['client_id']||$g['resource']!==$this->resource||($p['resource']??$g['resource'])!==$g['resource'])throw new Fault('invalid_grant');
+            if(!$g||$g['owner']!==$probeGrant['owner']||$g['client']!==$p['client_id']||$g['resource']!==$this->resource||($p['resource']??$g['resource'])!==$g['resource'])throw new Fault('invalid_grant');
             if((int)$r['used']===1){$this->revokeGrant($g['id']);return ['replayed'=>true];}
             if((int)$g['revoked']!==0||(int)$r['expires']<=$now||(int)$g['expires']<=$now||!$eligible($g['owner']))throw new Fault('invalid_grant');
             if(isset($p['scope'])&&$p['scope']!==implode(' ',json_decode($g['scopes'],true)))throw new Fault('invalid_scope');

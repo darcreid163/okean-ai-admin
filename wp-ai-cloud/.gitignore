@@ -1,5 +1,0 @@
-*.sqlite*
-*keys.php
-*.log
-vendor/
-dist/

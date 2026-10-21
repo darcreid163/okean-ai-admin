@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
-foreach (['Security','Transport','Store','Core','Gateway'] as $name) require_once dirname(__DIR__).'/src/'.$name.'.php';
+// Core tests load source classes without WordPress plugin bootstrap.
+if (!defined('WPAI_CLOUD_VERSION')) define('WPAI_CLOUD_VERSION','0.3.12-dev');
+foreach (['Security','Transport','Store','QuotaPolicy','BatchAccounting','Core','Skills','Unsplash','MediaPolicy','Gateway'] as $name) require_once dirname(__DIR__).'/src/'.$name.'.php';
 
 final class FakeTransport implements \WPAICloudGateway\Transport {
     public int $executions=0;

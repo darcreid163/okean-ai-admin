@@ -34,7 +34,7 @@ class OAI_Regression_Runner {
  private static function stage(&$scenario,$name,$value){$scenario['stages'][$name]=$value;}
  private static function lifecycle($name,$op,$tool,$client_id,$user_id){
   $scenario=array('name'=>$name,'status'=>'FAIL','operation_id'=>null,'baseline_restored'=>false,'stages'=>array());
-  if(is_wp_error($op)){$scenario['error']=self::err($op);self::stage($scenario,'create','FAIL');return $scenario;}
+  if(is_wp_error($op)){$scenario['error']=self::err($op);self::stage($scenario,'create','FAIL');$scenario['baseline_restored']=true;$scenario['cleanup_effective']=true;return $scenario;}
   $id=self::tag($op,$tool,$client_id,$user_id);
   if(is_wp_error($id)){$scenario['error']=self::err($id);self::stage($scenario,'tag','FAIL');return $scenario;}
   $scenario['operation_id']=$id;self::stage($scenario,'create','PASS');self::stage($scenario,'tag','PASS');
@@ -122,18 +122,25 @@ class OAI_Regression_Runner {
   $scenario['baseline_restored']=$ok;self::stage($scenario,'cleanup',$ok?'PASS':'FAIL');
   return $ok;
  }
- private static function woo_create_scenario($run_id,$client_id,$user_id){
-  $snapshot=OAI_WooCommerce::create_draft(array(
-   'type'=>'variable','name'=>'WP AI Admin TEST — '.$run_id,'catalog_visibility'=>'hidden',
-   'variations'=>array(
+ private static function woo_create_scenario($run_id,$client_id,$user_id,$kind='variable'){
+  // Each regression creates its own hidden draft product. The normal sandbox
+  // lifecycle must verify and delete this exact artifact before continuing.
+  $simple=$kind==='simple';
+  $name=$simple?'woocommerce_simple_create':'woocommerce_create';
+  $data=array('type'=>$simple?'simple':'variable','name'=>'WP AI Admin TEST — '.$kind.' — '.$run_id,'catalog_visibility'=>'hidden','status'=>'draft');
+  if($simple){
+   $data['regular_price']='19.00';$data['manage_stock']=true;$data['stock_quantity']=3;$data['stock_status']='instock';
+  }else{
+   $data['variations']=array(
     array('regular_price'=>'13.00','manage_stock'=>true,'stock_quantity'=>2,'stock_status'=>'instock'),
     array('regular_price'=>'27.00','manage_stock'=>true,'stock_quantity'=>4,'stock_status'=>'instock')
-   )
-  ));
-  if(is_wp_error($snapshot))return array('name'=>'woocommerce_create','status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($snapshot),'stages'=>array('create'=>'FAIL'));
+   );
+  }
+  $snapshot=OAI_WooCommerce::create_draft($data);
+  if(is_wp_error($snapshot))return array('name'=>$name,'status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($snapshot),'stages'=>array('create'=>'FAIL'));
   $op=OAI_P0::op_for_created_product($snapshot);
-  if(is_wp_error($op))return array('name'=>'woocommerce_create','status'=>'FAIL','baseline_restored'=>true,'error'=>self::err($op),'stages'=>array('create'=>'FAIL','cleanup'=>'PASS'));
-  return self::lifecycle('woocommerce_create',$op,'woocommerce.create_product_sandbox',$client_id,$user_id);
+  if(is_wp_error($op))return array('name'=>$name,'status'=>'FAIL','baseline_restored'=>false,'error'=>self::err($op),'stages'=>array('create'=>'FAIL'),'reason'=>'Created draft could not enter rollback lifecycle; manual artifact reconciliation required');
+  return self::lifecycle($name,$op,'woocommerce.create_product_sandbox',$client_id,$user_id);
  }
  private static function elementor_container_scenario($post_id,$container_id,$run_id,$client_id,$user_id){
   if($container_id==='')return array('name'=>'elementor_container','status'=>'SKIP','baseline_restored'=>true,'reason'=>'elementor_container_id not supplied');
@@ -150,7 +157,7 @@ class OAI_Regression_Runner {
   return self::lifecycle('elementor_page_layout',OAI_P0::elementor_page_layout(array('post_id'=>$post_id,'page_template'=>$next)),'elementor.patch_page_layout',$client_id,$user_id);
  }
  private static function option_scenario($run_id,$client_id,$user_id){
-  $key='oai_test_matrix_'.substr(md5($run_id),0,10);
+  $key='wp_ai_admin_test_matrix_'.substr(md5($run_id),0,10);
   $req=new WP_REST_Request('POST','/okean-ai/v1/sandbox');$req->set_param('type','option_update');$req->set_param('target',$key);$req->set_param('value','WP AI Admin '.$run_id);
   return self::lifecycle('option_update',OAI_REST::sandbox_create($req),'wp.option_update_sandbox',$client_id,$user_id);
  }
@@ -286,7 +293,7 @@ class OAI_Regression_Runner {
  }
  public static function run($args,$client_id,$user_id){
   $auth=OAI_Test_Automation::runner_authorized($client_id,$user_id);if(is_wp_error($auth))return $auth;
-  $args=is_array($args)?$args:array();
+  $args=array_merge(OAI_Test_Automation::regression_fixture_args(),is_array($args)?$args:array());
   $content_id=absint($args['content_post_id']??0);$elementor_id=absint($args['elementor_post_id']??0);$widget=sanitize_text_field((string)($args['elementor_widget_id']??''));$container_id=sanitize_text_field((string)($args['elementor_container_id']??''));$product_id=absint($args['product_id']??0);$gutenberg_id=absint($args['gutenberg_post_id']??0);if(!$gutenberg_id&&class_exists('OAI_Test_Automation'))$gutenberg_id=OAI_Test_Automation::managed_gutenberg_fixture_id();
   if(!$content_id||!$elementor_id||$widget===''||!$product_id)return new WP_Error('oai_regression_args','content_post_id, elementor_post_id, elementor_widget_id and product_id are required',array('status'=>400));
   $include_file=!array_key_exists('include_file',$args)||!empty($args['include_file']);$include_reject=!array_key_exists('include_reject',$args)||!empty($args['include_reject']);$include_elementor_settings=!array_key_exists('include_elementor_settings',$args)||!empty($args['include_elementor_settings']);$include_elementor_create=!array_key_exists('include_elementor_create',$args)||!empty($args['include_elementor_create']);$include_elementor_create_patch_many=!array_key_exists('include_elementor_create_patch_many',$args)||!empty($args['include_elementor_create_patch_many']);$include_p0=!empty($args['include_p0']);
@@ -388,7 +395,9 @@ class OAI_Regression_Runner {
   if(!$report['stopped_early']&&$gutenberg_id)$report['scenarios'][]=self::gutenberg_scenario($gutenberg_id,$run_id,$client_id,$user_id);
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
 
-  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::woo_create_scenario($run_id,$client_id,$user_id);
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::woo_create_scenario($run_id,$client_id,$user_id,'simple');
+  foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
+  if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::woo_create_scenario($run_id,$client_id,$user_id,'variable');
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}
   if(!$report['stopped_early']&&$include_p0)$report['scenarios'][]=self::elementor_container_scenario($elementor_id,$container_id,$run_id,$client_id,$user_id);
   foreach($report['scenarios'] as $s)if(($s['status']??'')==='FAIL'&&empty($s['baseline_restored'])){$report['baseline_restored']=false;$report['stopped_early']=true;break;}

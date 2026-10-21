@@ -56,6 +56,9 @@ class TestWpdb {
 }
 function dbDelta($sql) {
     global $wpdb;
+    // The translation below is newline-anchored, so it must not depend on the
+    // checkout line endings (a Windows core.autocrlf=true clone is CRLF).
+    $sql=str_replace("\r\n","\n",$sql);
     $sql=preg_replace('/^CREATE TABLE /','CREATE TABLE IF NOT EXISTS ',$sql);
     if ($wpdb->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='sqlite') {
         $sql=preg_replace('/id bigint\(20\) unsigned NOT NULL AUTO_INCREMENT,/','id INTEGER PRIMARY KEY AUTOINCREMENT,',$sql);
@@ -106,10 +109,11 @@ foreach([false,0,'0','','false','true',2,[],null] as $value) {
 }
 WordPress::enable();
 check(Settings::keys()===$keys && $snapshot()===$before,'Reload check changed existing keys or Core data');
-check(get_option('wpai_gateway_db_version')==='2','Gateway migration not recorded');
+check(get_option('wpai_gateway_db_version')==='4','Gateway migration not recorded');
 check($snapshot()===$before,'Gateway migration modified legacy data');
 WordPress::enable(); check($snapshot()===$before && Settings::keys()===$keys,'Repeated update changed core data or keys');
-check(Settings::policy()['plans']===['agency'=>5000,'free'=>100,'power'=>2000,'pro'=>500,'scale'=>10000],'Policy differs from original Core plans');
+check(Settings::policy()['plans']===['free'=>100,'pro'=>500,'biznes'=>2000,'biznespro'=>5000],'Recovered v2 tariff policy differs from approved limits');
+check(Settings::policy()['legacy_plans']===['agency'=>5000,'free'=>100,'power'=>2000,'pro'=>500,'scale'=>10000],'Legacy Core plan limits changed');
 Settings::account('42');check($snapshot()===$before,'Existing account changed by bridge');
 $wpdb->query("UPDATE ".WPAI_Cloud_DB::table('accounts')." SET status='suspended' WHERE wp_user_id=42");
 rejects(fn()=>Settings::account('42'),'core_account_unavailable');
@@ -120,8 +124,10 @@ $wpdb->query('UPDATE '.WPAI_Cloud_DB::table('plan_versions')." SET verify_billab
 foreach($actions['rest_api_init'] as $callback)$callback();
 foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
 check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1/plans'])===1,'Legacy public routes overwritten');
-check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.6','Old status version');
-check(count(WPAI_Cloud_REST::plans()->data['data']['items'])===5,'Old plans contract changed');
+check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.12-dev','Candidate status version');
+$publishedPlans=WPAI_Cloud_REST::plans()->data['data']['items'];
+check(array_column($publishedPlans,'slug')===['free','pro','biznes','biznespro'],'Approved four-plan catalog differs from recovered v2 policy');
+check(WPAI_Cloud_REST::plans()->data['data']['automatic_money_debits']===false,'Automatic debits unexpectedly active');
 $loggedIn=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Anonymous provisioning');
 $loggedIn=true;$admin=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Subscriber provisioning');
 $admin=true;$ssl=false;check(WordPress::provisioningPermission() instanceof WP_Error,'HTTP provisioning');
@@ -141,7 +147,7 @@ class TestRequest {
 $headers=['authorization'=>'Bearer '.$token,'content-type'=>'application/json','accept'=>'application/json, text/event-stream','mcp-protocol-version'=>'2025-11-25'];
 $message=['jsonrpc'=>'2.0','id'=>99,'method'=>'initialize','params'=>['protocolVersion'=>'2025-11-25']];
 $req=new TestRequest($headers,$message);$response=WordPress::mcp($req);
-check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.6','HTTP MCP initialization failed');
+check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.12-dev','HTTP MCP initialization failed');
 foreach ([['authorization','',401],['origin','https://evil.example.com',403],['mcp-protocol-version','unknown',400],['content-type','text/plain',415],['accept','application/json',406]] as [$header,$value,$status]) {
     $changed=$headers; $changed[$header]=$value;
     check(WordPress::mcp(new TestRequest($changed,$message))->status===$status,'HTTP validation bypass: '.$header);
@@ -156,8 +162,8 @@ $core->revokeToken($owner,hash('sha256',$token),time());
 check(WordPress::mcp($req)->status===401,'Revoked HTTP gateway token accepted');
 check($snapshot()===$before,'Gateway authentication changed legacy data');
 $gatewaySnapshot=function()use($store){$value=[];foreach(['accounts','balances','sites','tokens','requests','audit','rate'] as $table)$value[$table]=$store->rows('SELECT * FROM '.$store->table($table));return Security::canonical($value);};
-$oldGateway=$gatewaySnapshot();update_option('wpai_gateway_db_version','1',false);WordPress::enable();
-check($gatewaySnapshot()===$oldGateway && get_option('wpai_gateway_db_version')==='2','Upgrade from gateway v1 reset existing connections or tokens');
+$oldGateway=$gatewaySnapshot();update_option('wpai_gateway_db_version','3',false);WordPress::enable();
+check($gatewaySnapshot()===$oldGateway && get_option('wpai_gateway_db_version')==='4','Upgrade from gateway v3 to v4 reset existing connections or tokens');
 check(WPAICloudGateway\Surface::routeKind('/.well-known/oauth-authorization-server')===null,'Native OAuth issuer discovery overwritten');
 check(WPAICloudGateway\Surface::routeKind('/.well-known/oauth-protected-resource')===null,'Native protected resource discovery overwritten');
 check(WPAICloudGateway\Surface::metadataUrl()==='https://wpaiadmin.ru/.well-known/oauth-protected-resource/mcp','Wrong main-domain metadata URL');

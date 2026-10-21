@@ -2,6 +2,10 @@
 /** Авторские права Андриянов Н.Г. */
 if (!defined('ABSPATH')) exit;
 class OAI_Operations {
+ public static function new_id($prefix='OAI'){
+  if(!is_string($prefix)||!preg_match('/^[A-Za-z]{1,8}$/D',$prefix))throw new InvalidArgumentException('Invalid internal operation namespace');
+  return $prefix.'-'.gmdate('Ymd-His').'-'.bin2hex(random_bytes(16));
+ }
  public static function snapshot($type,$target){
   $r=OAI_REST::current($type,$target); if(is_array($r)) return $r;
   if(is_wp_error($r)) return $r;

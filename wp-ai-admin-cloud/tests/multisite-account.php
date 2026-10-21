@@ -52,7 +52,7 @@ rejects(fn()=>$core->catalog($actor,$other['id'],$now),'scope_or_site_denied');
 $extra=$core->connect('71','https://fourth.example.com','fixture-fourth-site-token-aaaaaaaa',$now);
 rejects(fn()=>$core->catalog($actor,$extra['id'],$now),'scope_or_site_denied');
 check(count($core->sites('71'))===4,'Adding a fourth site replaced earlier sites');
-$core->setPlan('operator','71','power',$now);
+$core->setPlan('operator','71','biznes',$now);
 check($core->usage('71',$now)['limit']===2000&&$core->usage('71',$now)['used']===3,'Plan upgrade must preserve shared balance');
 check(sameIds(array_column($core->sites('71'),'id'),array_merge($ids,[$extra['id']])),'Plan upgrade changed registration identities');
 // Every plan uses the same registration capacity; reconnect at capacity is still allowed.

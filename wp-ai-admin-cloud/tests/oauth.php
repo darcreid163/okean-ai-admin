@@ -65,7 +65,7 @@ $before=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('tokens'))['
 putenv('CLOUD_OAUTH_EXCHANGE='.json_encode($parallel));
 $command=[PHP_BINARY,'-n','-d','extension_dir='.ini_get('extension_dir')];
 $modules=['pdo','pdo_sqlite','sodium'];if(getenv('TEST_MYSQL_DSN'))array_push($modules,'mysqlnd','pdo_mysql');
-foreach($modules as $module)if(is_file(ini_get('extension_dir').'/'.$module.'.'.PHP_SHLIB_SUFFIX))array_push($command,'-d','extension='.$module);
+foreach($modules as $module) foreach([$module.'.'.PHP_SHLIB_SUFFIX,'php_'.$module.'.'.PHP_SHLIB_SUFFIX] as $file) if(is_file(ini_get('extension_dir').'/'.$file)){array_push($command,'-d','extension='.$file);break;}
 array_push($command,__DIR__.'/oauth-worker.php',$database,(string)$now);$workers=[];
 for($i=0;$i<10;$i++){$pipes=[];$handle=proc_open($command,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);fclose($pipes[0]);$workers[]=[$handle,$pipes];}
 $success=0;$denied=0;

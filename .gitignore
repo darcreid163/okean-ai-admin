@@ -1,0 +1,23 @@
+# Generated files and local secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.sql
+*.sqlite
+*.sqlite3
+*.bak
+*.log
+*.zip
+*.tar
+*.tar.gz
+/vendor/
+/node_modules/
+/dist/
+/coverage/
+/.phpunit.cache/
+.DS_Store
+Thumbs.db

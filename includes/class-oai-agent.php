@@ -269,15 +269,15 @@ class OAI_Agent {
    if(is_wp_error($license)) return $license;
   }
   if(in_array($action,array('approve','apply','rollback'),true)) return new WP_Error('oai_agent_human_approval','Approve, apply and rollback are restricted to wp-admin human confirmation',array('status'=>403));
+  $callback=static function()use($action,$params){return self::route($action,$params);};
   if(class_exists('OAI_Quota')){
    $fingerprint=wp_json_encode($params,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
    $request_id=(string)($req->get_header('x-oai-agent-request-id')?:'');
    if($request_id==='') $request_id=hash('sha256',$fingerprint);
    $request_key=OAI_Quota::request_key('agent',$request_id,$fingerprint);
-   $quota=OAI_Quota::consume_request($request_key,'agent',1);
-   if(is_wp_error($quota)) return $quota;
-  }
-  $result=self::route($action,$params);
+   $units=in_array($action,array('verify','proof','operation_receipt','operation','preview_link'),true)?0:1;
+   $result=OAI_Quota::run_metered($request_key,'agent',$fingerprint,$callback,$units,OAI_Quota::legacy_request_key('agent',$request_id,$fingerprint));
+  }else{$result=$callback();}
   if(is_wp_error($result)) return $result;
   return array('ok'=>true,'action'=>$action,'result'=>$result);
  }

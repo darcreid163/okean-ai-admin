@@ -37,15 +37,26 @@ class WPAI_Cloud_REST {
     }
 
     public static function plans() {
-        global $wpdb;
-        $plans = $wpdb->get_results(
-            "SELECT p.slug,p.name,p.active,v.version_key,v.monthly_actions,v.batch_objects_per_action,v.failed_actions_billable,v.rollback_billable,v.verify_billable
-             FROM " . WPAI_Cloud_DB::table('plans') . " p
-             INNER JOIN " . WPAI_Cloud_DB::table('plan_versions') . " v ON v.plan_id=p.id
-             WHERE p.active=1 AND v.active=1
-             ORDER BY p.id ASC",
-            ARRAY_A
-        );
-        return self::response(array('items' => $plans));
+        try {
+            if (!class_exists('WPAICloudGateway\\Settings')) throw new RuntimeException('Gateway PHP requirements unavailable');
+            $policy=\WPAICloudGateway\Settings::catalogPolicy();
+        } catch (Throwable $e) {
+            return new WP_REST_Response(array('success'=>false,'data'=>null,'error'=>'plan_catalog_unavailable'),503);
+        }
+        $batch=in_array(get_option('wpai_gateway_batch_object_v1',false),array(true,1,'1'),true);
+        $names=array('free'=>'Free','pro'=>'Pro','biznes'=>'Biznes','biznespro'=>'BiznesPro');
+        $plans=array();
+        foreach ($policy['plans'] as $slug=>$limit) {
+            $period=$policy['periods'][$slug];
+            $plans[]=array('slug'=>$slug,'name'=>$names[$slug],'active'=>1,'version_key'=>$policy['version'],
+                'actions_limit'=>$limit,'quota_period'=>$period,'timezone'=>'UTC',
+                'monthly_actions'=>$period==='calendar_month_utc'?$limit:null,
+                'daily_actions'=>$period==='calendar_day_utc'?$limit:null,
+                'batch_objects_per_action'=>$batch?1:null,
+                'batch_policy'=>$batch?'successful_object_v1':'disabled_until_receipt_accounting_contract',
+                'failed_actions_billable'=>0,'rollback_billable'=>0,'verify_billable'=>0);
+        }
+        return self::response(array('items'=>$plans,'quota_scheme'=>'tariffs_v2','payments_enabled'=>false,
+            'automatic_money_debits'=>false,'manual_refills'=>'deferred','prices_approved'=>false));
     }
 }
