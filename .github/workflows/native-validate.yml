@@ -46,6 +46,8 @@ jobs:
         run: php tests/control-plane-entitlements.php
       - name: Expanded read-only CLI commands (Tier B)
         run: php tests/cli-expanded-commands.php
+      - name: Abilities opt-in discovery contract
+        run: php tests/abilities-discovery.php
 
   wordpress-smoke:
     runs-on: ubuntu-latest
