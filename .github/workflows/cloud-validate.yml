@@ -45,6 +45,10 @@ jobs:
           php tests/policy-preflight-static.php
           php tests/abilities-read-contract.php
           php tests/abilities-transport-boundary.php
+          php tests/artifact-integrity.php
+          php tests/unsplash-http-auth.php
+      - name: Deterministic candidate ZIP and provenance regression
+        run: python3 tests/artifact-reproducibility.py
       - name: SQLite migration OAuth, tenant isolation, billing Batch
         shell: bash
         run: |
@@ -85,6 +89,10 @@ jobs:
     needs: [cloud-contracts]
     steps:
       - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
       - name: Build candidate Cloud ZIP (never deploy)
         shell: bash
         run: |
@@ -92,17 +100,14 @@ jobs:
           test -f wp-ai-admin-cloud/wp-ai-admin-cloud.php
           grep -Fq "define('WPAI_CLOUD_VERSION', '0.3.13-dev')" wp-ai-admin-cloud/wp-ai-admin-cloud.php
           php wp-ai-admin-cloud/tests/recovered-runtime-hashes.php
-          mkdir -p dist/wp-ai-admin-cloud
-          cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/src wp-ai-admin-cloud/includes wp-ai-admin-cloud/config dist/wp-ai-admin-cloud/
-          php wp-ai-admin-cloud/tests/artifact-allowlist.php dist/wp-ai-admin-cloud
-          test ! -e dist/wp-ai-admin-cloud/tests
-          (cd dist && zip -qr wp-ai-admin-cloud-0.3.13-dev.zip wp-ai-admin-cloud)
-          unzip -tq dist/wp-ai-admin-cloud-0.3.13-dev.zip
-          (cd dist && sha256sum wp-ai-admin-cloud-0.3.13-dev.zip > wp-ai-admin-cloud-0.3.13-dev.zip.sha256)
+          python3 wp-ai-admin-cloud/tools/build-candidate.py --output dist/cloud-candidate
+          unzip -tq dist/cloud-candidate/wp-ai-admin-cloud-0.3.13-dev.zip
+          (cd dist/cloud-candidate && sha256sum -c wp-ai-admin-cloud-0.3.13-dev.zip.sha256)
       - uses: actions/upload-artifact@v4
         with:
           name: wp-ai-admin-cloud-0.3.13-dev-candidate
           path: |
-            dist/wp-ai-admin-cloud-0.3.13-dev.zip
-            dist/wp-ai-admin-cloud-0.3.13-dev.zip.sha256
+            dist/cloud-candidate/wp-ai-admin-cloud-0.3.13-dev.zip
+            dist/cloud-candidate/wp-ai-admin-cloud-0.3.13-dev.zip.sha256
+            dist/cloud-candidate/PROVENANCE.json
           if-no-files-found: error
