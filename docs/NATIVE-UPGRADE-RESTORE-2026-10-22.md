@@ -37,6 +37,13 @@ Docker network. The database client used a shared local Unix socket. The existin
 CI WordPress profiles must independently pass on the final commit; this local run
 does not establish their results.
 
+The first hosted run passed all five new phases in both WordPress profiles, then
+exposed an assumption in the following simulated migration fixture: an already
+enabled option is read as string `"1"`, while a freshly set option may be cached as
+boolean `true`. Its comparison now checks the exact enabled value after string
+normalization and still checks the credential hash unchanged. Runtime code and
+WordPress option storage are unchanged; the final head needs a new hosted run.
+
 This verifies a paired **code+database backup restore**, not a files-only downgrade
 of DB24, customer database compatibility, Cloud Core upgrade, production rollback,
 or external ChatGPT OAuth. The reported live reconnect loop remains unresolved:
