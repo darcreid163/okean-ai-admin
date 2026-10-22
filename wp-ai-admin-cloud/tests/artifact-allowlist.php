@@ -1,34 +1,34 @@
 <?php
 declare(strict_types=1);
-/** Validates staged Cloud ZIP contents against strict production runtime allowlist. */
-$root=$argv[1]??'';
-if(!is_dir($root))throw new RuntimeException('Missing staged Cloud directory');
-$expected=['wp-ai-admin-cloud.php'];
-foreach(['src','includes','config'] as $dir) {
-    $source=dirname(__DIR__).'/'.$dir;
-    if(!is_dir($source))throw new RuntimeException('Missing source directory '.$dir);
-    $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source,FilesystemIterator::SKIP_DOTS));
-    foreach($it as $file) {
-        if(!$file->isFile() || $file->isLink())throw new RuntimeException('Non-regular source file');
-        $relative=$dir.'/'.substr($file->getPathname(),strlen($source)+1);
+/** Require exact checked-out production paths AND bytes; inspect directories too. */
+$input=$argv[1]??'';
+if($input==='' || is_link(rtrim($input,'/')) || !is_dir($input))throw new RuntimeException('Missing or linked staged Cloud directory');
+$root=realpath($input);
+$source=realpath(dirname(__DIR__));
+if($root===$source)throw new RuntimeException('Stage must be separate from source');
+$collect=static function(string $base,array $paths): array {
+    $entries=[];
+    $record=static function(string $path,string $relative)use(&$entries):void {
+        if(is_link($path))throw new RuntimeException('Linked runtime entry '.$relative);
+        if(preg_match('/(?:^|\/)(?:\.git|\.env|tests|docs|vendor)(?:\/|$)/i',$relative))throw new RuntimeException('Forbidden production payload '.$relative);
+        if(is_dir($path)){$entries[$relative.'/']='directory';return;}
+        if(!is_file($path))throw new RuntimeException('Non-regular runtime entry '.$relative);
         if(!str_ends_with($relative,'.php') && $relative!=='config/plans.json')throw new RuntimeException('Unexpected runtime file '.$relative);
-        $expected[]=$relative;
+        $entries[$relative]=hash_file('sha256',$path);
+    };
+    foreach($paths as $relative){
+        $path=$base.'/'.$relative;
+        $record($path,$relative);
+        if(is_dir($path)){
+            $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path,FilesystemIterator::SKIP_DOTS),RecursiveIteratorIterator::SELF_FIRST);
+            foreach($it as $file)$record($file->getPathname(),substr($file->getPathname(),strlen($base)+1));
+        }
     }
-}
-sort($expected);
-$found=[];
-$it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS));
-foreach($it as $file) {
-    if(!$file->isFile() || $file->isLink())throw new RuntimeException('Non-regular artifact entry');
-    $relative=substr($file->getPathname(),strlen($root)+1);
-    $found[]=$relative;
-    if(preg_match('/(?:^|\/)(?:\.git|\.env|tests|docs|vendor)(?:\/|$)/i',$relative))
-        throw new RuntimeException('Forbidden production payload '.$relative);
-}
-sort($found);
-if($found!==$expected)throw new RuntimeException('Cloud production allowlist mismatch: '.json_encode(array_values(array_diff($found,$expected))).' missing='.json_encode(array_values(array_diff($expected,$found))));
-foreach($found as $file) {
-    $data=file_get_contents($root.'/'.$file);
-    if($file==='config/plans.json') { if(!is_array(json_decode((string)$data,true))) throw new RuntimeException('Invalid plans JSON'); } elseif($data===false || !str_starts_with($data,'<?php'))throw new RuntimeException('Invalid runtime PHP '.$file);
-}
-echo 'PASS Cloud runtime artifact allowlist: '.count($found)." files\n";
+    ksort($entries,SORT_STRING);
+    return $entries;
+};
+$expected=$collect($source,['wp-ai-admin-cloud.php','src','includes','config']);
+$found=$collect($root,array_values(array_diff(scandir($root),['.','..'])));
+if(array_keys($found)!==array_keys($expected))throw new RuntimeException('Cloud production allowlist mismatch');
+foreach($expected as $path=>$hash)if(!hash_equals($hash,$found[$path]))throw new RuntimeException('Cloud source SHA-256 mismatch: '.$path);
+echo 'PASS Cloud runtime artifact source paths and SHA-256: '.count(array_filter($found,static fn($hash)=>$hash!=='directory'))." files\n";
