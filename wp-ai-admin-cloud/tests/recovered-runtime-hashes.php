@@ -33,11 +33,11 @@ if($base!==17||$changed!==3||
     throw new RuntimeException('Inconsistent recovered 0.3.11 baseline or unlisted code change');
 $plugin=file_get_contents($root.'/wp-ai-admin-cloud.php');
 $gateway=file_get_contents($root.'/src/Gateway.php');
-if(!str_contains($plugin,"define('WPAI_CLOUD_VERSION', '0.3.12-dev')")||
-   !str_contains($plugin,"* Version: 0.3.12-dev")||
+if(!str_contains($plugin,"define('WPAI_CLOUD_VERSION', '0.3.13-dev')")||
+   !str_contains($plugin,"* Version: 0.3.13-dev")||
    !str_contains($plugin,"'Skills','Unsplash','MediaPolicy','Gateway'")||
    !str_contains($gateway,"$"."tool('cloud_skills_list'")||
    !str_contains($gateway,"$"."tool('cloud_skill_load'")||
    !str_contains($gateway,"$"."tool('cloud_media_search_images'"))
     throw new RuntimeException('Candidate is not independently marked, safely bootstrapped, or complete');
-echo "PASS: 17/17 unchanged 0.3.11 baseline SHA-256 + 3 explicitly changed 0.3.12-dev files; historic manifest not rewritten\n";
+echo "PASS: 17/17 unchanged 0.3.11 baseline SHA-256 + 3 explicitly changed 0.3.13-dev files; historic manifest not rewritten\n";
