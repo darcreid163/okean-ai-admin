@@ -79,3 +79,29 @@ jobs:
             fi
           done
           exit "$failed"
+
+  cloud-artifact:
+    runs-on: ubuntu-latest
+    needs: [cloud-contracts]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build candidate Cloud ZIP (never deploy)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f wp-ai-admin-cloud/wp-ai-admin-cloud.php
+          grep -Fq "define('WPAI_CLOUD_VERSION', '0.3.13-dev')" wp-ai-admin-cloud/wp-ai-admin-cloud.php
+          php wp-ai-admin-cloud/tests/recovered-runtime-hashes.php
+          mkdir -p dist/wp-ai-admin-cloud
+          cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/src wp-ai-admin-cloud/includes wp-ai-admin-cloud/config dist/wp-ai-admin-cloud/
+          test ! -e dist/wp-ai-admin-cloud/tests
+          (cd dist && zip -qr wp-ai-admin-cloud-0.3.13-dev.zip wp-ai-admin-cloud)
+          unzip -tq dist/wp-ai-admin-cloud-0.3.13-dev.zip
+          (cd dist && sha256sum wp-ai-admin-cloud-0.3.13-dev.zip > wp-ai-admin-cloud-0.3.13-dev.zip.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wp-ai-admin-cloud-0.3.13-dev-candidate
+          path: |
+            dist/wp-ai-admin-cloud-0.3.13-dev.zip
+            dist/wp-ai-admin-cloud-0.3.13-dev.zip.sha256
+          if-no-files-found: error
