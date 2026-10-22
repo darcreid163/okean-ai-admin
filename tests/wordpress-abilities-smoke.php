@@ -10,16 +10,18 @@ if (!function_exists('wp_register_ability') || !function_exists('wp_get_abilitie
 }
 wp_set_current_user((int) get_users(['role'=>'administrator','number'=>1,'fields'=>'ID'])[0]);
 $name='oai-acceptance/read-example';
-wp_register_ability($name,[
+if (function_exists('wp_register_ability_category')) wp_register_ability_category('oai-acceptance', ['label'=>'Acceptance tests','description'=>'Disposable test category']);
+$registered=wp_register_ability($name,[
     'label'=>'Smoke metadata read',
     'description'=>'Disposable ability for MCP discovery',
-    'category'=>'data-retrieval',
+    'category'=>'oai-acceptance',
     'input_schema'=>['type'=>'object','properties'=>[]],
     'output_schema'=>['type'=>'object','properties'=>[]],
     'execute_callback'=>static fn($input)=>['ok'=>true],
     'permission_callback'=>static fn()=>current_user_can('manage_options'),
     'meta'=>['show_in_rest'=>true],
 ]);
+if (is_wp_error($registered)) throw new RuntimeException('Ability registration error: '.$registered->get_error_message());
 $names=array_column(OAI_Abilities::discover(),'name');
 if (!in_array($name,$names,true)) throw new RuntimeException('Registered REST-visible Ability missing from discovery');
 $info=OAI_Abilities::info($name);
