@@ -65,4 +65,18 @@ $cached=$core->call($read,$a['id'],'ability.get',['name'=>'example/read','uncert
 assertAbility($cached['reconciled']===true && $transport->executions===$execBefore+1,'settled retry reexecuted');
 denyAbility(fn()=>$core->reconcile('operator','tenant-a',$key,'succeeded',$evidence,$now+6),'request_not_reconcilable');
 assertAbility($core->usage('tenant-a',$now+6)['used']===$after['used'],'double billed settlement');
+// A verified failed upstream operation must release its held unit without billing.
+$baseline=$core->usage('tenant-a',$now+7);
+$executions=$transport->executions;
+denyAbility(fn()=>$core->call($read,$a['id'],'ability.get',['name'=>'example/read','uncertain'=>true],'uncertain-read-failed',$now+7),'request_outcome_pending_reconciliation');
+$failedKey=hash('sha256','tenant-a|uncertain-read-failed');
+$failureEvidence=['note'=>'Independent Native receipt confirms that the request did not complete.','receipt_sha256'=>str_repeat('b',64)];
+$failed=$core->reconcile('operator','tenant-a',$failedKey,'failed',$failureEvidence,$now+8);
+assertAbility($failed['state']==='failed' && $failed['charged_units']===0,'failed reconciliation billed');
+$released=$core->usage('tenant-a',$now+8);
+assertAbility($released['reserved']===$baseline['reserved'] && $released['used']===$baseline['used'],'failed reconciliation failed to release reservation');
+$againFailed=$core->call($read,$a['id'],'ability.get',['name'=>'example/read','uncertain'=>true],'uncertain-read-failed',$now+9);
+assertAbility($againFailed['state']==='failed' && $transport->executions===$executions+1,'failed reconciliation replay re-dispatched');
+denyAbility(fn()=>$core->reconcile('operator','tenant-b',$failedKey,'succeeded',$failureEvidence,$now+10),'request_not_reconcilable');
+assertAbility($core->usage('tenant-b',$now+10)['used']===0,'foreign settlement affected tenant');
 echo "PASS Abilities Cloud OAuth/site/tenant/ledger/uncertain-network-idempotency acceptance\\n";
