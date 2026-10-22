@@ -2,8 +2,8 @@
 declare(strict_types=1);
 namespace WPAICloudGateway;
 
-/** Release-gated Abilities policy, separated from recovered Core 0.3.11.
- * This class is NOT wired into Gateway/Core until a new version is qualified.
+/** Metadata-only Abilities policy integrated in the 0.3.13-dev candidate.
+ * Discovery does not grant execution of an arbitrary Ability.
  */
 final class AbilitiesPolicy {
     public const READ_TOOLS = ['ability_list','ability_get'];

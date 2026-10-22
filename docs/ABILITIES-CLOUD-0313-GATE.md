@@ -1,18 +1,37 @@
-# Cloud Abilities integration gate — proposed 0.3.13-dev
+# Cloud Abilities integration gate — 0.3.13-dev candidate
 
-**Status:** isolated AbilitiesPolicy + green-eligible contract test added; Cloud runtime Core/Gateway unchanged. No deployment or release approval.
+**Source status, 22 October 2026:** integrated in current `main`; not a production
+release or deployment claim. `Core::writes()` uses `AbilitiesPolicy` to classify
+`ability.list` and `ability.get` as metadata reads. Native 2.1.17 advertises these
+tools; arbitrary Ability execution remains outside this discovery contract.
 
-Native 2.1.17 main includes `ability.list` and `ability.get` in the MCP read catalog after PR #57. Cloud recovered 0.3.11 Core currently classifies any unlisted tool as write, so these tools are **not yet usable under a read-only OAuth grant through the central gateway**.
+The recovered 0.3.11 SHA-256 manifest remains immutable. The candidate integrity
+gate explicitly permits changes to historical Core, Gateway and bootstrap, while
+17 other historical files remain SHA-identical. New candidate modules are not
+members of the historical archive and must be reviewed separately.
 
-The historical `docs/RECOVERED-CLOUD-RUNTIME.sha256` manifest MUST remain immutable. The current 0.3.12-dev recovery gate permits only explicit Gateway/bootstrap changes. Do not silently alter Core.php and claim the recovered source still matches. A separate versioned 0.3.13-dev candidate must update the delta inventory and CI qualification first.
+## Automated acceptance present in main
 
-## Acceptance
+- `abilities-read-contract.php` checks the real `Core::writes()` classification
+  together with the isolated metadata policy. `ability.run`, `ability.execute`
+  and unlisted names are not granted read access.
+- `abilities-cloud-acceptance.php` exercises Core and public Gateway JSON-RPC with
+  a synthetic transport: selected-site/owner/read-scope isolation, one-unit
+  charging, cached retry, uncertain reservation/no redispatch, evidence-required
+  reconciliation, exactly-once successful settlement and zero-charge failure.
+- `abilities-transport-boundary.php` checks malformed JSON-RPC/tool results and
+  rejection of insecure/local upstream addresses. It does not perform a live
+  public HTTPS call.
+- Cloud CI runs database acceptance on SQLite and MySQL under PHP 8.2/8.3/8.4.
+  Exact audited source SHA `1fb3f98c1ec87013990e4f35c0c02e8e39c65556` passed
+  [Cloud run 39735258143](https://github.com/darcreid163/okean-ai-admin/actions/runs/39735258143).
 
-1. Only `ability.list` and `ability.get` classify as reads, unknown `ability.run` and `ability.execute` remain writes (and are *not* executable without typed adapters).
-2. `Core::catalog()` checks selected site authorization before exposing its catalog; `call()` checks the same site and OAuth read scope, reserves one quota unit, never grants extra site IDs.
-3. Deterministic retries return cached receipts with no duplicate charge; failure and uncertain outcome follow existing Ledger settlement rules.
-4. `tests/abilities-read-contract.php` is in Cloud CI and tests only the isolated `AbilitiesPolicy` class. **It does not imply Core/Gateway integration**; add a separate end-to-end live Core test only with a versioned implementation and integrity-gate update.
-5. Test SQLite/MySQL and PHP 8.2–8.4, tenant A/B, revoked grants, selected-site restrictions, provider catalog. No production install until staging accepts.
-6. Existing Cloud 0.3.11 manifest must continue to verify its original unchanged files and source hashes.
+## Remaining release acceptance
 
-Changes to recovered Core were intentionally not applied in this working branch. The new policy test is a forward contract and can pass independently; it is not evidence of integrated Gateway behavior.
+Use a production-equivalent disposable staging environment to validate the full
+HTTPS path, real Native Abilities metadata, fresh external OAuth consent,
+selected/unselected sites, tenant A/B denial and revocation. Preserve identities,
+credentials, quota state, approval/verify/receipt/rollback semantics and explicit
+site selection. Automated fake-transport acceptance is not proof of these live
+flows. No arbitrary Ability execution, quota reset, paid migration or production
+installation is authorized by this document.
