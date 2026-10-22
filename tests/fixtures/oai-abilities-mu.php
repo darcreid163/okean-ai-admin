@@ -3,11 +3,11 @@
  * Disposable MU plugin for real WordPress Abilities boot lifecycle.
  * Only loaded by CI; never shipped in the Native artifact.
  */
+add_action('wp_abilities_api_categories_init',static function():void {
+    wp_register_ability_category('oai-acceptance',['label'=>'Acceptance tests','description'=>'Disposable CI category']);
+});
 add_action('wp_abilities_api_init',static function():void {
     if (!function_exists('wp_register_ability')) return;
-    if (function_exists('wp_register_ability_category')) {
-        wp_register_ability_category('oai-acceptance',['label'=>'Acceptance tests','description'=>'Disposable CI category']);
-    }
     wp_register_ability('oai-acceptance/read-example',[
         'label'=>'Smoke metadata read',
         'description'=>'Disposable ability for MCP discovery',
