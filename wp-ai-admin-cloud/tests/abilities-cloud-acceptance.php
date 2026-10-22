@@ -39,4 +39,17 @@ $rpcOther=$rpc($read,'ability.list','rpc-foreign',$b['id']);
 assertAbility(($rpcOther['result']['isError']??false)===true && $core->usage('tenant-a',$now)['used']===3,'Gateway site boundary or billing failed');
 $rpcUnsafe=$rpc($read,'ability.run','rpc-unsafe',$a['id']);
 assertAbility(($rpcUnsafe['result']['isError']??false)===true && $core->usage('tenant-a',$now)['used']===3,'Gateway unsafe Ability not denied');
-echo "PASS Abilities Core + Cloud Gateway JSON-RPC OAuth/site/tenant/ledger/idempotency acceptance\n";
+// An uncertain upstream result must hold a single reservation for reconciliation,
+// never charge a confirmed action and never automatically dispatch a retry.
+$before=$core->usage('tenant-a',$now);
+$execBefore=$transport->executions;
+denyAbility(fn()=>$core->call($read,$a['id'],'ability.get',['name'=>'example/read','uncertain'=>true],'uncertain-read-1',$now),'request_outcome_pending_reconciliation');
+$held=$core->usage('tenant-a',$now);
+assertAbility($held['used']===$before['used'] && $held['reserved']===$before['reserved']+1,'uncertain reply charged or lost reservation');
+assertAbility($transport->executions===$execBefore+1,'uncertain request not dispatched exactly once');
+denyAbility(fn()=>$core->call($read,$a['id'],'ability.get',['name'=>'example/read','uncertain'=>true],'uncertain-read-1',$now+1),'request_outcome_pending_reconciliation');
+assertAbility($transport->executions===$execBefore+1,'uncertain retry re-dispatched');
+assertAbility($core->usage('tenant-a',$now+1)['reserved']===$held['reserved'],'uncertain retry reserved twice');
+denyAbility(fn()=>$core->call($read,$a['id'],'ability.get',['name'=>'other/read'],'uncertain-read-1',$now+2),'idempotency_conflict');
+assertAbility($transport->executions===$execBefore+1,'conflicting retry dispatched');
+echo "PASS Abilities Cloud OAuth/site/tenant/ledger/uncertain-network-idempotency acceptance\\n";
