@@ -34,6 +34,19 @@ if(($decoded['name']??'')!==$name || ($decoded['execution']??'')!=='disabled_unt
 $bad=$dispatch->invoke(null,'ability-denied',['name'=>'ability.run','arguments'=>['name'=>$name]]);
 if(($bad->get_data()['error']['code']??null)!==-32602)
     throw new RuntimeException('Unknown ability.run incorrectly exposed');
+// Actual REST handler must reject calls without transport authentication,
+// even when the WordPress global user was set by another component.
+$priorHeader=$_SERVER['HTTP_AUTHORIZATION']??null;
+$priorRedirect=$_SERVER['REDIRECT_HTTP_AUTHORIZATION']??null;
+unset($_SERVER['HTTP_AUTHORIZATION'],$_SERVER['REDIRECT_HTTP_AUTHORIZATION']);
+$request=new WP_REST_Request('POST','/okean-ai/mcp');
+$request->set_body(wp_json_encode(['jsonrpc'=>'2.0','id'=>'anonymous-mcp','method'=>'tools/call','params'=>['name'=>'ability.get','arguments'=>['name'=>$name]]]));
+$request->set_header('Content-Type','application/json');
+$anonymous=OAI_MCP::handle($request);
+if($anonymous->get_status()!==401 || !isset($anonymous->get_data()['error']))
+    throw new RuntimeException('Native MCP handler failed closed without bearer authorization');
+if($priorHeader!==null) $_SERVER['HTTP_AUTHORIZATION']=$priorHeader;
+if($priorRedirect!==null) $_SERVER['REDIRECT_HTTP_AUTHORIZATION']=$priorRedirect;
 wp_set_current_user(0);
 $denied=$dispatch->invoke(null,'ability-anonymous',['name'=>'ability.get','arguments'=>['name'=>$name]]);
 if(!isset($denied->get_data()['error']))
