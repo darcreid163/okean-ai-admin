@@ -18,6 +18,10 @@ install_ci_plugin() {
 }
 install_ci_plugin elementor "${ELEMENTOR_TEST_VERSION:-latest}"
 install_ci_plugin woocommerce "${WOO_TEST_VERSION:-latest}"
+# Install the historical Native first, then exercise real code upgrade and a
+# complete pre-upgrade code/database restore. Restore the clean fixture before
+# the remaining smoke suites, including their unlicensed-denial assertions.
+OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/site" "$WORK/wp-cli.phar"
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
 cp -R okean-ai-admin.php includes starter-themes "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin

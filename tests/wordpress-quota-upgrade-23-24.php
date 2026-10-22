@@ -33,7 +33,9 @@ foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table) {
     quotaUpgradeAssert($found===$table,'Missing quota v24 table '.$table);
 }
 quotaUpgradeAssert(OAI_Platform::site_id()===$siteId&&OAI_Platform::installation_id()===$installId,'Site/installation identity changed');
-quotaUpgradeAssert(get_option('oai_mcp_token_hash')===$tokenHash&&get_option('oai_mcp_enabled')===true,'MCP credential changed');
+// A retained enabled option is read as "1" on a new WordPress process; an
+// update to the already-enabled value does not replace it with a cached bool.
+quotaUpgradeAssert(get_option('oai_mcp_token_hash')===$tokenHash&&(string)get_option('oai_mcp_enabled')==='1','MCP credential changed');
 quotaUpgradeAssert((int)get_option('oai_oauth_schema_version')===1,'OAuth schema reset');
 quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$clients.' WHERE client_id=%s',$clientId))===1,'OAuth client lost');
 quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::table().' WHERE operation_id=%s',$operationId))===$operationsBefore,'Pending operation lost');
