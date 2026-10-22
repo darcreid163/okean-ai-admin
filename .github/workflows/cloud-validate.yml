@@ -47,6 +47,8 @@ jobs:
           php tests/abilities-transport-boundary.php
           php tests/artifact-integrity.php
           php tests/unsplash-http-auth.php
+      - name: Frontend session, account and quota-period regression
+        run: python3 tests/frontend-session.py
       - name: Deterministic candidate ZIP and provenance regression
         run: python3 tests/artifact-reproducibility.py
       - name: SQLite migration OAuth, tenant isolation, billing Batch
@@ -84,9 +86,32 @@ jobs:
           done
           exit "$failed"
 
+  browser-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated pinned Chromium runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/wpai-browser-runner" --no-save --ignore-scripts playwright@1.62.1
+          "$RUNNER_TEMP/wpai-browser-runner/node_modules/.bin/playwright" install --with-deps chromium
+          echo "NODE_PATH=$RUNNER_TEMP/wpai-browser-runner/node_modules" >> "$GITHUB_ENV"
+      - name: Actual Cloud two-origin pairing and OAuth navigation
+        run: node wp-ai-admin-cloud/tests/browser-navigation.js
+      - name: Actual Native consent allow, deny, manual and security boundaries
+        run: node wp-ai-admin-cloud/tests/native-consent-navigation.js
+
   cloud-artifact:
     runs-on: ubuntu-latest
-    needs: [cloud-contracts]
+    needs: [cloud-contracts, browser-contracts]
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
