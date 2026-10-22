@@ -1,4 +1,8 @@
-# WP AI Admin — single active release state
+# WP AI Admin — recovery/integration record, 21 October 2026
+
+Current source and audit status: [22 October audit](AUDIT-2026-10-22.md).
+The following records the 21 October recovery baseline; it does not supersede
+subsequent merged 0.3.13-dev implementation or exact-commit CI evidence.
 
 ## Verified repository audit
 
