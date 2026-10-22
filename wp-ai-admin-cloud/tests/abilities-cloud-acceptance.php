@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
-use WPAICloudGateway\{Fault,Core};
+use WPAICloudGateway\{Fault,Core,Gateway};
 $now=strtotime('2026-10-22T08:00:00Z');
 $file=tempnam(sys_get_temp_dir(),'wpai-abilities-');
 $store=fixtureStore($file); $store->migrate();
@@ -25,4 +25,18 @@ denyAbility(fn()=>$core->call($read,$b['id'],'ability.list',[],'foreign-site',$n
 denyAbility(fn()=>$core->call($foreign,$a['id'],'ability.list',[],'foreign-owner',$now),'scope_or_site_denied');
 denyAbility(fn()=>$core->call($read,$a['id'],'ability.run',[],'unsafe-exec',$now),'scope_or_site_denied');
 assertAbility($core->usage('tenant-a',$now)['used']===2 && $core->usage('tenant-b',$now)['used']===0,'denied operations billed');
-echo "PASS Abilities Cloud OAuth/site/tenant/ledger/idempotency acceptance\n";
+// Exercise public Cloud JSON-RPC Gateway surface, not Core alone.
+$gateway=new Gateway($core);
+$rpc=static fn(array $actor,string $tool,string $key,string $site) =>
+    $gateway->handle($actor,['jsonrpc'=>'2.0','id'=>$key,'method'=>'tools/call',
+        'params'=>['name'=>'cloud_site_tool_call','arguments'=>['site_id'=>$site,'tool'=>$tool,'arguments'=>[],'idempotency_key'=>$key]]],$now);
+$rpcList=$rpc($read,'ability.list','rpc-discovery-1',$a['id']);
+assertAbility(($rpcList['result']['isError']??false)===false,'Gateway rejected valid Abilities list');
+assertAbility($core->usage('tenant-a',$now)['used']===3,'Gateway failed to bill one action');
+$rpcRetry=$rpc($read,'ability.list','rpc-discovery-1',$a['id']);
+assertAbility(($rpcRetry['result']['isError']??false)===false && $core->usage('tenant-a',$now)['used']===3,'Gateway retry double billed');
+$rpcOther=$rpc($read,'ability.list','rpc-foreign',$b['id']);
+assertAbility(($rpcOther['result']['isError']??false)===true && $core->usage('tenant-a',$now)['used']===3,'Gateway site boundary or billing failed');
+$rpcUnsafe=$rpc($read,'ability.run','rpc-unsafe',$a['id']);
+assertAbility(($rpcUnsafe['result']['isError']??false)===true && $core->usage('tenant-a',$now)['used']===3,'Gateway unsafe Ability not denied');
+echo "PASS Abilities Core + Cloud Gateway JSON-RPC OAuth/site/tenant/ledger/idempotency acceptance\n";
