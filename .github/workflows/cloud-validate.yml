@@ -1,4 +1,4 @@
-name: Cloud Core 0.3.12-dev validation (restored 0.3.11 baseline)
+name: Cloud Core 0.3.13-dev validation (restored 0.3.11 baseline)
 on:
   push:
     branches: [main, 'integration/**']
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cloud-0311-${{ github.ref }}
+  group: cloud-0313-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   cloud-contracts:
@@ -69,7 +69,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=0
-          for t in run compatibility quota-migration-v4 batch-accounting-v2 multisite-account oauth cross-account-isolation tier-a; do
+          for t in run compatibility quota-migration-v4 batch-accounting-v2 abilities-cloud-acceptance multisite-account oauth cross-account-isolation tier-a; do
             echo "=== MySQL $t ==="
             if php "tests/$t.php"; then
               echo "PASS MySQL $t"
