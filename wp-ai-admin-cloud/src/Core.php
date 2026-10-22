@@ -209,8 +209,10 @@ final class Core {
         return $this->batchAccounting()->receipt($actor['owner'],$siteId,$key);
     }
     public function call(array $actor,string $siteId,string $name,array $args,string $nonce,int $now): array {
+        $started=time();
         Security::identifier($name); Security::identifier($nonce);
-        $site=$this->authorize($actor,$siteId,self::writes($name,$args)?'mcp:write':'mcp:read',$now);
+        $scope=self::writes($name,$args)?'mcp:write':'mcp:read';
+        $site=$this->authorize($actor,$siteId,$scope,$now);
         $normalized=str_replace('.','_',$name);
         if (in_array($normalized,['batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','system_regression_run','system_regression_matrix'],true)) throw new Fault('batch_receipt_accounting_not_ready',422);
         if (strlen(Security::canonical($args))>65536) throw new Fault('arguments_too_large',413);
@@ -246,11 +248,16 @@ final class Core {
         try {
             // tools/list cannot execute the requested site tool. A catalog
             // failure is a known pre-dispatch failure, not an unknown write.
-            try { $catalog=$this->catalog($actor,$siteId,$now); }
+            try {
+                $catalog=$this->catalog($actor,$siteId,$now);
+                // Catalog network time must not carry revoked/expired access
+                // or a replaced site credential into a new tool dispatch.
+                $site=$this->authorize($actor,$siteId,$scope,$now+max(0,time()-$started));
+            }
             catch (\Throwable $e) { $catalog=null; }
             $names=$catalog===null?[]:array_column($catalog,'name');
             if ($catalog===null) {
-                $reply=['jsonrpc'=>'2.0','id'=>$key,'error'=>['code'=>-32603,'message'=>'Site tool catalog unavailable']];
+                $reply=['jsonrpc'=>'2.0','id'=>$key,'error'=>['code'=>-32603,'message'=>'Site tool unavailable before dispatch']];
             } elseif (!in_array($name,$names,true)) {
                 $reply=['jsonrpc'=>'2.0','id'=>$key,'error'=>['code'=>-32602,'message'=>'Unknown site tool']];
             } else {
