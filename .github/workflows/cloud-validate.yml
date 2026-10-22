@@ -44,6 +44,7 @@ jobs:
           php tests/recovered-runtime-hashes.php
           php tests/policy-preflight-static.php
           php tests/abilities-read-contract.php
+          php tests/abilities-transport-boundary.php
       - name: SQLite migration OAuth, tenant isolation, billing Batch
         shell: bash
         run: |
