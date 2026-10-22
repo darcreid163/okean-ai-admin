@@ -17,7 +17,7 @@ class OAI_Abilities {
   foreach($abilities as $key=>$ability){
    if(!is_object($ability) || !method_exists($ability,'get_name') || !method_exists($ability,'get_meta'))continue;
    $meta=$ability->get_meta();
-   if(!is_array($meta) || (empty($meta['public']) && empty($meta['mcp']['public'])))continue;
+   if(!is_array($meta) || (empty($meta['show_in_rest']) && empty($meta['public']) && empty($meta['mcp']['public'])))continue;
    $name=$ability->get_name();
    if(!is_string($name) || !preg_match('#^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$#D',$name))continue;
    $rows[$name]=array(

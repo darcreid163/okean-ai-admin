@@ -18,13 +18,15 @@ $GLOBALS['abilities']=[
  'private/danger'=>new FixtureAbility('private/danger',[]),
  'public/read'=>new FixtureAbility('public/read',['mcp'=>['public'=>true]]),
  'older/read'=>new FixtureAbility('older/read',['public'=>true]),
+ 'rest/exposed'=>new FixtureAbility('rest/exposed',['show_in_rest'=>true]),
  'invalid'=>new FixtureAbility('BAD FORMAT',['public'=>true]),
 ];
 $list=OAI_Abilities::discover();
-must(count($list)===2,'private or invalid Ability disclosed');
-must($list[0]['name']==='older/read' && $list[1]['name']==='public/read','unstable sort');
+must(count($list)===3,'private or invalid Ability disclosed');
+must($list[0]['name']==='older/read' && $list[1]['name']==='public/read' && $list[2]['name']==='rest/exposed','unstable sort');
 must($list[1]['execution']==='disabled_until_explicit_policy','execution enabled by discovery');
 must(OAI_Abilities::info('private/danger') instanceof WP_Error,'private ability accessible');
+must(OAI_Abilities::info('rest/exposed')['name']==='rest/exposed','WP 6.9 show_in_rest ability not discoverable');
 must(OAI_Abilities::info('public/read')['name']==='public/read','public ability not discoverable');
 $GLOBALS['is_admin']=false;
 must(OAI_Abilities::discover()===[],'non-admin leaked');
