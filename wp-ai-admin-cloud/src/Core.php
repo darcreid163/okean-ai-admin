@@ -244,8 +244,14 @@ final class Core {
         if (isset($reservation['cached'])) return $reservation['cached'];
         if (isset($reservation['pending'])) throw new Fault('request_outcome_pending_reconciliation',409);
         try {
-            $catalog=$this->catalog($actor,$siteId,$now); $names=array_column($catalog,'name');
-            if (!in_array($name,$names,true)) {
+            // tools/list cannot execute the requested site tool. A catalog
+            // failure is a known pre-dispatch failure, not an unknown write.
+            try { $catalog=$this->catalog($actor,$siteId,$now); }
+            catch (\Throwable $e) { $catalog=null; }
+            $names=$catalog===null?[]:array_column($catalog,'name');
+            if ($catalog===null) {
+                $reply=['jsonrpc'=>'2.0','id'=>$key,'error'=>['code'=>-32603,'message'=>'Site tool catalog unavailable']];
+            } elseif (!in_array($name,$names,true)) {
                 $reply=['jsonrpc'=>'2.0','id'=>$key,'error'=>['code'=>-32602,'message'=>'Unknown site tool']];
             } else {
                 $reply=$this->upstream($site,['jsonrpc'=>'2.0','id'=>$key,'method'=>'tools/call','params'=>['name'=>$name,'arguments'=>$args ?: (object)[]]]);
