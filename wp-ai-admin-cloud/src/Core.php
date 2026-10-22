@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace WPAICloudGateway;
 
+require_once __DIR__.'/AbilitiesPolicy.php';
+
 final class Core {
     // Exceeds the bounded HTTPS catalog + tool request timeouts. Expiry only
     // fences local settlement; it never proves a remote mutation did not occur.
