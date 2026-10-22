@@ -29,6 +29,6 @@ sort($found);
 if($found!==$expected)throw new RuntimeException('Cloud production allowlist mismatch: '.json_encode(array_values(array_diff($found,$expected))).' missing='.json_encode(array_values(array_diff($expected,$found))));
 foreach($found as $file) {
     $data=file_get_contents($root.'/'.$file);
-    if($data===false || !str_starts_with($data,'<?php'))throw new RuntimeException('Invalid runtime PHP '.$file);
+    if($file==='config/plans.json') { if(!is_array(json_decode((string)$data,true))) throw new RuntimeException('Invalid plans JSON'); } elseif($data===false || !str_starts_with($data,'<?php'))throw new RuntimeException('Invalid runtime PHP '.$file);
 }
 echo 'PASS Cloud runtime artifact allowlist: '.count($found)." files\n";
