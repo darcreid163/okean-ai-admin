@@ -3,8 +3,10 @@ declare(strict_types=1);
 // HTTP regression fixture: WordPress session validation is stubbed, cookie path
 // selection is performed by the real HTTP client. Never load this in WordPress.
 namespace WPAICloudGateway {
+    require_once dirname(__DIR__).'/src/QuotaPolicy.php';
     final class Fault extends \RuntimeException { public function __construct(public string $reason,public int $status=400){parent::__construct($reason);} }
     final class Settings {
+        public static function endpoint(): string {return 'https://wpaiadmin.ru/mcp';}
         public static function eligible(string $owner): bool {return ($_COOKIE['fixture_access']??'')!=='blocked';}
         public static function account(string $owner): void {}
     }
@@ -16,7 +18,13 @@ namespace WPAICloudGateway {
             if(($_COOKIE['fixture_connected']??'')==='1')$sites[]=['home'=>'https://okean.market','id'=>'second-site'];
             return $sites;
         }
-        public function usage(string $owner,int $now): array {return ['plan'=>'pro','limit'=>500,'used'=>7,'reserved'=>1,'remaining'=>492];}
+        public function usage(string $owner,int $now): array {
+            $policy=json_decode(file_get_contents(dirname(__DIR__).'/config/plans.json'),true,32,JSON_THROW_ON_ERROR);
+            $plan=($_COOKIE['fixture_plan']??'')==='free'?'free':'pro';
+            $terms=QuotaPolicy::terms($policy,['plan'=>$plan,'quota_scheme'=>(($_COOKIE['fixture_quota']??'')==='legacy'?QuotaPolicy::LEGACY:QuotaPolicy::CURRENT)]);
+            return QuotaPolicy::window($terms,strtotime('2026-10-22T12:00:00Z'))+$terms+
+                ['plan'=>$plan,'used'=>7,'reserved'=>1,'remaining'=>$terms['limit']-8,'timezone'=>'UTC','policy_version'=>$policy['version'],'batch_available'=>false];
+        }
         public function connect(string $owner,string $home,string $token,int $now): void {echo '<p>fixture-connect-called</p>';}
     }
     final class Security {public static function canonical(mixed $value): string {return json_encode($value,JSON_THROW_ON_ERROR);}}
