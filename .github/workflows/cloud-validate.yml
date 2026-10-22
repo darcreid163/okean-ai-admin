@@ -109,9 +109,37 @@ jobs:
       - name: Actual Native consent allow, deny, manual and security boundaries
         run: node wp-ai-admin-cloud/tests/native-consent-navigation.js
 
+  wordpress-upgrade:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        wordpress: ['7.0.6', latest]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-cloud-upgrade-only
+          MYSQL_DATABASE: wpai_cloud_upgrade_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci-cloud-upgrade-only"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, pdo_mysql, sodium, curl
+          coverage: none
+      - name: Actual historical Cloud upgrade, OAuth/key preservation and backup restore
+        env:
+          WP_TEST_VERSION: ${{ matrix.wordpress }}
+        run: bash wp-ai-admin-cloud/tests/wordpress-upgrade-smoke.sh
+
   cloud-artifact:
     runs-on: ubuntu-latest
-    needs: [cloud-contracts, browser-contracts]
+    needs: [cloud-contracts, browser-contracts, wordpress-upgrade]
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
