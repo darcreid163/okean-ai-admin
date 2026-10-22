@@ -1,19 +1,13 @@
 <?php
 declare(strict_types=1);
-/** Required Cloud versioned Abilities policy; fails until new release implementation. */
-require dirname(__DIR__).'/src/Security.php';
-require dirname(__DIR__).'/src/BatchAccounting.php';
-require dirname(__DIR__).'/src/QuotaPolicy.php';
-require dirname(__DIR__).'/src/Core.php';
-use WPAICloudGateway\Core;
-foreach (['ability.list','ability.get'] as $tool) {
-    if (Core::writes($tool, [])) {
-        throw new RuntimeException('Cloud must treat approved Ability metadata as mcp:read: '.$tool);
-    }
+require dirname(__DIR__).'/src/AbilitiesPolicy.php';
+use WPAICloudGateway\AbilitiesPolicy;
+foreach (['ability.list','ability.get','ability_list','ability_get'] as $name) {
+    if (!AbilitiesPolicy::isMetadataRead($name) || AbilitiesPolicy::requiredScope($name)!=='mcp:read' || !AbilitiesPolicy::mayExecute($name))
+        throw new RuntimeException('Metadata policy rejected: '.$name);
 }
-foreach (['ability.run','ability.execute','ability.delete'] as $tool) {
-    if (!Core::writes($tool, [])) {
-        throw new RuntimeException('Unknown Ability execution must fail closed: '.$tool);
-    }
+foreach (['ability.run','ability.execute','ability.delete','ability_run','ability_get_extra'] as $name) {
+    if (AbilitiesPolicy::isMetadataRead($name) || AbilitiesPolicy::requiredScope($name)!=='mcp:write' || AbilitiesPolicy::mayExecute($name))
+        throw new RuntimeException('Non-metadata tool permitted: '.$name);
 }
-echo "PASS Cloud Abilities metadata read/write classification\n";
+echo "PASS isolated Cloud Abilities policy (not integrated into Core)\n";
