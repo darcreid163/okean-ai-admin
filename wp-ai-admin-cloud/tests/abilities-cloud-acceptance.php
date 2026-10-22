@@ -52,4 +52,17 @@ assertAbility($transport->executions===$execBefore+1,'uncertain retry re-dispatc
 assertAbility($core->usage('tenant-a',$now+1)['reserved']===$held['reserved'],'uncertain retry reserved twice');
 denyAbility(fn()=>$core->call($read,$a['id'],'ability.get',['name'=>'other/read'],'uncertain-read-1',$now+2),'idempotency_conflict');
 assertAbility($transport->executions===$execBefore+1,'conflicting retry dispatched');
+// Settlement requires operator evidence and charges the reserved unit exactly once.
+$key=hash('sha256','tenant-a|uncertain-read-1');
+denyAbility(fn()=>$core->reconcile('operator','tenant-a',$key,'succeeded',['note'=>'short','receipt_sha256'=>str_repeat('a',64)],$now+3),'operator_receipt_evidence_required');
+assertAbility($core->usage('tenant-a',$now+3)['reserved']===$held['reserved'],'invalid evidence released quota');
+$evidence=['note'=>'Independently verified matching Native site receipt for this request.','receipt_sha256'=>str_repeat('a',64)];
+$settled=$core->reconcile('operator','tenant-a',$key,'succeeded',$evidence,$now+4);
+assertAbility($settled['charged_units']===1 && $settled['reconciled']===true,'operator settlement incorrect');
+$after=$core->usage('tenant-a',$now+4);
+assertAbility($after['reserved']===$before['reserved'] && $after['used']===$before['used']+1,'settlement balance incorrect');
+$cached=$core->call($read,$a['id'],'ability.get',['name'=>'example/read','uncertain'=>true],'uncertain-read-1',$now+5);
+assertAbility($cached['reconciled']===true && $transport->executions===$execBefore+1,'settled retry reexecuted');
+denyAbility(fn()=>$core->reconcile('operator','tenant-a',$key,'succeeded',$evidence,$now+6),'request_not_reconcilable');
+assertAbility($core->usage('tenant-a',$now+6)['used']===$after['used'],'double billed settlement');
 echo "PASS Abilities Cloud OAuth/site/tenant/ledger/uncertain-network-idempotency acceptance\\n";
