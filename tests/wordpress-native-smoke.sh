@@ -37,6 +37,8 @@ wp_test plugin status okean-ai-admin
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-commerce-blocks-matrix.php"
 # Normal Native license/approval/rollback lifecycle, temporary product only.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-lifecycle.php"
+# Decode real images before upload, then exercise approval/verify/rollback.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-media-upload.php"
 
 # Exercise actual WP Abilities registration and Native read-only discovery.
 mkdir -p "$WORK/site/wp-content/mu-plugins"

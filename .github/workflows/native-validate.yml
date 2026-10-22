@@ -62,10 +62,12 @@ jobs:
       matrix:
         include:
           - profile: pinned-compat
+            image_editor: WP_Image_Editor_GD
             wp: '7.0.6'
             elementor: '4.3.3'
             woo: '11.1.2'
           - profile: latest-compat
+            image_editor: WP_Image_Editor_Imagick
             wp: latest
             elementor: latest
             woo: latest
@@ -86,13 +88,14 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mysqli, pdo_mysql, curl, sodium
+          extensions: mysqli, pdo_mysql, curl, sodium, gd, imagick
           coverage: none
       - name: Real WordPress + Elementor, WooCommerce and Gutenberg acceptance
         env:
           WP_TEST_VERSION: ${{ matrix.wp }}
           ELEMENTOR_TEST_VERSION: ${{ matrix.elementor }}
           WOO_TEST_VERSION: ${{ matrix.woo }}
+          OAI_MEDIA_TEST_EDITOR: ${{ matrix.image_editor }}
         run: bash tests/wordpress-native-smoke.sh
 
   build-artifact:

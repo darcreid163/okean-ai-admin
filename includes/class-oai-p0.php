@@ -57,15 +57,44 @@ class OAI_P0 {
   $before=(int)get_post_thumbnail_id($post_id);
   return self::op('media_featured',(string)$post_id,$before,$attachment_id,array('post_id'=>$post_id),true);
  }
+ /** Validate in a private temporary file before creating any Media Library artifact. */
+ private static function validate_media_image($filename,$bytes,$declared_mime){
+  $allowed=array('image/jpeg','image/png','image/webp','image/gif');
+  $check=wp_check_filetype($filename);$mime=(string)($check['type']??'');
+  if(!in_array($mime,$allowed,true)||($declared_mime!==null&&$declared_mime!==$mime))return new WP_Error('oai_media_mime','Filename and declared MIME must identify the same supported image',array('status'=>422,'allowed'=>$allowed));
+  $image=@getimagesizefromstring($bytes);
+  if(!is_array($image)||empty($image[0])||empty($image[1]))return new WP_Error('oai_media_content','Media payload is not a supported image',array('status'=>422));
+  if(($image['mime']??'')!==$mime)return new WP_Error('oai_media_mime','Image bytes do not match filename and declared MIME',array('status'=>422));
+  // Bound decoded memory before invoking GD/Imagick, including compressed bombs.
+  if($image[0]>20000000/$image[1])return new WP_Error('oai_media_dimensions','Image exceeds 20 megapixels',array('status'=>413));
+  if(!wp_image_editor_supports(array('mime_type'=>$mime)))return new WP_Error('oai_media_decoder','Server cannot decode this image format',array('status'=>503));
+  $temporary=wp_tempnam('oai-media-validate');
+  if(!$temporary)return new WP_Error('oai_media_temporary','Cannot validate image in temporary storage',array('status'=>503));
+  try{
+   if(!@chmod($temporary,0600)||@file_put_contents($temporary,$bytes)!==strlen($bytes))return new WP_Error('oai_media_temporary','Cannot validate image in temporary storage',array('status'=>503));
+   $editor=wp_get_image_editor($temporary,array('mime_type'=>$mime));
+   if(is_wp_error($editor))return new WP_Error('oai_media_decode','Image data could not be decoded',array('status'=>422));
+   $size=$editor->get_size();
+   if(!is_array($size)||(int)($size['width']??0)!==(int)$image[0]||(int)($size['height']??0)!==(int)$image[1])return new WP_Error('oai_media_decode','Decoded image dimensions are inconsistent',array('status'=>422));
+   return $mime;
+  }catch(Throwable $error){
+   return new WP_Error('oai_media_decode','Image data could not be decoded',array('status'=>422));
+  }finally{
+   unset($editor);
+   @unlink($temporary);
+  }
+ }
+
  public static function media_upload($a){
   if(!current_user_can('upload_files'))return new WP_Error('oai_media_permission','upload_files capability required',array('status'=>403));
+  if(!is_array($a))return new WP_Error('oai_media_payload','Media payload must be an object',array('status'=>400));
+  foreach(array('filename','content_base64','mime_type','title','alt') as $field)if(array_key_exists($field,$a)&&!is_string($a[$field]))return new WP_Error('oai_media_payload','Media fields must be strings',array('status'=>400));
   $filename=sanitize_file_name((string)($a['filename']??''));$encoded=(string)($a['content_base64']??'');
   if($filename===''||$encoded==='')return new WP_Error('oai_media_payload','filename and content_base64 are required',array('status'=>400));
+  if(strlen($encoded)>4*(int)ceil((10*1024*1024)/3))return new WP_Error('oai_media_size','Encoded media payload exceeds 10 MB image limit',array('status'=>413));
   $bytes=base64_decode($encoded,true);if($bytes===false||$bytes==='')return new WP_Error('oai_media_base64','Invalid base64 media payload',array('status'=>422));
   if(strlen($bytes)>10*1024*1024)return new WP_Error('oai_media_size','Media payload exceeds 10 MB',array('status'=>413));
-  $check=wp_check_filetype($filename);$mime=(string)($a['mime_type']??($check['type']??''));
-  $allowed=array('image/jpeg','image/png','image/webp','image/gif');
-  if(!in_array($mime,$allowed,true))return new WP_Error('oai_media_mime','Only JPEG, PNG, WEBP and GIF images are supported in P0',array('status'=>422,'allowed'=>$allowed));
+  $mime=self::validate_media_image($filename,$bytes,$a['mime_type']??null);if(is_wp_error($mime))return $mime;
   $up=wp_upload_bits($filename,null,$bytes);if(!empty($up['error']))return new WP_Error('oai_media_upload',$up['error'],array('status'=>500));
   $title=sanitize_text_field((string)($a['title']??pathinfo($filename,PATHINFO_FILENAME)));
   $id=wp_insert_attachment(array('post_mime_type'=>$mime,'post_title'=>$title,'post_status'=>'private'),$up['file'],0,true);
