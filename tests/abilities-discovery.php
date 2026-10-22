@@ -29,4 +29,14 @@ must(OAI_Abilities::info('public/read')['name']==='public/read','public ability 
 $GLOBALS['is_admin']=false;
 must(OAI_Abilities::discover()===[],'non-admin leaked');
 must(OAI_Abilities::info('public/read') instanceof WP_Error,'non-admin info leaked');
+
+// MCP adapter source contract: both tools are read-only, and arbitrary
+// execution must never be exposed without explicit lifecycle authorization.
+$mcp=(string)file_get_contents(dirname(__DIR__).'/includes/class-oai-mcp.php');
+must(str_contains($mcp,"'ability.list'=>array("),'MCP list schema missing');
+must(str_contains($mcp,"'ability.get'=>array("),'MCP get schema missing');
+must(str_contains($mcp,"'ability.list','ability.get','gutenberg.get_blocks'"),'MCP read catalog missing');
+must(str_contains($mcp,"case 'ability_list':"),'MCP list dispatcher missing');
+must(str_contains($mcp,"case 'ability_get':"),'MCP get dispatcher missing');
+must(!str_contains($mcp,"case 'ability_run':"),'Unreviewed Ability execute exposed');
 echo "PASS Abilities public-opt-in, metadata, ACL and non-execution contract\n";

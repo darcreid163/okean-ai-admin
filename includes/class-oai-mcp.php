@@ -180,6 +180,8 @@ class OAI_MCP {
    'operation.verify'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
    'operation.proof'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
    'operation.preview_link'=>array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),
+   'ability.list'=>array('type'=>'object','additionalProperties'=>false),
+   'ability.get'=>array('type'=>'object','required'=>array('name'),'additionalProperties'=>false,'properties'=>array('name'=>array('type'=>'string','minLength'=>3,'maxLength'=>120))),
    'wordpress.execute'=>array('type'=>'object','required'=>array('command'),'additionalProperties'=>false,'properties'=>array('command'=>array('type'=>'string','minLength'=>1),'mode'=>array('type'=>'string','enum'=>array('read','plan')))),
    'gutenberg.get_blocks'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'view'=>array('type'=>'string','enum'=>array('outline','full')))),
    'gutenberg.get_outline'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
@@ -307,7 +309,7 @@ class OAI_MCP {
    'woodmart.status','woodmart.list_settings','woodmart.get_setting',
    'wp.get_site','wp.inspect_html','wp.visual_qa_result','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
    'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','elementor.get_container','elementor.get_page_layout','woocommerce.get_product','woocommerce.get_product_full','operation.get_receipt',
-   'gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
+   'ability.list','ability.get','gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
    'wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.list','batch.status','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_history','system.coverage_report','system.security_fuzz'
   );
   $tools=array();
@@ -530,6 +532,8 @@ class OAI_MCP {
    case 'builder_catalog':$out=OAI_Adapter_Catalog::catalog();break;
    case 'builder_detect':$out=OAI_Adapter_Catalog::detect(absint($a['post_id']??0));break;
    case 'system_capabilities':$out=array('capabilities'=>OAI_Capabilities::available(),'adapters'=>OAI_Adapter_Catalog::catalog(),'execution'=>OAI_REST::execution_readiness());break;
+   case 'ability_list':$out=OAI_Abilities::discover(100);break;
+   case 'ability_get':$out=OAI_Abilities::info((string)($a['name']??''));break;
    case 'wordpress_execute':$cmd=$a['command']??null;$mode=sanitize_key((string)($a['mode']??'read'));$out=OAI_Execution_Dispatcher::dispatch($cmd,$mode);break;
    case 'gutenberg_get_blocks':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0));$rr->set_url_params(array('id'=>absint($a['post_id']??0)));if(isset($a['view']))$rr->set_param('view',$a['view']);$out=OAI_REST::gutenberg_resolved($rr);break;
    case 'gutenberg_get_outline':$rr=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0));$rr->set_url_params(array('id'=>absint($a['post_id']??0)));$rr->set_param('view','outline');$out=OAI_REST::gutenberg_resolved($rr);break;
