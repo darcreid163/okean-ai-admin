@@ -94,6 +94,7 @@ jobs:
           php wp-ai-admin-cloud/tests/recovered-runtime-hashes.php
           mkdir -p dist/wp-ai-admin-cloud
           cp -a wp-ai-admin-cloud/wp-ai-admin-cloud.php wp-ai-admin-cloud/src wp-ai-admin-cloud/includes wp-ai-admin-cloud/config dist/wp-ai-admin-cloud/
+          php wp-ai-admin-cloud/tests/artifact-allowlist.php dist/wp-ai-admin-cloud
           test ! -e dist/wp-ai-admin-cloud/tests
           (cd dist && zip -qr wp-ai-admin-cloud-0.3.13-dev.zip wp-ai-admin-cloud)
           unzip -tq dist/wp-ai-admin-cloud-0.3.13-dev.zip
