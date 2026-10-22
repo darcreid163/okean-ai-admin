@@ -46,6 +46,7 @@ jobs:
           php tests/abilities-read-contract.php
           php tests/abilities-transport-boundary.php
           php tests/artifact-integrity.php
+          php tests/unsplash-http-auth.php
       - name: Deterministic candidate ZIP and provenance regression
         run: python3 tests/artifact-reproducibility.py
       - name: SQLite migration OAuth, tenant isolation, billing Batch
