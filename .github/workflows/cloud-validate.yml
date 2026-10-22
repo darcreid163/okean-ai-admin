@@ -54,7 +54,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=0
-          for t in run compatibility quota-migration-v4 batch-accounting-v2 abilities-cloud-acceptance multisite-account oauth cross-account-isolation tier-a; do
+          for t in run compatibility quota-migration-v4 batch-accounting-v2 abilities-cloud-acceptance catalog-failure-settlement multisite-account oauth cross-account-isolation tier-a; do
             echo "=== SQLite $t ==="
             if php "tests/$t.php"; then
               echo "PASS SQLite $t"
@@ -73,7 +73,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=0
-          for t in run compatibility quota-migration-v4 batch-accounting-v2 abilities-cloud-acceptance multisite-account oauth cross-account-isolation tier-a; do
+          for t in run compatibility quota-migration-v4 batch-accounting-v2 abilities-cloud-acceptance catalog-failure-settlement multisite-account oauth cross-account-isolation tier-a; do
             echo "=== MySQL $t ==="
             if php "tests/$t.php"; then
               echo "PASS MySQL $t"
