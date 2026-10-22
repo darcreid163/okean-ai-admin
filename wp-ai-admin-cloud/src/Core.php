@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace WPAICloudGateway;
 
+require_once __DIR__.'/AbilitiesPolicy.php';
+
 final class Core {
     // Exceeds the bounded HTTPS catalog + tool request timeouts. Expiry only
     // fences local settlement; it never proves a remote mutation did not occur.
@@ -184,6 +186,7 @@ final class Core {
     }
     public static function writes(string $name,array $args): bool {
         $name=str_replace('.','_',$name);
+        if (AbilitiesPolicy::isMetadataRead($name)) return false;
         if ($name==='wordpress_execute') return ($args['mode']??'read')!=='read';
         return !in_array($name,self::READ_TOOLS,true);
     }
