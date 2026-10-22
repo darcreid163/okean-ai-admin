@@ -20,10 +20,10 @@ final class Unsplash {
     private $http;
 
     public function __construct(private readonly string $accessKey, ?callable $http = null) {
-        if (strlen($accessKey) < 20 || strlen($accessKey) > 200 || preg_match('/\s/', $accessKey) === 1) {
+        if (strlen($accessKey) < 20 || strlen($accessKey) > 200 || preg_match('/[\x00-\x20\x7F]/', $accessKey) === 1) {
             throw new Fault('unsplash_key_invalid', 503);
         }
-        $this->http = $http ?? static fn(string $url): array => self::curl($url);
+        $this->http = $http ?? static fn(string $url): array => self::curl($url, $accessKey);
     }
 
     /** @return array<string,mixed> */
@@ -80,12 +80,12 @@ final class Unsplash {
     }
 
     /** @return array{status:int,body:string} */
-    private static function curl(string $url): array {
+    private static function curl(string $url, string $accessKey): array {
         $ch = curl_init($url);
         $body = '';
         $tooLarge = false;
         curl_setopt_array($ch, array(
-            CURLOPT_HTTPHEADER => array('Accept: application/json', 'Accept-Version: v1'),
+            CURLOPT_HTTPHEADER => array('Accept: application/json', 'Accept-Version: v1', 'Authorization: Client-ID '.$accessKey),
             CURLOPT_PROXY => '',
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
