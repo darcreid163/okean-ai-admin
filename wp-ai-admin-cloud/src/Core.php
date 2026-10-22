@@ -184,7 +184,6 @@ final class Core {
     }
     public static function writes(string $name,array $args): bool {
         $name=str_replace('.','_',$name);
-        if (AbilitiesPolicy::isMetadataRead($name)) return false;
         if ($name==='wordpress_execute') return ($args['mode']??'read')!=='read';
         return !in_array($name,self::READ_TOOLS,true);
     }
