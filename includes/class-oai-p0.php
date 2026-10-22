@@ -72,6 +72,8 @@ class OAI_P0 {
   if(!$temporary)return new WP_Error('oai_media_temporary','Cannot validate image in temporary storage',array('status'=>503));
   try{
    if(!@chmod($temporary,0600)||@file_put_contents($temporary,$bytes)!==strlen($bytes))return new WP_Error('oai_media_temporary','Cannot validate image in temporary storage',array('status'=>503));
+   $verified_type=wp_check_filetype_and_ext($temporary,$filename);
+   if(empty($verified_type['ext'])||($verified_type['type']??'')!==$mime||!empty($verified_type['proper_filename']))return new WP_Error('oai_media_mime','WordPress rejected the image type or filename',array('status'=>422));
    $editor=wp_get_image_editor($temporary,array('mime_type'=>$mime));
    if(is_wp_error($editor))return new WP_Error('oai_media_decode','Image data could not be decoded',array('status'=>422));
    $size=$editor->get_size();

@@ -66,6 +66,7 @@ $png = $fixtures['png'];
 mediaReject(null, 'oai_media_payload');
 mediaReject([], 'oai_media_payload');
 mediaReject(array_replace($png, ['filename'=>'mismatch.jpg']), 'oai_media_mime');
+mediaReject(array_replace($png, ['filename'=>'mismatch.jpg', 'mime_type'=>'image/jpeg']), 'oai_media_mime');
 mediaReject(array_replace($png, ['mime_type'=>'image/jpeg']), 'oai_media_mime');
 mediaReject(array_replace($png, ['filename'=>'payload.php']), 'oai_media_mime');
 mediaReject(array_replace($png, ['content_base64'=>base64_encode('<?php echo "synthetic";')]), 'oai_media_content');
@@ -93,6 +94,9 @@ try { mediaReject($png, 'oai_media_decode'); } finally { remove_filter('wp_image
 $noPng = function($mimes) { unset($mimes['png']); return $mimes; };
 add_filter('upload_mimes', $noPng);
 try { mediaReject($png, 'oai_media_mime'); } finally { remove_filter('upload_mimes', $noPng); }
+$typePolicy = function($type) { $type['type'] = false; $type['ext'] = false; return $type; };
+add_filter('wp_check_filetype_and_ext', $typePolicy);
+try { mediaReject($png, 'oai_media_mime'); } finally { remove_filter('wp_check_filetype_and_ext', $typePolicy); }
 wp_set_current_user(0);
 mediaReject($png, 'oai_media_permission');
 wp_set_current_user(1);
