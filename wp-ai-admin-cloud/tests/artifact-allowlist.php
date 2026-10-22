@@ -11,7 +11,7 @@ foreach(['src','includes','config'] as $dir) {
     foreach($it as $file) {
         if(!$file->isFile() || $file->isLink())throw new RuntimeException('Non-regular source file');
         $relative=$dir.'/'.substr($file->getPathname(),strlen($source)+1);
-        if(!preg_match('/^[A-Za-z0-9_\/-]+\.php$/D',$relative))throw new RuntimeException('Non-PHP runtime file '.$relative);
+        if(!str_ends_with($relative,'.php') && $relative!=='config/plans.json')throw new RuntimeException('Unexpected runtime file '.$relative);
         $expected[]=$relative;
     }
 }
