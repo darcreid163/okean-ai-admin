@@ -124,7 +124,7 @@ $wpdb->query('UPDATE '.WPAI_Cloud_DB::table('plan_versions')." SET verify_billab
 foreach($actions['rest_api_init'] as $callback)$callback();
 foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
 check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1/plans'])===1,'Legacy public routes overwritten');
-check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.12-dev','Candidate status version');
+check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.13-dev','Candidate status version');
 $publishedPlans=WPAI_Cloud_REST::plans()->data['data']['items'];
 check(array_column($publishedPlans,'slug')===['free','pro','biznes','biznespro'],'Approved four-plan catalog differs from recovered v2 policy');
 check(WPAI_Cloud_REST::plans()->data['data']['automatic_money_debits']===false,'Automatic debits unexpectedly active');
@@ -147,7 +147,7 @@ class TestRequest {
 $headers=['authorization'=>'Bearer '.$token,'content-type'=>'application/json','accept'=>'application/json, text/event-stream','mcp-protocol-version'=>'2025-11-25'];
 $message=['jsonrpc'=>'2.0','id'=>99,'method'=>'initialize','params'=>['protocolVersion'=>'2025-11-25']];
 $req=new TestRequest($headers,$message);$response=WordPress::mcp($req);
-check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.12-dev','HTTP MCP initialization failed');
+check($response->status===200 && $response->data['result']['serverInfo']['version']==='0.3.13-dev','HTTP MCP initialization failed');
 foreach ([['authorization','',401],['origin','https://evil.example.com',403],['mcp-protocol-version','unknown',400],['content-type','text/plain',415],['accept','application/json',406]] as [$header,$value,$status]) {
     $changed=$headers; $changed[$header]=$value;
     check(WordPress::mcp(new TestRequest($changed,$message))->status===$status,'HTTP validation bypass: '.$header);
