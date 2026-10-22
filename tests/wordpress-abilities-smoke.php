@@ -23,7 +23,7 @@ $registered=wp_register_ability($name,[
 ]);
 if (is_wp_error($registered)) throw new RuntimeException('Ability registration error: '.$registered->get_error_message());
 $names=array_column(OAI_Abilities::discover(),'name');
-if (!in_array($name,$names,true)) throw new RuntimeException('Registered REST-visible Ability missing from discovery');
+if (!in_array($name,$names,true)) { $entry=wp_get_ability($name); throw new RuntimeException('Registered REST-visible Ability missing; admin='.(int)current_user_can('manage_options').' registry='.count(wp_get_abilities()).' meta='.wp_json_encode($entry && method_exists($entry,'get_meta')?$entry->get_meta():null).' discovered='.wp_json_encode($names)); }
 $info=OAI_Abilities::info($name);
 if (!is_array($info) || $info['execution']!=='disabled_until_explicit_policy') throw new RuntimeException('Ability metadata not protected');
 wp_set_current_user(0);
