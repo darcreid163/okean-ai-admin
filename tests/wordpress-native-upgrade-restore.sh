@@ -18,6 +18,7 @@ PLUGIN="$SITE/wp-content/plugins/okean-ai-admin"
 BACKUP="$(mktemp -d "${RUNNER_TEMP:-/tmp}/wpai-upgrade-restore.XXXXXX")"
 trap 'rm -rf "$BACKUP"' EXIT
 export WPAI_UPGRADE_SNAPSHOT="$BACKUP/expected.json"
+wp_upgrade db export "$BACKUP/pristine.sql" --single-transaction
 if ! git -C "$ROOT" cat-file -e "$BASELINE^{commit}" 2>/dev/null; then
   git -C "$ROOT" fetch --no-tags --depth=1 origin "$BASELINE"
 fi
@@ -44,7 +45,13 @@ wp_upgrade db reset --yes
 wp_upgrade db import "$BACKUP/before.sql"
 [[ "$(sha256sum "$SITE/wp-config.php")" == "$CONFIG_HASH" ]] || { echo 'WordPress configuration changed' >&2; exit 1; }
 WPAI_UPGRADE_PHASE=restored wp_upgrade eval-file "$ROOT/tests/wordpress-native-upgrade-restore.php"
-# Leave the disposable site on the candidate for the remaining smoke gates.
+# Verify a second upgrade after the paired restore.
 install_candidate
 WPAI_UPGRADE_PHASE=upgraded-again wp_upgrade eval-file "$ROOT/tests/wordpress-native-upgrade-restore.php"
+# Isolate synthetic license/credentials/quota rows from the later smoke suites.
+# In particular their unlicensed-denial case must start genuinely unlicensed.
+rm -rf "$PLUGIN"
+wp_upgrade db reset --yes
+wp_upgrade db import "$BACKUP/pristine.sql"
+[[ "$(sha256sum "$SITE/wp-config.php")" == "$CONFIG_HASH" ]] || { echo 'WordPress configuration changed' >&2; exit 1; }
 echo 'PASS: historical Native 2.1.14 -> 2.1.17, repeated boot, full code+DB restore, and re-upgrade'

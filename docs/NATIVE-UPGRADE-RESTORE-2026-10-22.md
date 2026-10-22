@@ -22,7 +22,10 @@ and a pending operation under the old code. It then:
 5. Restores both historical files and the complete database; checks DB23, the exact
    pre-upgrade table list, original sentinel, credentials, rows and wp-config hash.
 6. Re-upgrades to DB24 and verifies post-backup quota data did not leak into the
-   restored database. Leaves the disposable site on the candidate for other gates.
+   restored database.
+7. Removes the test plugin and restores the pristine pre-test database. The smoke
+   runner then installs the candidate normally so synthetic license/credential
+   records cannot affect other suites, including unlicensed-denial checks.
 
 Explicit opt-in, the dedicated `wp_test` / `wpai_upgrade_test` database name, a
 loopback fixture home and an absent initial Native directory are mandatory. Dumps

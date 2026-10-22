@@ -19,8 +19,12 @@ install_ci_plugin() {
 install_ci_plugin elementor "${ELEMENTOR_TEST_VERSION:-latest}"
 install_ci_plugin woocommerce "${WOO_TEST_VERSION:-latest}"
 # Install the historical Native first, then exercise real code upgrade and a
-# complete pre-upgrade code/database restore before continuing on the candidate.
+# complete pre-upgrade code/database restore. Restore the clean fixture before
+# the remaining smoke suites, including their unlicensed-denial assertions.
 OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/site" "$WORK/wp-cli.phar"
+mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
+cp -R okean-ai-admin.php includes starter-themes "$WORK/site/wp-content/plugins/okean-ai-admin/"
+wp_test plugin activate okean-ai-admin
 # Disposable site only: exercise the additive Native 23 -> 24 schema migration,
 # preserving paired identity, registered OAuth client and pending operations.
 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-quota-upgrade-23-24.php"
