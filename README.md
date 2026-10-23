@@ -2,7 +2,7 @@
 
 **Current integrated candidate:** Native **2.1.17** (DB schema 24; build `2.1.17-usage-batch-v1-20261019`) + recovered Cloud Core **0.3.11** (Gateway schema 4); current **unreleased Cloud 0.3.13-dev** adds scoped Skills/Media and read-only Abilities metadata discovery. This branch is **not** an approved production release.
 
-[Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
+[Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
 
 ## Один основной репозиторий до завершения проекта
 

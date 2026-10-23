@@ -1,6 +1,7 @@
 <?php
 /** Actual creators, SQL rows, audit and receipt on disposable WordPress only. */
 if(getenv('OAI_DISPOSABLE_WP_TEST')!=='1'||(strpos(home_url(),'localhost')===false&&strpos(home_url(),'.test')===false))throw new RuntimeException('Disposable WordPress required');
+require_once (getenv('GITHUB_WORKSPACE')?:getcwd()).'/tests/fixtures/media-creation-cleanup.php';
 function riskWPAssert($ok,$why){if(!$ok)throw new RuntimeException($why);}
 function riskWPOk($v,$why){if(is_wp_error($v))throw new RuntimeException($why.': '.$v->get_error_code());return $v;}
 function riskWPRequest($args){$r=new WP_REST_Request('POST','/okean-ai/v1/sandbox');foreach($args as $k=>$v)$r->set_param($k,$v);return $r;}
@@ -55,7 +56,7 @@ try{
  riskWPAssert(count($riskWPOps)===15,'Expected all 15 creator cases to be registered for cleanup');
  echo 'PASS: '.count($riskWPOps)." real generic/content/Gutenberg/Woo/Elementor/media/menu/file/workspace operations agree with SQL/audit/receipt risk; protected guard and approved lifecycle retained\n";
 }finally{
- foreach($riskWPOps as $id){$wpdb->delete(OAI_DB::audit_table(),['operation_db_id'=>$id]);$wpdb->delete(OAI_DB::table(),['id'=>$id]);riskWPAssert(OAI_DB::get($id)===null,'Fixture operation cleanup failed');riskWPAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::audit_table().' WHERE operation_db_id=%d',$id))===0,'Fixture audit cleanup failed');}
+ foreach($riskWPOps as $id){oai_fixture_media_claim_cleanup($id);$wpdb->delete(OAI_DB::audit_table(),['operation_db_id'=>$id]);$wpdb->delete(OAI_DB::table(),['id'=>$id]);riskWPAssert(OAI_DB::get($id)===null,'Fixture operation cleanup failed');riskWPAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::audit_table().' WHERE operation_db_id=%d',$id))===0,'Fixture audit cleanup failed');}
  foreach(array_reverse($posts) as $id){if(get_post_type($id)==='attachment')wp_delete_attachment($id,true);else wp_delete_post($id,true);}
  if($menu)wp_delete_nav_menu($menu);
  if($file&&is_file($file))unlink($file);
