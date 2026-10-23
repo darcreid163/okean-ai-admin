@@ -34,12 +34,14 @@ class OAI_Workspace {
   return array('root'=>$root,'items'=>$items);
  }
  public static function create($clone_theme=true){
-  $root=self::ensure_root(); if(!$root)return new WP_Error('oai_workspace_root','Could not create workspace root',array('status'=>500));
+  // Check permission before touching uploads or creating directories.
+
   // Creation writes a new filesystem artifact before any operation ledger entry.
   // Reserve an actor/theme/clone intent atomically using the unique options key.
   // Unknown outcomes remain held: no automatic TTL or age-based replacement.
   $actor=get_current_user_id();
   if($actor<=0 || !current_user_can('manage_options'))return new WP_Error('oai_workspace_auth','Administrator required',array('status'=>403));
+  $root=self::ensure_root(); if(!$root)return new WP_Error('oai_workspace_root','Could not create workspace root',array('status'=>500));
   $intent='oai_workspace_creation_'.hash('sha256',wp_json_encode(array($actor,get_stylesheet(),get_template(),(bool)$clone_theme)));
   $id=self::id();
   $claim=array('id'=>$id,'actor'=>$actor,'state'=>'reserved','created_at'=>time());
