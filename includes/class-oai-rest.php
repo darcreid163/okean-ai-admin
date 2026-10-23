@@ -1666,7 +1666,7 @@ frame.addEventListener('load',function(){
  public static function workspace_status($req){ return OAI_Workspace::list_workspaces(); }
  public static function workspace_create($req){
   $clone=!in_array(strtolower((string)$req->get_param('clone_theme')),array('0','false','no'),true);
-  return OAI_Workspace::create($clone);
+  return OAI_Workspace::create($clone,$req->get_param('idempotency_key')??'');
  }
  public static function workspace_files($req){return OAI_Workspace::files((string)$req->get_param('workspace_id'),(string)$req->get_param('path'));}
  public static function workspace_read($req){return OAI_Workspace::read((string)$req->get_param('workspace_id'),(string)$req->get_param('path'));}
