@@ -185,6 +185,14 @@ class OAI_P0 {
   if(!is_string($fingerprint))return new WP_Error('oai_menu_intent','Unable to encode menu creation intent',array('status'=>503));
   $intent='oai_menu_creation_'.hash('sha256',$fingerprint);
   global $wpdb;
+  if($key!==''){
+   $legacy=wp_json_encode(array('menu-creation-v1',get_current_blog_id(),$actor,$normal_name,$key),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+   if(!is_string($legacy))return new WP_Error('oai_menu_intent','Cannot encode legacy menu creation',array('status'=>503));
+   $legacy_name='oai_menu_creation_'.hash('sha256',$legacy);
+   $legacy_claim=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$legacy_name));
+   if($legacy_claim!==null)return new WP_Error('oai_menu_creation_pending','Legacy menu claim requires reconciliation',array('status'=>409));
+   if($wpdb->last_error!=='')return new WP_Error('oai_menu_storage','Legacy menu reservation lookup unavailable',array('status'=>503));
+  }
   $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
   if($existing!==null){
    $prior=maybe_unserialize($existing);
@@ -231,6 +239,19 @@ class OAI_P0 {
   if(!is_string($identity))return new WP_Error('oai_menu_item_intent','Cannot encode menu item request identity',array('status'=>503));
   $intent='oai_menu_item_creation_'.hash('sha256',$identity);
   global $wpdb;
+  if($key!==''){
+   $legacy_identity=wp_json_encode(array('menu-item-v1',get_current_blog_id(),$actor,$menu_id,$key));
+   if(!is_string($legacy_identity))return new WP_Error('oai_menu_item_intent','Cannot encode legacy menu item creation',array('status'=>503));
+   $legacy_name='oai_menu_item_creation_'.hash('sha256',$legacy_identity);
+   $legacy_value=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$legacy_name));
+   if($legacy_value!==null){
+    $prior=maybe_unserialize($legacy_value);
+    if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+     return new WP_Error('oai_menu_item_intent_conflict','Reused prior menu item request key with changed content',array('status'=>409));
+    return new WP_Error('oai_menu_item_creation_pending','Existing item claim requires reconciliation',array('status'=>409));
+   }
+   if($wpdb->last_error!=='')return new WP_Error('oai_menu_item_storage','Legacy item reservation lookup unavailable',array('status'=>503));
+  }
   $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
   if($existing!==null){
    $prior=maybe_unserialize($existing);
