@@ -201,8 +201,34 @@ class OAI_P0 {
   );
  }
  public static function menu_add_item($a){
+  if(!current_user_can('edit_theme_options'))return new WP_Error('oai_menu_permission','Menu edit permission required',array('status'=>403));
   $menu_id=absint($a['menu_id']??0);$menu=wp_get_nav_menu_object($menu_id);if(!$menu)return new WP_Error('oai_menu_not_found','Menu not found',array('status'=>404));
   $args=self::menu_item_args($a);if($args['menu-item-title']===''&&$args['menu-item-object-id']===0)return new WP_Error('oai_menu_item','Menu item title or object_id is required',array('status'=>422));
+  $key=$a['idempotency_key']??'';
+  if(!is_string($key)||($key!==''&&!preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$key)))
+   return new WP_Error('oai_menu_item_request_key','Invalid menu item idempotency_key',array('status'=>400));
+  $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $actor=get_current_user_id();
+  $canonical=$args;ksort($canonical,SORT_STRING);
+  $encoded=wp_json_encode(array('menu-item-v1',$menu_id,$canonical),JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION);
+  if(!is_string($encoded))return new WP_Error('oai_menu_item_intent','Cannot encode menu item creation intent',array('status'=>503));
+  $payload_hash=hash('sha256',$encoded);
+  $identity=wp_json_encode(array('menu-item-v1',get_current_blog_id(),$actor,$menu_id,$key!==''?$key:$payload_hash));
+  if(!is_string($identity))return new WP_Error('oai_menu_item_intent','Cannot encode menu item request identity',array('status'=>503));
+  $intent='oai_menu_item_creation_'.hash('sha256',$identity);
+  global $wpdb;
+  $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
+  if($existing!==null){
+   $prior=maybe_unserialize($existing);
+   if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+    return new WP_Error('oai_menu_item_intent_conflict','Reused item creation key with different content',array('status'=>409));
+   return new WP_Error('oai_menu_item_creation_pending','Menu item creation requires reconciliation',array('status'=>409));
+  }
+  if($wpdb->last_error!=='')return new WP_Error('oai_menu_item_storage','Item creation reservation unavailable',array('status'=>503));
+  // Persist the claim before wp_update_nav_menu_item can write a new post.
+  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
+  if(!add_option($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
+   return new WP_Error('oai_menu_item_creation_pending','Menu item creation requires reconciliation',array('status'=>409));
   $item_id=wp_update_nav_menu_item($menu_id,0,$args);if(is_wp_error($item_id))return $item_id;
   wp_update_post(array('ID'=>$item_id,'post_status'=>'draft'));update_post_meta($item_id,'_oai_sandbox_artifact','1');
   $after=self::menu_item_snapshot($item_id);if(is_wp_error($after)){wp_delete_post($item_id,true);return $after;}$after['status']='publish';

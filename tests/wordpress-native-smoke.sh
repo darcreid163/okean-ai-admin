@@ -69,3 +69,6 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-el
 
 # Preserve created artifact operation evidence before any operator-only reconciliation.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-evidence-cleanup.php"
+
+# Durable navigation-menu item creation: retries, actor isolation and six workers.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-menu-item-creation.php"
