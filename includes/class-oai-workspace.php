@@ -35,7 +35,18 @@ class OAI_Workspace {
  }
  public static function create($clone_theme=true){
   $root=self::ensure_root(); if(!$root)return new WP_Error('oai_workspace_root','Could not create workspace root',array('status'=>500));
-  $id=self::id(); $base=$root.'/'.$id; wp_mkdir_p($base);
+  // Creation writes a new filesystem artifact before any operation ledger entry.
+  // Reserve an actor/theme/clone intent atomically using the unique options key.
+  // Unknown outcomes remain held: no automatic TTL or age-based replacement.
+  $actor=get_current_user_id();
+  if($actor<=0 || !current_user_can('manage_options'))return new WP_Error('oai_workspace_auth','Administrator required',array('status'=>403));
+  $intent='oai_workspace_creation_'.hash('sha256',wp_json_encode(array($actor,get_stylesheet(),get_template(),(bool)$clone_theme)));
+  $id=self::id();
+  $claim=array('id'=>$id,'actor'=>$actor,'state'=>'reserved','created_at'=>time());
+  if(!add_option($intent,$claim,'',false))
+   return new WP_Error('oai_workspace_creation_pending','Workspace creation intent already reserved; verify its files before retry',array('status'=>409));
+  $base=$root.'/'.$id;
+  if(!wp_mkdir_p($base))return new WP_Error('oai_workspace_dir','Could not initialize workspace directory',array('status'=>500));
   $theme=array('stylesheet'=>get_stylesheet(),'template'=>get_template(),'name'=>wp_get_theme()->get('Name'),'version'=>wp_get_theme()->get('Version'));
   $meta=array('id'=>$id,'created_at'=>gmdate('c'),'active'=>true,'theme'=>$theme,'clone_theme'=>(bool)$clone_theme);
   $theme_dir=$base.'/theme';if(!wp_mkdir_p($theme_dir)){self::remove_tree($base);return new WP_Error('oai_workspace_dir','Could not initialize the isolated theme directory',array('status'=>500));}
