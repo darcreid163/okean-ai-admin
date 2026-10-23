@@ -15,6 +15,11 @@ $user=wp_create_user('menu-admission-ci','ci-local-only-password','menu-ci@examp
 mcAssert(!is_wp_error($user),'Cannot provision menu actor');
 (new WP_User((int)$user))->set_role('administrator');wp_set_current_user((int)$user);
 mcAssert(current_user_can('edit_theme_options'),'Menu actor lacks permission');
+$claimName='oai_menu_creation_'.hash('sha256','strict-insert-fixture-'.wp_generate_uuid4());
+$claim=array('actor'=>(int)$user,'state'=>'reserved','claim'=>'private-test-only');
+mcAssert(OAI_DB::insert_creation_claim($claimName,$claim)===true,'Strict database claim did not insert');
+mcAssert(OAI_DB::insert_creation_claim($claimName,$claim)===false,'Strict database claim accepted duplicate insert');
+mcAssert(delete_option($claimName),'Could not clean synthetic admission claim');
 $startMenus=mcMenus();$startOps=OAI_DB::count_all();
 $one=OAI_P0::menu_create(['name'=>'WP AI Menu Creation First','idempotency_key'=>'menu-create-one-1234567890']);
 mcAssert(!is_wp_error($one),'Initial menu creation failed: '.(is_wp_error($one)?$one->get_error_code():'unknown'));
@@ -51,28 +56,35 @@ $three=OAI_P0::menu_create(['name'=>'WP AI Menu Third','idempotency_key'=>'menu-
 mcAssert(!is_wp_error($three),'Alternate actor was blocked by first actor claim');
 mcAssert(mcMenus()===$startMenus+3&&OAI_DB::count_all()===$startOps+3,'Alternate actor menu/operation absent');
 wp_set_current_user((int)$user);
-$token=bin2hex(random_bytes(8));$workers=[];
-for($i=0;$i<6;$i++){
- $pipes=[];
- $env=array_merge($_ENV,['OAI_DISPOSABLE_WP_TEST'=>'1','OAI_MENU_TEST_ACTOR'=>(string)$user,'OAI_MENU_TEST_TOKEN'=>$token]);
- $proc=proc_open([PHP_BINARY,$_SERVER['argv'][0],'--path='.ABSPATH,'--allow-root','--quiet','eval-file',(getenv('GITHUB_WORKSPACE')?:getcwd()).'/tests/wordpress-menu-creation-worker.php'],[1=>['pipe','w'],2=>['pipe','w']],$pipes,null,$env);
- mcAssert(is_resource($proc),'Could not start parallel menu worker');
- $workers[]=[$proc,$pipes];
+function mcParallelWave($actor,$token){
+ $workers=[];
+ for($i=0;$i<6;$i++){
+  $pipes=[];
+  $env=array_merge($_ENV,['OAI_DISPOSABLE_WP_TEST'=>'1','OAI_MENU_TEST_ACTOR'=>(string)$actor,'OAI_MENU_TEST_TOKEN'=>$token]);
+  $proc=proc_open([PHP_BINARY,$_SERVER['argv'][0],'--path='.ABSPATH,'--allow-root','--quiet','eval-file',(getenv('GITHUB_WORKSPACE')?:getcwd()).'/tests/wordpress-menu-creation-worker.php'],[1=>['pipe','w'],2=>['pipe','w']],$pipes,null,$env);
+  mcAssert(is_resource($proc),'Could not start parallel menu worker');
+  $workers[]=[$proc,$pipes];
+ }
+ $wins=0;$errors=0;
+ foreach($workers as [$proc,$pipes]){
+  $stdout=stream_get_contents($pipes[1]);$stderr=stream_get_contents($pipes[2]);
+  foreach($pipes as $pipe)fclose($pipe);
+  $exit=proc_close($proc);$res=json_decode(trim($stdout),true);
+  mcAssert($exit===0&&is_array($res),'Menu worker failed: '.substr($stderr,0,300));
+  if(isset($res['id']))$wins++;
+  elseif(($res['error']??'')==='oai_menu_creation_pending')$errors++;
+  else throw new RuntimeException('Unexpected menu worker result: '.substr($stdout,0,180));
+ }
+ return [$wins,$errors];
 }
-$wins=0;$errors=0;
-foreach($workers as [$proc,$pipes]){
- $stdout=stream_get_contents($pipes[1]);$stderr=stream_get_contents($pipes[2]);
- foreach($pipes as $pipe)fclose($pipe);
- $exit=proc_close($proc);$res=json_decode(trim($stdout),true);
- mcAssert($exit===0&&is_array($res),'Menu worker failed: '.substr($stderr,0,300));
- if(isset($res['id']))$wins++;
- elseif(($res['error']??'')==='oai_menu_creation_pending')$errors++;
- else throw new RuntimeException('Unexpected menu worker result');
+for($round=0;$round<3;$round++){
+ [$wins,$errors]=mcParallelWave((int)$user,bin2hex(random_bytes(8)));
+ mcAssert($wins===1&&$errors===5,'Concurrent menu winner count invalid in round '.$round.': '.$wins.'/'.$errors);
+ $termCount=mcMenus();$operationCount=OAI_DB::count_all();
+ $expected=$startMenus+4+$round;
+ mcAssert($termCount===$expected&&$operationCount===$startOps+4+$round,'Concurrent menu/operation mismatch in round '.$round.': menus='.$termCount.' ops='.$operationCount);
 }
-mcAssert($wins===1&&$errors===5,'Concurrent menu winner count invalid: '.$wins.'/'.$errors);
-$termCount=mcMenus();$operationCount=OAI_DB::count_all();
-mcAssert($termCount===$startMenus+4&&$operationCount===$startOps+4,'Concurrent menu/operation mismatch: menus='.$termCount.' expected='.($startMenus+4).' operations='.$operationCount.' expected='.($startOps+4));
 wp_set_current_user(0);
 mcErr(OAI_P0::menu_create(['name'=>'WP AI Menu Anonymous','idempotency_key'=>'menu-anonymous-12345678']),'oai_menu_permission');
-mcAssert(mcMenus()===$startMenus+4,'Anonymous created menu');
-echo "PASS menu creation admission: ".MenuCreationFixture::$checks." checks; six workers and one menu/operation\n";
+mcAssert(mcMenus()===$startMenus+6,'Anonymous created menu');
+echo "PASS menu creation admission: ".MenuCreationFixture::$checks." checks; 3 rounds of 6 workers, one menu/operation per round\n";
