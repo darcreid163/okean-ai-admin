@@ -63,3 +63,6 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-me
 
 # WooCommerce new draft products: atomic pre-save intent admission and six workers.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-product-creation.php"
+
+# Reserve Elementor drafts before post creation; exercise random wrappers and 6 workers.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-elementor-creation.php"

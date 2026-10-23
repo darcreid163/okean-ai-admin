@@ -197,6 +197,13 @@ class OAI_REST {
   $req->set_param('value',$changes);
   return self::sandbox_create($req);
  }
+ /** Canonicalize only map-key ordering; Elementor element/list order is semantic. */
+ private static function elementor_creation_canonical($value){
+  if(!is_array($value))return $value;
+  if(!array_is_list($value))ksort($value,SORT_STRING);
+  foreach($value as $key=>$entry)$value[$key]=self::elementor_creation_canonical($entry);
+  return $value;
+ }
  public static function elementor_create_page($req){
   $license=OAI_License::can('elementor'); if(is_wp_error($license)) return $license;
   if(!OAI_Elementor::available())return new WP_Error('oai_elementor_unavailable','Elementor is not available',array('status'=>503));
@@ -220,7 +227,39 @@ class OAI_REST {
   if(!is_array($data))return new WP_Error('oai_elementor_data','data must be an Elementor element array or element object',array('status'=>400));
   if(!self::is_list_array($data) && (isset($data['elType'])||isset($data['widgetType'])||isset($data['elements']))){$data=array($data);}
   $data=OAI_Elementor::decode_create_nodes($data); if(is_wp_error($data))return $data;
+  // Save the canonical caller/source input BEFORE normalize_elementor_page_data()
+  // generates random IDs for legacy nodes lacking an explicit container.
+  $intent_nodes=self::elementor_creation_canonical($data);
   $data=self::normalize_elementor_page_data($data); if(is_wp_error($data))return $data;
+
+  // These operations create a page before recording its pending lifecycle.
+  // The unique options key is the durable admission barrier across workers.
+  if(!current_user_can('edit_pages'))return new WP_Error('oai_page_permission','Page edit permission required',array('status'=>403));
+  $request_key=$req->get_param('idempotency_key');
+  if($request_key===null)$request_key='';
+  if(!is_string($request_key)||($request_key!==''&&!preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$request_key)))
+   return new WP_Error('oai_page_request_key','Invalid page idempotency_key',array('status'=>400));
+  $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $payload=array('elementor-page-v1',$title,$excerpt,$slug,$status,$template,$template_type,$source_id,$intent_nodes);
+  $encoded=wp_json_encode(self::elementor_creation_canonical($payload),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION);
+  if(!is_string($encoded))return new WP_Error('oai_page_intent','Cannot encode page creation intent',array('status'=>503));
+  $payload_hash=hash('sha256',$encoded);
+  $actor=get_current_user_id();
+  $identity=wp_json_encode(array('elementor-page-v1',get_current_blog_id(),$actor,$request_key!==''?$request_key:$payload_hash));
+  if(!is_string($identity))return new WP_Error('oai_page_intent','Cannot encode page request identity',array('status'=>503));
+  $intent='oai_elementor_page_creation_'.hash('sha256',$identity);
+  global $wpdb;
+  $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
+  if($existing!==null){
+   $prior=maybe_unserialize($existing);
+   if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+    return new WP_Error('oai_page_intent_conflict','Creation key was reused with another page payload',array('status'=>409));
+   return new WP_Error('oai_page_creation_pending','Page creation requires result reconciliation',array('status'=>409));
+  }
+  if($wpdb->last_error!=='')return new WP_Error('oai_page_storage','Page creation reservation unavailable',array('status'=>503));
+  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
+  if(!add_option($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
+   return new WP_Error('oai_page_creation_pending','Page creation requires result reconciliation',array('status'=>409));
 
   $adapter=OAI_Builder_Manager::get('elementor');
   if(!$adapter)return new WP_Error('oai_builder_adapter','Elementor adapter is unavailable',array('status'=>500));
