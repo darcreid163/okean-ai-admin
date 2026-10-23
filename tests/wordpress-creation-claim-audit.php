@@ -5,16 +5,22 @@ if(getenv('OAI_DISPOSABLE_WP_TEST')!=='1'||
  throw new RuntimeException('Disposable localhost WordPress required');
 final class ClaimAuditFixture { public static int $checks=0; }
 function claimCheck($condition,$label){++ClaimAuditFixture::$checks;if(!$condition)throw new RuntimeException($label);}
-$names=array();$original=get_current_user_id();$secret='synthetic-test-secret-never-expose-7e8c';
+$names=array();$original=get_current_user_id();$fixtureOperation=0;$secret='synthetic-test-secret-never-expose-7e8c';
 $families=OAI_Creation_Claim_Audit::FAMILIES;
 try{
  wp_set_current_user(1);
  claimCheck(current_user_can('manage_options'),'Admin permission missing');
+ global $wpdb;
+ claimCheck($wpdb->insert(OAI_DB::table(),array('operation_id'=>'CREATION-AUDIT-'.bin2hex(random_bytes(8)),
+  'type'=>'media_upload','status'=>'pending','target'=>'synthetic',
+  'created_at'=>current_time('mysql',true)))===1,'Cannot seed synthetic ledger operation');
+ $fixtureOperation=(int)$wpdb->insert_id;
+ claimCheck($fixtureOperation>0,'Synthetic operation ID missing');
  foreach($families as $family=>$prefix){
   $id=hash('sha256','claims-ci-'.$family.'-'.wp_generate_uuid4());
   $name=$prefix.$id;
   $record=array('state'=>'reserved','created_at'=>time()-2*DAY_IN_SECONDS,
-   'claim'=>$secret,'operation_id'=>12345,'id'=>'ws-synthetic-private');
+   'claim'=>$secret,'operation_id'=>$family==='media'||$family==='menu'?$fixtureOperation:12345,'id'=>'ws-synthetic-private');
   claimCheck(add_option($name,$family==='media'?wp_json_encode($record):$record,'',false),'Cannot seed valid '.$family);
   $names[]=$name;
   $bad=$prefix.hash('sha256','claims-ci-bad-'.$family.'-'.wp_generate_uuid4());
@@ -30,6 +36,9 @@ try{
   claimCheck($row['sampled']>=2&&!$row['truncated'],'No bounded claim inventory for '.$family);
   claimCheck($row['declared_reserved']>=1&&$row['unreadable_metadata']>=1,'Valid/opaque claim classification wrong '.$family);
   claimCheck($row['with_operation_reference']>=1&&$row['older_than_24h']>=1,'Claim evidence/time counters incorrect '.$family);
+  if($family==='media')claimCheck($row['referenced_operation_same_type']>=1,'Real media ledger link was missed');
+  if($family==='menu')claimCheck($row['referenced_operation_other_type']>=1,'Wrong-type ledger link was accepted');
+  if($family==='product')claimCheck($row['referenced_operation_missing']>=1,'Missing operation was accepted');
  }
  $json=wp_json_encode($full);
  claimCheck(strpos($json,$secret)===false&&strpos($json,'ws-synthetic-private')===false&&
@@ -58,5 +67,6 @@ try{
 }finally{
  wp_set_current_user(1);
  foreach($names as $name)delete_option($name);
+ if($fixtureOperation>0)$wpdb->delete(OAI_DB::table(),array('id'=>$fixtureOperation));
  wp_set_current_user($original);
 }

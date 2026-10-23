@@ -28,6 +28,22 @@ automated judgement of which records can be released. Older-than-24h is merely
 an observation. The actual existence of artifacts and ownership of related
 operations have **not** been independently verified.
 
+## Preliminary operation-reference checks
+
+For claims that declare a positive numeric operation ID, the auditor performs
+one bounded batch lookup against the Native operation ledger per family.
+It distinguishes: a reference to an operation of the expected creation type,
+a reference to a different type, an absent operation and malformed reference
+values. The expected classes are media_upload, menu_create, menu_add_item,
+woocommerce_product_create and elementor_page_create; workspaces have no
+corresponding operation type in this lifecycle. Only aggregated counters are
+returned. A same-type reference is **not proof of ownership, payload match,
+approval or successful application**. Nor does an absent reference prove
+nothing was created: a crash could have happened before storing it. Actual
+reconciliation requires independent corroboration and is not implemented.
+Batch lookup is bounded by the same per-family limit; it does not run a query
+per claim or mutate the ledger.
+
 No option names, claim values, keys, request payloads, WordPress user IDs,
 operation IDs, paths, media filenames or customer fields are returned.
 Stored legacy PHP arrays are decoded with object deserialization disabled;

@@ -52,9 +52,16 @@ final class OAI_Creation_Claim_Audit {
    $group=array(
     'sampled'=>count($rows),'truncated'=>$truncated,
     'declared_reserved'=>0,'declared_other_state'=>0,'state_unknown'=>0,
-    'with_operation_reference'=>0,'with_creation_time'=>0,
+    'with_operation_reference'=>0,'operation_reference_invalid'=>0,
+    'referenced_operation_same_type'=>0,'referenced_operation_other_type'=>0,
+    'referenced_operation_missing'=>0,'with_creation_time'=>0,
     'older_than_24h'=>0,'unreadable_metadata'=>0
    );
+   $expected_types=array(
+    'media'=>'media_upload','menu'=>'menu_create','menu_item'=>'menu_add_item',
+    'product'=>'woocommerce_product_create','elementor_page'=>'elementor_page_create'
+   );
+   $referenced=array();
    foreach($rows as $record){
     $meta=self::metadata($record['option_value']??null);
     if($meta===null){$group['unreadable_metadata']++;$group['state_unknown']++;continue;}
@@ -62,8 +69,13 @@ final class OAI_Creation_Claim_Audit {
     if($state==='reserved')$group['declared_reserved']++;
     elseif(is_string($state)&&$state!=='')$group['declared_other_state']++;
     else $group['state_unknown']++;
-    if(!empty($meta['operation_id']) && (is_string($meta['operation_id'])||is_int($meta['operation_id'])))
+    if(isset($meta['operation_id'])&&$meta['operation_id']!==''&&$meta['operation_id']!==null){
      $group['with_operation_reference']++;
+     $reference=$meta['operation_id'];
+     if((is_int($reference)||is_string($reference))&&preg_match('/^[1-9][0-9]{0,17}$/D',(string)$reference))
+      $referenced[]=(int)$reference;
+     else $group['operation_reference_invalid']++;
+    }
     $created=$meta['created_at']??null;
     if(is_int($created)||is_string($created)&&preg_match('/^[0-9]{10}$/D',$created)){
      $created=(int)$created;
@@ -71,6 +83,24 @@ final class OAI_Creation_Claim_Audit {
       $group['with_creation_time']++;
       if($created<=time()-DAY_IN_SECONDS)$group['older_than_24h']++;
      }
+    }
+   }
+   // One bounded ledger lookup per family, not a query per claim.
+   // A matching operation TYPE is only preliminary evidence; it does not
+   // prove the operation belongs to the option claim or succeeded.
+   if($referenced){
+    $unique=array_values(array_unique($referenced));
+    $marks=implode(',',array_fill(0,count($unique),'%d'));
+    $table=OAI_DB::table();
+    $found=$wpdb->get_results($wpdb->prepare("SELECT id,type FROM $table WHERE id IN ($marks)",$unique),ARRAY_A);
+    if(!is_array($found)||$wpdb->last_error!=='')
+     return new WP_Error('oai_creation_audit_unavailable','Creation audit database unavailable',array('status'=>503));
+    $types=array();
+    foreach($found as $entry)$types[(int)$entry['id']]=(string)$entry['type'];
+    foreach($referenced as $id){
+     if(!isset($types[$id]))$group['referenced_operation_missing']++;
+     elseif(($expected_types[$family]??null)===$types[$id])$group['referenced_operation_same_type']++;
+     else $group['referenced_operation_other_type']++;
     }
    }
    $results[$family]=$group;
