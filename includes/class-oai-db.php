@@ -96,6 +96,130 @@ class OAI_DB {
   $wpdb->query("DELETE FROM $table WHERE state IN ('succeeded','failed') AND created_at < UTC_TIMESTAMP() - INTERVAL 90 DAY");
  }
  public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
+ private static $media_creation=null;
+ private static function intent_autocommit(){
+  global $wpdb;
+  if((string)$wpdb->get_var('SELECT @@session.autocommit')!=='1')return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));
+  $suppressed=$wpdb->suppress_errors();
+  try{$isolation=$wpdb->get_var('SELECT @@session.transaction_isolation');if($isolation===null)$isolation=$wpdb->get_var('SELECT @@session.tx_isolation');}finally{$wpdb->suppress_errors($suppressed);}
+  if(!in_array($isolation,array('READ-UNCOMMITTED','READ-COMMITTED','REPEATABLE-READ','SERIALIZABLE'),true))return new WP_Error('oai_intent_transaction','Cannot establish transaction state',array('status'=>503));
+  // This fails inside an active transaction without committing that transaction.
+  $suppressed=$wpdb->suppress_errors();
+  try{$ready=$wpdb->query('SET TRANSACTION ISOLATION LEVEL '.str_replace('-',' ',$isolation));}finally{$wpdb->suppress_errors($suppressed);}
+  return $ready===false?new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503)):true;
+ }
+ private static function media_creation_cas($name,$expected,$next=null){
+  global $wpdb;
+  $sql=$next===null?'DELETE FROM '.$wpdb->options.' WHERE option_name=%s AND BINARY option_value=BINARY %s':'UPDATE '.$wpdb->options.' SET option_value=%s WHERE option_name=%s AND BINARY option_value=BINARY %s';
+  $args=$next===null?array($name,$expected):array($next,$name,$expected);
+  $result=$wpdb->query($wpdb->prepare($sql,$args));
+  wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');
+  return $result===1;
+ }
+ private static function media_creation_terminal($record,$fingerprint){
+  $id=$record['operation_id']??0;if(!is_int($id)||$id<1)return false;
+  $row=self::get($id);if(!$row||$row['type']!=='media_upload')return false;
+  $meta=json_decode((string)$row['meta_data'],true);
+  if(($meta['_wpai_creation_intent']??'')!==$fingerprint||($meta['_wpai_creation_claim']??'')!==hash('sha256',$record['claim']))return false;
+  if(self::operation_lease($id)!==null)return false;
+  $status=(string)$row['status'];
+  if(in_array($status,array('rejected','expired'),true)){
+   // A terminal label alone is insufficient while a private artifact remains.
+   global $wpdb;
+   return get_post((int)$row['target'])===null&&(int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$wpdb->posts.' WHERE ID=%d',(int)$row['target']))===0;
+  }
+  if(!in_array($status,array('applied','proved','rolled_back'),true))return false;
+  $verified=OAI_Verify::operation($id);
+  return is_array($verified)&&!empty($verified['verified']);
+ }
+ /** Durable admission before media artifacts; unknown outcomes never age out. */
+ public static function with_media_creation(array $intent,callable $create){
+  global $wpdb;
+  $actor=(int)get_current_user_id();
+  if($actor<1)return new WP_Error('oai_creation_actor','Authenticated media owner required',array('status'=>403));
+  if(self::$media_creation!==null)return new WP_Error('oai_creation_nested','Nested media creation is not supported',array('status'=>503));
+  $ready=self::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $json=wp_json_encode(self::pending_intent_value((object)array('actor'=>$actor,'intent'=>(object)$intent)),JSON_PRESERVE_ZERO_FRACTION|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  if(!is_string($json))return new WP_Error('oai_creation_payload','Invalid creation intent',array('status'=>400));
+  $fingerprint=hash('sha256',$json);$name='oai_media_creation_'.$fingerprint;
+  $record=array('v'=>1,'actor'=>$actor,'claim'=>bin2hex(random_bytes(16)),'created_at'=>time(),'operation_id'=>0,'attachment_id'=>0,'source_name'=>(string)($intent['filename']??''),'content_sha256'=>(string)($intent['bytes_sha256']??''));
+  $raw=wp_json_encode($record);if(!is_string($raw))return new WP_Error('oai_creation_payload','Invalid media creation record',array('status'=>400));$acquired=false;
+  for($attempt=0;$attempt<3;$attempt++){
+   // Read the database, never a potentially stale positive/negative option cache.
+   $existing=$wpdb->get_row($wpdb->prepare('SELECT option_value FROM '.$wpdb->options.' WHERE option_name=%s',$name),ARRAY_A);
+   if($existing===null){
+    if($wpdb->last_error!=='')return new WP_Error('oai_creation_storage','Creation reservation is unavailable',array('status'=>503));
+    wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');
+    if(add_option($name,$raw,'',false)){$acquired=true;break;}
+    continue;
+   }
+   $prior=json_decode((string)$existing['option_value'],true);
+   if(!is_array($prior)||($prior['v']??null)!==1||($prior['actor']??null)!==$actor||!is_string($prior['claim']??null)||!preg_match('/^[a-f0-9]{32}$/D',$prior['claim']))return new WP_Error('oai_creation_unresolved','Media creation requires reconciliation',array('status'=>409));
+   if(empty($prior['operation_id']))return new WP_Error('oai_creation_unresolved','Media creation outcome requires reconciliation',array('status'=>409));
+   if(!self::media_creation_terminal($prior,$fingerprint))return new WP_Error('oai_duplicate_pending','An identical media creation is pending or requires reconciliation',array('status'=>409));
+   // Compare-and-swap: another request may have already installed a new claim.
+   if(self::media_creation_cas($name,(string)$existing['option_value'],$raw)){$acquired=true;break;}
+  }
+  if(!$acquired)return new WP_Error('oai_creation_busy','Media creation cannot be reserved; retry later',array('status'=>409));
+  $ready=self::intent_autocommit();if(is_wp_error($ready))return $ready;
+  if($wpdb->get_var($wpdb->prepare('SELECT option_value FROM '.$wpdb->options.' WHERE option_name=%s',$name))!==$raw)return new WP_Error('oai_creation_unresolved','Media creation ownership could not be established',array('status'=>503));
+  self::$media_creation=array('name'=>$name,'raw'=>$raw,'fingerprint'=>$fingerprint,'claim_hash'=>hash('sha256',$record['claim']),'actor'=>$actor,'operation_id'=>0,'record'=>$record);
+  try{
+   $out=$create();
+   if(is_wp_error($out)){if(self::$media_creation['operation_id']>0)throw new RuntimeException('Media creation outcome requires reconciliation');return $out;} // Claim retained even after known cleanup.
+   $id=(int)(is_array($out)?($out['id']??0):0);
+   if($id<1||self::$media_creation['operation_id']!==$id)throw new RuntimeException('Media creation outcome requires reconciliation');
+   $record=self::$media_creation['record'];$record['operation_id']=$id;
+   // A lost binding update cannot permit another creation: the reserved claim
+   // remains held. The valid operation may still be inspected by its owner.
+   self::media_creation_cas($name,self::$media_creation['raw'],wp_json_encode($record));
+   return $out;
+  }catch(Throwable $error){
+   // Preserve an unknown transport outcome for Cloud reservation accounting.
+   // Do not expose the original exception or convert partial work into a
+   // definite failed JSON-RPC reply. The durable claim remains held.
+   // Restore only a missing claim after a storage fault; never replace a
+   // different owner's/generation's reservation. Ordinary retries cannot clear it.
+   try{$missing=$wpdb->get_row($wpdb->prepare('SELECT option_value FROM '.$wpdb->options.' WHERE option_name=%s',$name),ARRAY_A);if($missing===null&&$wpdb->last_error===''){wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');add_option($name,self::$media_creation['raw'],'',false);}}catch(Throwable $ignored){}
+   throw new RuntimeException('Media creation outcome requires reconciliation');
+  }finally{self::$media_creation=null;}
+ }
+ public static function record_media_artifact($id){
+  if(self::$media_creation===null)throw new RuntimeException('Media creation context is missing');
+  $record=self::$media_creation['record'];$record['attachment_id']=(int)$id;$next=wp_json_encode($record);
+  if(!self::media_creation_cas(self::$media_creation['name'],self::$media_creation['raw'],$next))throw new RuntimeException('Media artifact outcome requires reconciliation');
+  self::$media_creation['record']=$record;self::$media_creation['raw']=$next;
+ }
+ private static function insert_media_creation($data){
+  global $wpdb;
+  $context=self::$media_creation;
+  if($data['type']!=='media_upload'||($data['status']??'')!=='pending'||$context['operation_id']!==0||(int)get_current_user_id()!==$context['actor'])return new WP_Error('oai_creation_context','Invalid media creation context',array('status'=>503));
+  $ready=self::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $meta=json_decode((string)($data['meta_data']??''),true);
+  if(!is_array($meta))return new WP_Error('oai_creation_payload','Invalid media creation metadata',array('status'=>503));
+  $meta['_wpai_creation_intent']=$context['fingerprint'];$meta['_wpai_creation_claim']=$context['claim_hash'];
+  $data['meta_data']=wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  $columns=array();$values=array();$args=array();
+  foreach($data as $key=>$value){
+   if(!preg_match('/^[a-z_]+$/D',$key))return new WP_Error('oai_creation_payload','Invalid operation field',array('status'=>400));
+   $columns[]='`'.$key.'`';$values[]=$value===null?'NULL':'%s';if($value!==null)$args[]=$value;
+  }
+  // Persisted ownership is checked by the INSERT itself, including reconnects.
+  $sql='INSERT INTO '.self::table().' ('.implode(',',$columns).') SELECT '.implode(',',$values).' FROM DUAL WHERE @@session.autocommit=1 AND EXISTS (SELECT 1 FROM '.$wpdb->options.' WHERE option_name=%s AND BINARY option_value=BINARY %s) AND NOT EXISTS (SELECT 1 FROM '.self::table().' WHERE type=\'media_upload\' AND LOCATE(BINARY %s,BINARY meta_data)>0)';
+  $claim='"_wpai_creation_claim":"'.$context['claim_hash'].'"';
+  $ok=$wpdb->query($wpdb->prepare($sql,array_merge($args,array($context['name'],$context['raw'],$claim))));
+  if($ok===1){$id=(int)$wpdb->insert_id;self::$media_creation['operation_id']=$id;return $id;}
+  // wpdb may retry a query after reconnecting. Recover only this exact
+  // invocation's row, bound to the same claim, target and original snapshots.
+  $rows=$wpdb->get_results($wpdb->prepare('SELECT * FROM '.self::table().' WHERE type=%s AND LOCATE(BINARY %s,BINARY meta_data)>0','media_upload',$claim),ARRAY_A);
+  if(is_array($rows)&&count($rows)===1){
+   $prior=$rows[0];$priorMeta=json_decode((string)$prior['meta_data'],true);
+   if(($priorMeta['_wpai_creation_intent']??'')===$context['fingerprint']&&$prior['operation_id']===$data['operation_id']&&$prior['target']===(string)$data['target']&&$prior['before_data']===$data['before_data']&&$prior['after_data']===$data['after_data']){self::$media_creation['operation_id']=(int)$prior['id'];return (int)$prior['id'];}
+  }
+  // A false query result can follow a committed INSERT with a lost reply.
+  // Keep the private artifact and durable journal for evidence-based recovery.
+  throw new RuntimeException('Media creation outcome requires reconciliation');
+ }
  /** Reject repeated new existing-target edits; never return another operation. */
  private static function pending_intent_value($value){
   if($value instanceof stdClass){$map=get_object_vars($value);ksort($map,SORT_STRING);foreach($map as &$child)$child=self::pending_intent_value($child);unset($child);return (object)$map;}
@@ -120,17 +244,7 @@ class OAI_DB {
   $held=$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s,3)',$lock));
   if((string)$held!=='1')return new WP_Error('oai_intent_busy','Operation intent cannot be reserved; retry later',array('status'=>409));
   try{
-   // Releasing a lock before an outer transaction commits would allow a
-   // second connection to miss its uncommitted intent. Only autocommit is supported.
-   if((string)$wpdb->get_var('SELECT @@session.autocommit')!=='1')return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));
-   $suppressed=$wpdb->suppress_errors();
-   try{$isolation=$wpdb->get_var('SELECT @@session.transaction_isolation');if($isolation===null)$isolation=$wpdb->get_var('SELECT @@session.tx_isolation');}finally{$wpdb->suppress_errors($suppressed);}
-   if(!in_array($isolation,array('READ-UNCOMMITTED','READ-COMMITTED','REPEATABLE-READ','SERIALIZABLE'),true))return new WP_Error('oai_intent_transaction','Cannot establish transaction state',array('status'=>503));
-   // MySQL rejects SET TRANSACTION inside an active transaction without
-   // committing it. Reapply the current isolation to the next statement only.
-   $suppressed=$wpdb->suppress_errors();
-   try{$ready=$wpdb->query('SET TRANSACTION ISOLATION LEVEL '.str_replace('-',' ',$isolation));}finally{$wpdb->suppress_errors($suppressed);}
-   if($ready===false)return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));
+   $ready=self::intent_autocommit();if(is_wp_error($ready))return $ready;
    $columns=array();$values=array();$args=array();
    foreach($data as $key=>$value){
     if(!preg_match('/^[a-z_]+$/D',$key))return new WP_Error('oai_intent_payload','Invalid operation field',array('status'=>400));
@@ -150,6 +264,7 @@ class OAI_DB {
  }
  public static function insert($data){
   global $wpdb;
+  if(self::$media_creation!==null)return self::insert_media_creation($data);
   $actor=function_exists('get_current_user_id')?(int)get_current_user_id():0;
   $guarded=array('woodmart_theme_setting','option_update','post_title','post_excerpt','post_content','woo_product_price','woo_product_stock','woocommerce_product','elementor_widget_html','elementor_widget_settings','elementor_page_layout','file_write','media_alt','media_title','media_featured','menu_remove_item','menu_move_item','menu_assign_location');
   if($actor>0&&($data['status']??'')==='pending'&&in_array($data['type']??'',$guarded,true))return self::insert_pending_intent($data,$actor);

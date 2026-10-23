@@ -97,17 +97,21 @@ class OAI_P0 {
   $bytes=base64_decode($encoded,true);if($bytes===false||$bytes==='')return new WP_Error('oai_media_base64','Invalid base64 media payload',array('status'=>422));
   if(strlen($bytes)>10*1024*1024)return new WP_Error('oai_media_size','Media payload exceeds 10 MB',array('status'=>413));
   $mime=self::validate_media_image($filename,$bytes,$a['mime_type']??null);if(is_wp_error($mime))return $mime;
-  $up=wp_upload_bits($filename,null,$bytes);if(!empty($up['error']))return new WP_Error('oai_media_upload',$up['error'],array('status'=>500));
   $title=sanitize_text_field((string)($a['title']??pathinfo($filename,PATHINFO_FILENAME)));
-  $id=wp_insert_attachment(array('post_mime_type'=>$mime,'post_title'=>$title,'post_status'=>'private'),$up['file'],0,true);
-  if(is_wp_error($id)){@unlink($up['file']);return $id;}
-  if(!function_exists('wp_generate_attachment_metadata'))require_once ABSPATH.'wp-admin/includes/image.php';
-  $meta=wp_generate_attachment_metadata($id,$up['file']);if(is_array($meta))wp_update_attachment_metadata($id,$meta);
-  if(array_key_exists('alt',$a))update_post_meta($id,'_wp_attachment_image_alt',sanitize_text_field((string)$a['alt']));
-  update_post_meta($id,'_oai_sandbox_artifact','1');
-  $after=self::media_snapshot($id);if(is_wp_error($after)){wp_delete_attachment($id,true);return $after;}
-  $after['status']='inherit';
-  $op=self::op('media_upload',(string)$id,null,$after,array('attachment_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_attachment($id,true);return $op;}return $op;
+  $intent=array('filename'=>$filename,'bytes_sha256'=>hash('sha256',$bytes),'mime'=>$mime,'title'=>$title,'alt_present'=>array_key_exists('alt',$a),'alt'=>sanitize_text_field((string)($a['alt']??'')));
+  return OAI_DB::with_media_creation($intent,static function()use($filename,$bytes,$mime,$title,$a){
+   $up=wp_upload_bits($filename,null,$bytes);if(!empty($up['error']))return new WP_Error('oai_media_upload',$up['error'],array('status'=>500));
+   $id=wp_insert_attachment(array('post_mime_type'=>$mime,'post_title'=>$title,'post_status'=>'private'),$up['file'],0,true);
+   if(is_wp_error($id)){@unlink($up['file']);return $id;}
+   update_post_meta($id,'_oai_sandbox_artifact','1');
+   OAI_DB::record_media_artifact($id);
+   if(!function_exists('wp_generate_attachment_metadata'))require_once ABSPATH.'wp-admin/includes/image.php';
+   $meta=wp_generate_attachment_metadata($id,$up['file']);if(is_array($meta))wp_update_attachment_metadata($id,$meta);
+   if(array_key_exists('alt',$a))update_post_meta($id,'_wp_attachment_image_alt',sanitize_text_field((string)$a['alt']));
+   $after=self::media_snapshot($id);if(is_wp_error($after)){wp_delete_attachment($id,true);return $after;}
+   $after['status']='inherit';
+   $op=self::op('media_upload',(string)$id,null,$after,array('attachment_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_attachment($id,true);return $op;}return $op;
+  });
  }
 
  public static function media_import_url($a){

@@ -15,6 +15,7 @@ class OAI_Operations_Cleanup {
    'audit_log_preserved'=>true,
    'failed_terminal_statuses_supported'=>true,
    'admin_required'=>true,
+   'media_creation_evidence_protected'=>true,
   );
  }
 
@@ -35,8 +36,10 @@ class OAI_Operations_Cleanup {
   $max_id=absint($args['max_id']??0);
   $statuses=self::statuses($include_applied);
   $ph=self::placeholders(count($statuses));
-  $where="status IN ($ph)";
-  $params=$statuses;
+  // Journal-bound media rows are recovery evidence. Generic retention must
+  // not remove them before a dedicated journal/evidence reconciliation.
+  $where="status IN ($ph) AND LOCATE(%s,COALESCE(meta_data,''))=0";
+  $params=array_merge($statuses,array('"_wpai_creation_intent"'));
   if($max_id>0){$where.=' AND id <= %d';$params[]=$max_id;}
 
   $sql="SELECT status,COUNT(*) AS c FROM $table WHERE $where GROUP BY status ORDER BY status";

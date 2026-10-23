@@ -1,6 +1,7 @@
 <?php
 /** Public path sweep and evidence/rollback integrity; disposable WordPress only. */
 if(getenv('OAI_DISPOSABLE_WP_TEST')!=='1'||!in_array(wp_parse_url(home_url(),PHP_URL_HOST),['localhost','127.0.0.1'],true))throw new RuntimeException('Disposable loopback WordPress required');
+require_once (getenv('GITHUB_WORKSPACE')?:getcwd()).'/tests/fixtures/media-creation-cleanup.php';
 function evidenceAssert($ok,$message){if(!$ok)throw new RuntimeException($message);}
 function evidenceOk($result,$message){evidenceAssert(!is_wp_error($result),$message.': '.(is_wp_error($result)?$result->get_error_code():''));return $result;}
 function evidenceClean($value,$name){
@@ -111,7 +112,7 @@ try{
 }finally{
  if($testFile&&is_file($testFile))unlink($testFile);
  if($legacyId){$wpdb->delete(OAI_DB::audit_table(),['operation_db_id'=>$legacyId]);$wpdb->delete(OAI_DB::table(),['id'=>$legacyId]);}
- if($opId){$wpdb->delete(OAI_DB::audit_table(),['operation_db_id'=>$opId]);$wpdb->delete(OAI_DB::table(),['id'=>$opId]);}
+ if($opId){oai_fixture_media_claim_cleanup($opId);$wpdb->delete(OAI_DB::audit_table(),['operation_db_id'=>$opId]);$wpdb->delete(OAI_DB::table(),['id'=>$opId]);}
  if($attachment&&get_post($attachment))wp_delete_attachment($attachment,true);
  OAI_AI_Lifecycle_Control::disable(1,'disposable_ci_teardown');OAI_License::deactivate_local_owner();
 }
