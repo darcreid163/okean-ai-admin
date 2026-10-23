@@ -21,26 +21,36 @@ wsAssert(wsCount()===$initial+1,'Retry produced another workspace');
 $second=OAI_Workspace::create(false,'workspace-create-new-12345678');
 wsAssert(!is_wp_error($second)&&$second['id']!==$first['id'],'Distinct explicit key failed to create legitimate new workspace');
 wsAssert(wsCount()===$initial+2,'New key did not add one workspace');
+// REST request must convey the same explicit idempotency key to the creator.
+$restRequest=new WP_REST_Request('POST','/okean-ai/v1/workspace/create');
+$restRequest->set_param('clone_theme','false');
+$restRequest->set_param('idempotency_key','workspace-rest-create-123456');
+$restCreated=OAI_REST::workspace_create($restRequest);
+wsAssert(!is_wp_error($restCreated),'REST key was not forwarded to workspace creator');
+$restDuplicate=OAI_REST::workspace_create($restRequest);
+wsError($restDuplicate,'oai_workspace_creation_pending');
+wsAssert(array_keys($restDuplicate->get_error_data())===['status'],'Duplicate exposed claim or workspace ID');
+wsAssert(wsCount()===$initial+3,'REST retry created extra artifact');
 wsError(OAI_Workspace::create(false,'bad'),'oai_workspace_request_key');
-wsAssert(wsCount()===$initial+2,'Invalid key produced artifact');
+wsAssert(wsCount()===$initial+3,'Invalid key produced artifact');
 $legacy=OAI_Workspace::create(false);
 wsAssert(!is_wp_error($legacy),'Legacy first create failed');
 wsError(OAI_Workspace::create(false),'oai_workspace_creation_pending');
-wsAssert(wsCount()===$initial+3,'Legacy duplicate produced artifact');
+wsAssert(wsCount()===$initial+4,'Legacy duplicate produced artifact');
 // Transaction/autocommit protection must happen before creating files or claims.
 global $wpdb;
 wsAssert($wpdb->query('START TRANSACTION')!==false,'Cannot start transaction');
 try {
  wsError(OAI_Workspace::create(false,'workspace-in-transaction-123456'),'oai_intent_transaction');
 }finally{$wpdb->query('ROLLBACK');}
-wsAssert(wsCount()===$initial+3,'Transaction-guarded creation produced artifact');
+wsAssert(wsCount()===$initial+4,'Transaction-guarded creation produced artifact');
 $other=wp_create_user('workspace-other-ci','ci-local-only-password','workspace-other@example.invalid');
 wsAssert(!is_wp_error($other),'Cannot provision second disposable actor');
 (new WP_User((int)$other))->set_role('administrator');
 wp_set_current_user((int)$other);
 $third=OAI_Workspace::create(false,$key);
 wsAssert(!is_wp_error($third)&&$third['id']!==$first['id'],'Independent actor intent was improperly blocked');
-wsAssert(wsCount()===$initial+4,'Independent actor did not create one workspace');
+wsAssert(wsCount()===$initial+5,'Independent actor did not create one workspace');
 wp_set_current_user((int)$user);
 $parallelKey='workspace-parallel-0123456789abcdef';
 $workers=[];
@@ -63,8 +73,8 @@ foreach($workers as [$proc,$pipes]){
  else throw new RuntimeException('Unexpected concurrent worker response');
 }
 wsAssert($winners===1&&$denied===5,'Atomic creation failed: winners='.$winners.' rejected='.$denied);
-wsAssert(wsCount()===$initial+5,'Concurrent workers left duplicated directories');
+wsAssert(wsCount()===$initial+6,'Concurrent workers left duplicated directories');
 wp_set_current_user(0);
 wsError(OAI_Workspace::create(false,'workspace-anonymous-123456'),'oai_workspace_auth');
-wsAssert(wsCount()===$initial+5,'Anonymous request created artifact');
+wsAssert(wsCount()===$initial+6,'Anonymous request created artifact');
 echo "PASS workspace admission: $checks checks, 6 processes, actor isolation, retries, distinct key, transactions\n";
