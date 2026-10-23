@@ -42,6 +42,8 @@ Media sandbox uploads and URL imports accept decodable JPEG, PNG, GIF and WebP i
 
 Public metadata and evidence responses redact server filesystem paths, including paths inside historical JSON receipt/proof fields. Redacted objects carry `_wpai_projection`: hashes and `verified` attest the original evidence and its verification result, not the redacted presentation; this presentation cannot reconstruct the canonical payload. Stored rows, audit records and proof hashes are not migrated or re-signed. Runtime fingerprints retain relative file identifiers and source hashes. Authorized file/content reads retain their exact editable bytes; internal Apply/Verify/Rollback use original data.
 
+Cloud Gateway applies the same presentation contract to known Native metadata/evidence and diagnostic error replies, including old cache hits and individual items in mixed batches. Core authorization, encrypted receipts, original per-child digests, settlement and replay charges remain unchanged. Raw editable file/content and arbitrary third-party tool content remain exact. See [Cloud cached evidence checks](wp-ai-admin-cloud/docs/CACHED-EVIDENCE-PROJECTION.md).
+
 [Current audit, 22 October](docs/AUDIT-2026-10-22.md) · [Recovery history, 21 October](docs/RELEASE-STATE-2026-10-21.md) · [Migration / release checklist](MIGRATION-STATUS.md) · [Repository policies](docs/REPOSITORY-BOUNDARIES.md).
 
 Historical dated release notes are preserved as references, not active installation instructions.
