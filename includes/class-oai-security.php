@@ -39,6 +39,8 @@ class OAI_Security {
    if(is_array($decoded)||$decoded instanceof stdClass){
     $nested=false;$projected=self::evidence_value($decoded,$key,$nested);
     if($nested){$changed=true;return wp_json_encode($projected,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION);}
+   }elseif(in_array($key,array('proof','receipt'),true)&&json_last_error()!==JSON_ERROR_NONE){
+    $changed=true;return '[invalid serialized evidence]';
    }
   }
   return self::evidence_text($value,$key,$changed);

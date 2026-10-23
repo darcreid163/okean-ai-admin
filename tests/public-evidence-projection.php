@@ -14,6 +14,7 @@ $fixture=[
   'message'=>'Decode failed at /unusual-mount/private/image.png',
   'root_error'=>'Failed in /var/old-tenant/image.png'],
  'receipt'=>'{"verification":{"file":"/srv/old-site/image.png","empty":{},"list":[],"float":1.0}}',
+ 'malformed'=>['proof'=>'{"file":"\\/legacy-mount\\/private.png"'],
  'url'=>'https://example.test/srv/current-wordpress/image.png',
  'url2'=>'https://example.test/var/image.png','relative'=>'includes/class-oai-rest.php',
  'route'=>'/wp-json/okean-ai/v1/operations/1','text'=>'/various-choices',
@@ -26,6 +27,7 @@ foreach(['current-wordpress/wp-content','old-site','PrivateTenant','private-serv
 projectionAssert($public['url']===$fixture['url']&&$public['url2']===$fixture['url2'],'Public URLs changed');
 projectionAssert($public['relative']===$fixture['relative']&&$public['route']===$fixture['route']&&$public['text']===$fixture['text'],'Logical relative/route identifiers changed');
 projectionAssert($public['hash']===$fixture['hash']&&$public['verified']===true&&$public['phase']==='after','Proof claims changed');
+projectionAssert($public['malformed']['proof']==='[invalid serialized evidence]','Malformed serialized proof disclosed its raw body');
 projectionAssert(serialize($fixture)===$original,'Original evidence modified');
 projectionAssert(count($public['keyed'])===2&&array_values($public['keyed'])===[1,2],'Path-keyed records collapsed');
 $collision='[server-path]:'.substr(hash('sha256','/srv/a/image.png'),0,12);
