@@ -5,7 +5,7 @@ $admins=get_users(['role'=>'administrator','number'=>1,'fields'=>'ID']);
 wp_set_current_user((int)$admins[0]);
 $before=OAI_Workspace::list_workspaces();
 $first=OAI_Workspace::create(false);
-if(is_wp_error($first)||empty($first['id']))throw new RuntimeException('First workspace creation failed');
+if(is_wp_error($first)||empty($first['id']))throw new RuntimeException('First workspace creation failed: '.(is_wp_error($first)?$first->get_error_code().' '.$first->get_error_message():'missing ID'));
 $second=OAI_Workspace::create(false);
 if(!is_wp_error($second)||$second->get_error_code()!=='oai_workspace_creation_pending')throw new RuntimeException('Retry incorrectly created second workspace');
 $after=OAI_Workspace::list_workspaces();
