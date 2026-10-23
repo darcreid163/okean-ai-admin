@@ -33,7 +33,7 @@ class OAI_Workspace {
   usort($items,function($a,$b){return strcmp((string)$b['id'],(string)$a['id']);});
   return array('root'=>$root,'items'=>$items);
  }
- public static function create($clone_theme=true){
+ public static function create($clone_theme=true,$request_key=''){
   // Check permission before touching uploads or creating directories.
 
   // Creation writes a new filesystem artifact before any operation ledger entry.
@@ -41,10 +41,19 @@ class OAI_Workspace {
   // Unknown outcomes remain held: no automatic TTL or age-based replacement.
   $actor=get_current_user_id();
   if($actor<=0 || !current_user_can('manage_options'))return new WP_Error('oai_workspace_auth','Administrator required',array('status'=>403));
+  // A distinct client request_key permits a new intentional workspace with the
+  // same theme. Legacy calls without a key remain conservatively deduplicated.
+  // A retry must reuse the original key; changing it opts into a new creation.
+  if(!is_string($request_key) || ($request_key!=='' && !preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$request_key)))
+   return new WP_Error('oai_workspace_request_key','Invalid workspace idempotency_key',array('status'=>400));
+  $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $intent_data=wp_json_encode(array('workspace-v2',get_current_blog_id(),$actor,get_stylesheet(),get_template(),(bool)$clone_theme,$request_key),JSON_UNESCAPED_SLASHES);
+  if(!is_string($intent_data))return new WP_Error('oai_workspace_intent','Cannot encode workspace intent',array('status'=>503));
+  $intent='oai_workspace_creation_'.hash('sha256',$intent_data);
   $root=self::ensure_root(); if(!$root)return new WP_Error('oai_workspace_root','Could not create workspace root',array('status'=>500));
-  $intent='oai_workspace_creation_'.hash('sha256',wp_json_encode(array($actor,get_stylesheet(),get_template(),(bool)$clone_theme)));
   $id=self::id();
   $claim=array('id'=>$id,'actor'=>$actor,'state'=>'reserved','created_at'=>time());
+  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
   if(!add_option($intent,$claim,'',false))
    return new WP_Error('oai_workspace_creation_pending','Workspace creation intent already reserved; verify its files before retry',array('status'=>409));
   $base=$root.'/'.$id;
@@ -58,7 +67,9 @@ class OAI_Workspace {
    if(is_wp_error($ok)){ self::remove_tree($base); return $ok; }
    $meta['theme_path']=$theme_dir;
   }
-  file_put_contents($base.'/workspace.json',wp_json_encode($meta,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),LOCK_EX);
+  $encoded=wp_json_encode($meta,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  if(!is_string($encoded)||file_put_contents($base.'/workspace.json',$encoded,LOCK_EX)===false)
+   return new WP_Error('oai_workspace_metadata','Workspace metadata could not be persisted; creation held for reconciliation',array('status'=>503));
   update_option('oai_active_workspace',$id,false);
   return $meta;
  }
