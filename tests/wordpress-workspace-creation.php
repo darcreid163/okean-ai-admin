@@ -17,6 +17,7 @@ $first=OAI_Workspace::create(false,$key);
 wsAssert(!is_wp_error($first),'First workspace failed: '.(is_wp_error($first)?$first->get_error_code().' '.$first->get_error_message():'missing result'));
 wsAssert(is_file(OAI_Workspace::root().'/'.$first['id'].'/workspace.json'),'Workspace metadata absent');
 wsError(OAI_Workspace::create(false,$key),'oai_workspace_creation_pending');
+wsError(OAI_Workspace::create(true,$key),'oai_workspace_intent_conflict');
 wsAssert(wsCount()===$initial+1,'Retry produced another workspace');
 $second=OAI_Workspace::create(false,'workspace-create-new-12345678');
 wsAssert(!is_wp_error($second)&&$second['id']!==$first['id'],'Distinct explicit key failed to create legitimate new workspace');
