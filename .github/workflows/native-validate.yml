@@ -48,6 +48,8 @@ jobs:
         run: php tests/woocommerce-stock-rounding.php
       - name: Option normalization
         run: php tests/option-normalization.php
+      - name: Canonical operation risk policy
+        run: php tests/operation-risk.php
       - name: Read-only public evidence projection
         run: php tests/public-evidence-projection.php
       - name: Control plane entitlements

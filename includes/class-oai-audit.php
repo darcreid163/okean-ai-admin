@@ -5,6 +5,8 @@
 if (!defined('ABSPATH')) exit;
 class OAI_Audit {
  public static function log($event,$row=array(),$details=array()){
+  // Capture the stored classification on new events; never relabel old rows.
+  if(isset($row['risk']))$details['risk']=(string)$row['risk'];
   $operation_id=(string)($row['operation_id']??'');
   OAI_DB::audit_insert(array(
    'operation_id'=>$operation_id,'operation_db_id'=>isset($row['id'])?(int)$row['id']:null,
