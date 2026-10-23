@@ -4,6 +4,14 @@
  */
 if (!defined('ABSPATH')) exit;
 class OAI_REST {
+ public static function public_metadata_response($response,$server,$request){
+  // File/content reads keep their exact bytes. Only metadata/evidence routes
+  // use the projection; MCP performs the same projection before JSON encoding.
+  if(!preg_match('#^/okean-ai/v1/(?:status|runtime/fingerprint|diagnostics|audit|verify/\d+|proof/\d+|operations(?:/\d+(?:/receipt)?|/catalog)?|sandbox(?:/\d+/(?:approve|apply|reject|rollback))?|read/(?:site|health|capabilities)|capabilities/foundation)/?$#D',$request->get_route()))return $response;
+  $response=rest_ensure_response($response);
+  if($response instanceof WP_REST_Response)$response->set_data(OAI_Security::public_evidence($response->get_data()));
+  return $response;
+ }
  private static function is_list_array($a){ if(function_exists('array_is_list')) return array_is_list($a); $i=0; foreach($a as $k=>$v){if($k!==$i++) return false;} return true; }
  public static function token(){return (string)(get_option('oai_bearer_token','') ?: get_option('oai_api_token',''));}
  private static function authorization_header($req){
@@ -175,8 +183,8 @@ class OAI_REST {
  public static function users($req){return OAI_Read::users($req);}
  public static function comments($req){return OAI_Read::comments($req);}
  public static function widgets(){return OAI_Read::widgets();}
- public static function health(){return OAI_Read::health();}
- public static function diagnostics(){return OAI_Diagnostics::run();}
+ public static function health(){return OAI_Security::public_evidence(OAI_Read::health());}
+ public static function diagnostics(){return OAI_Security::public_evidence(OAI_Diagnostics::run());}
  public static function elementor_schema($req){return OAI_Elementor::widget_schema((string)$req['widget_type']);}
  public static function elementor_globals(){return OAI_Elementor::globals();}
  public static function elementor_patch($req){
@@ -345,7 +353,7 @@ class OAI_REST {
  private static function is_elementor_available_for_preview(){return defined('ELEMENTOR_VERSION') && class_exists('Elementor\\Plugin') && isset(\Elementor\Plugin::$instance->frontend);}
  public static function plan($req){return OAI_Planner::plan($req);}
 
- public static function status(){return array('ok'=>true,'plugin_version'=>OAI_VERSION,'sandbox'=>true,'direct_live_writes'=>false,'database'=>OAI_DB::table(),'api_auth'=>'bearer_or_wp_admin','allowed_types'=>OAI_Capabilities::available()['sandbox'],'capabilities'=>OAI_Capabilities::available(),'site_url'=>home_url('/'),'builders'=>OAI_Builder_Manager::info(),'mcp'=>OAI_MCP::info(),'license'=>OAI_License::status(),'ai_lifecycle_control'=>class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('supported'=>false),'preview'=>array('signed'=>true,'renderer'=>'elementor_frontend','draft_fallback'=>true,'ascii_safe_payloads'=>true,'ascii_safe_payloads_mode'=>'title_excerpt_slug_data_b64','build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:'unknown','plugin_file'=>plugin_basename(OAI_DIR.'okean-ai-admin.php'),'plugin_dir'=>OAI_DIR));}
+ public static function status(){return array('ok'=>true,'plugin_version'=>OAI_VERSION,'sandbox'=>true,'direct_live_writes'=>false,'database'=>OAI_DB::table(),'api_auth'=>'bearer_or_wp_admin','allowed_types'=>OAI_Capabilities::available()['sandbox'],'capabilities'=>OAI_Capabilities::available(),'site_url'=>home_url('/'),'builders'=>OAI_Builder_Manager::info(),'mcp'=>OAI_MCP::info(),'license'=>OAI_License::status(),'ai_lifecycle_control'=>class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('supported'=>false),'preview'=>array('signed'=>true,'renderer'=>'elementor_frontend','draft_fallback'=>true,'ascii_safe_payloads'=>true,'ascii_safe_payloads_mode'=>'title_excerpt_slug_data_b64','build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:'unknown','plugin_file'=>plugin_basename(OAI_DIR.'okean-ai-admin.php'),'plugin_dir'=>dirname(plugin_basename(OAI_DIR.'okean-ai-admin.php'))));}
  public static function preview_link($req){
   $id=absint($req['id']);
   $r=OAI_DB::get($id);
@@ -883,7 +891,7 @@ frame.addEventListener('load',function(){
   $statuses=array_values(array_filter(array_map('sanitize_key',(array)$statuses)));$offset=($page-1)*$per_page;
   if($statuses){$total=OAI_DB::count_by_status($statuses);$rows=OAI_DB::by_status($statuses,$per_page,$offset);}else{$total=OAI_DB::count_all();$rows=OAI_DB::page($per_page,$offset);}
   foreach($rows as &$r){foreach(array('before_data','after_data','applied_data','meta_data','diff_data','rollback_data') as $k)if(array_key_exists($k,$r))$r[$k]=json_decode($r[$k],true);$r=OAI_Lifecycle::decorate($r);}unset($r);
-  return array('page'=>$page,'per_page'=>$per_page,'total'=>$total,'total_pages'=>max(1,(int)ceil($total/$per_page)),'statuses'=>$statuses,'items'=>$rows);
+  return OAI_Security::public_evidence(array('page'=>$page,'per_page'=>$per_page,'total'=>$total,'total_pages'=>max(1,(int)ceil($total/$per_page)),'statuses'=>$statuses,'items'=>$rows));
  }
  /** Shared by creation and every approval/apply entry point, including old rows. */
  public static function validate_option_write_target($target){
@@ -1651,10 +1659,10 @@ frame.addEventListener('load',function(){
   $req->set_param('type','file_write'); $req->set_param('target',$target); $req->set_param('value',$content);
   return self::sandbox_create($req);
  }
- public static function audit($req){return array('items'=>OAI_Audit::list($req->get_param('limit')?:200));}
- public static function verify($req){ $id=absint($req['id']); $row=OAI_DB::get($id); if(!$row)return new WP_Error('oai_not_found','Operation not found',array('status'=>404)); if($row['status']==='rolled_back')return OAI_Verify::operation($id,null,'rollback'); return OAI_Verify::operation($id); }
- public static function proof($req){ $x=OAI_Proof::make(absint($req['id'])); return $x?:new WP_Error('oai_not_found','Operation not found',array('status'=>404)); }
- public static function operation($req){ $r=OAI_DB::get(absint($req['id'])); if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404)); return self::row($r['id']); }
+ public static function audit($req){return OAI_Security::public_evidence(array('items'=>OAI_Audit::list($req->get_param('limit')?:200)));}
+ public static function verify($req){ $id=absint($req['id']); $row=OAI_DB::get($id); if(!$row)return new WP_Error('oai_not_found','Operation not found',array('status'=>404)); if($row['status']==='rolled_back')return OAI_Security::public_evidence(OAI_Verify::operation($id,null,'rollback')); return OAI_Security::public_evidence(OAI_Verify::operation($id)); }
+ public static function proof($req){ $x=OAI_Proof::make(absint($req['id'])); return $x?OAI_Security::public_evidence($x):new WP_Error('oai_not_found','Operation not found',array('status'=>404)); }
+ public static function operation($req){ $r=OAI_DB::get(absint($req['id'])); if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404)); return OAI_Security::public_evidence(self::row($r['id'])); }
  public static function workspace_status($req){ return OAI_Workspace::list_workspaces(); }
  public static function workspace_create($req){
   $clone=!in_array(strtolower((string)$req->get_param('clone_theme')),array('0','false','no'),true);
@@ -1693,9 +1701,9 @@ frame.addEventListener('load',function(){
  private static function sandbox_create_from_patch($type,$id,$field,$before,$after,$meta=array()){ if($type==='post_content'){$allowed=OAI_Elementor::content_write_allowed($id);if(is_wp_error($allowed))return $allowed;} $diff=OAI_Operations::diff($before,$after); if(empty($diff['changed']))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409)); $op=OAI_Operations::new_id();$target=$id.':'.$field;$descriptor=OAI_Lifecycle::descriptor($type,$target,$before,array_merge(array('before_exists'=>true),$meta));$meta=array_merge($meta,array('rollback_descriptor'=>$descriptor));$row=array('operation_id'=>$op,'status'=>'pending','type'=>$type,'target'=>$target,'before_data'=>wp_json_encode($before,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'after_data'=>wp_json_encode($after,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'applied_data'=>null,'meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'diff_data'=>wp_json_encode($diff,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'phase'=>'awaiting_approval','risk'=>OAI_Operations::risk($type,$field),'created_at'=>current_time('mysql',true),'expires_at'=>gmdate('Y-m-d H:i:s',time()+7*DAY_IN_SECONDS));$row['rollback_data']=wp_json_encode($descriptor,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);$idb=OAI_DB::insert($row);if(is_wp_error($idb))return $idb;OAI_Audit::log('created',array_merge($row,array('id'=>$idb)));return self::row($idb);}
 
  public static function runtime_fingerprint(){
-  $out=array('ok'=>true,'version'=>defined('OAI_VERSION')?OAI_VERSION:null,'build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:null,'plugin_main'=>defined('OAI_FILE')?OAI_FILE:null,'plugin_dir'=>defined('OAI_DIR')?OAI_DIR:dirname(__DIR__),'php_version'=>PHP_VERSION,'methods'=>array(),'routes'=>array());
+  $out=array('ok'=>true,'version'=>defined('OAI_VERSION')?OAI_VERSION:null,'build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:null,'plugin_main'=>defined('OAI_FILE')?plugin_basename(OAI_FILE):null,'plugin_dir'=>dirname(plugin_basename(OAI_DIR.'okean-ai-admin.php')),'php_version'=>PHP_VERSION,'methods'=>array(),'routes'=>array());
   foreach(array('execution_wordpress','execution_plan','execution_input','runtime_fingerprint') as $m){
-   try{$rm=new ReflectionMethod('OAI_REST',$m);$file=$rm->getFileName();$out['methods'][$m]=array('file'=>$file,'start_line'=>$rm->getStartLine(),'end_line'=>$rm->getEndLine(),'sha256'=>($file&&is_readable($file)?hash_file('sha256',$file):null));}catch(Throwable $e){$out['methods'][$m]=array('error'=>$e->getMessage());}
+   try{$rm=new ReflectionMethod('OAI_REST',$m);$file=$rm->getFileName();$out['methods'][$m]=array('file'=>($file?plugin_basename($file):null),'start_line'=>$rm->getStartLine(),'end_line'=>$rm->getEndLine(),'sha256'=>($file&&is_readable($file)?hash_file('sha256',$file):null));}catch(Throwable $e){$out['methods'][$m]=array('error'=>$e->getMessage());}
   }
   try {
    $routes=rest_get_server()->get_routes();
@@ -1709,7 +1717,7 @@ frame.addEventListener('load',function(){
    }
    $out['route_count']=count($out['routes']);
   } catch(Throwable $e) { $out['route_error']=$e->getMessage(); }
-  return $out;
+  return OAI_Security::public_evidence($out);
  }
  public static function execution_readiness(){return array('version'=>OAI_VERSION,'command_registry'=>true,'command_count'=>count(OAI_Command_Registry::all()),'registry_audit'=>OAI_Command_Registry::handler_audit(),'execution'=>OAI_WP_CLI_Execution::readiness(),'normalizer'=>true,'argument_parser'=>true,'permission_resolver'=>true,'dispatcher'=>true,'wp_post_resolver'=>true,'gutenberg_resolver'=>true,'parse_blocks'=>function_exists('parse_blocks'),'serialize_blocks'=>function_exists('serialize_blocks'),'direct_live_writes'=>false,'approval_required'=>true);}
  public static function execution_input($req,$key,$default=null){

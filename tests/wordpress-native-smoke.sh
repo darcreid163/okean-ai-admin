@@ -41,6 +41,8 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-wo
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-option-policy.php"
 # Decode real images before upload, then exercise approval/verify/rollback.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-media-upload.php"
+# Historical evidence is projected without rewriting raw records or proof hashes.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-public-evidence.php"
 
 # Exercise actual WP Abilities registration and Native read-only discovery.
 mkdir -p "$WORK/site/wp-content/mu-plugins"

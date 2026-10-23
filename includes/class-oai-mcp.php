@@ -124,6 +124,7 @@ class OAI_MCP {
   elseif($uri==='okean://operations')$value=OAI_REST::sandbox_list();
   else return self::response($id,null,array('code'=>-32002,'message'=>'Unknown resource'));
   if(is_wp_error($value))return self::response($id,null,array('code'=>-32000,'message'=>$value->get_error_message(),'data'=>$value->get_error_data()));
+  if(class_exists('OAI_Security'))$value=OAI_Security::public_evidence($value);
   return self::response($id,array('contents'=>array(array('uri'=>$uri,'mimeType'=>'application/json','text'=>wp_json_encode($value,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)))));
  }
  private static function prompts(){
@@ -596,6 +597,11 @@ class OAI_MCP {
   if(!is_wp_error($out) && in_array($name,$sandbox_tools,true) && is_array($out) && !empty($out['id']) && class_exists('OAI_Test_Automation')){
    $tag=OAI_Test_Automation::tag_operation(absint($out['id']),$raw_name,(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));
    if(is_array($tag))$out['test_automation']=$tag;
+  }
+  if(class_exists('OAI_Security')){
+   if(is_wp_error($out))return self::response($id,null,OAI_Security::public_evidence(array('code'=>-32000,'message'=>$out->get_error_message(),'data'=>$out->get_error_data())));
+   $metadata_tools=array('wp_get_site','wp_health','wp_diagnostics','system_manifest','system_capabilities','system_tool_catalog','system_security_status','wp_list_operations','operation_get','operation_status','operation_diff','operation_verify','verify_operation','operation_proof','proof_operation','operation_get_receipt','batch_receipt','batch_proof');
+   if(in_array($name,$metadata_tools,true)||(is_array($out)&&isset($out['operation_id'],$out['type'])))$out=OAI_Security::public_evidence($out);
   }
   if(is_wp_error($out))return self::response($id,null,array('code'=>-32000,'message'=>$out->get_error_message(),'data'=>$out->get_error_data()));
   return self::response($id,array('content'=>array(array('type'=>'text','text'=>wp_json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)))));
