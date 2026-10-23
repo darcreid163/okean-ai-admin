@@ -171,6 +171,21 @@ class OAI_P0 {
  public static function menu_create($a){
   if(!current_user_can('edit_theme_options'))return new WP_Error('oai_menu_permission','edit_theme_options capability required',array('status'=>403));
   $name=sanitize_text_field((string)($a['name']??''));if($name==='')return new WP_Error('oai_menu_name','Menu name is required',array('status'=>400));
+  $key=$a['idempotency_key']??'';
+  if(!is_string($key)||($key!==''&&!preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$key)))
+   return new WP_Error('oai_menu_request_key','Invalid menu idempotency_key',array('status'=>400));
+  $actor=get_current_user_id();
+  if($actor<1)return new WP_Error('oai_menu_permission','Authenticated editor required',array('status'=>403));
+  $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $normal_name=function_exists('mb_strtolower')?mb_strtolower($name,'UTF-8'):strtolower($name);
+  $fingerprint=wp_json_encode(array('menu-creation-v1',get_current_blog_id(),$actor,$normal_name,$key),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  if(!is_string($fingerprint))return new WP_Error('oai_menu_intent','Unable to encode menu creation intent',array('status'=>503));
+  $intent='oai_menu_creation_'.hash('sha256',$fingerprint);
+  // Unique option_name is the atomic admission point. Crash/unknown outcome
+  // claims remain held: a timeout or old timestamp cannot prove absence.
+  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
+  if(!add_option($intent,array('actor'=>$actor,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
+   return new WP_Error('oai_menu_creation_pending','Menu creation intent already reserved; verify before retry',array('status'=>409));
   $id=wp_create_nav_menu($name);if(is_wp_error($id))return $id;update_term_meta($id,'_oai_sandbox_artifact','1');
   $after=self::menu_snapshot($id);if(is_wp_error($after)){wp_delete_nav_menu($id);return $after;}
   $op=self::op('menu_create',(string)$id,null,$after,array('menu_id'=>(int)$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_nav_menu($id);return $op;}return $op;
