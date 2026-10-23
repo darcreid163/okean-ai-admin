@@ -38,6 +38,8 @@ Run hosted [Native CI](.github/workflows/native-validate.yml) and [Cloud CI](.gi
 
 Generic option writes require ASCII identifiers of at most 191 bytes. Core/security settings, Native/Cloud control-plane keys, credential names and transient caches are protected, including case aliases under WordPress's database collation. The same target policy is checked again before AI or WP-admin approval/apply of historical operations. Rejection and conflict-checked rollback remain available; ordinary safe option changes retain their full approval/verify/rollback lifecycle.
 
+Media sandbox uploads and URL imports accept decodable JPEG, PNG, GIF and WebP images up to 10 MiB and 20 megapixels, subject to the site's allowed MIME types. Direct uploads require the filename extension, optional declared MIME and image bytes to agree. A working WordPress image editor (GD or Imagick with support for the format) and writable temporary storage are required. Validation precedes Media Library writes; accepted images remain private pending artifacts until the normal approval/apply flow. The WordPress CI suite checks rejection without persistent writes and the full approval/verify/rollback lifecycle.
+
 [Current audit, 22 October](docs/AUDIT-2026-10-22.md) · [Recovery history, 21 October](docs/RELEASE-STATE-2026-10-21.md) · [Migration / release checklist](MIGRATION-STATUS.md) · [Repository policies](docs/REPOSITORY-BOUNDARIES.md).
 
 Historical dated release notes are preserved as references, not active installation instructions.

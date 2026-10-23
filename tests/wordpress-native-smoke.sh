@@ -39,6 +39,8 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-co
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-lifecycle.php"
 # Current target policy also applies to historical pending/approved options.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-option-policy.php"
+# Decode real images before upload, then exercise approval/verify/rollback.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-media-upload.php"
 
 # Exercise actual WP Abilities registration and Native read-only discovery.
 mkdir -p "$WORK/site/wp-content/mu-plugins"
