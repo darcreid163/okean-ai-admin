@@ -885,31 +885,39 @@ frame.addEventListener('load',function(){
   foreach($rows as &$r){foreach(array('before_data','after_data','applied_data','meta_data','diff_data','rollback_data') as $k)if(array_key_exists($k,$r))$r[$k]=json_decode($r[$k],true);$r=OAI_Lifecycle::decorate($r);}unset($r);
   return array('page'=>$page,'per_page'=>$per_page,'total'=>$total,'total_pages'=>max(1,(int)ceil($total/$per_page)),'statuses'=>$statuses,'items'=>$rows);
  }
- private static function validate_sandbox_target($type,$target){
-  if($type==='option_update'){
+ /** Shared by creation and every approval/apply entry point, including old rows. */
+ public static function validate_option_write_target($target){
    global $wpdb;
-   $key=(string)$target;
+   $key=(string)$target;$policy_key=strtolower(trim($key));
    $protected=array(
     'siteurl','home','admin_email','new_admin_email','active_plugins',
     'recently_activated','uninstall_plugins','rewrite_rules','cron',
-    'users_can_register','default_role','stylesheet','template'
+    'users_can_register','default_role','stylesheet','template',
+    'upload_path','upload_url_path','active_sitewide_plugins'
    );
-   if(isset($wpdb) && is_object($wpdb) && !empty($wpdb->prefix))$protected[]=$wpdb->prefix.'user_roles';
-   if(in_array($key,$protected,true))return new WP_Error('oai_option_protected','Protected WordPress option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   if(isset($wpdb) && is_object($wpdb) && !empty($wpdb->prefix))$protected[]=strtolower($wpdb->prefix.'user_roles');
+   if(in_array($policy_key,$protected,true))return new WP_Error('oai_option_protected','Protected WordPress option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   // WordPress option lookup trims names; common MySQL collations also fold
+   // case/accents. Restrict generic write keys to unambiguous ASCII identifiers.
+   if(strlen($key)>191||!preg_match('/\A[A-Za-z0-9_.:-]+\z/D',$key))return new WP_Error('oai_option_key','Generic option writes require an ASCII identifier of at most 191 bytes',array('status'=>400));
    // Cloud Core control-plane options are never generic content settings.
    // The native plugin may coexist with Cloud Core on wpaiadmin.ru; allowing
    // option_update to touch these keys would bypass the Cloud admin/OAuth
    // lifecycle and could corrupt wrapped keys, beta enrollment or schema state.
-   if(str_starts_with($key,'oai_')){
+   if(str_starts_with($policy_key,'oai_')){
     return new WP_Error('oai_option_control_plane','WP AI Admin control-plane option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
    }
-   if(str_starts_with($key,'wpai_gateway_')||str_starts_with($key,'wpai_cloud_')){
+   if(str_starts_with($policy_key,'wpai_gateway_')||str_starts_with($policy_key,'wpai_cloud_')){
     return new WP_Error('oai_option_control_plane','Cloud control-plane option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
    }
    if(preg_match('/(?:^|_)(?:password|passwd|secret|auth|token|private_key|api_key|apikey|client_secret)(?:_|$)/i',$key)){
     return new WP_Error('oai_option_sensitive','Sensitive credential/security option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
    }
-  }
+   if(str_starts_with($policy_key,'_transient_')||str_starts_with($policy_key,'_site_transient_'))return new WP_Error('oai_option_cache','Transient caches cannot be modified through the generic option sandbox',array('status'=>403));
+   return true;
+ }
+ private static function validate_sandbox_target($type,$target){
+  if($type==='option_update')return self::validate_option_write_target($target);
   if(in_array($type,array('post_title','post_excerpt','post_content'),true)){
    $id=absint($target); if(!$id || !get_post($id))return new WP_Error('oai_target','Post not found',array('status'=>404));
    if($type==='post_content'){$allowed=OAI_Elementor::content_write_allowed($id);if(is_wp_error($allowed))return $allowed;}
@@ -1087,6 +1095,13 @@ frame.addEventListener('load',function(){
   }
   $r=OAI_DB::get($id);
   if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
+  // Historical rows cannot bypass current target policy. Reject and rollback
+  // remain available, including reversal of formerly allowed option writes.
+  // "applying" retries only reconcile existing state under a lease; they never
+  // replay the write and must remain available so completed old writes can roll back.
+  if($r['type']==='option_update'&&($action==='approve'||($action==='apply'&&$r['status']!=='applying'))){
+   $policy=self::validate_option_write_target($r['target']);if(is_wp_error($policy))return $policy;
+  }
   $meta=json_decode((string)$r['meta_data'],true); if(!is_array($meta))$meta=array();
 
   // Crash-safe reconciliation is allowed only after an execution lease has
