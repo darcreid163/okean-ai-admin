@@ -54,3 +54,6 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-pu
 mkdir -p "$WORK/site/wp-content/mu-plugins"
 cp "$GITHUB_WORKSPACE/tests/fixtures/oai-abilities-mu.php" "$WORK/site/wp-content/mu-plugins/oai-abilities-mu.php"
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-abilities-smoke.php"
+
+# Disposable workspace creation: durable admission before draft filesystem artifacts.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-workspace-creation.php"
