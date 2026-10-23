@@ -60,3 +60,6 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-wo
 
 # Atomic menu creation: prevent a retry from creating extra terms or operations.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-menu-creation.php"
+
+# WooCommerce new draft products: atomic pre-save intent admission and six workers.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-product-creation.php"
