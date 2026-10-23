@@ -97,6 +97,39 @@ class OAI_DB {
  }
  public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
  private static $media_creation=null;
+ /** Atomic first-writer claim admission for new WordPress artifacts.
+  * WordPress add_option() can report success for duplicate-key no-op updates
+  * under driver-specific affected-row settings. A strict INSERT must return
+  * exactly one newly inserted row. No generic claim release/expiry is offered.
+  *
+  * @return true|false|WP_Error true=inserted, false=existing, error=storage
+  */
+ public static function insert_creation_claim($name,array $claim){
+  global $wpdb;
+  if(!is_string($name)||!preg_match('/^oai_(?:workspace|menu|menu_item|product|elementor_page)_creation_[a-f0-9]{64}$/D',$name))
+   return new WP_Error('oai_creation_claim_name','Invalid internal creation claim name',array('status'=>400));
+  $ready=self::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $value=maybe_serialize($claim);
+  if(!is_string($value))return new WP_Error('oai_creation_claim_value','Invalid internal creation claim',array('status'=>503));
+  // Suppress expected duplicate-key error from the public WP error log.
+  $previous=$wpdb->suppress_errors(true);
+  try{
+   $inserted=$wpdb->insert($wpdb->options,array(
+    'option_name'=>$name,'option_value'=>$value,'autoload'=>'off'
+   ),array('%s','%s','%s'));
+  }finally{
+   $wpdb->suppress_errors($previous);
+   wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');
+  }
+  if($inserted===1)return true;
+  // A duplicate and a database outage both cause INSERT failure. Differentiate
+  // from the authoritative DB, not a stale option cache or boolean guess.
+  $exists=$wpdb->get_var($wpdb->prepare(
+   "SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$name
+  ));
+  if($exists!==null)return false;
+  return new WP_Error('oai_creation_claim_storage','Creation reservation storage unavailable',array('status'=>503));
+ }
  public static function intent_autocommit(){
   global $wpdb;
   if((string)$wpdb->get_var('SELECT @@session.autocommit')!=='1')return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));
