@@ -40,9 +40,16 @@ try{
  pendingAssert((string)$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s,0)',$lock))==='1','Cannot hold fixture lock');
  $primary=$wpdb;$other=new wpdb(DB_USER,DB_PASSWORD,DB_NAME,DB_HOST);$other->set_prefix($primary->prefix);
  try{$wpdb=$other;pendingError(OAI_DB::insert($data),'oai_intent_busy');}finally{$wpdb=$primary;$primary->get_var($primary->prepare('SELECT RELEASE_LOCK(%s)',$lock));$lock='';$other->close();$other=null;}
+ $wpdb->query('SET autocommit=0');try{pendingError(OAI_DB::insert($data),'oai_intent_transaction');}finally{$wpdb->query('SET autocommit=1');}
  // A lost lock is checked by the INSERT, not just by a preceding SELECT.
  $release=function($sql)use($lock,$fingerprint){global $wpdb;if(str_starts_with($sql,'INSERT INTO '.OAI_DB::table().' ')){$name='oai_intent_'.substr(hash('sha256',DB_NAME.'|'.OAI_DB::table().'|'.$fingerprint),0,50);$wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)',$name));}return $sql;};
- add_filter('query',$release);try{pendingError(OAI_DB::insert($data),'oai_duplicate_pending');}finally{remove_filter('query',$release);}
+ OAI_DB::update($canonical,['status'=>'rejected']);$beforeLoss=OAI_DB::count_all();
+ add_filter('query',$release);try{pendingError(OAI_DB::insert($data),'oai_intent_busy');}finally{remove_filter('query',$release);}
+ pendingAssert(OAI_DB::count_all()===$beforeLoss,'Lost lock permitted an unguarded insert');
+ $breakInsert=function($sql){return str_starts_with($sql,'INSERT INTO '.OAI_DB::table().' ')?'INSERT INTO '.OAI_DB::table().' (synthetic_missing_column) VALUES (1)':$sql;};
+ $silent=$wpdb->suppress_errors();add_filter('query',$breakInsert);try{pendingError(OAI_DB::insert($data),'oai_intent_storage');}finally{remove_filter('query',$breakInsert);$wpdb->suppress_errors($silent);}
+ pendingAssert(OAI_DB::count_all()===$beforeLoss,'Storage error created an operation');
+ pendingOk(OAI_DB::insert($data));
  // Six fresh WordPress processes race on a new intent, with one SQL winner.
  putenv('OAI_PENDING_POST='.$post);
  for($i=0;$i<6;$i++){$pipes=[];$process=proc_open([PHP_BINARY,$_SERVER['argv'][0],'--path='.ABSPATH,'--allow-root','--quiet','eval-file',(getenv('GITHUB_WORKSPACE')?:getcwd()).'/tests/wordpress-pending-intent-worker.php'],[1=>['pipe','w'],2=>['pipe','w']],$pipes);pendingAssert(is_resource($process),'Cannot start worker');$workers[]=[$process,$pipes];}

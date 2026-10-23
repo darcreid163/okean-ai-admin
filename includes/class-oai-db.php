@@ -142,6 +142,7 @@ class OAI_DB {
    $ok=$wpdb->query($wpdb->prepare($sql,$args));
    if($ok===1)return (int)$wpdb->insert_id;
    if($ok===false)return new WP_Error('oai_intent_storage','Operation intent could not be stored',array('status'=>503));
+   if((string)$wpdb->get_var($wpdb->prepare('SELECT IS_USED_LOCK(%s)=CONNECTION_ID()',$lock))!=='1')return new WP_Error('oai_intent_busy','Operation intent reservation was lost; retry later',array('status'=>409));
    // No identifiers, cached reply or evidence from an existing intent escape.
    return new WP_Error('oai_duplicate_pending','An identical operation is pending or its outcome requires reconciliation',array('status'=>409));
   }finally{$wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)',$lock));}
