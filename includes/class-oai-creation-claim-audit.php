@@ -38,6 +38,11 @@ final class OAI_Creation_Claim_Audit {
    $limit=(int)$raw;
   }
   global $wpdb;
+  // wp_upload_dir's create_dir=false is critical: the audit itself must not
+  // create a workspace directory while looking for one.
+  $uploads=wp_upload_dir(null,false);
+  $workspace_root=is_array($uploads)&&isset($uploads['basedir'])&&is_string($uploads['basedir'])
+   ?trailingslashit($uploads['basedir']).'ai-admin-workspaces':null;
   $results=array();
   foreach(self::FAMILIES as $family=>$prefix){
    $sql=$wpdb->prepare(
@@ -55,7 +60,10 @@ final class OAI_Creation_Claim_Audit {
     'with_operation_reference'=>0,'operation_reference_invalid'=>0,
     'referenced_operation_same_type'=>0,'referenced_operation_other_type'=>0,
     'referenced_operation_missing'=>0,'with_creation_time'=>0,
-    'older_than_24h'=>0,'unreadable_metadata'=>0
+    'older_than_24h'=>0,'unreadable_metadata'=>0,
+    'workspace_id_unverifiable'=>0,'workspace_root_unavailable'=>0,
+    'workspace_directory_present'=>0,'workspace_directory_absent'=>0,
+    'workspace_metadata_present'=>0,'workspace_symlink_rejected'=>0
    );
    $expected_types=array(
     'media'=>'media_upload','menu'=>'menu_create','menu_item'=>'menu_add_item',
@@ -65,6 +73,26 @@ final class OAI_Creation_Claim_Audit {
    foreach($rows as $record){
     $meta=self::metadata($record['option_value']??null);
     if($meta===null){$group['unreadable_metadata']++;$group['state_unknown']++;continue;}
+    if($family==='workspace'){
+     $candidate=$meta['id']??null;
+     // Real OAI_Operations::new_id('ws') format only. Never append untrusted
+     // paths, legacy aliases, slashes or variable-length arbitrary strings.
+     if(!is_string($candidate)||!preg_match('/^ws-[0-9]{8}-[0-9]{6}-[a-f0-9]{32}$/D',$candidate))
+      $group['workspace_id_unverifiable']++;
+     elseif(!$workspace_root||is_link($workspace_root)||!is_dir($workspace_root))
+      $group['workspace_root_unavailable']++;
+     else{
+      $folder=$workspace_root.'/'.$candidate;
+      if(is_link($folder))$group['workspace_symlink_rejected']++;
+      elseif(is_dir($folder)){
+       $group['workspace_directory_present']++;
+       $metadata=$folder.'/workspace.json';
+       if(is_link($metadata))$group['workspace_symlink_rejected']++;
+       elseif(is_file($metadata))$group['workspace_metadata_present']++;
+      }
+      else $group['workspace_directory_absent']++;
+     }
+    }
     $state=$meta['state']??null;
     if($state==='reserved')$group['declared_reserved']++;
     elseif(is_string($state)&&$state!=='')$group['declared_other_state']++;
