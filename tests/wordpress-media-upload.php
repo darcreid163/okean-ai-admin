@@ -103,10 +103,12 @@ wp_set_current_user(1);
 echo "PASS: invalid bytes, MIME/extension mismatch, corrupt image, size/pixel limits, field types, site policy, missing decoder and capability denied before persistent writes\n";
 
 $artifacts = [];
-$remoteUrl = 'https://192.0.2.1/disposable-image.jpg'; // RFC 5737 documentation address; intercepted below, no network request.
+$remoteUrl = 'https://8.8.8.8/disposable-image.jpg'; // Public-address fixture; always intercepted below, no network request.
 $remoteBody = substr(base64_decode($png['content_base64']), 0, 33);
-$remote = function($pre, $args, $url) use ($remoteUrl, &$remoteBody) {
+$remoteRequests = 0;
+$remote = function($pre, $args, $url) use ($remoteUrl, &$remoteBody, &$remoteRequests) {
     if ($url !== $remoteUrl) return $pre;
+    ++$remoteRequests;
     return ['headers'=>[], 'body'=>$remoteBody, 'response'=>['code'=>200, 'message'=>'OK'], 'cookies'=>[]];
 };
 add_filter('pre_http_request', $remote, 10, 3);
@@ -137,6 +139,7 @@ try {
         mediaAssert(!get_post($id) && !is_file($file), 'Rollback left attachment or original file');
         mediaAssert(mediaState()[0] === $before[0] && mediaState()[1] === $before[1], 'Upload lifecycle left file artifacts');
     }
+    mediaAssert($remoteRequests === 2, 'Both URL imports must use intercepted HTTP responses');
     echo "PASS: JPEG (jpeg alias/no declared MIME), PNG, GIF, WebP and intercepted URL import: private pending → approve → apply → verify → rollback → verify; files cleaned\n";
     echo 'PASS: image editor '.($preferred ?: 'WordPress default')."\n";
 } finally {
