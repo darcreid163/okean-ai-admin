@@ -21,6 +21,13 @@ mcAssert(!is_wp_error($one),'Initial menu creation failed: '.(is_wp_error($one)?
 mcAssert(mcMenus()===$startMenus+1&&OAI_DB::count_all()===$startOps+1,'Initial menu or operation not persisted');
 $retry=OAI_P0::menu_create(['name'=>'WP AI Menu Creation First','idempotency_key'=>'menu-create-one-1234567890']);
 mcErr($retry,'oai_menu_creation_pending');
+mcErr(OAI_P0::menu_create(['name'=>'WP AI Menu Changed Same Key','idempotency_key'=>'menu-create-one-1234567890']),'oai_menu_intent_conflict');
+// Exact-key legacy v1 menu reservation must not be bypassed by the v2 identity.
+$priorMenuKey='menu-prior-claim-12345678';$priorMenuName='WP AI Prior Menu';
+$normalizedPrior=function_exists('mb_strtolower')?mb_strtolower($priorMenuName,'UTF-8'):strtolower($priorMenuName);
+$oldMenuRaw=wp_json_encode(['menu-creation-v1',get_current_blog_id(),(int)$user,$normalizedPrior,$priorMenuKey],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+mcAssert(add_option('oai_menu_creation_'.hash('sha256',$oldMenuRaw),['actor'=>(int)$user,'state'=>'reserved','claim'=>'fixture'],'',false),'Cannot seed old menu claim');
+mcErr(OAI_P0::menu_create(['name'=>$priorMenuName,'idempotency_key'=>$priorMenuKey]),'oai_menu_creation_pending');
 mcAssert(array_keys($retry->get_error_data())===['status'],'Duplicate response exposes IDs or internal claim');
 mcAssert(mcMenus()===$startMenus+1&&OAI_DB::count_all()===$startOps+1,'Retry created extra menu or operation');
 // Normalized case aliases must be the same intent.

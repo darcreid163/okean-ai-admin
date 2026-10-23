@@ -17,6 +17,13 @@ $first=OAI_Workspace::create(false,$key);
 wsAssert(!is_wp_error($first),'First workspace failed: '.(is_wp_error($first)?$first->get_error_code().' '.$first->get_error_message():'missing result'));
 wsAssert(is_file(OAI_Workspace::root().'/'.$first['id'].'/workspace.json'),'Workspace metadata absent');
 wsError(OAI_Workspace::create(false,$key),'oai_workspace_creation_pending');
+wsError(OAI_Workspace::create(true,$key),'oai_workspace_intent_conflict');
+// A claim from the earlier v2 candidate must also fence an exact-key retry.
+$priorKey='workspace-prior-claim-1234567';
+$priorJson=wp_json_encode(['workspace-v2',get_current_blog_id(),(int)$user,get_stylesheet(),get_template(),false,$priorKey],JSON_UNESCAPED_SLASHES);
+$priorOption='oai_workspace_creation_'.hash('sha256',$priorJson);
+wsAssert(add_option($priorOption,['id'=>'ws-old-only','actor'=>(int)$user,'state'=>'reserved','created_at'=>time()],'',false),'Cannot seed old workspace intent');
+wsError(OAI_Workspace::create(false,$priorKey),'oai_workspace_creation_pending');
 wsAssert(wsCount()===$initial+1,'Retry produced another workspace');
 $second=OAI_Workspace::create(false,'workspace-create-new-12345678');
 wsAssert(!is_wp_error($second)&&$second['id']!==$first['id'],'Distinct explicit key failed to create legitimate new workspace');

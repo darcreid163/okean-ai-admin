@@ -18,6 +18,14 @@ $one=miCreate($menu,'WP AI Test Menu Item One','menu-item-create-one-123456');
 miAssert(!is_wp_error($one),'First menu item failed '.(is_wp_error($one)?$one->get_error_code():'unknown'));
 miAssert(miCount()===$before+1&&OAI_DB::count_all()===$ops+1,'Menu item/operation not persisted');
 miErr(miCreate($menu,'WP AI Test Menu Item One','menu-item-create-one-123456'),'oai_menu_item_creation_pending');
+$otherMenu=wp_create_nav_menu('WP AI Item Other Target '.substr(wp_generate_uuid4(),0,8));
+miAssert(!is_wp_error($otherMenu),'Cannot create independent item target');
+miErr(miCreate($otherMenu,'WP AI Test Menu Item One','menu-item-create-one-123456'),'oai_menu_item_intent_conflict');
+// A prior v1 menu-item claim is also honored after changing key identity.
+$priorItemKey='menu-item-prior-claim-123456';
+$oldItemRaw=wp_json_encode(['menu-item-v1',get_current_blog_id(),1,(int)$menu,$priorItemKey]);
+miAssert(add_option('oai_menu_item_creation_'.hash('sha256',$oldItemRaw),['actor'=>1,'payload_hash'=>str_repeat('a',64),'state'=>'reserved'],'',false),'Cannot seed old menu-item claim');
+miErr(miCreate($menu,'WP AI Prior Menu Item',$priorItemKey),'oai_menu_item_intent_conflict');
 miErr(miCreate($menu,'<strong>WP AI Test Menu Item One</strong>','menu-item-create-one-123456'),'oai_menu_item_creation_pending');
 miErr(miCreate($menu,'WP AI Test Menu Item One','menu-item-create-one-123456','https://example.invalid/change'),'oai_menu_item_intent_conflict');
 miAssert(miCount()===$before+1&&OAI_DB::count_all()===$ops+1,'Retry or conflict created artifact');
