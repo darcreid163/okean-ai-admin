@@ -70,7 +70,8 @@ class OAI_Workspace {
   $encoded=wp_json_encode($meta,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
   if(!is_string($encoded)||file_put_contents($base.'/workspace.json',$encoded,LOCK_EX)===false)
    return new WP_Error('oai_workspace_metadata','Workspace metadata could not be persisted; creation held for reconciliation',array('status'=>503));
-  update_option('oai_active_workspace',$id,false);
+  if(!update_option('oai_active_workspace',$id,false) && get_option('oai_active_workspace')!==$id)
+   return new WP_Error('oai_workspace_activation','Workspace persisted but activation outcome requires reconciliation',array('status'=>503));
   return $meta;
  }
  private static function copy_tree($src,$dst){
