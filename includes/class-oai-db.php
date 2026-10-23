@@ -97,7 +97,7 @@ class OAI_DB {
  }
  public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
  private static $media_creation=null;
- private static function intent_autocommit(){
+ public static function intent_autocommit(){
   global $wpdb;
   if((string)$wpdb->get_var('SELECT @@session.autocommit')!=='1')return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));
   $suppressed=$wpdb->suppress_errors();
