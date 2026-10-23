@@ -8,8 +8,7 @@ Creation paths with atomic pre-artifact admission have dedicated disposable MySQ
 acceptance suites: media (#107), workspace (#108), menus (#109), WooCommerce drafts
 (#110), Elementor pages (#111), menu items (#113); old/changed nonce defenses (#114).
 Generic cleanup preserves creation-operation evidence (#112). Administrator-only read-only
-aggregate claim inventory (#115, #116); workspace footprint detection (#117 is a separate
-candidate until final merge). Native/Cloud CI checks are tied to each exact PR head.
+aggregate claim inventory (#115, #116); workspace footprint detection (#117 merged after exact-head Native/Cloud CI). Native/Cloud CI checks are tied to each exact PR head.
 These tests are **not** evidence that the installed `wpaiadmin.ru` or `okean.market`
 files contain these changes.
 
