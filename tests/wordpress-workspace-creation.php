@@ -2,8 +2,8 @@
 /** Disposable WordPress + MySQL regression for #103 workspace creation. */
 if(getenv('OAI_DISPOSABLE_WP_TEST')!=='1'||!in_array(wp_parse_url(home_url(),PHP_URL_HOST),['localhost','127.0.0.1'],true))
  throw new RuntimeException('Disposable loopback WordPress required');
-$checks=0;
-function wsAssert($truth,$msg){global $checks;++$checks;if(!$truth)throw new RuntimeException($msg);}
+final class WorkspaceFixtureCounter {public static int $count=0;}
+function wsAssert($truth,$msg){++WorkspaceFixtureCounter::$count;if(!$truth)throw new RuntimeException($msg);}
 function wsError($result,$code){wsAssert(is_wp_error($result)&&$result->get_error_code()===$code,'Expected '.$code.', got '.(is_wp_error($result)?$result->get_error_code():gettype($result)));}
 function wsCount(){return count(OAI_Workspace::list_workspaces()['items']);}
 $user=wp_create_user('workspace-admission-ci','ci-local-only-password','workspace-ci@example.invalid');
@@ -77,4 +77,4 @@ wsAssert(wsCount()===$initial+6,'Concurrent workers left duplicated directories'
 wp_set_current_user(0);
 wsError(OAI_Workspace::create(false,'workspace-anonymous-123456'),'oai_workspace_auth');
 wsAssert(wsCount()===$initial+6,'Anonymous request created artifact');
-echo "PASS workspace admission: $checks checks, 6 processes, actor isolation, retries, distinct key, transactions\n";
+echo "PASS workspace admission: ".WorkspaceFixtureCounter::$count." checks, 6 processes, actor isolation, retries, distinct key, transactions\n";
