@@ -52,10 +52,18 @@ class OAI_Workspace {
   $payload_hash=hash('sha256',$payload);
   // An explicit retry key identifies one request, not each different payload.
   // Legacy calls without a key keep the existing per-theme/clone fingerprint.
-  $identity=wp_json_encode(array('workspace-v3',get_current_blog_id(),$actor,$request_key!==''?$request_key:$payload_hash),JSON_UNESCAPED_SLASHES);
+  $identity=wp_json_encode($request_key!==''?array('workspace-v3',get_current_blog_id(),$actor,$request_key):array('workspace-v2',get_current_blog_id(),$actor,get_stylesheet(),get_template(),(bool)$clone_theme,''),JSON_UNESCAPED_SLASHES);
   if(!is_string($identity))return new WP_Error('oai_workspace_intent','Cannot encode workspace intent',array('status'=>503));
   $intent='oai_workspace_creation_'.hash('sha256',$identity);
   global $wpdb;
+  if($request_key!==''){
+   $old_identity=wp_json_encode(array('workspace-v2',get_current_blog_id(),$actor,get_stylesheet(),get_template(),(bool)$clone_theme,$request_key),JSON_UNESCAPED_SLASHES);
+   if(!is_string($old_identity))return new WP_Error('oai_workspace_intent','Cannot encode legacy request',array('status'=>503));
+   $old_name='oai_workspace_creation_'.hash('sha256',$old_identity);
+   $old_record=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$old_name));
+   if($old_record!==null)return new WP_Error('oai_workspace_creation_pending','Existing creation claim requires reconciliation before retry',array('status'=>409));
+   if($wpdb->last_error!=='')return new WP_Error('oai_workspace_storage','Legacy reservation lookup unavailable',array('status'=>503));
+  }
   $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
   if($existing!==null){
    $prior=maybe_unserialize($existing);
