@@ -1,8 +1,10 @@
 <?php
 /** Disposable WordPress regression: creation must reserve before filesystem side effects. */
 if(getenv('OAI_DISPOSABLE_WP_TEST')!=='1')throw new RuntimeException('Disposable guard required');
-$admins=get_users(['role'=>'administrator','number'=>1,'fields'=>'ID']);
-wp_set_current_user((int)$admins[0]);
+$actor=wp_create_user('workspace-admission-ci','ci-local-only-password','workspace-ci@example.invalid');
+if(is_wp_error($actor))throw new RuntimeException('Could not create disposable workspace fixture user');
+(new WP_User((int)$actor))->set_role('administrator');
+wp_set_current_user((int)$actor);
 $before=OAI_Workspace::list_workspaces();
 $first=OAI_Workspace::create(false);
 if(is_wp_error($first)||empty($first['id']))throw new RuntimeException('First workspace creation failed: '.(is_wp_error($first)?$first->get_error_code().' '.$first->get_error_message():'missing ID'));
