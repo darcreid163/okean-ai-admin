@@ -57,3 +57,6 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-ab
 
 # Disposable workspace creation: durable admission before draft filesystem artifacts.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-workspace-creation.php"
+
+# Atomic menu creation: prevent a retry from creating extra terms or operations.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-menu-creation.php"
