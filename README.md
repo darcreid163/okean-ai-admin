@@ -2,6 +2,8 @@
 
 **Current integrated candidate:** Native **2.1.17** (DB schema 24; build `2.1.17-usage-batch-v1-20261019`) + recovered Cloud Core **0.3.11** (Gateway schema 4); current **unreleased Cloud 0.3.13-dev** adds scoped Skills/Media and read-only Abilities metadata discovery. This branch is **not** an approved production release.
 
+[Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
+
 ## Один основной репозиторий до завершения проекта
 
 As explicitly directed by the maintainer, `darcreid163/okean-ai-admin` is the current **PUBLIC** single development repository with GitHub-hosted CI for both Native and Cloud. The current 0.3.11 Cloud source and synthetic tests are included in `wp-ai-admin-cloud/`. Production keys, credentials, accounts, private database snapshots and deployment configuration are prohibited.
@@ -48,7 +50,7 @@ Cloud Gateway applies the same presentation contract to known Native metadata/ev
 
 Historical dated release notes are preserved as references, not active installation instructions.
 
-## Текущая точка разработки (22.10.2026)
+## Историческая точка проверки (22.10.2026)
 
 Основная ветка — `main` этого репозитория. Проверенный при аудите SHA:
 `1fb3f98c1ec87013990e4f35c0c02e8e39c65556`. Native 2.1.17 и кандидат

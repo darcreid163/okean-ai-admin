@@ -96,7 +96,68 @@ class OAI_DB {
   $wpdb->query("DELETE FROM $table WHERE state IN ('succeeded','failed') AND created_at < UTC_TIMESTAMP() - INTERVAL 90 DAY");
  }
  public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
- public static function insert($data){global $wpdb; $t=self::table(); $ok=$wpdb->insert($t,$data); if(!$ok) return new WP_Error('oai_db','Could not create operation',array('status'=>500,'db_error'=>$wpdb->last_error)); return (int)$wpdb->insert_id;}
+ /** Reject repeated new existing-target edits; never return another operation. */
+ private static function pending_intent_value($value){
+  if($value instanceof stdClass){$map=get_object_vars($value);ksort($map,SORT_STRING);foreach($map as &$child)$child=self::pending_intent_value($child);unset($child);return (object)$map;}
+  if(is_array($value)){foreach($value as &$child)$child=self::pending_intent_value($child);unset($child);return $value;}
+  return $value;
+ }
+ private static function insert_pending_intent($data,$actor){
+  global $wpdb;
+  $meta=json_decode((string)($data['meta_data']??'{}'));
+  if(json_last_error()!==JSON_ERROR_NONE||!$meta instanceof stdClass)return new WP_Error('oai_intent_payload','Invalid operation metadata',array('status'=>400));
+  unset($meta->_wpai_pending_intent);
+  $frame=array('actor'=>$actor,'type'=>$data['type'],'target'=>$data['target'],'meta'=>$meta,'workspace_id'=>$data['workspace_id']??null);
+  foreach(array('before_data','after_data','rollback_data') as $field){
+   $frame[$field]=json_decode((string)($data[$field]??'null'));
+   if(json_last_error()!==JSON_ERROR_NONE)return new WP_Error('oai_intent_payload','Invalid operation snapshot',array('status'=>400));
+  }
+  $json=wp_json_encode(self::pending_intent_value($frame),JSON_PRESERVE_ZERO_FRACTION|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  if(!is_string($json))return new WP_Error('oai_intent_payload','Invalid operation snapshot',array('status'=>400));
+  $fingerprint=hash('sha256',$json);$meta->_wpai_pending_intent=$fingerprint;
+  $data['meta_data']=wp_json_encode($meta,JSON_PRESERVE_ZERO_FRACTION|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  $table=self::table();$lock='oai_intent_'.substr(hash('sha256',(defined('DB_NAME')?DB_NAME:'').'|'.$table.'|'.$fingerprint),0,50);
+  $held=$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s,3)',$lock));
+  if((string)$held!=='1')return new WP_Error('oai_intent_busy','Operation intent cannot be reserved; retry later',array('status'=>409));
+  try{
+   // Releasing a lock before an outer transaction commits would allow a
+   // second connection to miss its uncommitted intent. Only autocommit is supported.
+   if((string)$wpdb->get_var('SELECT @@session.autocommit')!=='1')return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));
+   $suppressed=$wpdb->suppress_errors();
+   try{$isolation=$wpdb->get_var('SELECT @@session.transaction_isolation');if($isolation===null)$isolation=$wpdb->get_var('SELECT @@session.tx_isolation');}finally{$wpdb->suppress_errors($suppressed);}
+   if(!in_array($isolation,array('READ-UNCOMMITTED','READ-COMMITTED','REPEATABLE-READ','SERIALIZABLE'),true))return new WP_Error('oai_intent_transaction','Cannot establish transaction state',array('status'=>503));
+   // MySQL rejects SET TRANSACTION inside an active transaction without
+   // committing it. Reapply the current isolation to the next statement only.
+   $suppressed=$wpdb->suppress_errors();
+   try{$ready=$wpdb->query('SET TRANSACTION ISOLATION LEVEL '.str_replace('-',' ',$isolation));}finally{$wpdb->suppress_errors($suppressed);}
+   if($ready===false)return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));
+   $columns=array();$values=array();$args=array();
+   foreach($data as $key=>$value){
+    if(!preg_match('/^[a-z_]+$/D',$key))return new WP_Error('oai_intent_payload','Invalid operation field',array('status'=>400));
+    $columns[]='`'.$key.'`';$values[]=$value===null?'NULL':'%s';if($value!==null)$args[]=$value;
+   }
+   // The lock ownership predicate is evaluated by the INSERT itself. A wpdb
+   // reconnect cannot turn a lost lock into an unguarded insert.
+   $sql='INSERT INTO '.$table.' ('.implode(',',$columns).') SELECT '.implode(',',$values).' FROM DUAL WHERE IS_USED_LOCK(%s)=CONNECTION_ID() AND @@session.autocommit=1 AND NOT EXISTS (SELECT 1 FROM '.$table.' WHERE type=%s AND BINARY target=BINARY %s AND LOCATE(BINARY %s,BINARY meta_data)>0 AND ((status IN (\'pending\',\'approved\') AND (expires_at IS NULL OR expires_at>=UTC_TIMESTAMP())) OR status NOT IN (\'pending\',\'approved\',\'rejected\',\'rolled_back\',\'expired\',\'applied\',\'proved\')))';
+   $args=array_merge($args,array($lock,$data['type'],$data['target'],'"_wpai_pending_intent":"'.$fingerprint.'"'));
+   $ok=$wpdb->query($wpdb->prepare($sql,$args));
+   if($ok===1)return (int)$wpdb->insert_id;
+   if($ok===false)return new WP_Error('oai_intent_storage','Operation intent could not be stored',array('status'=>503));
+   if((string)$wpdb->get_var($wpdb->prepare('SELECT IS_USED_LOCK(%s)=CONNECTION_ID()',$lock))!=='1')return new WP_Error('oai_intent_busy','Operation intent reservation was lost; retry later',array('status'=>409));
+   // No identifiers, cached reply or evidence from an existing intent escape.
+   return new WP_Error('oai_duplicate_pending','An identical operation is pending or its outcome requires reconciliation',array('status'=>409));
+  }finally{$wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)',$lock));}
+ }
+ public static function insert($data){
+  global $wpdb;
+  $actor=function_exists('get_current_user_id')?(int)get_current_user_id():0;
+  $guarded=array('woodmart_theme_setting','option_update','post_title','post_excerpt','post_content','woo_product_price','woo_product_stock','woocommerce_product','elementor_widget_html','elementor_widget_settings','elementor_page_layout','file_write','media_alt','media_title','media_featured','menu_remove_item','menu_move_item','menu_assign_location');
+  if($actor>0&&($data['status']??'')==='pending'&&in_array($data['type']??'',$guarded,true))return self::insert_pending_intent($data,$actor);
+  $ok=$wpdb->insert(self::table(),$data);
+  if(!$ok)return new WP_Error('oai_db','Could not create operation',array('status'=>500,'db_error'=>$wpdb->last_error));
+  return (int)$wpdb->insert_id;
+ }
+
  public static function get($id){global $wpdb; return $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE id=%d',$id),ARRAY_A);}
  public static function update($id,$data){global $wpdb; return $wpdb->update(self::table(),$data,array('id'=>$id));}
  public static function transition($id,$from,$status,$phase=null){
