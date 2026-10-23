@@ -178,13 +178,25 @@ class OAI_P0 {
   if($actor<1)return new WP_Error('oai_menu_permission','Authenticated editor required',array('status'=>403));
   $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
   $normal_name=function_exists('mb_strtolower')?mb_strtolower($name,'UTF-8'):strtolower($name);
-  $fingerprint=wp_json_encode(array('menu-creation-v1',get_current_blog_id(),$actor,$normal_name,$key),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  $payload_hash=hash('sha256',$normal_name);
+  // Legacy keyless creation retains v1 identity. Explicit key now defines one
+  // creation request across changed names instead of becoming a new intent.
+  $fingerprint=wp_json_encode($key!==''?array('menu-creation-v2',get_current_blog_id(),$actor,$key):array('menu-creation-v1',get_current_blog_id(),$actor,$normal_name,''),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
   if(!is_string($fingerprint))return new WP_Error('oai_menu_intent','Unable to encode menu creation intent',array('status'=>503));
   $intent='oai_menu_creation_'.hash('sha256',$fingerprint);
+  global $wpdb;
+  $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
+  if($existing!==null){
+   $prior=maybe_unserialize($existing);
+   if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+    return new WP_Error('oai_menu_intent_conflict','Menu creation key reused with another name',array('status'=>409));
+   return new WP_Error('oai_menu_creation_pending','Menu creation requires reconciliation',array('status'=>409));
+  }
+  if($wpdb->last_error!=='')return new WP_Error('oai_menu_storage','Menu reservation unavailable',array('status'=>503));
   // Unique option_name is the atomic admission point. Crash/unknown outcome
   // claims remain held: a timeout or old timestamp cannot prove absence.
   wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
-  if(!add_option($intent,array('actor'=>$actor,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
+  if(!add_option($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
    return new WP_Error('oai_menu_creation_pending','Menu creation intent already reserved; verify before retry',array('status'=>409));
   $id=wp_create_nav_menu($name);if(is_wp_error($id))return $id;update_term_meta($id,'_oai_sandbox_artifact','1');
   $after=self::menu_snapshot($id);if(is_wp_error($after)){wp_delete_nav_menu($id);return $after;}
@@ -213,7 +225,9 @@ class OAI_P0 {
   $encoded=wp_json_encode(array('menu-item-v1',$menu_id,$canonical),JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION);
   if(!is_string($encoded))return new WP_Error('oai_menu_item_intent','Cannot encode menu item creation intent',array('status'=>503));
   $payload_hash=hash('sha256',$encoded);
-  $identity=wp_json_encode(array('menu-item-v1',get_current_blog_id(),$actor,$menu_id,$key!==''?$key:$payload_hash));
+  // A nonempty retry key is bound to one payload, even when menu target
+  // changes. Keyless legacy calls remain scoped to menu and canonical item.
+  $identity=wp_json_encode($key!==''?array('menu-item-v2',get_current_blog_id(),$actor,$key):array('menu-item-v1',get_current_blog_id(),$actor,$menu_id,$payload_hash));
   if(!is_string($identity))return new WP_Error('oai_menu_item_intent','Cannot encode menu item request identity',array('status'=>503));
   $intent='oai_menu_item_creation_'.hash('sha256',$identity);
   global $wpdb;
