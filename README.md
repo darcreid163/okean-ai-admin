@@ -36,6 +36,8 @@ Successful reads/Sandbox calls count; every successful Batch object is one actio
 
 Run hosted [Native CI](.github/workflows/native-validate.yml) and [Cloud CI](.github/workflows/cloud-validate.yml), including PHP 8.2/8.3/8.4, MySQL and SQLite, OAuth isolation, Billing/Batch, WordPress smoke and upgrade. Candidate Native ZIP MUST exclude `wp-ai-admin-cloud/`. No CI workflow may use production secrets.
 
+Generic option writes require ASCII identifiers of at most 191 bytes. Core/security settings, Native/Cloud control-plane keys, credential names and transient caches are protected, including case aliases under WordPress's database collation. The same target policy is checked again before AI or WP-admin approval/apply of historical operations. Rejection and conflict-checked rollback remain available; ordinary safe option changes retain their full approval/verify/rollback lifecycle.
+
 [Current audit, 22 October](docs/AUDIT-2026-10-22.md) · [Recovery history, 21 October](docs/RELEASE-STATE-2026-10-21.md) · [Migration / release checklist](MIGRATION-STATUS.md) · [Repository policies](docs/REPOSITORY-BOUNDARIES.md).
 
 Historical dated release notes are preserved as references, not active installation instructions.
