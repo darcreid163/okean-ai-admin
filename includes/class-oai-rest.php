@@ -258,8 +258,9 @@ class OAI_REST {
    return new WP_Error('oai_page_creation_pending','Page creation requires result reconciliation',array('status'=>409));
   }
   if($wpdb->last_error!=='')return new WP_Error('oai_page_storage','Page creation reservation unavailable',array('status'=>503));
-  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
-  if(!add_option($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
+  $admission=OAI_DB::insert_creation_claim($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))));
+  if(is_wp_error($admission))return $admission;
+  if($admission!==true)
    return new WP_Error('oai_page_creation_pending','Page creation requires result reconciliation',array('status'=>409));
 
   $adapter=OAI_Builder_Manager::get('elementor');
