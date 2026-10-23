@@ -26,6 +26,7 @@ class OAI_Security {
     $public_name=is_string($name)?self::evidence_text($name,'',$changed):$name;
     // Preserve distinct path-keyed entries after redaction.
     if($public_name!==$name)$public_name.=':'.substr(hash('sha256',$name),0,12);
+    while(array_key_exists($public_name,$out)){$changed=true;$public_name.=':';}
     $out[$public_name]=self::evidence_value($item,(string)$name,$changed);
    }return $out;
   }

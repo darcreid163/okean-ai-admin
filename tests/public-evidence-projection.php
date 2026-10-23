@@ -28,6 +28,9 @@ projectionAssert($public['relative']===$fixture['relative']&&$public['route']===
 projectionAssert($public['hash']===$fixture['hash']&&$public['verified']===true&&$public['phase']==='after','Proof claims changed');
 projectionAssert(serialize($fixture)===$original,'Original evidence modified');
 projectionAssert(count($public['keyed'])===2&&array_values($public['keyed'])===[1,2],'Path-keyed records collapsed');
+$collision='[server-path]:'.substr(hash('sha256','/srv/a/image.png'),0,12);
+$collisionView=OAI_Security::public_evidence(['items'=>['/srv/a/image.png'=>1,$collision=>2]]);
+projectionAssert(count($collisionView['items'])===2&&array_values($collisionView['items'])===[1,2],'User-supplied display-key collision hid evidence');
 $decoded=json_decode($public['receipt']);
 projectionAssert($decoded->verification->empty instanceof stdClass&&$decoded->verification->list===[]&&is_float($decoded->verification->float),'Serialized JSON object/list/float contract changed');
 projectionAssert($public['_wpai_projection']['hashes_attest']==='original_evidence'&&$public['_wpai_projection']['canonical_payload_available']===false,'Missing explicit hash/projection contract');
