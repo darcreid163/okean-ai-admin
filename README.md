@@ -40,6 +40,8 @@ Generic option writes require ASCII identifiers of at most 191 bytes. Protected 
 
 Media sandbox uploads and URL imports accept decodable JPEG, PNG, GIF and WebP images up to 10 MiB and 20 megapixels, subject to the site's allowed MIME types. Direct uploads require the filename extension, optional declared MIME and image bytes to agree. A working WordPress image editor (GD or Imagick with support for the format) and writable temporary storage are required. Validation precedes Media Library writes; accepted images remain private pending artifacts until the normal approval/apply flow. The WordPress CI suite checks rejection without persistent writes and the full approval/verify/rollback lifecycle.
 
+Public metadata and evidence responses redact server filesystem paths, including paths inside historical JSON receipt/proof fields. Redacted objects carry `_wpai_projection`: hashes and `verified` attest the original evidence and its verification result, not the redacted presentation; this presentation cannot reconstruct the canonical payload. Stored rows, audit records and proof hashes are not migrated or re-signed. Runtime fingerprints retain relative file identifiers and source hashes. Authorized file/content reads retain their exact editable bytes; internal Apply/Verify/Rollback use original data.
+
 [Current audit, 22 October](docs/AUDIT-2026-10-22.md) · [Recovery history, 21 October](docs/RELEASE-STATE-2026-10-21.md) · [Migration / release checklist](MIGRATION-STATUS.md) · [Repository policies](docs/REPOSITORY-BOUNDARIES.md).
 
 Historical dated release notes are preserved as references, not active installation instructions.

@@ -99,6 +99,7 @@ add_action('plugins_loaded', function(){
 add_action('plugins_loaded', function(){ OAI_Builder_Manager::register(new OAI_Elementor_Adapter()); });
 add_action('wp_abilities_api_init', array('OAI_Abilities','register'));
 add_action('rest_api_init', array('OAI_REST','register_routes'));
+add_filter('rest_post_dispatch', array('OAI_REST','public_metadata_response'), 10, 3);
 add_action('rest_api_init', array('OAI_MCP_OAuth','register_routes'), 19);
 add_action('rest_api_init', array('OAI_MCP','register_routes'), 20);
 add_action('init', array('OAI_MCP_OAuth','init_hooks'));
