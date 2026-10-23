@@ -18,7 +18,7 @@ try{
  pendingAssert(get_post_field('post_content',$post)==='alpha','Planning changed live content');
  pendingOk(pendingPatch($post,'gamma'));
  wp_update_post(['ID'=>$post,'post_content'=>'alpha external']);pendingOk(pendingPatch($post));wp_update_post(['ID'=>$post,'post_content'=>'alpha']);
- foreach(['approved','applying','apply_failed','rollback_pending','rolling_back','rollback_failed'] as $status){OAI_DB::update($id,['status'=>$status,'expires_at'=>gmdate('Y-m-d H:i:s',time()+3600)]);pendingError(pendingPatch($post),'oai_duplicate_pending');}
+ foreach(['approved','applying','apply_failed','rollback_pending','rolling_back','rollback_failed','uncertain','unknown'] as $status){OAI_DB::update($id,['status'=>$status,'expires_at'=>gmdate('Y-m-d H:i:s',time()+3600)]);pendingError(pendingPatch($post),'oai_duplicate_pending');}
  OAI_DB::update($id,['status'=>'apply_failed','expires_at'=>'2000-01-01 00:00:00']);pendingError(pendingPatch($post),'oai_duplicate_pending');
  foreach(['rejected','rolled_back','expired','applied','proved'] as $status){OAI_DB::update($id,['status'=>$status]);$id=pendingOk(pendingPatch($post));}
  foreach(['pending','approved'] as $status){OAI_DB::update($id,['status'=>$status,'expires_at'=>'2000-01-01 00:00:00']);$id=pendingOk(pendingPatch($post));}
@@ -49,7 +49,7 @@ try{
  $breakInsert=function($sql){return str_starts_with($sql,'INSERT INTO '.OAI_DB::table().' ')?'INSERT INTO '.OAI_DB::table().' (synthetic_missing_column) VALUES (1)':$sql;};
  $silent=$wpdb->suppress_errors();add_filter('query',$breakInsert);try{pendingError(OAI_DB::insert($data),'oai_intent_storage');}finally{remove_filter('query',$breakInsert);$wpdb->suppress_errors($silent);}
  pendingAssert(OAI_DB::count_all()===$beforeLoss,'Storage error created an operation');
- pendingOk(OAI_DB::insert($data));
+ pendingOk(OAI_DB::insert(array_replace($data,['operation_id'=>OAI_Operations::new_id('TEST')])));
  // Six fresh WordPress processes race on a new intent, with one SQL winner.
  putenv('OAI_PENDING_POST='.$post);
  for($i=0;$i<6;$i++){$pipes=[];$process=proc_open([PHP_BINARY,$_SERVER['argv'][0],'--path='.ABSPATH,'--allow-root','--quiet','eval-file',(getenv('GITHUB_WORKSPACE')?:getcwd()).'/tests/wordpress-pending-intent-worker.php'],[1=>['pipe','w'],2=>['pipe','w']],$pipes);pendingAssert(is_resource($process),'Cannot start worker');$workers[]=[$process,$pipes];}

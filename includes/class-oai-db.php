@@ -107,8 +107,8 @@ class OAI_DB {
   $meta=json_decode((string)($data['meta_data']??'{}'));
   if(json_last_error()!==JSON_ERROR_NONE||!$meta instanceof stdClass)return new WP_Error('oai_intent_payload','Invalid operation metadata',array('status'=>400));
   unset($meta->_wpai_pending_intent);
-  $frame=array('actor'=>$actor,'type'=>$data['type'],'target'=>$data['target'],'meta'=>$meta);
-  foreach(array('before_data','after_data') as $field){
+  $frame=array('actor'=>$actor,'type'=>$data['type'],'target'=>$data['target'],'meta'=>$meta,'workspace_id'=>$data['workspace_id']??null);
+  foreach(array('before_data','after_data','rollback_data') as $field){
    $frame[$field]=json_decode((string)($data[$field]??'null'));
    if(json_last_error()!==JSON_ERROR_NONE)return new WP_Error('oai_intent_payload','Invalid operation snapshot',array('status'=>400));
   }
@@ -123,7 +123,8 @@ class OAI_DB {
    // Releasing a lock before an outer transaction commits would allow a
    // second connection to miss its uncommitted intent. Only autocommit is supported.
    if((string)$wpdb->get_var('SELECT @@session.autocommit')!=='1')return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));
-   $isolation=$wpdb->get_var('SELECT @@session.transaction_isolation');
+   $suppressed=$wpdb->suppress_errors();
+   try{$isolation=$wpdb->get_var('SELECT @@session.transaction_isolation');if($isolation===null)$isolation=$wpdb->get_var('SELECT @@session.tx_isolation');}finally{$wpdb->suppress_errors($suppressed);}
    if(!in_array($isolation,array('READ-UNCOMMITTED','READ-COMMITTED','REPEATABLE-READ','SERIALIZABLE'),true))return new WP_Error('oai_intent_transaction','Cannot establish transaction state',array('status'=>503));
    // MySQL rejects SET TRANSACTION inside an active transaction without
    // committing it. Reapply the current isolation to the next statement only.
@@ -137,8 +138,8 @@ class OAI_DB {
    }
    // The lock ownership predicate is evaluated by the INSERT itself. A wpdb
    // reconnect cannot turn a lost lock into an unguarded insert.
-   $sql='INSERT INTO '.$table.' ('.implode(',',$columns).') SELECT '.implode(',',$values).' FROM DUAL WHERE IS_USED_LOCK(%s)=CONNECTION_ID() AND @@session.autocommit=1 AND NOT EXISTS (SELECT 1 FROM '.$table.' WHERE type=%s AND BINARY target=BINARY %s AND meta_data LIKE %s AND ((status IN (\'pending\',\'approved\') AND (expires_at IS NULL OR expires_at>UTC_TIMESTAMP())) OR status IN (\'applying\',\'apply_failed\',\'rollback_pending\',\'rolling_back\',\'rollback_failed\')))';
-   $args=array_merge($args,array($lock,$data['type'],$data['target'],'%"\_wpai\_pending\_intent":"'.$fingerprint.'"%'));
+   $sql='INSERT INTO '.$table.' ('.implode(',',$columns).') SELECT '.implode(',',$values).' FROM DUAL WHERE IS_USED_LOCK(%s)=CONNECTION_ID() AND @@session.autocommit=1 AND NOT EXISTS (SELECT 1 FROM '.$table.' WHERE type=%s AND BINARY target=BINARY %s AND LOCATE(BINARY %s,BINARY meta_data)>0 AND ((status IN (\'pending\',\'approved\') AND (expires_at IS NULL OR expires_at>=UTC_TIMESTAMP())) OR status NOT IN (\'pending\',\'approved\',\'rejected\',\'rolled_back\',\'expired\',\'applied\',\'proved\')))';
+   $args=array_merge($args,array($lock,$data['type'],$data['target'],'"_wpai_pending_intent":"'.$fingerprint.'"'));
    $ok=$wpdb->query($wpdb->prepare($sql,$args));
    if($ok===1)return (int)$wpdb->insert_id;
    if($ok===false)return new WP_Error('oai_intent_storage','Operation intent could not be stored',array('status'=>503));
