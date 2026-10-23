@@ -295,7 +295,7 @@ class OAI_MCP {
   );
   $schemas['woocommerce.update_product_sandbox']=array('type'=>'object','required'=>array('product_id','changes'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1),'changes'=>$product_changes));
   $create_product_changes=$product_changes;$create_product_changes['properties']['type']=array('type'=>'string','enum'=>array('simple','variable'));
-  $schemas['woocommerce.create_product_sandbox']=array('type'=>'object','required'=>array('product'),'additionalProperties'=>false,'properties'=>array('product'=>$create_product_changes));
+  $schemas['woocommerce.create_product_sandbox']=array('type'=>'object','required'=>array('product'),'additionalProperties'=>false,'properties'=>array('product'=>$create_product_changes,'idempotency_key'=>array('type'=>'string','minLength'=>16,'maxLength'=>128)));
   $schemas['media.upload_sandbox']=array('type'=>'object','required'=>array('filename','content_base64'),'additionalProperties'=>false,'properties'=>array('filename'=>array('type'=>'string','minLength'=>1),'content_base64'=>array('type'=>'string','minLength'=>4),'mime_type'=>array('type'=>'string'),'title'=>array('type'=>'string'),'alt'=>array('type'=>'string')));
   $schemas['media.import_url_sandbox']=array('type'=>'object','required'=>array('url'),'additionalProperties'=>false,'properties'=>array('url'=>array('type'=>'string','minLength'=>8),'filename'=>array('type'=>'string'),'title'=>array('type'=>'string'),'alt'=>array('type'=>'string')));
   $schemas['media.update_alt_sandbox']=array('type'=>'object','required'=>array('attachment_id','alt'),'additionalProperties'=>false,'properties'=>array('attachment_id'=>array('type'=>'integer','minimum'=>1),'alt'=>array('type'=>'string')));
@@ -548,7 +548,7 @@ class OAI_MCP {
     if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'reject',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
     return self::response($id,null,array('code'=>-32003,'message'=>'Human rejection is required in wp-admin unless AI Lifecycle Control or scoped Test Automation Mode is active'));
    case 'woocommerce_create_product_sandbox':
-    $data=is_array($a['product']??null)?$a['product']:array();$snap=OAI_WooCommerce::create_draft($data);
+    $data=is_array($a['product']??null)?$a['product']:array();$snap=OAI_WooCommerce::create_draft($data,$a['idempotency_key']??'');
     if(is_wp_error($snap)){$out=$snap;break;}
     $out=OAI_P0::op_for_created_product($snap);
     break;
