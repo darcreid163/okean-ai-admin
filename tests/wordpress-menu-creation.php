@@ -5,7 +5,12 @@ if(getenv('OAI_DISPOSABLE_WP_TEST')!=='1'||!in_array(wp_parse_url(home_url(),PHP
 final class MenuCreationFixture {public static int $checks=0;}
 function mcAssert($condition,$why){++MenuCreationFixture::$checks;if(!$condition)throw new RuntimeException($why);}
 function mcErr($out,$code){mcAssert(is_wp_error($out)&&$out->get_error_code()===$code,'Expected '.$code.' got '.(is_wp_error($out)?$out->get_error_code():gettype($out)));}
-function mcMenus(){return count(wp_get_nav_menus());}
+function mcMenus(){
+ // Worker processes commit via their own DB connection. Parent WordPress term
+ // caches are not automatically invalidated cross-process; read the DB truth.
+ global $wpdb;
+ return (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->term_taxonomy} WHERE taxonomy='nav_menu'");
+}
 $user=wp_create_user('menu-admission-ci','ci-local-only-password','menu-ci@example.invalid');
 mcAssert(!is_wp_error($user),'Cannot provision menu actor');
 (new WP_User((int)$user))->set_role('administrator');wp_set_current_user((int)$user);
@@ -58,7 +63,8 @@ foreach($workers as [$proc,$pipes]){
  else throw new RuntimeException('Unexpected menu worker result');
 }
 mcAssert($wins===1&&$errors===5,'Concurrent menu winner count invalid: '.$wins.'/'.$errors);
-mcAssert(mcMenus()===$startMenus+4&&OAI_DB::count_all()===$startOps+4,'Concurrent duplicate menu or operation');
+$termCount=mcMenus();$operationCount=OAI_DB::count_all();
+mcAssert($termCount===$startMenus+4&&$operationCount===$startOps+4,'Concurrent menu/operation mismatch: menus='.$termCount.' expected='.($startMenus+4).' operations='.$operationCount.' expected='.($startOps+4));
 wp_set_current_user(0);
 mcErr(OAI_P0::menu_create(['name'=>'WP AI Menu Anonymous','idempotency_key'=>'menu-anonymous-12345678']),'oai_menu_permission');
 mcAssert(mcMenus()===$startMenus+4,'Anonymous created menu');
