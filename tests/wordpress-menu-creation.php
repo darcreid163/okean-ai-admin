@@ -21,6 +21,7 @@ mcAssert(!is_wp_error($one),'Initial menu creation failed: '.(is_wp_error($one)?
 mcAssert(mcMenus()===$startMenus+1&&OAI_DB::count_all()===$startOps+1,'Initial menu or operation not persisted');
 $retry=OAI_P0::menu_create(['name'=>'WP AI Menu Creation First','idempotency_key'=>'menu-create-one-1234567890']);
 mcErr($retry,'oai_menu_creation_pending');
+mcErr(OAI_P0::menu_create(['name'=>'WP AI Menu Changed Same Key','idempotency_key'=>'menu-create-one-1234567890']),'oai_menu_intent_conflict');
 mcAssert(array_keys($retry->get_error_data())===['status'],'Duplicate response exposes IDs or internal claim');
 mcAssert(mcMenus()===$startMenus+1&&OAI_DB::count_all()===$startOps+1,'Retry created extra menu or operation');
 // Normalized case aliases must be the same intent.
