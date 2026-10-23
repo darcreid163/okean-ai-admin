@@ -24,13 +24,17 @@ function optionPolicyStored($target) {
     global $wpdb;
     return $wpdb->get_row($wpdb->prepare("SELECT option_name,option_value FROM {$wpdb->options} WHERE option_name=%s",$target),ARRAY_A);
 }
-function optionPolicyHistorical($target, $status) {
-    $before = get_option($target, null);
+function optionPolicyHistorical($target, $status, $snapshots = null) {
+    $before = $snapshots === null ? get_option($target, null) : $snapshots['before'];
+    $after = $snapshots === null ? 'synthetic-forbidden-value' : $snapshots['after'];
     $meta = ['before_exists'=>$before !== null];
     $descriptor = OAI_Lifecycle::descriptor('option_update',$target,$before,$meta);
+    $meta['rollback_descriptor'] = $descriptor;
     return optionPolicyOk(OAI_DB::insert([
         'operation_id'=>OAI_Operations::new_id('TEST'), 'status'=>$status, 'type'=>'option_update', 'target'=>$target,
-        'before_data'=>wp_json_encode($before), 'after_data'=>wp_json_encode('synthetic-forbidden-value'),
+        'before_data'=>wp_json_encode($before), 'after_data'=>wp_json_encode($after),
+        'applied_data'=>$status === 'applied' ? wp_json_encode($after) : null,
+        'applied_at'=>$status === 'applied' ? current_time('mysql',true) : null,
         'meta_data'=>wp_json_encode($meta), 'diff_data'=>wp_json_encode(['changed'=>true]),
         'rollback_data'=>wp_json_encode($descriptor), 'risk'=>'low', 'phase'=>$status,
         'created_at'=>current_time('mysql',true), 'expires_at'=>gmdate('Y-m-d H:i:s',time()+DAY_IN_SECONDS),
@@ -81,20 +85,41 @@ try {
     optionPolicyAssert(get_option($historicalTarget,null) === null,'Historical rollback fixture exists');
     update_option($historicalTarget,'updated',false);
     // Synthetic pre-upgrade applied row, separate from the real lifecycle above.
-    $historicalId = optionPolicyHistorical($historicalTarget,'applied'); $owned[] = $historicalId;
-    $descriptor = OAI_Lifecycle::descriptor('option_update',$historicalTarget,'original',['before_exists'=>true]);
-    OAI_DB::update($historicalId,[
-        'before_data'=>wp_json_encode('original'), 'after_data'=>wp_json_encode('updated'),
-        'applied_data'=>wp_json_encode('updated'), 'applied_at'=>current_time('mysql',true),
-        'meta_data'=>wp_json_encode(['before_exists'=>true,'rollback_descriptor'=>$descriptor]),
-        'rollback_data'=>wp_json_encode($descriptor),
-    ]);
+    $historicalId = optionPolicyHistorical($historicalTarget,'applied',['before'=>'original','after'=>'updated']); $owned[] = $historicalId;
     try {
         optionPolicyOk(optionPolicyAction($historicalId,'rollback',true),'Rollback protected historical target');
         optionPolicyAssert(get_option($historicalTarget) === 'original','Protected historical target rollback failed');
         optionPolicyAssert(!empty(optionPolicyOk(OAI_Verify::operation($historicalId),'Verify historical rollback')['verified']),'Historical rollback not verified');
     } finally { delete_option($historicalTarget); }
     echo "PASS: safe option pending → approve → apply → verify → rollback → verify; historical protected target rollback → verify remains available\n";
+    foreach ([true,false] as $ai) foreach (['original','updated','unrelated'] as $live) {
+        update_option($historicalTarget,$live,false);
+        $id = optionPolicyHistorical($historicalTarget,'applying',['before'=>'original','after'=>'updated']); $owned[] = $id;
+        $writes = 0;
+        $spy = function($value,$old,$key) use (&$writes,$historicalTarget) { if ($key === $historicalTarget) ++$writes; return $value; };
+        add_filter('pre_update_option',$spy,10,3);
+        try {
+            $result = optionPolicyAction($id,'apply',$ai);
+            optionPolicyAssert($writes === 0 && get_option($historicalTarget) === $live,'Interrupted recovery replayed a protected write');
+            if ($live === 'updated') {
+                optionPolicyOk($result,'Reconcile completed protected write');
+                optionPolicyAssert(OAI_DB::get($id)['status'] === 'applied','Completed protected write not reconciled');
+                optionPolicyOk(optionPolicyAction($id,'rollback',$ai),'Rollback recovered protected write');
+                optionPolicyAssert(get_option($historicalTarget) === 'original' && !empty(optionPolicyOk(OAI_Verify::operation($id),'Verify recovered rollback')['verified']),'Recovered protected write not reversible');
+            } elseif ($live === 'original') {
+                optionPolicyAssert(is_wp_error($result) && $result->get_error_code() === 'oai_apply_recovery_ready' && OAI_DB::get($id)['status'] === 'approved','Uncommitted protected write not reconciled');
+                $retry = optionPolicyAction($id,'apply',$ai);
+                optionPolicyAssert(is_wp_error($retry) && ($retry->get_error_data()['status'] ?? 0) === 403 && $writes === 0,'Reconciled protected operation allowed a new write');
+                optionPolicyOk(optionPolicyAction($id,'reject',$ai),'Reject reconciled protected operation');
+            } else {
+                optionPolicyAssert(is_wp_error($result) && $result->get_error_code() === 'oai_apply_outcome_uncertain' && OAI_DB::get($id)['status'] === 'applying','Uncertain protected outcome was not preserved');
+            }
+        } finally {
+            remove_filter('pre_update_option',$spy,10);
+            delete_option($historicalTarget);
+        }
+    }
+    echo "PASS: interrupted protected writes reconcile without replay; completed writes can roll back, unapplied writes stay blocked, uncertain outcomes stay uncertain\n";
 } finally {
     OAI_AI_Lifecycle_Control::disable(1,'disposable_ci_teardown');
     OAI_License::deactivate_local_owner();

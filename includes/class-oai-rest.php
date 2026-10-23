@@ -1097,7 +1097,9 @@ frame.addEventListener('load',function(){
   if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
   // Historical rows cannot bypass current target policy. Reject and rollback
   // remain available, including reversal of formerly allowed option writes.
-  if($r['type']==='option_update'&&in_array($action,array('approve','apply'),true)){
+  // "applying" retries only reconcile existing state under a lease; they never
+  // replay the write and must remain available so completed old writes can roll back.
+  if($r['type']==='option_update'&&($action==='approve'||($action==='apply'&&$r['status']!=='applying'))){
    $policy=self::validate_option_write_target($r['target']);if(is_wp_error($policy))return $policy;
   }
   $meta=json_decode((string)$r['meta_data'],true); if(!is_array($meta))$meta=array();

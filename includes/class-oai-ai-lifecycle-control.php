@@ -122,7 +122,7 @@ class OAI_AI_Lifecycle_Control {
   if($user_id!==absint($cfg['owner_user_id']??0))return new WP_Error('oai_ai_lifecycle_owner','AI Lifecycle Control belongs to a different administrator',array('status'=>403));
   $row=OAI_DB::get(absint($id));
   if(!$row)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
-  if($row['type']==='option_update'&&in_array($action,array('approve','apply'),true)){
+  if($row['type']==='option_update'&&($action==='approve'||($action==='apply'&&$row['status']!=='applying'))){
    $policy=OAI_REST::validate_option_write_target($row['target']);if(is_wp_error($policy))return $policy;
   }
   $client_hash=hash('sha256',(string)$client_id);
