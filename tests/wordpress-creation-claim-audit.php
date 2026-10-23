@@ -5,7 +5,7 @@ if(getenv('OAI_DISPOSABLE_WP_TEST')!=='1'||
  throw new RuntimeException('Disposable localhost WordPress required');
 final class ClaimAuditFixture { public static int $checks=0; }
 function claimCheck($condition,$label){++ClaimAuditFixture::$checks;if(!$condition)throw new RuntimeException($label);}
-$names=array();$original=get_current_user_id();$fixtureOperation=0;$secret='synthetic-test-secret-never-expose-7e8c';
+$names=array();$workspaceFixtures=array();$original=get_current_user_id();$fixtureOperation=0;$secret='synthetic-test-secret-never-expose-7e8c';
 $families=OAI_Creation_Claim_Audit::FAMILIES;
 try{
  wp_set_current_user(1);
@@ -27,6 +27,26 @@ try{
   claimCheck(add_option($bad,'not-a-claim-'.$secret,'',false),'Cannot seed opaque '.$family);
   $names[]=$bad;
  }
+ // Synthetic workspace evidence: an existing metadata file, absent
+ // directory, symlink and malicious path string. All are disposable.
+ $upload=wp_upload_dir(null,false);
+ $root=trailingslashit($upload['basedir']).'ai-admin-workspaces';
+ claimCheck(is_dir($root)||wp_mkdir_p($root),'Cannot initialize disposable workspace root');
+ $realId='ws-'.gmdate('Ymd-His').'-'.bin2hex(random_bytes(16));
+ $realFolder=$root.'/'.$realId;
+ claimCheck(wp_mkdir_p($realFolder),'Could not create disposable workspace fixture');
+ $workspaceFixtures[]=array('directory',$realFolder);
+ claimCheck(file_put_contents($realFolder.'/workspace.json',wp_json_encode(array('secret'=>$secret)))!==false,'Could not seed private workspace metadata');
+ $missingId='ws-'.gmdate('Ymd-His').'-'.bin2hex(random_bytes(16));
+ $linkId='ws-'.gmdate('Ymd-His').'-'.bin2hex(random_bytes(16));
+ $linkFolder=$root.'/'.$linkId;
+ claimCheck(symlink($realFolder,$linkFolder),'Cannot create synthetic workspace symlink');
+ $workspaceFixtures[]=array('symlink',$linkFolder);
+ foreach(array($realId,$missingId,$linkId,'../../wp-config.php') as $i=>$id){
+  $name='oai_workspace_creation_'.hash('sha256','audit-workspace-footprint-'.$i.'-'.wp_generate_uuid4());
+  claimCheck(add_option($name,array('id'=>$id,'state'=>'reserved','created_at'=>time(),'claim'=>$secret),'',false),'Could not seed workspace footprint');
+  $names[]=$name;
+ }
  $empty=new WP_REST_Request('GET','/okean-ai/v1/diagnostics/creation-intents');
  $full=OAI_Creation_Claim_Audit::summary($empty);
  claimCheck(!is_wp_error($full)&&$full['ok']===true&&$full['read_only']===true,'Cannot read admin-only claim inventory');
@@ -40,6 +60,12 @@ try{
   if($family==='menu')claimCheck($row['referenced_operation_other_type']>=1,'Wrong-type ledger link was accepted');
   if($family==='product')claimCheck($row['referenced_operation_missing']>=1,'Missing operation was accepted');
  }
+ $workspace=$full['families']['workspace'];
+ claimCheck($workspace['workspace_directory_present']>=1,'Safe existing workspace not detected');
+ claimCheck($workspace['workspace_metadata_present']>=1,'Workspace metadata presence not detected');
+ claimCheck($workspace['workspace_directory_absent']>=1,'Missing workspace directory not detected');
+ claimCheck($workspace['workspace_symlink_rejected']>=1,'Workspace symlink was followed');
+ claimCheck($workspace['workspace_id_unverifiable']>=1,'Unsafe workspace ID was accepted');
  $json=wp_json_encode($full);
  claimCheck(strpos($json,$secret)===false&&strpos($json,'ws-synthetic-private')===false&&
    strpos($json,'12345')===false,'Raw claim data disclosed in report');
@@ -68,5 +94,12 @@ try{
  wp_set_current_user(1);
  foreach($names as $name)delete_option($name);
  if($fixtureOperation>0)$wpdb->delete(OAI_DB::table(),array('id'=>$fixtureOperation));
+ foreach(array_reverse($workspaceFixtures) as $fixture){
+  if($fixture[0]==='symlink'&&is_link($fixture[1]))unlink($fixture[1]);
+  if($fixture[0]==='directory'&&is_dir($fixture[1])){
+   if(is_file($fixture[1].'/workspace.json'))unlink($fixture[1].'/workspace.json');
+   rmdir($fixture[1]);
+  }
+ }
  wp_set_current_user($original);
 }

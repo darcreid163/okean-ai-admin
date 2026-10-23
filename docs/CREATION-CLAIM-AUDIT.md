@@ -56,6 +56,25 @@ secret) for all six families and confirms aggregate classification, no raw
 secret/ID disclosure, bounded/invalid limits, actual REST administrator-only
 access, anonymous denial and cleanup of **fixture-owned options only**.
 
+## Workspace filesystem footprints (read-only)
+
+For workspace claims with an `id` matching the strict generated format
+`ws-YYYYMMDD-HHMMSS-32hex`, the report counts whether its directory and
+`workspace.json` metadata file **exist**. The scan uses
+`wp_upload_dir(null, false)` to avoid creating upload directories and does
+not read any metadata bytes. A missing directory, missing metadata file,
+invalid/legacy ID, unavailable root or symlink is reported only as an
+aggregate count. It must **not** trigger automatic recreation, deletion,
+rollback or releasing the held claim: a crash could have happened at any
+point, and older workspaces may use different ID formats.
+
+The auditor never concatenates an unvalidated option value into a path,
+never follows a claimed directory symlink, and never exposes actual
+filesystem paths or IDs. Real disposable WordPress tests seed a safe
+workspace.json containing a synthetic secret, a missing directory, a
+symlink and path traversal input; none are disclosed or followed. Only
+test-created resources are removed in fixture teardown.
+
 ## Remaining operator reconciliation gate
 
 To actually release a blocked creation intent requires a **separate,
