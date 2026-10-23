@@ -15,9 +15,10 @@ function riskWPRow($op,$risk){
  foreach($events as $event)riskWPAssert((json_decode($event['details'],true)['risk']??null)===$risk,'Audit risk mismatch');
  return $op;
 }
-wp_set_current_user(1);global $wpdb;
+wp_set_current_user(1);global $wpdb,$riskWPOps;
 $riskWPOps=[];$posts=[];$menu=0;$file='';$workspace=null;
-$option='wp_ai_admin_test_matrix_risk';$activeWorkspace=get_option('oai_active_workspace',null);
+$fixtureKey=str_replace('-','',wp_generate_uuid4());
+$option='wp_ai_admin_test_matrix_risk_'.$fixtureKey;$activeWorkspace=get_option('oai_active_workspace',null);
 try{
  riskWPOk(OAI_License::activate_local_owner(1),'Activate disposable owner');
  riskWPOk(OAI_AI_Lifecycle_Control::enable(1),'Enable lifecycle');
@@ -41,7 +42,7 @@ try{
  $media=riskWPRow(OAI_P0::media_upload(['filename'=>'risk-fixture.png','content_base64'=>'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGPkiephYGBgYmBgYGBgAAALAgD2hsU36QAAAABJRU5ErkJggg==']),'medium');$attachment=(int)$media['target'];$posts[]=$attachment;
  riskWPRow(OAI_P0::media_update_alt(['attachment_id'=>$attachment,'alt'=>'risk fixture']),'medium');
  $menuOp=riskWPRow(OAI_P0::menu_create(['name'=>'Risk fixture '.wp_generate_uuid4()]),'medium');$menu=(int)$menuOp['target'];
- $name='wpai-disposable-risk.txt';$file=trailingslashit(get_stylesheet_directory()).$name;riskWPAssert(!file_exists($file),'File fixture already exists');file_put_contents($file,'before');
+ $name='wpai-disposable-risk-'.$fixtureKey.'.txt';$candidate=trailingslashit(get_stylesheet_directory()).$name;riskWPAssert(!file_exists($candidate),'File fixture already exists');$file=$candidate;file_put_contents($file,'before');
  riskWPRow(OAI_REST::sandbox_create(riskWPRequest(['type'=>'file_write','target'=>'child_theme:'.$name,'value'=>'after'])),'high');
  riskWPAssert(file_get_contents($file)==='before','Planning wrote live theme file');
  $workspace=riskWPOk(OAI_Workspace::create(false),'Create isolated workspace');
@@ -51,9 +52,10 @@ try{
  riskWPAssert(!empty(riskWPOk(OAI_Verify::operation((int)$safe['id']),'Verify apply')['verified']),'Apply not verified');
  riskWPOk(OAI_AI_Lifecycle_Control::perform((int)$safe['id'],'rollback','disposable-risk',1),'Safe rollback');
  riskWPAssert(!empty(riskWPOk(OAI_Verify::operation((int)$safe['id']),'Verify rollback')['verified'])&&get_option($option)==='before','Rollback not restored');
+ riskWPAssert(count($riskWPOps)===15,'Expected all 15 creator cases to be registered for cleanup');
  echo 'PASS: '.count($riskWPOps)." real generic/content/Gutenberg/Woo/Elementor/media/menu/file/workspace operations agree with SQL/audit/receipt risk; protected guard and approved lifecycle retained\n";
 }finally{
- foreach($riskWPOps as $id){$wpdb->delete(OAI_DB::audit_table(),['operation_db_id'=>$id]);$wpdb->delete(OAI_DB::table(),['id'=>$id]);}
+ foreach($riskWPOps as $id){$wpdb->delete(OAI_DB::audit_table(),['operation_db_id'=>$id]);$wpdb->delete(OAI_DB::table(),['id'=>$id]);riskWPAssert(OAI_DB::get($id)===null,'Fixture operation cleanup failed');riskWPAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::audit_table().' WHERE operation_db_id=%d',$id))===0,'Fixture audit cleanup failed');}
  foreach(array_reverse($posts) as $id){if(get_post_type($id)==='attachment')wp_delete_attachment($id,true);else wp_delete_post($id,true);}
  if($menu)wp_delete_nav_menu($menu);
  if($file&&is_file($file))unlink($file);
