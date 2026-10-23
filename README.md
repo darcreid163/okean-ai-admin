@@ -36,6 +36,8 @@ Successful reads/Sandbox calls count; every successful Batch object is one actio
 
 Run hosted [Native CI](.github/workflows/native-validate.yml) and [Cloud CI](.github/workflows/cloud-validate.yml), including PHP 8.2/8.3/8.4, MySQL and SQLite, OAuth isolation, Billing/Batch, WordPress smoke and upgrade. Candidate Native ZIP MUST exclude `wp-ai-admin-cloud/`. No CI workflow may use production secrets.
 
+Media sandbox uploads and URL imports accept decodable JPEG, PNG, GIF and WebP images up to 10 MiB and 20 megapixels, subject to the site's allowed MIME types. Direct uploads require the filename extension, optional declared MIME and image bytes to agree. A working WordPress image editor (GD or Imagick with support for the format) and writable temporary storage are required. Validation precedes Media Library writes; accepted images remain private pending artifacts until the normal approval/apply flow. The WordPress CI suite checks rejection without persistent writes and the full approval/verify/rollback lifecycle.
+
 [Current audit, 22 October](docs/AUDIT-2026-10-22.md) · [Recovery history, 21 October](docs/RELEASE-STATE-2026-10-21.md) · [Migration / release checklist](MIGRATION-STATUS.md) · [Repository policies](docs/REPOSITORY-BOUNDARIES.md).
 
 Historical dated release notes are preserved as references, not active installation instructions.
