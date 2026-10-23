@@ -118,6 +118,7 @@ class OAI_REST {
   register_rest_route($n,'/read/widgets',array('methods'=>'GET','callback'=>array(__CLASS__,'widgets'))+$args);
   register_rest_route($n,'/read/health',array('methods'=>'GET','callback'=>array(__CLASS__,'health'))+$args);
   register_rest_route($n,'/diagnostics',array('methods'=>'GET','callback'=>array(__CLASS__,'diagnostics'))+$args);
+  register_rest_route($n,'/diagnostics/creation-intents',array('methods'=>'GET','callback'=>array('OAI_Creation_Claim_Audit','summary'))+$args);
   register_rest_route($n,'/plan',array('methods'=>'POST','callback'=>array(__CLASS__,'plan'))+$args);
 
   register_rest_route($n,'/read/content',array('methods'=>'GET','callback'=>array(__CLASS__,'content'))+$args);

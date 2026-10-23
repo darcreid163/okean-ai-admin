@@ -72,3 +72,6 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-cr
 
 # Durable navigation-menu item creation: retries, actor isolation and six workers.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-menu-item-creation.php"
+
+# Read-only privileged claim inventory on synthetic options; never a reconciliation/cleanup.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-claim-audit.php"
