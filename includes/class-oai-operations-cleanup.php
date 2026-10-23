@@ -5,6 +5,8 @@ if (!defined('ABSPATH')) exit;
 class OAI_Operations_Cleanup {
  const ACTIVE_STATUSES=array('pending','approved','applying','rollback_pending','rolling_back');
  const TERMINAL_STATUSES=array('rolled_back','rejected','expired','cancelled','failed','apply_failed','rollback_failed','verification_failed');
+ // Created artifacts can outlive a lost response and must remain reconcilable.
+ const CREATION_EVIDENCE_TYPES=array('media_upload','menu_create','menu_add_item','woocommerce_product_create','elementor_page_create');
 
  public static function self_test_contract(){
   return array(
@@ -16,6 +18,7 @@ class OAI_Operations_Cleanup {
    'failed_terminal_statuses_supported'=>true,
    'admin_required'=>true,
    'media_creation_evidence_protected'=>true,
+   'all_artifact_creation_evidence_protected'=>true,
   );
  }
 
@@ -38,8 +41,13 @@ class OAI_Operations_Cleanup {
   $ph=self::placeholders(count($statuses));
   // Journal-bound media rows are recovery evidence. Generic retention must
   // not remove them before a dedicated journal/evidence reconciliation.
-  $where="status IN ($ph) AND LOCATE(%s,COALESCE(meta_data,''))=0";
-  $params=array_merge($statuses,array('"_wpai_creation_intent"'));
+  $types=self::CREATION_EVIDENCE_TYPES;
+  $tph=self::placeholders(count($types));
+  // Protect journal-backed media and all artifact creation rows, including
+  // historical rows without a marker. Losing one of these rows destroys the
+  // evidence needed to settle a durable option claim after an unknown outcome.
+  $where="status IN ($ph) AND LOCATE(%s,COALESCE(meta_data,''))=0 AND type NOT IN ($tph)";
+  $params=array_merge($statuses,array('"_wpai_creation_intent"'),$types);
   if($max_id>0){$where.=' AND id <= %d';$params[]=$max_id;}
 
   $sql="SELECT status,COUNT(*) AS c FROM $table WHERE $where GROUP BY status ORDER BY status";
