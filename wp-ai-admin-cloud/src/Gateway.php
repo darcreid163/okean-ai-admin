@@ -7,6 +7,9 @@ final class Gateway {
 
     public function __construct(private readonly Core $core) {}
 
+    /** Stable public core catalog used by gateway diagnostics and smoke checks. */
+    public static function tools(): array { return self::cloudTools(); }
+
     private static function cloudTools(): array {
         $site=['type'=>'string','description'=>'Explicit registered site ID; never inferred from a global active site.'];
         $tool=function(string $name,string $description,array $properties,array $required,bool $read):array {
