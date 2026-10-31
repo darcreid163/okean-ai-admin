@@ -139,7 +139,11 @@ final class Admin {
                 $reply=json_decode($body,true);
                 if ($status!==200 || !is_array($reply) || ($reply['jsonrpc']??'')!=='2.0' || ($reply['id']??null)!==$message['id'] || !isset($reply['result']) || isset($reply['error']) || !empty($reply['result']['isError'])) throw new Fault('gateway_smoke_step_failed',502);
                 if ($message['method']==='initialize' && ($reply['result']['protocolVersion']??'')!=='2025-11-25') throw new Fault('protocol_negotiation_failed',502);
-                if ($message['method']==='tools/list' && array_column($reply['result']['tools']??[],'name')!==array_column(Gateway::tools(),'name')) throw new Fault('gateway_catalog_failed',502);
+                if ($message['method']==='tools/list') {
+                    $publishedNames=array_column($reply['result']['tools']??[],'name');
+                    $requiredNames=array_column(Gateway::tools(),'name');
+                    if (array_diff($requiredNames,$publishedNames) || count($publishedNames)!==count(array_unique($publishedNames))) throw new Fault('gateway_catalog_failed',502);
+                }
                 if ($message['method']==='tools/call') {
                     $data=json_decode($reply['result']['content'][0]['text']??'',true);
                     if (!is_array($data)) throw new Fault('gateway_tool_result_failed',502);
