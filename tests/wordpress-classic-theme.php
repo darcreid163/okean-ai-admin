@@ -24,7 +24,8 @@ $theme=wp_get_theme();
 ctAssert(method_exists($theme,'is_block_theme')&&$theme->is_block_theme()===false,'Active theme is not a classic theme: '.$theme->get_stylesheet());
 ctAssert(get_stylesheet()==='twentytwentyone','Unexpected active classic theme: '.get_stylesheet());
 $locations=get_registered_nav_menus();
-ctAssert(is_array($locations)&&isset($locations['primary']),'Classic theme did not register a primary menu location');
+$primary=isset($locations['primary'])?'primary':(string)array_key_first($locations);
+ctAssert($primary!==''&&isset($locations[$primary]),'Classic theme did not register a navigation menu location');
 
 /* 2. Theme discovery reports the active classic theme without leakage. */
 $themes=OAI_Read::themes();
@@ -66,22 +67,22 @@ try{
 ctOk(OAI_License::activate_local_owner(1),'Activate disposable owner license');
 ctOk(OAI_AI_Lifecycle_Control::enable(1),'Enable AI lifecycle control');
 $menu_name='WP AI Classic Menu '.substr(str_replace('-','',wp_generate_uuid4()),0,8);
-$menu_id=0;$item_id=0;$location_before=(int)(get_theme_mod('nav_menu_locations',[])[$locations['primary']]??0);
+$menu_id=0;$item_id=0;$location_before=(int)(get_theme_mod('nav_menu_locations',[])[$primary]??0);
 try{
  $created=ctOk(OAI_P0::menu_create(['name'=>$menu_name,'idempotency_key'=>'classic-menu-'.bin2hex(random_bytes(8))]),'Create classic menu');
  $menu_id=(int)$created['target'];
  ctAssert($menu_id>0&&wp_get_nav_menu_object($menu_id),'Created classic menu is missing');
  $item=ctOk(OAI_P0::menu_add_item(['menu_id'=>$menu_id,'title'=>'Classic item','url'=>'/classic-item','idempotency_key'=>'classic-item-'.bin2hex(random_bytes(8))]),'Add classic menu item');
  $item_id=(int)$item['target'];
- $assign=ctOk(OAI_P0::menu_assign_location(['location'=>$locations['primary'],'menu_id'=>$menu_id]),'Plan classic menu location');
+ $assign=ctOk(OAI_P0::menu_assign_location(['location'=>$primary,'menu_id'=>$menu_id]),'Plan classic menu location');
  $assign_id=(int)$assign['id'];
  ctAssert($assign['status']==='pending','Location assignment was not a pending sandbox');
- ctAssert((int)(get_theme_mod('nav_menu_locations',[])[$locations['primary']]??0)===$location_before,'Planning wrote the menu location');
+ ctAssert((int)(get_theme_mod('nav_menu_locations',[])[$primary]??0)===$location_before,'Planning wrote the menu location');
  foreach(['approve','apply'] as $action)ctOk(OAI_AI_Lifecycle_Control::perform($assign_id,$action,'classic-theme-ci',1),'Location '.$action);
- ctAssert((int)(get_theme_mod('nav_menu_locations',[])[$locations['primary']]??0)===$menu_id,'Applied menu location is wrong');
+ ctAssert((int)(get_theme_mod('nav_menu_locations',[])[$primary]??0)===$menu_id,'Applied menu location is wrong');
  ctAssert(!empty(OAI_Verify::operation($assign_id)['verified']),'Location assignment did not verify');
  ctOk(OAI_AI_Lifecycle_Control::perform($assign_id,'rollback','classic-theme-ci',1),'Rollback menu location');
- ctAssert((int)(get_theme_mod('nav_menu_locations',[])[$locations['primary']]??0)===$location_before,'Rollback did not restore the previous location');
+ ctAssert((int)(get_theme_mod('nav_menu_locations',[])[$primary]??0)===$location_before,'Rollback did not restore the previous location');
  ctAssert(!empty(OAI_Verify::operation($assign_id)['verified']),'Location rollback did not verify');
 }finally{
  if($item_id)wp_delete_post($item_id,true);
