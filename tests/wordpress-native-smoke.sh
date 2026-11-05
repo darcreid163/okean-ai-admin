@@ -18,6 +18,10 @@ install_ci_plugin() {
 }
 install_ci_plugin elementor "${ELEMENTOR_TEST_VERSION:-latest}"
 install_ci_plugin woocommerce "${WOO_TEST_VERSION:-latest}"
+# Install the historical Native first, then exercise real code upgrade and a
+# complete pre-upgrade code/database restore. Restore the clean fixture before
+# the remaining smoke suites, including their unlicensed-denial assertions.
+OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/site" "$WORK/wp-cli.phar"
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
 cp -R okean-ai-admin.php includes starter-themes "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin
@@ -33,3 +37,41 @@ wp_test plugin status okean-ai-admin
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-commerce-blocks-matrix.php"
 # Normal Native license/approval/rollback lifecycle, temporary product only.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-lifecycle.php"
+# Current target policy also applies to historical pending/approved options.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-option-policy.php"
+# Decode real images before upload, then exercise approval/verify/rollback.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-media-upload.php"
+# Durable media admission precedes persistent artifacts and survives ambiguity.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-media-creation.php"
+# Stored operation risk agrees across real sandbox creators and audit/receipt.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-operation-risk.php"
+# Atomic duplicate rejection for new existing-target intents (six WP workers).
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-pending-intent.php"
+# Historical evidence is projected without rewriting raw records or proof hashes.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-public-evidence.php"
+
+# Exercise actual WP Abilities registration and Native read-only discovery.
+mkdir -p "$WORK/site/wp-content/mu-plugins"
+cp "$GITHUB_WORKSPACE/tests/fixtures/oai-abilities-mu.php" "$WORK/site/wp-content/mu-plugins/oai-abilities-mu.php"
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-abilities-smoke.php"
+
+# Disposable workspace creation: durable admission before draft filesystem artifacts.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-workspace-creation.php"
+
+# Atomic menu creation: prevent a retry from creating extra terms or operations.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-menu-creation.php"
+
+# WooCommerce new draft products: atomic pre-save intent admission and six workers.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-product-creation.php"
+
+# Reserve Elementor drafts before post creation; exercise random wrappers and 6 workers.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-elementor-creation.php"
+
+# Preserve created artifact operation evidence before any operator-only reconciliation.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-evidence-cleanup.php"
+
+# Durable navigation-menu item creation: retries, actor isolation and six workers.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-menu-item-creation.php"
+
+# Read-only privileged claim inventory on synthetic options; never a reconciliation/cleanup.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-claim-audit.php"

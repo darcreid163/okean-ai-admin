@@ -20,6 +20,7 @@ define('OAI_RELEASE_CANDIDATE',true);
 define('OAI_DIR',plugin_dir_path(__FILE__));
 require_once OAI_DIR.'includes/class-oai-db.php';
 require_once OAI_DIR.'includes/class-oai-operations-cleanup.php';
+require_once OAI_DIR.'includes/class-oai-creation-claim-audit.php';
 require_once OAI_DIR.'includes/class-oai-errors.php';
 require_once OAI_DIR.'includes/class-oai-operation-schema.php';
 require_once OAI_DIR.'includes/class-oai-intent.php';
@@ -99,6 +100,7 @@ add_action('plugins_loaded', function(){
 add_action('plugins_loaded', function(){ OAI_Builder_Manager::register(new OAI_Elementor_Adapter()); });
 add_action('wp_abilities_api_init', array('OAI_Abilities','register'));
 add_action('rest_api_init', array('OAI_REST','register_routes'));
+add_filter('rest_post_dispatch', array('OAI_REST','public_metadata_response'), 10, 3);
 add_action('rest_api_init', array('OAI_MCP_OAuth','register_routes'), 19);
 add_action('rest_api_init', array('OAI_MCP','register_routes'), 20);
 add_action('init', array('OAI_MCP_OAuth','init_hooks'));

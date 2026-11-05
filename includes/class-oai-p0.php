@@ -57,26 +57,61 @@ class OAI_P0 {
   $before=(int)get_post_thumbnail_id($post_id);
   return self::op('media_featured',(string)$post_id,$before,$attachment_id,array('post_id'=>$post_id),true);
  }
+ /** Validate in a private temporary file before creating any Media Library artifact. */
+ private static function validate_media_image($filename,$bytes,$declared_mime){
+  $allowed=array('image/jpeg','image/png','image/webp','image/gif');
+  $check=wp_check_filetype($filename);$mime=(string)($check['type']??'');
+  if(!in_array($mime,$allowed,true)||($declared_mime!==null&&$declared_mime!==$mime))return new WP_Error('oai_media_mime','Filename and declared MIME must identify the same supported image',array('status'=>422,'allowed'=>$allowed));
+  $image=@getimagesizefromstring($bytes);
+  if(!is_array($image)||empty($image[0])||empty($image[1]))return new WP_Error('oai_media_content','Media payload is not a supported image',array('status'=>422));
+  if(($image['mime']??'')!==$mime)return new WP_Error('oai_media_mime','Image bytes do not match filename and declared MIME',array('status'=>422));
+  // Bound decoded memory before invoking GD/Imagick, including compressed bombs.
+  if($image[0]>20000000/$image[1])return new WP_Error('oai_media_dimensions','Image exceeds 20 megapixels',array('status'=>413));
+  if(!wp_image_editor_supports(array('mime_type'=>$mime)))return new WP_Error('oai_media_decoder','Server cannot decode this image format',array('status'=>503));
+  $temporary=wp_tempnam('oai-media-validate');
+  if(!$temporary)return new WP_Error('oai_media_temporary','Cannot validate image in temporary storage',array('status'=>503));
+  try{
+   if(!@chmod($temporary,0600)||@file_put_contents($temporary,$bytes)!==strlen($bytes))return new WP_Error('oai_media_temporary','Cannot validate image in temporary storage',array('status'=>503));
+   $verified_type=wp_check_filetype_and_ext($temporary,$filename);
+   if(empty($verified_type['ext'])||($verified_type['type']??'')!==$mime||!empty($verified_type['proper_filename']))return new WP_Error('oai_media_mime','WordPress rejected the image type or filename',array('status'=>422));
+   $editor=wp_get_image_editor($temporary,array('mime_type'=>$mime));
+   if(is_wp_error($editor))return new WP_Error('oai_media_decode','Image data could not be decoded',array('status'=>422));
+   $size=$editor->get_size();
+   if(!is_array($size)||(int)($size['width']??0)!==(int)$image[0]||(int)($size['height']??0)!==(int)$image[1])return new WP_Error('oai_media_decode','Decoded image dimensions are inconsistent',array('status'=>422));
+   return $mime;
+  }catch(Throwable $error){
+   return new WP_Error('oai_media_decode','Image data could not be decoded',array('status'=>422));
+  }finally{
+   unset($editor);
+   @unlink($temporary);
+  }
+ }
+
  public static function media_upload($a){
   if(!current_user_can('upload_files'))return new WP_Error('oai_media_permission','upload_files capability required',array('status'=>403));
+  if(!is_array($a))return new WP_Error('oai_media_payload','Media payload must be an object',array('status'=>400));
+  foreach(array('filename','content_base64','mime_type','title','alt') as $field)if(array_key_exists($field,$a)&&!is_string($a[$field]))return new WP_Error('oai_media_payload','Media fields must be strings',array('status'=>400));
   $filename=sanitize_file_name((string)($a['filename']??''));$encoded=(string)($a['content_base64']??'');
   if($filename===''||$encoded==='')return new WP_Error('oai_media_payload','filename and content_base64 are required',array('status'=>400));
+  if(strlen($encoded)>4*(int)ceil((10*1024*1024)/3))return new WP_Error('oai_media_size','Encoded media payload exceeds 10 MB image limit',array('status'=>413));
   $bytes=base64_decode($encoded,true);if($bytes===false||$bytes==='')return new WP_Error('oai_media_base64','Invalid base64 media payload',array('status'=>422));
   if(strlen($bytes)>10*1024*1024)return new WP_Error('oai_media_size','Media payload exceeds 10 MB',array('status'=>413));
-  $check=wp_check_filetype($filename);$mime=(string)($a['mime_type']??($check['type']??''));
-  $allowed=array('image/jpeg','image/png','image/webp','image/gif');
-  if(!in_array($mime,$allowed,true))return new WP_Error('oai_media_mime','Only JPEG, PNG, WEBP and GIF images are supported in P0',array('status'=>422,'allowed'=>$allowed));
-  $up=wp_upload_bits($filename,null,$bytes);if(!empty($up['error']))return new WP_Error('oai_media_upload',$up['error'],array('status'=>500));
+  $mime=self::validate_media_image($filename,$bytes,$a['mime_type']??null);if(is_wp_error($mime))return $mime;
   $title=sanitize_text_field((string)($a['title']??pathinfo($filename,PATHINFO_FILENAME)));
-  $id=wp_insert_attachment(array('post_mime_type'=>$mime,'post_title'=>$title,'post_status'=>'private'),$up['file'],0,true);
-  if(is_wp_error($id)){@unlink($up['file']);return $id;}
-  if(!function_exists('wp_generate_attachment_metadata'))require_once ABSPATH.'wp-admin/includes/image.php';
-  $meta=wp_generate_attachment_metadata($id,$up['file']);if(is_array($meta))wp_update_attachment_metadata($id,$meta);
-  if(array_key_exists('alt',$a))update_post_meta($id,'_wp_attachment_image_alt',sanitize_text_field((string)$a['alt']));
-  update_post_meta($id,'_oai_sandbox_artifact','1');
-  $after=self::media_snapshot($id);if(is_wp_error($after)){wp_delete_attachment($id,true);return $after;}
-  $after['status']='inherit';
-  $op=self::op('media_upload',(string)$id,null,$after,array('attachment_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_attachment($id,true);return $op;}return $op;
+  $intent=array('filename'=>$filename,'bytes_sha256'=>hash('sha256',$bytes),'mime'=>$mime,'title'=>$title,'alt_present'=>array_key_exists('alt',$a),'alt'=>sanitize_text_field((string)($a['alt']??'')));
+  return OAI_DB::with_media_creation($intent,static function()use($filename,$bytes,$mime,$title,$a){
+   $up=wp_upload_bits($filename,null,$bytes);if(!empty($up['error']))return new WP_Error('oai_media_upload',$up['error'],array('status'=>500));
+   $id=wp_insert_attachment(array('post_mime_type'=>$mime,'post_title'=>$title,'post_status'=>'private'),$up['file'],0,true);
+   if(is_wp_error($id)){@unlink($up['file']);return $id;}
+   update_post_meta($id,'_oai_sandbox_artifact','1');
+   OAI_DB::record_media_artifact($id);
+   if(!function_exists('wp_generate_attachment_metadata'))require_once ABSPATH.'wp-admin/includes/image.php';
+   $meta=wp_generate_attachment_metadata($id,$up['file']);if(is_array($meta))wp_update_attachment_metadata($id,$meta);
+   if(array_key_exists('alt',$a))update_post_meta($id,'_wp_attachment_image_alt',sanitize_text_field((string)$a['alt']));
+   $after=self::media_snapshot($id);if(is_wp_error($after)){wp_delete_attachment($id,true);return $after;}
+   $after['status']='inherit';
+   $op=self::op('media_upload',(string)$id,null,$after,array('attachment_id'=>$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_attachment($id,true);return $op;}return $op;
+  });
  }
 
  public static function media_import_url($a){
@@ -136,6 +171,42 @@ class OAI_P0 {
  public static function menu_create($a){
   if(!current_user_can('edit_theme_options'))return new WP_Error('oai_menu_permission','edit_theme_options capability required',array('status'=>403));
   $name=sanitize_text_field((string)($a['name']??''));if($name==='')return new WP_Error('oai_menu_name','Menu name is required',array('status'=>400));
+  $key=$a['idempotency_key']??'';
+  if(!is_string($key)||($key!==''&&!preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$key)))
+   return new WP_Error('oai_menu_request_key','Invalid menu idempotency_key',array('status'=>400));
+  $actor=get_current_user_id();
+  if($actor<1)return new WP_Error('oai_menu_permission','Authenticated editor required',array('status'=>403));
+  $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $normal_name=function_exists('mb_strtolower')?mb_strtolower($name,'UTF-8'):strtolower($name);
+  $payload_hash=hash('sha256',$normal_name);
+  // Legacy keyless creation retains v1 identity. Explicit key now defines one
+  // creation request across changed names instead of becoming a new intent.
+  $fingerprint=wp_json_encode($key!==''?array('menu-creation-v2',get_current_blog_id(),$actor,$key):array('menu-creation-v1',get_current_blog_id(),$actor,$normal_name,''),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  if(!is_string($fingerprint))return new WP_Error('oai_menu_intent','Unable to encode menu creation intent',array('status'=>503));
+  $intent='oai_menu_creation_'.hash('sha256',$fingerprint);
+  global $wpdb;
+  if($key!==''){
+   $legacy=wp_json_encode(array('menu-creation-v1',get_current_blog_id(),$actor,$normal_name,$key),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+   if(!is_string($legacy))return new WP_Error('oai_menu_intent','Cannot encode legacy menu creation',array('status'=>503));
+   $legacy_name='oai_menu_creation_'.hash('sha256',$legacy);
+   $legacy_claim=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$legacy_name));
+   if($legacy_claim!==null)return new WP_Error('oai_menu_creation_pending','Legacy menu claim requires reconciliation',array('status'=>409));
+   if($wpdb->last_error!=='')return new WP_Error('oai_menu_storage','Legacy menu reservation lookup unavailable',array('status'=>503));
+  }
+  $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
+  if($existing!==null){
+   $prior=maybe_unserialize($existing);
+   if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+    return new WP_Error('oai_menu_intent_conflict','Menu creation key reused with another name',array('status'=>409));
+   return new WP_Error('oai_menu_creation_pending','Menu creation requires reconciliation',array('status'=>409));
+  }
+  if($wpdb->last_error!=='')return new WP_Error('oai_menu_storage','Menu reservation unavailable',array('status'=>503));
+  // Unique option_name is the atomic admission point. Crash/unknown outcome
+  // claims remain held: a timeout or old timestamp cannot prove absence.
+  $admission=OAI_DB::insert_creation_claim($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))));
+  if(is_wp_error($admission))return $admission;
+  if($admission!==true)
+   return new WP_Error('oai_menu_creation_pending','Menu creation intent already reserved; verify before retry',array('status'=>409));
   $id=wp_create_nav_menu($name);if(is_wp_error($id))return $id;update_term_meta($id,'_oai_sandbox_artifact','1');
   $after=self::menu_snapshot($id);if(is_wp_error($after)){wp_delete_nav_menu($id);return $after;}
   $op=self::op('menu_create',(string)$id,null,$after,array('menu_id'=>(int)$id,'sandbox_artifact'=>true,'created_by_ai_admin'=>true),false);if(is_wp_error($op)){wp_delete_nav_menu($id);return $op;}return $op;
@@ -151,8 +222,50 @@ class OAI_P0 {
   );
  }
  public static function menu_add_item($a){
+  if(!current_user_can('edit_theme_options'))return new WP_Error('oai_menu_permission','Menu edit permission required',array('status'=>403));
   $menu_id=absint($a['menu_id']??0);$menu=wp_get_nav_menu_object($menu_id);if(!$menu)return new WP_Error('oai_menu_not_found','Menu not found',array('status'=>404));
   $args=self::menu_item_args($a);if($args['menu-item-title']===''&&$args['menu-item-object-id']===0)return new WP_Error('oai_menu_item','Menu item title or object_id is required',array('status'=>422));
+  $key=$a['idempotency_key']??'';
+  if(!is_string($key)||($key!==''&&!preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$key)))
+   return new WP_Error('oai_menu_item_request_key','Invalid menu item idempotency_key',array('status'=>400));
+  $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $actor=get_current_user_id();
+  $canonical=$args;ksort($canonical,SORT_STRING);
+  $encoded=wp_json_encode(array('menu-item-v1',$menu_id,$canonical),JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION);
+  if(!is_string($encoded))return new WP_Error('oai_menu_item_intent','Cannot encode menu item creation intent',array('status'=>503));
+  $payload_hash=hash('sha256',$encoded);
+  // A nonempty retry key is bound to one payload, even when menu target
+  // changes. Keyless legacy calls remain scoped to menu and canonical item.
+  $identity=wp_json_encode($key!==''?array('menu-item-v2',get_current_blog_id(),$actor,$key):array('menu-item-v1',get_current_blog_id(),$actor,$menu_id,$payload_hash));
+  if(!is_string($identity))return new WP_Error('oai_menu_item_intent','Cannot encode menu item request identity',array('status'=>503));
+  $intent='oai_menu_item_creation_'.hash('sha256',$identity);
+  global $wpdb;
+  if($key!==''){
+   $legacy_identity=wp_json_encode(array('menu-item-v1',get_current_blog_id(),$actor,$menu_id,$key));
+   if(!is_string($legacy_identity))return new WP_Error('oai_menu_item_intent','Cannot encode legacy menu item creation',array('status'=>503));
+   $legacy_name='oai_menu_item_creation_'.hash('sha256',$legacy_identity);
+   $legacy_value=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$legacy_name));
+   if($legacy_value!==null){
+    $prior=maybe_unserialize($legacy_value);
+    if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+     return new WP_Error('oai_menu_item_intent_conflict','Reused prior menu item request key with changed content',array('status'=>409));
+    return new WP_Error('oai_menu_item_creation_pending','Existing item claim requires reconciliation',array('status'=>409));
+   }
+   if($wpdb->last_error!=='')return new WP_Error('oai_menu_item_storage','Legacy item reservation lookup unavailable',array('status'=>503));
+  }
+  $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
+  if($existing!==null){
+   $prior=maybe_unserialize($existing);
+   if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+    return new WP_Error('oai_menu_item_intent_conflict','Reused item creation key with different content',array('status'=>409));
+   return new WP_Error('oai_menu_item_creation_pending','Menu item creation requires reconciliation',array('status'=>409));
+  }
+  if($wpdb->last_error!=='')return new WP_Error('oai_menu_item_storage','Item creation reservation unavailable',array('status'=>503));
+  // Persist the claim before wp_update_nav_menu_item can write a new post.
+  $admission=OAI_DB::insert_creation_claim($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))));
+  if(is_wp_error($admission))return $admission;
+  if($admission!==true)
+   return new WP_Error('oai_menu_item_creation_pending','Menu item creation requires reconciliation',array('status'=>409));
   $item_id=wp_update_nav_menu_item($menu_id,0,$args);if(is_wp_error($item_id))return $item_id;
   wp_update_post(array('ID'=>$item_id,'post_status'=>'draft'));update_post_meta($item_id,'_oai_sandbox_artifact','1');
   $after=self::menu_item_snapshot($item_id);if(is_wp_error($after)){wp_delete_post($item_id,true);return $after;}$after['status']='publish';

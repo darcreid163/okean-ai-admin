@@ -24,24 +24,55 @@ $pair=sodium_crypto_sign_keypair();
 $core=new Core($store,new Vault(str_repeat('k',32)),$transport,$policy,new Signer(sodium_crypto_sign_secretkey($pair)));
 $core->ensureAccount('1');$core->ensureAccount('2');
 $site=$core->connect('1','https://batch-one.example.com','fixture-batch-credential-owner-1',$now);
+$sameOwnerSite=$core->connect('1','https://batch-owner-second.example.com','fixture-batch-credential-owner-1-second',$now);
 $other=$core->connect('2','https://batch-two.example.com','fixture-batch-credential-owner-2',$now);
 $actor=$core->authenticate($core->mint('1',[$site['id']],['mcp:read','mcp:write'],$now)['access_token'],$now);
+$readOnly=$core->authenticate($core->mint('1',[$site['id']],['mcp:read'],$now)['access_token'],$now);
 $foreign=$core->authenticate($core->mint('2',[$other['id']],['mcp:read'],$now)['access_token'],$now);
 $items=[
-    ['id'=>'a','tool'=>'wp_get_site','arguments'=>[]],
+    ['id'=>'a','tool'=>'wp_get_site','arguments'=>['meta'=>['z'=>2,'a'=>1],'alpha'=>true]],
     ['id'=>'b','tool'=>'wp_get_site','arguments'=>['fail'=>true]],
     ['id'=>'c','tool'=>'wp_get_site','arguments'=>[]],
 ];
 batchCheck($core->batchAvailable(),'Enabled test batch policy still disabled');
+// Authorization fences are checked before reservation or upstream execution.
+$preUsage=$core->usage('1',$now);
+$preExecutions=$transport->executions;
+batchReject(fn()=>$core->batchCall($actor,$other['id'],$items,'foreign-site-denied',false,$now),'scope_or_site_denied');
+batchReject(fn()=>$core->batchCall($readOnly,$sameOwnerSite['id'],$items,'ungranted-site-denied',false,$now),'scope_or_site_denied');
+batchReject(fn()=>$core->batchCall($foreign,$site['id'],$items,'foreign-actor-denied',false,$now),'scope_or_site_denied');
+batchReject(fn()=>$core->batchCall($readOnly,$site['id'],[
+    ['id'=>'write','tool'=>'woocommerce_update_product_sandbox','arguments'=>['product_id'=>1,'regular_price'=>'12.00']],
+],'read-token-write-denied',false,$now),'scope_or_site_denied');
+batchCheck($transport->executions===$preExecutions &&
+    $core->usage('1',$now)['used']===$preUsage['used'] &&
+    $core->usage('1',$now)['reserved']===$preUsage['reserved'],
+    'Rejected batch crossed tenant/scope boundary or reserved quota');
+
 $first=$core->batchCall($actor,$site['id'],$items,'batch-3',false,$now);
 batchCheck($first['charged_units']===2&&$first['pending_units']===0,'Batch charged failed or skipped object');
 batchCheck($first['summary']['succeeded']===2&&$first['summary']['failed']===1,'Batch per-step receipt incorrect');
 batchCheck($core->usage('1',$now)['used']===2&&$core->usage('1',$now)['reserved']===0,'Batch settlement not atomic');
 batchCheck($transport->executions===3,'Each batch object must be dispatched exactly once');
+// Successful steps must be charged once, even when a second identical request
+// arrives with an alternate dot/underscore tool spelling.
+$usedAfterFirst=$core->usage('1',$now)['used'];
+$alternate=$items;
+$alternate[0]['tool']='wp.get_site';
+$alternate[2]['tool']='wp.get_site';
+$aliasRetry=$core->batchCall($actor,$site['id'],$alternate,'batch-3',false,$now);
+batchCheck($aliasRetry['charged_units']===2 &&
+    $core->usage('1',$now)['used']===$usedAfterFirst &&
+    $transport->executions===3,
+    'Canonical tool alias retry double-charged or re-dispatched the batch');
+
 $key=hash('sha256','1|batch-3');
 $receipt=$core->batchReceipt($actor,$site['id'],$key,$now);
 batchCheck($receipt['charged_units']===2&&$receipt['site_id']===$site['id'],'Receipt mismatch');
-$replay=$core->batchCall($actor,$site['id'],$items,'batch-3',false,$now);
+$reordered=$items;
+$reordered[0]['arguments']=['alpha'=>true,'meta'=>['a'=>1,'z'=>2]];
+batchCheck(WPAICloudGateway\Security::canonical($items)===WPAICloudGateway\Security::canonical($reordered),'Canonical JSON changed with nested object key order');
+$replay=$core->batchCall($actor,$site['id'],$reordered,'batch-3',false,$now);
 batchCheck($replay['charged_units']===2&&$transport->executions===3,'Idempotency retry re-dispatched objects');
 $different=$items;$different[0]['arguments']=['fail'=>true];
 batchReject(fn()=>$core->batchCall($actor,$site['id'],$different,'batch-3',false,$now),'idempotency_conflict');
