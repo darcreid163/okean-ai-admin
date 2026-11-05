@@ -3,6 +3,71 @@ declare(strict_types=1);
 namespace WPAICloudGateway;
 
 final class Gateway {
+    /** Presentation only; Core retains canonical encrypted billing/evidence bytes. */
+    private static function metadataTool(string $tool): bool {
+        $name=str_replace('.','_',strtolower($tool));
+        return AbilitiesPolicy::isMetadataRead($name) || in_array($name,[
+            'wp_get_site','wp_health','wp_diagnostics','system_manifest','system_capabilities','system_tool_catalog',
+            'system_security_status','wp_list_operations','operation_get','operation_status','operation_diff',
+            'operation_verify','verify_operation','operation_proof','proof_operation','operation_get_receipt',
+            'operation_approve','operation_apply','operation_reject','operation_rollback','batch_receipt','batch_proof',
+            'woodmart_update_setting_sandbox','wp_option_update_sandbox','gutenberg_patch','content_patch','woocommerce_patch',
+            'woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_import_url_sandbox',
+            'media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox',
+            'menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox',
+            'elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget',
+            'elementor_patch_fragment','elementor_patch_settings','file_write_sandbox'
+        ],true);
+    }
+    private static function publicSiteReceipt(array $receipt,string $tool): array {
+        $reply=$receipt['upstream']??null;
+        if (!is_array($reply)) return $receipt;
+        // Raw editable reads and arbitrary third-party content are not evidence
+        // views. Error replies remain diagnostic even for those tools.
+        if (!self::metadataTool($tool) && !isset($reply['error']) && empty($reply['result']['isError'])) return $receipt;
+        $changed=false;
+        $receipt['upstream']=self::publicMetadata($reply,'',$changed);
+        if ($changed) $receipt['_wpai_projection']=[
+            'redacted'=>true,'reason'=>'server_filesystem_paths','stored_evidence_modified'=>false,
+            'hashes_attest'=>'original_evidence','canonical_payload_available'=>false
+        ];
+        return $receipt;
+    }
+    private static function publicMetadata(mixed $value,string $key,bool &$changed): mixed {
+        if ($value instanceof \stdClass) return (object)self::publicMetadata(get_object_vars($value),$key,$changed);
+        if (is_array($value)) {
+            $out=[];
+            foreach ($value as $name=>$child) {
+                $public=is_string($name)?self::publicPathText($name,'',$changed):$name;
+                if ($public!==$name) $public.=':'.substr(hash('sha256',$name),0,12);
+                while (array_key_exists($public,$out)) { $changed=true; $public.=':'; }
+                $out[$public]=self::publicMetadata($child,(string)$name,$changed);
+            }
+            return $out;
+        }
+        if (!is_string($value)) return $value;
+        $trim=ltrim($value);
+        if ($trim!=='' && in_array($trim[0],['{','['],true)) {
+            $decoded=json_decode($value);
+            if (is_array($decoded) || $decoded instanceof \stdClass) {
+                $nested=false; $public=self::publicMetadata($decoded,$key,$nested);
+                if ($nested) { $changed=true; return json_encode($public,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION); }
+            } elseif (in_array($key,['text','proof','receipt'],true) && json_last_error()!==JSON_ERROR_NONE) {
+                $changed=true; return '[invalid serialized metadata]';
+            }
+        }
+        return self::publicPathText($value,$key,$changed);
+    }
+    private static function publicPathText(string $text,string $key,bool &$changed): string {
+        $original=$text;
+        $text=preg_replace('~\bfile://[^\s"\'<>|,;)}\]]+~i','[server-path]',$text);
+        $text=preg_replace('~(?<![A-Za-z0-9_:/\\\\.-])(?:[A-Za-z]:[/\\\\]|\\\\\\\\[^\\\\\s]+\\\\)[^\s"\'<>|,;)}\]]+~','[server-path]',$text);
+        $text=preg_replace('~(?<![A-Za-z0-9_:/.-])/(?:home|var|srv|opt|tmp|usr|private|mnt|workspace|Users|Applications|Library|Volumes|www|htdocs|data|sites|public_html|inetpub)(?=/|$|[\s"\'<>|,;)}\]])(?:/[^\s"\'<>|,;)}\]]*)?~','[server-path]',$text);
+        if (preg_match('/(?:^|_)(?:error|message)$/i',$key)) $text=preg_replace('~(?<![A-Za-z0-9_:/.-])/(?:[^/\s"\'<>|,;)}\]]+/)+[^\s"\'<>|,;)}\]]+~','[server-path]',$text);
+        if (preg_match('/(?:^|_)(?:file|path|dir|directory|root|basedir)$/i',$key) && preg_match('~^/(?!/)~',$text)) $text='[server-path]';
+        if ($text!==$original) $changed=true;
+        return $text;
+    }
     public const VERSIONS=['2025-03-26','2025-06-18','2025-11-25'];
     public function __construct(
         private readonly Core $core,
@@ -91,6 +156,17 @@ final class Gateway {
                 'cloud_site_tools_list'=>$this->core->catalog($actor,$args['site_id'],$now),
                 'cloud_site_tool_call'=>$this->core->call($actor,$args['site_id'],$args['tool'],$args['arguments'],$args['idempotency_key'],$now)
             };
+            // Applies equally to fresh replies and old Core cache hits, after
+            // authorization/settlement. Never persist this presentation copy.
+            if ($name==='cloud_site_tool_call') $value=self::publicSiteReceipt($value,$args['tool']);
+            if (in_array($name,['cloud_site_batch_call','cloud_site_batch_receipt'],true)) {
+                $tools=[];
+                foreach ($value['steps']??[] as $step) $tools[$step['step_id']]=$step['tool'];
+                foreach ($args['items']??[] as $item) $tools[$item['id']]=$item['tool'];
+                foreach ($value['results']??[] as $i=>$result) {
+                    if (isset($tools[$result['step_id']??''])) $value['results'][$i]=self::publicSiteReceipt($result,$tools[$result['step_id']]);
+                }
+            }
             $failed=in_array($name,['cloud_site_tool_call','cloud_site_batch_call'],true) && in_array(($value['state']??''),['failed','uncertain'],true);
             return $reply(['content'=>[['type'=>'text','text'=>Security::canonical($value)]],'isError'=>$failed]);
         } catch(Fault $e) {

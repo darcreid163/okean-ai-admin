@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace WPAICloudGateway;
 
+require_once __DIR__.'/AbilitiesPolicy.php';
+
 final class Core {
     // Exceeds the bounded HTTPS catalog + tool request timeouts. Expiry only
     // fences local settlement; it never proves a remote mutation did not occur.
@@ -184,6 +186,7 @@ final class Core {
     }
     public static function writes(string $name,array $args): bool {
         $name=str_replace('.','_',$name);
+        if (AbilitiesPolicy::isMetadataRead($name)) return false;
         if ($name==='wordpress_execute') return ($args['mode']??'read')!=='read';
         return !in_array($name,self::READ_TOOLS,true);
     }
@@ -206,8 +209,10 @@ final class Core {
         return $this->batchAccounting()->receipt($actor['owner'],$siteId,$key);
     }
     public function call(array $actor,string $siteId,string $name,array $args,string $nonce,int $now): array {
+        $started=time();
         Security::identifier($name); Security::identifier($nonce);
-        $site=$this->authorize($actor,$siteId,self::writes($name,$args)?'mcp:write':'mcp:read',$now);
+        $scope=self::writes($name,$args)?'mcp:write':'mcp:read';
+        $site=$this->authorize($actor,$siteId,$scope,$now);
         $normalized=str_replace('.','_',$name);
         if (in_array($normalized,['batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','system_regression_run','system_regression_matrix'],true)) throw new Fault('batch_receipt_accounting_not_ready',422);
         if (strlen(Security::canonical($args))>65536) throw new Fault('arguments_too_large',413);
@@ -241,8 +246,19 @@ final class Core {
         if (isset($reservation['cached'])) return $reservation['cached'];
         if (isset($reservation['pending'])) throw new Fault('request_outcome_pending_reconciliation',409);
         try {
-            $catalog=$this->catalog($actor,$siteId,$now); $names=array_column($catalog,'name');
-            if (!in_array($name,$names,true)) {
+            // tools/list cannot execute the requested site tool. A catalog
+            // failure is a known pre-dispatch failure, not an unknown write.
+            try {
+                $catalog=$this->catalog($actor,$siteId,$now);
+                // Catalog network time must not carry revoked/expired access
+                // or a replaced site credential into a new tool dispatch.
+                $site=$this->authorize($actor,$siteId,$scope,$now+max(0,time()-$started));
+            }
+            catch (\Throwable $e) { $catalog=null; }
+            $names=$catalog===null?[]:array_column($catalog,'name');
+            if ($catalog===null) {
+                $reply=['jsonrpc'=>'2.0','id'=>$key,'error'=>['code'=>-32603,'message'=>'Site tool unavailable before dispatch']];
+            } elseif (!in_array($name,$names,true)) {
                 $reply=['jsonrpc'=>'2.0','id'=>$key,'error'=>['code'=>-32602,'message'=>'Unknown site tool']];
             } else {
                 $reply=$this->upstream($site,['jsonrpc'=>'2.0','id'=>$key,'method'=>'tools/call','params'=>['name'=>$name,'arguments'=>$args ?: (object)[]]]);

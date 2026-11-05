@@ -8,7 +8,7 @@ declare(strict_types=1);
 $root=dirname(__DIR__);
 $manifest=file($root.'/docs/RECOVERED-CLOUD-RUNTIME.sha256',FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
 if(!is_array($manifest)||count($manifest)!==20)throw new RuntimeException('Unexpected recovered source manifest');
-$intentional=['src/Gateway.php'=>true,'wp-ai-admin-cloud.php'=>true];
+$intentional=['src/Gateway.php'=>true,'src/Core.php'=>true,'wp-ai-admin-cloud.php'=>true];
 $seen=[];$base=0;$changed=0;
 foreach($manifest as $line){
     if(!preg_match('/^([a-f0-9]{64})  ([A-Za-z0-9_\/.-]+)$/D',$line,$match))
@@ -28,16 +28,16 @@ foreach($manifest as $line){
         ++$base;
     }
 }
-if($base!==18||$changed!==2||
+if($base!==17||$changed!==3||
    !isset($seen['src/Core.php'],$seen['src/Store.php'],$seen['src/OAuth.php'],$seen['src/QuotaPolicy.php'],$seen['src/BatchAccounting.php'],$seen['config/plans.json']))
     throw new RuntimeException('Inconsistent recovered 0.3.11 baseline or unlisted code change');
 $plugin=file_get_contents($root.'/wp-ai-admin-cloud.php');
 $gateway=file_get_contents($root.'/src/Gateway.php');
-if(!str_contains($plugin,"define('WPAI_CLOUD_VERSION', '0.3.12-dev')")||
-   !str_contains($plugin,"* Version: 0.3.12-dev")||
+if(!str_contains($plugin,"define('WPAI_CLOUD_VERSION', '0.3.13-dev')")||
+   !str_contains($plugin,"* Version: 0.3.13-dev")||
    !str_contains($plugin,"'Skills','Unsplash','MediaPolicy','Gateway'")||
    !str_contains($gateway,"$"."tool('cloud_skills_list'")||
    !str_contains($gateway,"$"."tool('cloud_skill_load'")||
    !str_contains($gateway,"$"."tool('cloud_media_search_images'"))
     throw new RuntimeException('Candidate is not independently marked, safely bootstrapped, or complete');
-echo "PASS: 18/18 unchanged 0.3.11 baseline SHA-256 + 2 explicitly changed 0.3.12-dev files; historic manifest not rewritten\n";
+echo "PASS: 17/17 unchanged 0.3.11 baseline SHA-256 + 3 explicitly changed 0.3.13-dev files; historic manifest not rewritten\n";

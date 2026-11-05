@@ -52,7 +52,10 @@ class FrontendSession(unittest.TestCase):
         except urllib.error.HTTPError as error:
             response = error
         with response:
-            return response.status, response.headers, response.read().decode()
+            body = response.read().decode()
+            self.assertNotIn('<b>Warning</b>', body)
+            self.assertNotIn('<b>Fatal error</b>', body)
+            return response.status, response.headers, body
 
     def test_browser_cookie_scope_and_single_login_handoff(self):
         jar = http.cookiejar.CookieJar()
@@ -147,6 +150,33 @@ class FrontendSession(unittest.TestCase):
         self.assertIn('Подключено сайтов: <strong>2</strong>', body)
         self.assertIn('owned-site', body)
         self.assertIn('second-site', body)
+
+    def test_current_pro_uses_daily_utc_window(self):
+        status, _, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session')
+        self.assertEqual(status, 200)
+        self.assertIn('Период учёта: сутки (UTC)', body)
+        self.assertIn('2026-10-23T00:00:00Z', body)
+        self.assertIn('https://wpaiadmin.ru/mcp', body)
+        self.assertIn('Подключить автоматически', body)
+        self.assertNotIn('Сохранены прежние месячные условия', body)
+        self.assertNotIn('Сервис подключения временно недоступен', body)
+
+    def test_free_uses_monthly_utc_window(self):
+        status, _, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session; fixture_plan=free')
+        self.assertEqual(status, 200)
+        self.assertIn('<strong>FREE</strong>', body)
+        self.assertIn('Период учёта: месяц (UTC)', body)
+        self.assertIn('2026-11-01T00:00:00Z', body)
+        self.assertIn('Подключить автоматически', body)
+
+    def test_legacy_pro_retains_monthly_terms(self):
+        status, _, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session; fixture_quota=legacy')
+        self.assertEqual(status, 200)
+        self.assertIn('<strong>PRO</strong>', body)
+        self.assertIn('Период учёта: месяц (UTC)', body)
+        self.assertIn('2026-11-01T00:00:00Z', body)
+        self.assertIn('Сохранены прежние месячные условия', body)
+        self.assertIn('Подключить автоматически', body)
 
     def test_preflight_does_not_register_or_navigate(self):
         status, headers, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session', urllib.parse.urlencode({'home':'https://okean.market','connect_mode':'check','wpai_nonce':'fixture-nonce'}).encode())

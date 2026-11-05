@@ -9,22 +9,25 @@ if (!defined('ABSPATH')) exit;
  */
 class OAI_Operation_Schema {
  public static function catalog(){
-  return array(
-   'woodmart_theme_setting'=>array('domain'=>'woodmart','mutating'=>true,'risk'=>'high','target'=>'setting_id','value'=>'native_setting_value','approval'=>true),
-   'option_update'=>array('domain'=>'options','mutating'=>true,'risk'=>'high','target'=>'option_name','value'=>'scalar|object|array','approval'=>true),
-   'post_title'=>array('domain'=>'content','mutating'=>true,'risk'=>'low','target'=>'post_id:post_title','value'=>'string','approval'=>true),
-   'post_excerpt'=>array('domain'=>'content','mutating'=>true,'risk'=>'low','target'=>'post_id:post_excerpt','value'=>'string','approval'=>true),
-   'post_content'=>array('domain'=>'content','mutating'=>true,'risk'=>'medium','target'=>'post_id:post_content','value'=>'string','approval'=>true),
-   'elementor_widget_html'=>array('domain'=>'elementor','mutating'=>true,'risk'=>'medium','target'=>'post_id:widget_id','value'=>'html','approval'=>true),
-   'elementor_widget_settings'=>array('domain'=>'elementor','mutating'=>true,'risk'=>'medium','target'=>'post_id:widget_id','value'=>'object','approval'=>true),
-   'elementor_page_create'=>array('domain'=>'elementor','mutating'=>true,'risk'=>'medium','target'=>'post_id:elementor_page','value'=>'elementor_tree|base64_json','approval'=>true),
-   'woo_product_price'=>array('domain'=>'woocommerce','mutating'=>true,'risk'=>'medium','target'=>'product_id','value'=>'price_object','approval'=>true),
-   'woo_product_stock'=>array('domain'=>'woocommerce','mutating'=>true,'risk'=>'medium','target'=>'product_id','value'=>'stock_object','approval'=>true),
-   'file_write'=>array('domain'=>'files','mutating'=>true,'risk'=>'high','target'=>'scope:path','value'=>'text','approval'=>true),
-   'content_patch'=>array('domain'=>'content','mutating'=>true,'risk'=>'medium','target'=>'post_id:field','value'=>'patch','approval'=>true),
-   'woocommerce_patch'=>array('domain'=>'woocommerce','mutating'=>true,'risk'=>'medium','target'=>'product_id','value'=>'patch','approval'=>true),
-   'workspace_write'=>array('domain'=>'workspace','mutating'=>true,'risk'=>'medium','target'=>'workspace_surface','value'=>'text|json','approval'=>true),
+  $catalog=array(
+   'woodmart_theme_setting'=>array('domain'=>'woodmart','mutating'=>true,'target'=>'setting_id','value'=>'native_setting_value','approval'=>true),
+   'option_update'=>array('domain'=>'options','mutating'=>true,'target'=>'option_name','value'=>'scalar|object|array','approval'=>true),
+   'post_title'=>array('domain'=>'content','mutating'=>true,'target'=>'post_id:post_title','value'=>'string','approval'=>true),
+   'post_excerpt'=>array('domain'=>'content','mutating'=>true,'target'=>'post_id:post_excerpt','value'=>'string','approval'=>true),
+   'post_content'=>array('domain'=>'content','mutating'=>true,'target'=>'post_id:post_content','value'=>'string','approval'=>true),
+   'elementor_widget_html'=>array('domain'=>'elementor','mutating'=>true,'target'=>'post_id:widget_id','value'=>'html','approval'=>true),
+   'elementor_widget_settings'=>array('domain'=>'elementor','mutating'=>true,'target'=>'post_id:widget_id','value'=>'object','approval'=>true),
+   'elementor_page_create'=>array('domain'=>'elementor','mutating'=>true,'target'=>'post_id:elementor_page','value'=>'elementor_tree|base64_json','approval'=>true),
+   'woo_product_price'=>array('domain'=>'woocommerce','mutating'=>true,'target'=>'product_id','value'=>'price_object','approval'=>true),
+   'woo_product_stock'=>array('domain'=>'woocommerce','mutating'=>true,'target'=>'product_id','value'=>'stock_object','approval'=>true),
+   'file_write'=>array('domain'=>'files','mutating'=>true,'target'=>'scope:path','value'=>'text','approval'=>true),
+   'content_patch'=>array('domain'=>'content','mutating'=>true,'target'=>'post_id:field','value'=>'patch','approval'=>true),
+   'woocommerce_patch'=>array('domain'=>'woocommerce','mutating'=>true,'target'=>'product_id','value'=>'patch','approval'=>true),
+   'workspace_write'=>array('domain'=>'workspace','mutating'=>true,'target'=>'workspace_surface','value'=>'text|json','approval'=>true),
   );
+  foreach($catalog as $type=>&$schema)$schema['risk']=OAI_Operations::risk($type,'');
+  unset($schema);
+  return $catalog;
  }
  public static function get($type){$c=self::catalog(); return isset($c[$type])?$c[$type]:null;}
  public static function validate($type,$target,$value=null){

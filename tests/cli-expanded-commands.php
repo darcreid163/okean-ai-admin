@@ -288,7 +288,33 @@ check($r['count'] === 4 && $r['tables'][0] === 'wp_posts' && $r['rows_returned']
 $r = ok_result('db prefix');
 check($r['prefix'] === 'wp_' && $r['base_prefix'] === 'wp_', 'db prefix');
 
+/* ------------------------------ Abilities read-only bridge contract --- */
+require_once dirname(__DIR__).'/includes/class-oai-abilities.php';
+check(!is_wp_error(OAI_Command_Registry::resolve('ability list')), 'Ability catalog command must resolve');
+check(!is_wp_error(OAI_Command_Registry::resolve('ability get example/read')), 'Ability info command must resolve');
+rejects(fn() => OAI_Command_Registry::resolve('ability get'), 'oai_cli_args');
+check(ok_result('ability list') === array(), 'Abilities fail closed if API is unavailable');
+rejects(fn() => run('ability get example/read'), 'oai_ability_unavailable');
+rejects(fn() => OAI_Command_Registry::resolve('ability run example/read'), 'oai_cli_not_allowed');
+
 /* ------------------------------------------------------------------- catalog --- */
+
+// Registry security contract: every canonical command has a stable name and
+// a matching read/write execution policy before future MCP tool expansion.
+$seenCanonical = array();
+foreach (OAI_Command_Registry::all() as $command => $entry) {
+    $canonical = implode(' ', array_filter(explode(' ', strtolower(trim($command))), 'strlen'));
+    check($command === $canonical, 'noncanonical registry name: ' . $command);
+    check(!isset($seenCanonical[$canonical]), 'duplicate canonical command: ' . $command);
+    $seenCanonical[$canonical] = true;
+    check(is_string($entry['handler'] ?? null) && $entry['handler'] !== '', 'missing handler: ' . $command);
+    if (!empty($entry['read'])) {
+        check(($entry['execution_mode'] ?? '') === 'read_only', 'read command with unsafe mode: ' . $command);
+    } else {
+        check(($entry['execution_mode'] ?? '') === 'plan_only' && !empty($entry['approval']),
+            'write command without mandatory plan and approval: ' . $command);
+    }
+}
 
 $audit = OAI_Command_Registry::handler_audit();
 check($audit['ok'] === true, 'every read command must have a handler: ' . implode(',', $audit['missing_handlers']));

@@ -4,6 +4,14 @@
  */
 if (!defined('ABSPATH')) exit;
 class OAI_REST {
+ public static function public_metadata_response($response,$server,$request){
+  // File/content reads keep their exact bytes. Only metadata/evidence routes
+  // use the projection; MCP performs the same projection before JSON encoding.
+  if(!preg_match('#^/okean-ai/v1/(?:status|runtime/fingerprint|diagnostics|audit|verify/\d+|proof/\d+|operations(?:/\d+(?:/receipt)?|/catalog)?|sandbox(?:/\d+/(?:approve|apply|reject|rollback))?|read/(?:site|health|capabilities)|capabilities/foundation)/?$#D',$request->get_route()))return $response;
+  $response=rest_ensure_response($response);
+  if($response instanceof WP_REST_Response)$response->set_data(OAI_Security::public_evidence($response->get_data()));
+  return $response;
+ }
  private static function is_list_array($a){ if(function_exists('array_is_list')) return array_is_list($a); $i=0; foreach($a as $k=>$v){if($k!==$i++) return false;} return true; }
  public static function token(){return (string)(get_option('oai_bearer_token','') ?: get_option('oai_api_token',''));}
  private static function authorization_header($req){
@@ -110,6 +118,7 @@ class OAI_REST {
   register_rest_route($n,'/read/widgets',array('methods'=>'GET','callback'=>array(__CLASS__,'widgets'))+$args);
   register_rest_route($n,'/read/health',array('methods'=>'GET','callback'=>array(__CLASS__,'health'))+$args);
   register_rest_route($n,'/diagnostics',array('methods'=>'GET','callback'=>array(__CLASS__,'diagnostics'))+$args);
+  register_rest_route($n,'/diagnostics/creation-intents',array('methods'=>'GET','callback'=>array('OAI_Creation_Claim_Audit','summary'))+$args);
   register_rest_route($n,'/plan',array('methods'=>'POST','callback'=>array(__CLASS__,'plan'))+$args);
 
   register_rest_route($n,'/read/content',array('methods'=>'GET','callback'=>array(__CLASS__,'content'))+$args);
@@ -175,8 +184,8 @@ class OAI_REST {
  public static function users($req){return OAI_Read::users($req);}
  public static function comments($req){return OAI_Read::comments($req);}
  public static function widgets(){return OAI_Read::widgets();}
- public static function health(){return OAI_Read::health();}
- public static function diagnostics(){return OAI_Diagnostics::run();}
+ public static function health(){return OAI_Security::public_evidence(OAI_Read::health());}
+ public static function diagnostics(){return OAI_Security::public_evidence(OAI_Diagnostics::run());}
  public static function elementor_schema($req){return OAI_Elementor::widget_schema((string)$req['widget_type']);}
  public static function elementor_globals(){return OAI_Elementor::globals();}
  public static function elementor_patch($req){
@@ -188,6 +197,13 @@ class OAI_REST {
   $req->set_param('target',$target);
   $req->set_param('value',$changes);
   return self::sandbox_create($req);
+ }
+ /** Canonicalize only map-key ordering; Elementor element/list order is semantic. */
+ private static function elementor_creation_canonical($value){
+  if(!is_array($value))return $value;
+  if(!array_is_list($value))ksort($value,SORT_STRING);
+  foreach($value as $key=>$entry)$value[$key]=self::elementor_creation_canonical($entry);
+  return $value;
  }
  public static function elementor_create_page($req){
   $license=OAI_License::can('elementor'); if(is_wp_error($license)) return $license;
@@ -212,7 +228,40 @@ class OAI_REST {
   if(!is_array($data))return new WP_Error('oai_elementor_data','data must be an Elementor element array or element object',array('status'=>400));
   if(!self::is_list_array($data) && (isset($data['elType'])||isset($data['widgetType'])||isset($data['elements']))){$data=array($data);}
   $data=OAI_Elementor::decode_create_nodes($data); if(is_wp_error($data))return $data;
+  // Save the canonical caller/source input BEFORE normalize_elementor_page_data()
+  // generates random IDs for legacy nodes lacking an explicit container.
+  $intent_nodes=self::elementor_creation_canonical($data);
   $data=self::normalize_elementor_page_data($data); if(is_wp_error($data))return $data;
+
+  // These operations create a page before recording its pending lifecycle.
+  // The unique options key is the durable admission barrier across workers.
+  if(!current_user_can('edit_pages'))return new WP_Error('oai_page_permission','Page edit permission required',array('status'=>403));
+  $request_key=$req->get_param('idempotency_key');
+  if($request_key===null)$request_key='';
+  if(!is_string($request_key)||($request_key!==''&&!preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$request_key)))
+   return new WP_Error('oai_page_request_key','Invalid page idempotency_key',array('status'=>400));
+  $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $payload=array('elementor-page-v1',$title,$excerpt,$slug,$status,$template,$template_type,$source_id,$intent_nodes);
+  $encoded=wp_json_encode(self::elementor_creation_canonical($payload),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION);
+  if(!is_string($encoded))return new WP_Error('oai_page_intent','Cannot encode page creation intent',array('status'=>503));
+  $payload_hash=hash('sha256',$encoded);
+  $actor=get_current_user_id();
+  $identity=wp_json_encode(array('elementor-page-v1',get_current_blog_id(),$actor,$request_key!==''?$request_key:$payload_hash));
+  if(!is_string($identity))return new WP_Error('oai_page_intent','Cannot encode page request identity',array('status'=>503));
+  $intent='oai_elementor_page_creation_'.hash('sha256',$identity);
+  global $wpdb;
+  $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
+  if($existing!==null){
+   $prior=maybe_unserialize($existing);
+   if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+    return new WP_Error('oai_page_intent_conflict','Creation key was reused with another page payload',array('status'=>409));
+   return new WP_Error('oai_page_creation_pending','Page creation requires result reconciliation',array('status'=>409));
+  }
+  if($wpdb->last_error!=='')return new WP_Error('oai_page_storage','Page creation reservation unavailable',array('status'=>503));
+  $admission=OAI_DB::insert_creation_claim($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))));
+  if(is_wp_error($admission))return $admission;
+  if($admission!==true)
+   return new WP_Error('oai_page_creation_pending','Page creation requires result reconciliation',array('status'=>409));
 
   $adapter=OAI_Builder_Manager::get('elementor');
   if(!$adapter)return new WP_Error('oai_builder_adapter','Elementor adapter is unavailable',array('status'=>500));
@@ -236,7 +285,7 @@ class OAI_REST {
   $diff=array('action'=>'create','builder'=>'elementor','before'=>null,'after'=>array('id'=>$post_id,'title'=>$title,'slug'=>get_post_field('post_name',$post_id),'status'=>$status,'data'=>$data,'verification'=>$verification));
   $rollback_descriptor=OAI_Lifecycle::descriptor('elementor_page_create',$target,null,array('before_exists'=>false,'preview_page_id'=>$post_id));
   $meta['rollback_descriptor']=$rollback_descriptor;
-  $data_row=array('operation_id'=>$op,'status'=>'pending','type'=>'elementor_page_create','target'=>$target,'before_data'=>wp_json_encode(null),'after_data'=>wp_json_encode($data),'meta_data'=>wp_json_encode($meta),'diff_data'=>wp_json_encode($diff,JSON_PRESERVE_ZERO_FRACTION),'phase'=>'awaiting_approval','workspace_id'=>isset($meta['workspace_id'])?$meta['workspace_id']:null,'rollback_data'=>wp_json_encode($rollback_descriptor),'risk'=>'medium','created_at'=>$now,'expires_at'=>$expiry);
+  $data_row=array('operation_id'=>$op,'status'=>'pending','type'=>'elementor_page_create','target'=>$target,'before_data'=>wp_json_encode(null),'after_data'=>wp_json_encode($data),'meta_data'=>wp_json_encode($meta),'diff_data'=>wp_json_encode($diff,JSON_PRESERVE_ZERO_FRACTION),'phase'=>'awaiting_approval','workspace_id'=>isset($meta['workspace_id'])?$meta['workspace_id']:null,'rollback_data'=>wp_json_encode($rollback_descriptor),'risk'=>OAI_Operations::risk('elementor_page_create',$target),'created_at'=>$now,'expires_at'=>$expiry);
   $id=OAI_DB::insert($data_row); if(is_wp_error($id)){wp_delete_post($post_id,true);return $id;}
   $row=OAI_DB::get($id); OAI_Audit::log('created',$row); $out=self::row($id); $out['preview_page_id']=$post_id; $out['view_url']=get_permalink($post_id); $out['editor_url']=admin_url('post.php?post='.$post_id.'&action=elementor');
   $exp=time()+30*60; $token=self::preview_token($id,$exp); $out['preview_url']=add_query_arg(array('preview_token'=>$token,'expires'=>$exp),rest_url('okean-ai/v1/preview-page/'.$id)); $out['preview_expires']=$exp; $out['builder_verification']=$verification; return $out;
@@ -345,7 +394,7 @@ class OAI_REST {
  private static function is_elementor_available_for_preview(){return defined('ELEMENTOR_VERSION') && class_exists('Elementor\\Plugin') && isset(\Elementor\Plugin::$instance->frontend);}
  public static function plan($req){return OAI_Planner::plan($req);}
 
- public static function status(){return array('ok'=>true,'plugin_version'=>OAI_VERSION,'sandbox'=>true,'direct_live_writes'=>false,'database'=>OAI_DB::table(),'api_auth'=>'bearer_or_wp_admin','allowed_types'=>OAI_Capabilities::available()['sandbox'],'capabilities'=>OAI_Capabilities::available(),'site_url'=>home_url('/'),'builders'=>OAI_Builder_Manager::info(),'mcp'=>OAI_MCP::info(),'license'=>OAI_License::status(),'ai_lifecycle_control'=>class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('supported'=>false),'preview'=>array('signed'=>true,'renderer'=>'elementor_frontend','draft_fallback'=>true,'ascii_safe_payloads'=>true,'ascii_safe_payloads_mode'=>'title_excerpt_slug_data_b64','build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:'unknown','plugin_file'=>plugin_basename(OAI_DIR.'okean-ai-admin.php'),'plugin_dir'=>OAI_DIR));}
+ public static function status(){return array('ok'=>true,'plugin_version'=>OAI_VERSION,'sandbox'=>true,'direct_live_writes'=>false,'database'=>OAI_DB::table(),'api_auth'=>'bearer_or_wp_admin','allowed_types'=>OAI_Capabilities::available()['sandbox'],'capabilities'=>OAI_Capabilities::available(),'site_url'=>home_url('/'),'builders'=>OAI_Builder_Manager::info(),'mcp'=>OAI_MCP::info(),'license'=>OAI_License::status(),'ai_lifecycle_control'=>class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('supported'=>false),'preview'=>array('signed'=>true,'renderer'=>'elementor_frontend','draft_fallback'=>true,'ascii_safe_payloads'=>true,'ascii_safe_payloads_mode'=>'title_excerpt_slug_data_b64','build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:'unknown','plugin_file'=>plugin_basename(OAI_DIR.'okean-ai-admin.php'),'plugin_dir'=>dirname(plugin_basename(OAI_DIR.'okean-ai-admin.php'))));}
  public static function preview_link($req){
   $id=absint($req['id']);
   $r=OAI_DB::get($id);
@@ -883,33 +932,41 @@ frame.addEventListener('load',function(){
   $statuses=array_values(array_filter(array_map('sanitize_key',(array)$statuses)));$offset=($page-1)*$per_page;
   if($statuses){$total=OAI_DB::count_by_status($statuses);$rows=OAI_DB::by_status($statuses,$per_page,$offset);}else{$total=OAI_DB::count_all();$rows=OAI_DB::page($per_page,$offset);}
   foreach($rows as &$r){foreach(array('before_data','after_data','applied_data','meta_data','diff_data','rollback_data') as $k)if(array_key_exists($k,$r))$r[$k]=json_decode($r[$k],true);$r=OAI_Lifecycle::decorate($r);}unset($r);
-  return array('page'=>$page,'per_page'=>$per_page,'total'=>$total,'total_pages'=>max(1,(int)ceil($total/$per_page)),'statuses'=>$statuses,'items'=>$rows);
+  return OAI_Security::public_evidence(array('page'=>$page,'per_page'=>$per_page,'total'=>$total,'total_pages'=>max(1,(int)ceil($total/$per_page)),'statuses'=>$statuses,'items'=>$rows));
  }
- private static function validate_sandbox_target($type,$target){
-  if($type==='option_update'){
+ /** Shared by creation and every approval/apply entry point, including old rows. */
+ public static function validate_option_write_target($target){
    global $wpdb;
-   $key=(string)$target;
+   $key=(string)$target;$policy_key=strtolower(trim($key));
    $protected=array(
     'siteurl','home','admin_email','new_admin_email','active_plugins',
     'recently_activated','uninstall_plugins','rewrite_rules','cron',
-    'users_can_register','default_role','stylesheet','template'
+    'users_can_register','default_role','stylesheet','template',
+    'upload_path','upload_url_path','active_sitewide_plugins'
    );
-   if(isset($wpdb) && is_object($wpdb) && !empty($wpdb->prefix))$protected[]=$wpdb->prefix.'user_roles';
-   if(in_array($key,$protected,true))return new WP_Error('oai_option_protected','Protected WordPress option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   if(isset($wpdb) && is_object($wpdb) && !empty($wpdb->prefix))$protected[]=strtolower($wpdb->prefix.'user_roles');
+   if(in_array($policy_key,$protected,true))return new WP_Error('oai_option_protected','Protected WordPress option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
+   // WordPress option lookup trims names; common MySQL collations also fold
+   // case/accents. Restrict generic write keys to unambiguous ASCII identifiers.
+   if(strlen($key)>191||!preg_match('/\A[A-Za-z0-9_.:-]+\z/D',$key))return new WP_Error('oai_option_key','Generic option writes require an ASCII identifier of at most 191 bytes',array('status'=>400));
    // Cloud Core control-plane options are never generic content settings.
    // The native plugin may coexist with Cloud Core on wpaiadmin.ru; allowing
    // option_update to touch these keys would bypass the Cloud admin/OAuth
    // lifecycle and could corrupt wrapped keys, beta enrollment or schema state.
-   if(str_starts_with($key,'oai_')){
+   if(str_starts_with($policy_key,'oai_')){
     return new WP_Error('oai_option_control_plane','WP AI Admin control-plane option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
    }
-   if(str_starts_with($key,'wpai_gateway_')||str_starts_with($key,'wpai_cloud_')){
+   if(str_starts_with($policy_key,'wpai_gateway_')||str_starts_with($policy_key,'wpai_cloud_')){
     return new WP_Error('oai_option_control_plane','Cloud control-plane option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
    }
    if(preg_match('/(?:^|_)(?:password|passwd|secret|auth|token|private_key|api_key|apikey|client_secret)(?:_|$)/i',$key)){
     return new WP_Error('oai_option_sensitive','Sensitive credential/security option cannot be modified through the generic option sandbox',array('status'=>403,'key'=>$key));
    }
-  }
+   if(str_starts_with($policy_key,'_transient_')||str_starts_with($policy_key,'_site_transient_'))return new WP_Error('oai_option_cache','Transient caches cannot be modified through the generic option sandbox',array('status'=>403));
+   return true;
+ }
+ private static function validate_sandbox_target($type,$target){
+  if($type==='option_update')return self::validate_option_write_target($target);
   if(in_array($type,array('post_title','post_excerpt','post_content'),true)){
    $id=absint($target); if(!$id || !get_post($id))return new WP_Error('oai_target','Post not found',array('status'=>404));
    if($type==='post_content'){$allowed=OAI_Elementor::content_write_allowed($id);if(is_wp_error($allowed))return $allowed;}
@@ -1070,7 +1127,7 @@ frame.addEventListener('load',function(){
   $meta=array('before_exists'=>$exists,'after_exists'=>true);
   if($woodmart_plan!==null)$meta=array_merge($meta,$woodmart_plan['meta']);
   if($type==='elementor_widget_settings'){$parts=explode(':',$target,2);$meta['post_id']=absint($parts[0]??0);$meta['widget_id']=sanitize_text_field($parts[1]??'');$meta['save_pipeline']='elementor_document';}
-  $data=array('operation_id'=>$op,'status'=>'pending','type'=>$type,'target'=>$target,'before_data'=>wp_json_encode($exists?$before:null,JSON_PRESERVE_ZERO_FRACTION),'after_data'=>wp_json_encode($after,JSON_PRESERVE_ZERO_FRACTION),'meta_data'=>wp_json_encode(array_merge($meta,array('rollback_descriptor'=>OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists)))),JSON_PRESERVE_ZERO_FRACTION),'diff_data'=>wp_json_encode($diff),'phase'=>'awaiting_approval','workspace_id'=>isset($meta['workspace_id'])?$meta['workspace_id']:null,'rollback_data'=>wp_json_encode(OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists))),'risk'=>in_array($type,array('option_update','woodmart_theme_setting'),true)?'high':(in_array($type,array('post_content','woo_product_price','woo_product_stock','elementor_widget_html','elementor_widget_settings','elementor_page_create','file_write'),true)?'medium':'low'),'created_at'=>$now,'expires_at'=>$expiry);
+  $data=array('operation_id'=>$op,'status'=>'pending','type'=>$type,'target'=>$target,'before_data'=>wp_json_encode($exists?$before:null,JSON_PRESERVE_ZERO_FRACTION),'after_data'=>wp_json_encode($after,JSON_PRESERVE_ZERO_FRACTION),'meta_data'=>wp_json_encode(array_merge($meta,array('rollback_descriptor'=>OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists)))),JSON_PRESERVE_ZERO_FRACTION),'diff_data'=>wp_json_encode($diff),'phase'=>'awaiting_approval','workspace_id'=>isset($meta['workspace_id'])?$meta['workspace_id']:null,'rollback_data'=>wp_json_encode(OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists))),'risk'=>OAI_Operations::risk($type,$target),'created_at'=>$now,'expires_at'=>$expiry);
   $id=OAI_DB::insert($data); if(is_wp_error($id))return $id; $row=OAI_DB::get($id); OAI_Audit::log('created',$row); return self::row($id);
  }
  private static function row($id){$r=OAI_DB::get($id); if(!$r)return null; foreach(array('before_data','after_data','applied_data','meta_data','diff_data','rollback_data') as $k){if(array_key_exists($k,$r))$r[$k]=json_decode($r[$k],true);} return OAI_Lifecycle::decorate($r);}
@@ -1087,6 +1144,13 @@ frame.addEventListener('load',function(){
   }
   $r=OAI_DB::get($id);
   if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404));
+  // Historical rows cannot bypass current target policy. Reject and rollback
+  // remain available, including reversal of formerly allowed option writes.
+  // "applying" retries only reconcile existing state under a lease; they never
+  // replay the write and must remain available so completed old writes can roll back.
+  if($r['type']==='option_update'&&($action==='approve'||($action==='apply'&&$r['status']!=='applying'))){
+   $policy=self::validate_option_write_target($r['target']);if(is_wp_error($policy))return $policy;
+  }
   $meta=json_decode((string)$r['meta_data'],true); if(!is_array($meta))$meta=array();
 
   // Crash-safe reconciliation is allowed only after an execution lease has
@@ -1636,14 +1700,14 @@ frame.addEventListener('load',function(){
   $req->set_param('type','file_write'); $req->set_param('target',$target); $req->set_param('value',$content);
   return self::sandbox_create($req);
  }
- public static function audit($req){return array('items'=>OAI_Audit::list($req->get_param('limit')?:200));}
- public static function verify($req){ $id=absint($req['id']); $row=OAI_DB::get($id); if(!$row)return new WP_Error('oai_not_found','Operation not found',array('status'=>404)); if($row['status']==='rolled_back')return OAI_Verify::operation($id,null,'rollback'); return OAI_Verify::operation($id); }
- public static function proof($req){ $x=OAI_Proof::make(absint($req['id'])); return $x?:new WP_Error('oai_not_found','Operation not found',array('status'=>404)); }
- public static function operation($req){ $r=OAI_DB::get(absint($req['id'])); if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404)); return self::row($r['id']); }
+ public static function audit($req){return OAI_Security::public_evidence(array('items'=>OAI_Audit::list($req->get_param('limit')?:200)));}
+ public static function verify($req){ $id=absint($req['id']); $row=OAI_DB::get($id); if(!$row)return new WP_Error('oai_not_found','Operation not found',array('status'=>404)); if($row['status']==='rolled_back')return OAI_Security::public_evidence(OAI_Verify::operation($id,null,'rollback')); return OAI_Security::public_evidence(OAI_Verify::operation($id)); }
+ public static function proof($req){ $x=OAI_Proof::make(absint($req['id'])); return $x?OAI_Security::public_evidence($x):new WP_Error('oai_not_found','Operation not found',array('status'=>404)); }
+ public static function operation($req){ $r=OAI_DB::get(absint($req['id'])); if(!$r)return new WP_Error('oai_not_found','Operation not found',array('status'=>404)); return OAI_Security::public_evidence(self::row($r['id'])); }
  public static function workspace_status($req){ return OAI_Workspace::list_workspaces(); }
  public static function workspace_create($req){
   $clone=!in_array(strtolower((string)$req->get_param('clone_theme')),array('0','false','no'),true);
-  return OAI_Workspace::create($clone);
+  return OAI_Workspace::create($clone,$req->get_param('idempotency_key')??'');
  }
  public static function workspace_files($req){return OAI_Workspace::files((string)$req->get_param('workspace_id'),(string)$req->get_param('path'));}
  public static function workspace_read($req){return OAI_Workspace::read((string)$req->get_param('workspace_id'),(string)$req->get_param('path'));}
@@ -1659,7 +1723,7 @@ frame.addEventListener('load',function(){
   $target='child_theme:'.$path;
   $op=OAI_Operations::new_id();
   $meta=array('workspace_id'=>$wid,'workspace_path'=>$path,'before_exists'=>$before_exists,'after_exists'=>true,'sandbox_artifact'=>true,'rollback_descriptor'=>OAI_Lifecycle::descriptor('theme_file_write',$target,$before,array('before_exists'=>$before_exists)));
-  $row=array('operation_id'=>$op,'status'=>'pending','type'=>'theme_file_write','target'=>$target,'before_data'=>wp_json_encode($before),'after_data'=>wp_json_encode($content),'meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'diff_data'=>wp_json_encode(OAI_Operations::diff($before,$content),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'risk'=>'high','phase'=>'awaiting_approval','workspace_id'=>$wid,'rollback_data'=>wp_json_encode($meta['rollback_descriptor']),'created_at'=>current_time('mysql',true),'expires_at'=>gmdate('Y-m-d H:i:s',time()+7*DAY_IN_SECONDS));
+  $row=array('operation_id'=>$op,'status'=>'pending','type'=>'theme_file_write','target'=>$target,'before_data'=>wp_json_encode($before),'after_data'=>wp_json_encode($content),'meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'diff_data'=>wp_json_encode(OAI_Operations::diff($before,$content),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'risk'=>OAI_Operations::risk('theme_file_write',$target),'phase'=>'awaiting_approval','workspace_id'=>$wid,'rollback_data'=>wp_json_encode($meta['rollback_descriptor']),'created_at'=>current_time('mysql',true),'expires_at'=>gmdate('Y-m-d H:i:s',time()+7*DAY_IN_SECONDS));
   $id=OAI_DB::insert($row); if(is_wp_error($id)){
    // A failed ledger insert must not leave an untracked workspace draft.
    $restore=OAI_Workspace::restore($wid,$path,$before_exists,$before);
@@ -1678,9 +1742,9 @@ frame.addEventListener('load',function(){
  private static function sandbox_create_from_patch($type,$id,$field,$before,$after,$meta=array()){ if($type==='post_content'){$allowed=OAI_Elementor::content_write_allowed($id);if(is_wp_error($allowed))return $allowed;} $diff=OAI_Operations::diff($before,$after); if(empty($diff['changed']))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409)); $op=OAI_Operations::new_id();$target=$id.':'.$field;$descriptor=OAI_Lifecycle::descriptor($type,$target,$before,array_merge(array('before_exists'=>true),$meta));$meta=array_merge($meta,array('rollback_descriptor'=>$descriptor));$row=array('operation_id'=>$op,'status'=>'pending','type'=>$type,'target'=>$target,'before_data'=>wp_json_encode($before,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'after_data'=>wp_json_encode($after,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'applied_data'=>null,'meta_data'=>wp_json_encode($meta,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'diff_data'=>wp_json_encode($diff,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'phase'=>'awaiting_approval','risk'=>OAI_Operations::risk($type,$field),'created_at'=>current_time('mysql',true),'expires_at'=>gmdate('Y-m-d H:i:s',time()+7*DAY_IN_SECONDS));$row['rollback_data']=wp_json_encode($descriptor,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);$idb=OAI_DB::insert($row);if(is_wp_error($idb))return $idb;OAI_Audit::log('created',array_merge($row,array('id'=>$idb)));return self::row($idb);}
 
  public static function runtime_fingerprint(){
-  $out=array('ok'=>true,'version'=>defined('OAI_VERSION')?OAI_VERSION:null,'build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:null,'plugin_main'=>defined('OAI_FILE')?OAI_FILE:null,'plugin_dir'=>defined('OAI_DIR')?OAI_DIR:dirname(__DIR__),'php_version'=>PHP_VERSION,'methods'=>array(),'routes'=>array());
+  $out=array('ok'=>true,'version'=>defined('OAI_VERSION')?OAI_VERSION:null,'build_id'=>defined('OAI_BUILD_ID')?OAI_BUILD_ID:null,'plugin_main'=>defined('OAI_FILE')?plugin_basename(OAI_FILE):null,'plugin_dir'=>dirname(plugin_basename(OAI_DIR.'okean-ai-admin.php')),'php_version'=>PHP_VERSION,'methods'=>array(),'routes'=>array());
   foreach(array('execution_wordpress','execution_plan','execution_input','runtime_fingerprint') as $m){
-   try{$rm=new ReflectionMethod('OAI_REST',$m);$file=$rm->getFileName();$out['methods'][$m]=array('file'=>$file,'start_line'=>$rm->getStartLine(),'end_line'=>$rm->getEndLine(),'sha256'=>($file&&is_readable($file)?hash_file('sha256',$file):null));}catch(Throwable $e){$out['methods'][$m]=array('error'=>$e->getMessage());}
+   try{$rm=new ReflectionMethod('OAI_REST',$m);$file=$rm->getFileName();$out['methods'][$m]=array('file'=>($file?plugin_basename($file):null),'start_line'=>$rm->getStartLine(),'end_line'=>$rm->getEndLine(),'sha256'=>($file&&is_readable($file)?hash_file('sha256',$file):null));}catch(Throwable $e){$out['methods'][$m]=array('error'=>$e->getMessage());}
   }
   try {
    $routes=rest_get_server()->get_routes();
@@ -1694,7 +1758,7 @@ frame.addEventListener('load',function(){
    }
    $out['route_count']=count($out['routes']);
   } catch(Throwable $e) { $out['route_error']=$e->getMessage(); }
-  return $out;
+  return OAI_Security::public_evidence($out);
  }
  public static function execution_readiness(){return array('version'=>OAI_VERSION,'command_registry'=>true,'command_count'=>count(OAI_Command_Registry::all()),'registry_audit'=>OAI_Command_Registry::handler_audit(),'execution'=>OAI_WP_CLI_Execution::readiness(),'normalizer'=>true,'argument_parser'=>true,'permission_resolver'=>true,'dispatcher'=>true,'wp_post_resolver'=>true,'gutenberg_resolver'=>true,'parse_blocks'=>function_exists('parse_blocks'),'serialize_blocks'=>function_exists('serialize_blocks'),'direct_live_writes'=>false,'approval_required'=>true);}
  public static function execution_input($req,$key,$default=null){
