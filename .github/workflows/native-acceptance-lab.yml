@@ -1,0 +1,90 @@
+name: Native acceptance lab
+# On-demand real-WordPress lab. Only maintainers can dispatch it. It never runs
+# on pull_request and never has access to repository secrets from fork code.
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: 'Comma-separated paths under tests/wordpress-*.php'
+        required: true
+        default: 'tests/wordpress-classic-theme.php'
+      full_suite:
+        description: 'Run the complete disposable WordPress smoke suite instead'
+        type: choice
+        options: ['no', 'yes']
+        default: 'no'
+      theme:
+        description: 'Theme to install and activate before focused tests'
+        type: choice
+        options: ['twentytwentyone', 'none']
+        default: 'twentytwentyone'
+      image_editor:
+        description: 'Image editor used by media tests'
+        type: choice
+        options: ['WP_Image_Editor_Imagick', 'WP_Image_Editor_GD']
+        default: 'WP_Image_Editor_Imagick'
+      wp:
+        description: 'WordPress version (latest or a pinned version)'
+        required: true
+        default: 'latest'
+      elementor:
+        description: 'Elementor version'
+        required: true
+        default: 'latest'
+      woo:
+        description: 'WooCommerce version'
+        required: true
+        default: 'latest'
+      run_woodmart:
+        description: 'Provision the hash-pinned Woodmart MCP source from the WOODMART_MCP_ZIP_BASE64 secret'
+        type: choice
+        options: ['no', 'yes']
+        default: 'no'
+permissions:
+  contents: read
+concurrency:
+  group: native-acceptance-lab-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-password
+          MYSQL_DATABASE: wp_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, pdo_mysql, curl, sodium, gd, imagick
+          coverage: none
+      - name: Full disposable WordPress suite
+        if: inputs.full_suite == 'yes'
+        env:
+          WP_TEST_VERSION: ${{ inputs.wp }}
+          ELEMENTOR_TEST_VERSION: ${{ inputs.elementor }}
+          WOO_TEST_VERSION: ${{ inputs.woo }}
+          OAI_MEDIA_TEST_EDITOR: ${{ inputs.image_editor }}
+        run: bash tests/wordpress-native-smoke.sh
+      - name: Focused WordPress suite
+        if: inputs.full_suite != 'yes'
+        env:
+          OAI_LAB_TESTS: ${{ inputs.tests }}
+          OAI_LAB_THEME: ${{ inputs.theme }}
+          OAI_LAB_WOODMART: ${{ inputs.run_woodmart == 'yes' && '1' || '0' }}
+          WOODMART_MCP_ZIP_BASE64: ${{ secrets.WOODMART_MCP_ZIP_BASE64 }}
+          WP_TEST_VERSION: ${{ inputs.wp }}
+          ELEMENTOR_TEST_VERSION: ${{ inputs.elementor }}
+          WOO_TEST_VERSION: ${{ inputs.woo }}
+          OAI_MEDIA_TEST_EDITOR: ${{ inputs.image_editor }}
+        run: bash tests/wordpress-ci-lab.sh
