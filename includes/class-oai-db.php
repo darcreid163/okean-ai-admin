@@ -214,6 +214,7 @@ class OAI_DB {
    // Restore only a missing claim after a storage fault; never replace a
    // different owner's/generation's reservation. Ordinary retries cannot clear it.
    try{$missing=$wpdb->get_row($wpdb->prepare('SELECT option_value FROM '.$wpdb->options.' WHERE option_name=%s',$name),ARRAY_A);if($missing===null&&$wpdb->last_error===''){wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');add_option($name,self::$media_creation['raw'],'',false);}}catch(Throwable $ignored){}
+   do_action('oai_media_creation_uncertain',$error);
    throw new RuntimeException('Media creation outcome requires reconciliation');
   }finally{self::$media_creation=null;}
  }
@@ -240,7 +241,19 @@ class OAI_DB {
   // Persisted ownership is checked by the INSERT itself, including reconnects.
   $sql='INSERT INTO '.self::table().' ('.implode(',',$columns).') SELECT '.implode(',',$values).' FROM DUAL WHERE @@session.autocommit=1 AND EXISTS (SELECT 1 FROM '.$wpdb->options.' WHERE option_name=%s AND BINARY option_value=BINARY %s) AND NOT EXISTS (SELECT 1 FROM '.self::table().' WHERE type=\'media_upload\' AND LOCATE(BINARY %s,BINARY meta_data)>0)';
   $claim='"_wpai_creation_claim":"'.$context['claim_hash'].'"';
-  $ok=$wpdb->query($wpdb->prepare($sql,array_merge($args,array($context['name'],$context['raw'],$claim))));
+  // A deadlock or lock-wait timeout can lose a guarded INSERT that never
+  // committed. Retrying is safe because the statement is idempotent: a
+  // committed row makes the next attempt insert nothing and be recovered below.
+  $ok=false;$lastError='';
+  for($attempt=0;$attempt<3;$attempt++){
+   $suppressed=$wpdb->suppress_errors(true);
+   try{$ok=$wpdb->query($wpdb->prepare($sql,array_merge($args,array($context['name'],$context['raw'],$claim))));}
+   finally{$wpdb->suppress_errors($suppressed);}
+   if($ok===1||$ok===0)break;
+   $lastError=(string)$wpdb->last_error;
+   do_action('oai_media_creation_insert_retry',$attempt,$lastError);
+   usleep(50000*(1+$attempt));
+  }
   if($ok===1){$id=(int)$wpdb->insert_id;self::$media_creation['operation_id']=$id;return $id;}
   // wpdb may retry a query after reconnecting. Recover only this exact
   // invocation's row, bound to the same claim, target and original snapshots.
@@ -251,6 +264,7 @@ class OAI_DB {
   }
   // A false query result can follow a committed INSERT with a lost reply.
   // Keep the private artifact and durable journal for evidence-based recovery.
+  do_action('oai_media_creation_insert_failed',$ok,$lastError);
   throw new RuntimeException('Media creation outcome requires reconciliation');
  }
  /** Reject repeated new existing-target edits; never return another operation. */
