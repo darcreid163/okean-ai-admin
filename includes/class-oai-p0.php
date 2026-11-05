@@ -203,8 +203,9 @@ class OAI_P0 {
   if($wpdb->last_error!=='')return new WP_Error('oai_menu_storage','Menu reservation unavailable',array('status'=>503));
   // Unique option_name is the atomic admission point. Crash/unknown outcome
   // claims remain held: a timeout or old timestamp cannot prove absence.
-  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
-  if(!add_option($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
+  $admission=OAI_DB::insert_creation_claim($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))));
+  if(is_wp_error($admission))return $admission;
+  if($admission!==true)
    return new WP_Error('oai_menu_creation_pending','Menu creation intent already reserved; verify before retry',array('status'=>409));
   $id=wp_create_nav_menu($name);if(is_wp_error($id))return $id;update_term_meta($id,'_oai_sandbox_artifact','1');
   $after=self::menu_snapshot($id);if(is_wp_error($after)){wp_delete_nav_menu($id);return $after;}
@@ -261,8 +262,9 @@ class OAI_P0 {
   }
   if($wpdb->last_error!=='')return new WP_Error('oai_menu_item_storage','Item creation reservation unavailable',array('status'=>503));
   // Persist the claim before wp_update_nav_menu_item can write a new post.
-  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
-  if(!add_option($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
+  $admission=OAI_DB::insert_creation_claim($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))));
+  if(is_wp_error($admission))return $admission;
+  if($admission!==true)
    return new WP_Error('oai_menu_item_creation_pending','Menu item creation requires reconciliation',array('status'=>409));
   $item_id=wp_update_nav_menu_item($menu_id,0,$args);if(is_wp_error($item_id))return $item_id;
   wp_update_post(array('ID'=>$item_id,'post_status'=>'draft'));update_post_meta($item_id,'_oai_sandbox_artifact','1');

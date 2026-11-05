@@ -75,8 +75,9 @@ class OAI_Workspace {
   $root=self::ensure_root(); if(!$root)return new WP_Error('oai_workspace_root','Could not create workspace root',array('status'=>500));
   $id=self::id();
   $claim=array('id'=>$id,'actor'=>$actor,'payload_hash'=>$payload_hash,'state'=>'reserved','created_at'=>time());
-  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
-  if(!add_option($intent,$claim,'',false))
+  $admission=OAI_DB::insert_creation_claim($intent,$claim);
+  if(is_wp_error($admission))return $admission;
+  if($admission!==true)
    return new WP_Error('oai_workspace_creation_pending','Workspace creation intent already reserved; verify its files before retry',array('status'=>409));
   $base=$root.'/'.$id;
   if(!wp_mkdir_p($base))return new WP_Error('oai_workspace_dir','Could not initialize workspace directory',array('status'=>500));

@@ -273,8 +273,9 @@ class OAI_WooCommerce {
    return new WP_Error('oai_product_creation_pending','Product creation requires result reconciliation',array('status'=>409));
   }
   if($wpdb->last_error!=='')return new WP_Error('oai_product_storage','Product creation reservation unavailable',array('status'=>503));
-  wp_cache_delete($intent,'options');wp_cache_delete('notoptions','options');
-  if(!add_option($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))),'',false))
+  $admission=OAI_DB::insert_creation_claim($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))));
+  if(is_wp_error($admission))return $admission;
+  if($admission!==true)
    return new WP_Error('oai_product_creation_pending','Product creation requires result reconciliation',array('status'=>409));
   $p=$type==='variable'?new WC_Product_Variable():new WC_Product_Simple();$p->set_name(wp_strip_all_tags((string)($changes['name']??'AI Admin draft product')));$p->set_status('draft');$id=$p->save();
   if(!$id)return new WP_Error('oai_woo_create','Failed to create draft product',array('status'=>500));
