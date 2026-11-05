@@ -75,3 +75,11 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-me
 
 # Read-only privileged claim inventory on synthetic options; never a reconciliation/cleanup.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-claim-audit.php"
+
+# Classic (non-block) theme surface: theme mods, nav-menu locations, classic
+# content and theme file scopes. Runs last because it switches the active theme.
+# Twenty Twenty-One ships with WordPress, but install it explicitly so the test
+# never silently depends on bundled-theme presence.
+wp_test theme install twentytwentyone || true
+wp_test theme activate twentytwentyone
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-classic-theme.php"
