@@ -95,8 +95,9 @@ try{
  // Six independent WP processes race before any persistent media side effects.
  $concurrent=creationFile($prefix,'concurrent');$before=creationState();
  for($i=0;$i<6;$i++)$workers[]=creationRunWorker($concurrent['filename']);
- $wins=0;$denied=0;foreach($workers as $worker){$out=creationWorkerResult($worker);if(isset($out['id']))$wins++;elseif(in_array($out['error']??'',['oai_duplicate_pending','oai_creation_unresolved','oai_creation_busy'],true)&&($out['status']??0)===409)$denied++;}$workers=[];
- $after=creationState();creationAssert($wins===1&&$denied===5&&$after[1]===$before[1]+1&&$after[2]===$before[2]+1&&count($after[0])===count($before[0])+1,'Concurrent media requests created extra artifacts/operations');
+ $wins=0;$denied=0;$notes=[];foreach($workers as $worker){$out=creationWorkerResult($worker);if(isset($out['id']))$wins++;elseif(in_array($out['error']??'',['oai_duplicate_pending','oai_creation_unresolved','oai_creation_busy'],true)&&($out['status']??0)===409)$denied++;if(!empty($out['detail']))$notes[]=implode(' / ',$out['detail']);}$workers=[];
+ $after=creationState();$delta=sprintf('wins=%d denied=%d files=%+d attachments=%+d operations=%+d',$wins,$denied,count($after[0])-count($before[0]),$after[1]-$before[1],$after[2]-$before[2]);
+ creationAssert($wins===1&&$denied===5&&$after[1]===$before[1]+1&&$after[2]===$before[2]+1&&count($after[0])===count($before[0])+1,'Concurrent media requests created extra artifacts/operations ('.$delta.($notes?'; '.implode(' | ',$notes):'').')');
  echo 'PASS: '.CreationFixture::$checks." durable media creation checks; sequential/URL/concurrent retries, actor/terminal/uncertain fences, SQL ownership, rollback and 6-process single artifact\n";
 }finally{
  foreach($workers as [$process,$pipes]){foreach($pipes as $pipe)if(is_resource($pipe))fclose($pipe);if(is_resource($process)){proc_terminate($process);proc_close($process);}}
