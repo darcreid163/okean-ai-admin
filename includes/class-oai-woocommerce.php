@@ -239,13 +239,6 @@ class OAI_WooCommerce {
    wc_delete_product_transients((int)$id);return self::get_full($id);
   }catch(Throwable $e){return new WP_Error('oai_woo_apply',$e->getMessage(),array('status'=>422));}
  }
- /** Stable representation: associative key order is not part of a product intent. */
- private static function creation_canonical($value){
-  if(!is_array($value))return $value;
-  if(!array_is_list($value))ksort($value,SORT_STRING);
-  foreach($value as $key=>$item)$value[$key]=self::creation_canonical($item);
-  return $value;
- }
  public static function create_draft($changes,$request_key=''){
   if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
   if(!is_array($changes))$changes=array();$type=sanitize_key((string)($changes['type']??'simple'));
@@ -255,11 +248,9 @@ class OAI_WooCommerce {
    return new WP_Error('oai_product_request_key','Invalid product idempotency_key',array('status'=>400));
   $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
   $actor=get_current_user_id();
-  $normalized=self::creation_canonical($changes);
-  $raw=wp_json_encode($normalized,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION);
-  if(!is_string($raw))return new WP_Error('oai_product_intent','Cannot encode product intent',array('status'=>503));
-  $payload_hash=hash('sha256',$raw);
-  $identity=wp_json_encode(array('product-create-v1',get_current_blog_id(),$actor,$request_key!==''?$request_key:$payload_hash));
+  $payload_fingerprint=OAI_Creation_Intent::fingerprint($changes);
+  if(!is_string($payload_fingerprint))return new WP_Error('oai_product_intent','Cannot encode product intent',array('status'=>503));
+  $identity=wp_json_encode(array('product-create-v1',get_current_blog_id(),$actor,$request_key!==''?$request_key:$payload_fingerprint));
   if(!is_string($identity))return new WP_Error('oai_product_intent','Cannot encode product identity',array('status'=>503));
   $intent='oai_product_creation_'.hash('sha256',$identity);
   global $wpdb;
@@ -268,12 +259,12 @@ class OAI_WooCommerce {
   $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
   if($existing!==null){
    $prior=maybe_unserialize($existing);
-   if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+   if(OAI_Creation_Intent::classify($prior,$payload_fingerprint)==='conflict')
     return new WP_Error('oai_product_intent_conflict','Reused product creation key with different payload',array('status'=>409));
    return new WP_Error('oai_product_creation_pending','Product creation requires result reconciliation',array('status'=>409));
   }
   if($wpdb->last_error!=='')return new WP_Error('oai_product_storage','Product creation reservation unavailable',array('status'=>503));
-  $admission=OAI_DB::insert_creation_claim($intent,array('actor'=>$actor,'payload_hash'=>$payload_hash,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16))));
+  $admission=OAI_DB::insert_creation_claim($intent,OAI_Creation_Intent::record($payload_fingerprint,array('actor'=>$actor,'created_at'=>time(),'state'=>'reserved','claim'=>bin2hex(random_bytes(16)))));
   if(is_wp_error($admission))return $admission;
   if($admission!==true)
    return new WP_Error('oai_product_creation_pending','Product creation requires result reconciliation',array('status'=>409));

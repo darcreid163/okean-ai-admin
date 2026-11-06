@@ -25,7 +25,9 @@ miErr(miCreate($otherMenu,'WP AI Test Menu Item One','menu-item-create-one-12345
 $priorItemKey='menu-item-prior-claim-123456';
 $oldItemRaw=wp_json_encode(['menu-item-v1',get_current_blog_id(),1,(int)$menu,$priorItemKey]);
 miAssert(add_option('oai_menu_item_creation_'.hash('sha256',$oldItemRaw),['actor'=>1,'payload_hash'=>str_repeat('a',64),'state'=>'reserved'],'',false),'Cannot seed old menu-item claim');
-miErr(miCreate($menu,'WP AI Prior Menu Item',$priorItemKey),'oai_menu_item_intent_conflict');
+// A historical record has no canonical fingerprint. Its legacy payload_hash
+// cannot prove equality or a deliberate change, so it stays held as pending.
+miErr(miCreate($menu,'WP AI Prior Menu Item',$priorItemKey),'oai_menu_item_creation_pending');
 miErr(miCreate($menu,'<strong>WP AI Test Menu Item One</strong>','menu-item-create-one-123456'),'oai_menu_item_creation_pending');
 miErr(miCreate($menu,'WP AI Test Menu Item One','menu-item-create-one-123456','https://example.invalid/change'),'oai_menu_item_intent_conflict');
 miAssert(miCount()===$before+1&&OAI_DB::count_all()===$ops+1,'Retry or conflict created artifact');

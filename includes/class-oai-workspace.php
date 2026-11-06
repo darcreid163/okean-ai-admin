@@ -47,9 +47,8 @@ class OAI_Workspace {
   if(!is_string($request_key) || ($request_key!=='' && !preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$request_key)))
    return new WP_Error('oai_workspace_request_key','Invalid workspace idempotency_key',array('status'=>400));
   $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
-  $payload=wp_json_encode(array('stylesheet'=>get_stylesheet(),'template'=>get_template(),'clone_theme'=>(bool)$clone_theme),JSON_UNESCAPED_SLASHES);
-  if(!is_string($payload))return new WP_Error('oai_workspace_intent','Cannot encode workspace payload',array('status'=>503));
-  $payload_hash=hash('sha256',$payload);
+  $payload_fingerprint=OAI_Creation_Intent::fingerprint(array('stylesheet'=>get_stylesheet(),'template'=>get_template(),'clone_theme'=>(bool)$clone_theme));
+  if(!is_string($payload_fingerprint))return new WP_Error('oai_workspace_intent','Cannot encode workspace payload',array('status'=>503));
   // An explicit retry key identifies one request, not each different payload.
   // Legacy calls without a key keep the existing per-theme/clone fingerprint.
   $identity=wp_json_encode($request_key!==''?array('workspace-v3',get_current_blog_id(),$actor,$request_key):array('workspace-v2',get_current_blog_id(),$actor,get_stylesheet(),get_template(),(bool)$clone_theme,''),JSON_UNESCAPED_SLASHES);
@@ -67,14 +66,14 @@ class OAI_Workspace {
   $existing=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$intent));
   if($existing!==null){
    $prior=maybe_unserialize($existing);
-   if(is_array($prior)&&isset($prior['payload_hash'])&&!hash_equals((string)$prior['payload_hash'],$payload_hash))
+   if(OAI_Creation_Intent::classify($prior,$payload_fingerprint)==='conflict')
     return new WP_Error('oai_workspace_intent_conflict','Workspace creation key reused with changed payload',array('status'=>409));
    return new WP_Error('oai_workspace_creation_pending','Workspace creation requires reconciliation',array('status'=>409));
   }
   if($wpdb->last_error!=='')return new WP_Error('oai_workspace_storage','Workspace reservation unavailable',array('status'=>503));
   $root=self::ensure_root(); if(!$root)return new WP_Error('oai_workspace_root','Could not create workspace root',array('status'=>500));
   $id=self::id();
-  $claim=array('id'=>$id,'actor'=>$actor,'payload_hash'=>$payload_hash,'state'=>'reserved','created_at'=>time());
+  $claim=OAI_Creation_Intent::record($payload_fingerprint,array('id'=>$id,'actor'=>$actor,'state'=>'reserved','created_at'=>time()));
   $admission=OAI_DB::insert_creation_claim($intent,$claim);
   if(is_wp_error($admission))return $admission;
   if($admission!==true)

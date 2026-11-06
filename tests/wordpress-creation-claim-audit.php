@@ -26,6 +26,14 @@ try{
   $bad=$prefix.hash('sha256','claims-ci-bad-'.$family.'-'.wp_generate_uuid4());
   claimCheck(add_option($bad,'not-a-claim-'.$secret,'',false),'Cannot seed opaque '.$family);
   $names[]=$bad;
+  $canonical=$prefix.hash('sha256','claims-ci-canonical-'.$family.'-'.wp_generate_uuid4());
+  claimCheck(add_option($canonical,OAI_Creation_Intent::record(str_repeat('b',64),
+   array('state'=>'reserved','created_at'=>time(),'claim'=>$secret)),'',false),'Cannot seed canonical '.$family);
+  $names[]=$canonical;
+  $legacy=$prefix.hash('sha256','claims-ci-legacy-'.$family.'-'.wp_generate_uuid4());
+  claimCheck(add_option($legacy,array('state'=>'reserved','created_at'=>time(),
+   'payload_hash'=>str_repeat('c',64),'claim'=>$secret),'',false),'Cannot seed legacy '.$family);
+  $names[]=$legacy;
  }
  // Synthetic workspace evidence: an existing metadata file, absent
  // directory, symlink and malicious path string. All are disposable.
@@ -56,6 +64,9 @@ try{
   claimCheck($row['sampled']>=2&&!$row['truncated'],'No bounded claim inventory for '.$family);
   claimCheck($row['declared_reserved']>=1&&$row['unreadable_metadata']>=1,'Valid/opaque claim classification wrong '.$family);
   claimCheck($row['with_operation_reference']>=1&&$row['older_than_24h']>=1,'Claim evidence/time counters incorrect '.$family);
+  claimCheck($row['with_canonical_fingerprint']>=1,'Canonical fingerprint not counted for '.$family);
+  claimCheck($row['without_canonical_fingerprint']>=2,'Legacy fingerprint absence not counted for '.$family);
+  claimCheck($row['legacy_unverifiable']>=1,'Legacy payload_hash was reported as verifiable for '.$family);
   if($family==='media')claimCheck($row['referenced_operation_same_type']>=1,'Real media ledger link was missed');
   if($family==='menu')claimCheck($row['referenced_operation_other_type']>=1,'Wrong-type ledger link was accepted');
   if($family==='product')claimCheck($row['referenced_operation_missing']>=1,'Missing operation was accepted');

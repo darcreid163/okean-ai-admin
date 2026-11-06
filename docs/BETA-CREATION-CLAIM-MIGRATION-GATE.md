@@ -29,14 +29,18 @@ files contain these changes.
    values in public CI, logs or issue comments. If `complete=false`, the sample
    did **not** cover all claims. Even a complete sample is not independently
    verified reconciliation.
-4. **Upgrade invariants:** old workspace-v2, menu-v1 and menu-item-v1 claim names
-   can include payload fields in a SHA-256 identity with no invertible nonce.
-   A changed-payload retry across that candidate upgrade cannot always be matched
-   to the old claim. **Block unattended creation writes** if such claims might be
-   outstanding; first reconcile all uncertain claims against original site identity,
-   request/intent evidence, actual artifact(s), operations and Verify/Receipt.
-   Never automatically clear an old claim because it is aged, absent from a
-   metadata file or listed as failed.
+4. **Upgrade invariants:** old workspace-v2, menu-v1, menu-item-v1, product and
+   elementor-page claim names can include payload fields in a SHA-256 identity
+   with no invertible nonce. New records carry `payload_scheme` and
+   `payload_fingerprint` (`CREATION-INTENT-IDENTITY.md`). A record without them
+   is reported as `without_canonical_fingerprint`/`legacy_unverifiable` and stays
+   **held**: its legacy `payload_hash` cannot prove either equality or a changed
+   payload. A changed-payload retry across that candidate upgrade cannot always
+   be matched to the old claim. **Block unattended creation writes** if such
+   claims might be outstanding; first reconcile all uncertain claims against
+   original site identity, request/intent evidence, actual artifact(s),
+   operations and Verify/Receipt. Never automatically clear an old claim because
+   it is aged, absent from a metadata file or listed as failed.
 5. **Known uncertain outcomes:** reserve and reconcile separately:
    - A reserved claim plus linked, verified artifact and ledger operation requires
      operator evidence before any state transition.
