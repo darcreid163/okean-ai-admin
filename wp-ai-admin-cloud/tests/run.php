@@ -49,7 +49,7 @@ rejects(fn()=>$core->call($actor,$site['id'],'wp_get_site',['uncertain'=>true],'
 check($transport->executions===$executions && $core->usage('1',$now)['reserved']===1,'Uncertain action retried or released');
 check($core->usage('2',$now)['used']===0,'Cross-account balance leak');
 check($core->usage('1',strtotime('2026-11-01T00:00:00Z'))['used']===0,'Day did not reset');
-check($core->usage('1',$now)['used']===1,'Past month balance changed');
+check($core->usage('1',$now)['used']===1,'Earlier balance changed');
 $core->throttle('1','test_rate',$now,2); $core->throttle('1','test_rate',$now,2);
 rejects(fn()=>$core->throttle('1','test_rate',$now,2),'rate_limit_exceeded');
 $core->throttle('1','test_rate',$now+60,2);
