@@ -35,6 +35,9 @@ wp_test plugin status okean-ai-admin
 # Draft-only disposable WooCommerce/Gutenberg regression imported after its
 # original Native PR #20 passed both WP profiles. No site publishing.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-commerce-blocks-matrix.php"
+# Gutenberg preservation: raw before bytes, merged/removed attributes, explicit
+# innerContent part and byte-exact apply -> verify -> rollback.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-gutenberg-preservation.php"
 # Normal Native license/approval/rollback lifecycle, temporary product only.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-lifecycle.php"
 # Current target policy also applies to historical pending/approved options.

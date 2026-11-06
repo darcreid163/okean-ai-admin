@@ -115,6 +115,13 @@ class OAI_Verify {
    $result['checks'][]=array('name'=>'authoritative_consistency','ok'=>$wp_matches_authoritative,'wp'=>$current,'persistent'=>$auth_current);
    $result['verification_source']=$wp_matches_authoritative?'dual_match':'conflict';
    $same=$expected_exists ? self::same($auth_current,$expected) : !$auth_exists;
+   // Gutenberg patches store the exact intended post_content bytes. Semantic
+   // canonicalisation must not hide a save filter that rewrote the document.
+   if($same && $expected_exists && $row['type']==='post_content' && ($meta['kind']??'')==='gutenberg_block_patch'){
+    $byte_exact=is_string($auth_current)&&is_string($expected)&&hash_equals(hash('sha256',$auth_current),hash('sha256',$expected));
+    $result['checks'][]=array('name'=>'byte_exact_post_content','ok'=>$byte_exact,'expected_sha256'=>is_string($expected)?hash('sha256',$expected):null,'actual_sha256'=>is_string($auth_current)?hash('sha256',$auth_current):null,'expected_bytes'=>is_string($expected)?strlen($expected):null,'actual_bytes'=>is_string($auth_current)?strlen($auth_current):null);
+    $same=$byte_exact;
+   }
    $result['checks'][]=array('name'=>'value_match','ok'=>$same);
    $result['checks'][]=array('name'=>'authoritative_value_match','ok'=>$same);
    $result['verified']=self::all_checks_ok($result['checks']);
