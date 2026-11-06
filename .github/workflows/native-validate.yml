@@ -134,11 +134,57 @@ jobs:
             dist/wp-ai-admin-*.zip.sha256
           if-no-files-found: error
 
+  package-install:
+    # The smoke suite installs from the checkout. This job installs the ZIP
+    # produced by build-artifact, so a broken or misplaced artifact cannot ship.
+    runs-on: ubuntu-latest
+    needs: [build-artifact]
+    strategy:
+      fail-fast: false
+      matrix:
+        wp: ['7.0.6', latest]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-password
+          MYSQL_DATABASE: wp_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, pdo_mysql, curl, sodium, gd, imagick
+          coverage: none
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Verify the published checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c wp-ai-admin-*.zip.sha256)
+      - name: Install and boot the published artifact
+        env:
+          WP_TEST_VERSION: ${{ matrix.wp }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="$(ls dist/wp-ai-admin-*.zip | head -n1)"
+          bash tests/wordpress-artifact-install.sh "$ZIP"
+
   release:
     # Publishing requires a separately authorized, exact version tag.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [php, wordpress-smoke, build-artifact]
+    needs: [php, wordpress-smoke, build-artifact, package-install]
     permissions:
       contents: write
     steps:
