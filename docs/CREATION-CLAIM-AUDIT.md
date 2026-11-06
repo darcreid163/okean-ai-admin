@@ -28,6 +28,18 @@ automated judgement of which records can be released. Older-than-24h is merely
 an observation. The actual existence of artifacts and ownership of related
 operations have **not** been independently verified.
 
+The canonical-fingerprint counters are:
+
+- `with_canonical_fingerprint` — valid `oai/creation-intent/v1` record;
+- `without_canonical_fingerprint` — decodable record with no valid canonical
+  scheme/fingerprint;
+- `legacy_unverifiable` — a subset of the latter that carries a legacy
+  `payload_hash`. It looks comparable but was produced from an older payload
+  shape, so it must never be reported as a verified match.
+
+See `CREATION-INTENT-IDENTITY.md`. A legacy or unreadable record stays held;
+this route still has no release, retry or reconciliation action.
+
 ## Preliminary operation-reference checks
 
 For claims that declare a positive numeric operation ID, the auditor performs

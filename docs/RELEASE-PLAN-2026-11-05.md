@@ -65,11 +65,12 @@ SQL-вставкой одного победителя; exact-HEAD CI зелён
 
 Разбить #103 на три независимых issue/PR:
 
-**2.1. Legacy и алиасы.**
+**2.1. Legacy и алиасы.** (#122)
 Канонический fingerprint для одинакового запроса из REST, MCP и Cloud Batch;
 нормализация алиасов; поведение для исторических строк без fingerprint
 (их нельзя «угадывать» и удалять по возрасту). Тесты: разные entry points дают
-один pending, а разные payload/actor — независимые операции.
+один pending, а разные payload/actor — независимые операции. Контракт:
+`docs/CREATION-INTENT-IDENTITY.md`.
 
 **2.2. Операторская сверка и retention.**
 Уже есть read-only диагностика (`/diagnostics/creation-intents`) — она ничего

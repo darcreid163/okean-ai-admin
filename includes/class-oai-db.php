@@ -175,7 +175,7 @@ class OAI_DB {
   $json=wp_json_encode(self::pending_intent_value((object)array('actor'=>$actor,'intent'=>(object)$intent)),JSON_PRESERVE_ZERO_FRACTION|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
   if(!is_string($json))return new WP_Error('oai_creation_payload','Invalid creation intent',array('status'=>400));
   $fingerprint=hash('sha256',$json);$name='oai_media_creation_'.$fingerprint;
-  $record=array('v'=>1,'actor'=>$actor,'claim'=>bin2hex(random_bytes(16)),'created_at'=>time(),'operation_id'=>0,'attachment_id'=>0,'source_name'=>(string)($intent['filename']??''),'content_sha256'=>(string)($intent['bytes_sha256']??''));
+  $record=OAI_Creation_Intent::record($fingerprint,array('v'=>1,'actor'=>$actor,'claim'=>bin2hex(random_bytes(16)),'created_at'=>time(),'operation_id'=>0,'attachment_id'=>0,'source_name'=>(string)($intent['filename']??''),'content_sha256'=>(string)($intent['bytes_sha256']??'')));
   $raw=wp_json_encode($record);if(!is_string($raw))return new WP_Error('oai_creation_payload','Invalid media creation record',array('status'=>400));$acquired=false;
   for($attempt=0;$attempt<3;$attempt++){
    // Read the database, never a potentially stale positive/negative option cache.

@@ -67,6 +67,9 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-pr
 # Reserve Elementor drafts before post creation; exercise random wrappers and 6 workers.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-elementor-creation.php"
 
+# One canonical fingerprint across REST and MCP; legacy rows stay held.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-intent.php"
+
 # Preserve created artifact operation evidence before any operator-only reconciliation.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-evidence-cleanup.php"
 
