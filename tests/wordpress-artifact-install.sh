@@ -31,10 +31,11 @@ wp_t core install --url=http://localhost:8080 --title="Artifact Smoke" \
 # Install the artifact, not the checkout. A ZIP shipped to testers must be the
 # thing that activates.
 wp_t plugin install "$ARTIFACT" --activate
-wp_t plugin status okean-ai-admin --field=status | grep -qx 'active' \
-  || { echo "ERROR: plugin is not active after installing the artifact" >&2; exit 1; }
+STATUS="$(wp_t plugin list --name=okean-ai-admin --field=status)"
+test "$STATUS" = 'active' \
+  || { echo "ERROR: plugin is not active after installing the artifact (status: $STATUS)" >&2; exit 1; }
 
-INSTALLED_VERSION="$(wp_t plugin get okean-ai-admin --field=version)"
+INSTALLED_VERSION="$(wp_t plugin list --name=okean-ai-admin --field=version)"
 test "$INSTALLED_VERSION" = "$FILE_VERSION" \
   || { echo "ERROR: artifact name version $FILE_VERSION != plugin version $INSTALLED_VERSION" >&2; exit 1; }
 
@@ -60,12 +61,14 @@ done
 # QA implementation; booting without it is part of the contract.
 test ! -e "$PLUGIN_DIR/includes/class-oai-elementor-schema-save.php" \
   || { echo "ERROR: artifact unexpectedly contains the excluded Elementor QA file" >&2; exit 1; }
-find "$PLUGIN_DIR" -type f \( -name '*.zip' -o -name '*.sql' -o -name '*.sqlite' -o -name '*.env' -o -name '*.pem' -o -name '*.key' \) -print -quit | grep -q . \
-  && { echo "ERROR: artifact contains a forbidden file type" >&2; exit 1; }
+FORBIDDEN_FILE="$(find "$PLUGIN_DIR" -type f \( -name '*.zip' -o -name '*.sql' -o -name '*.sqlite' -o -name '*.env' -o -name '*.pem' -o -name '*.key' \) -print -quit)"
+test -z "$FORBIDDEN_FILE" \
+  || { echo "ERROR: artifact contains a forbidden file: $FORBIDDEN_FILE" >&2; exit 1; }
 
 wp_t plugin deactivate okean-ai-admin
 wp_t plugin activate okean-ai-admin
-wp_t plugin status okean-ai-admin --field=status | grep -qx 'active' \
-  || { echo "ERROR: plugin did not reactivate cleanly" >&2; exit 1; }
+STATUS="$(wp_t plugin list --name=okean-ai-admin --field=status)"
+test "$STATUS" = 'active' \
+  || { echo "ERROR: plugin did not reactivate cleanly (status: $STATUS)" >&2; exit 1; }
 
 echo "PASS artifact install: wp-ai-admin-$FILE_VERSION.zip activated, booted and reactivated on WordPress ${WP_TEST_VERSION:-latest}"
