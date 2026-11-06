@@ -1,18 +1,18 @@
 {
-  "version": "tariffs-v2-20261019",
+  "version": "tariffs-v3-20261106",
   "period": "per_plan_utc",
   "status": "quota_policy_only_payments_not_implemented",
   "plans": {
     "free": 100,
-    "pro": 500,
-    "biznes": 2000,
-    "biznespro": 5000
+    "daily": 500,
+    "pro": 2000,
+    "business": 5000
   },
   "periods": {
-    "free": "calendar_month_utc",
+    "free": "calendar_day_utc",
+    "daily": "calendar_day_utc",
     "pro": "calendar_day_utc",
-    "biznes": "calendar_day_utc",
-    "biznespro": "calendar_day_utc"
+    "business": "calendar_day_utc"
   },
   "legacy_plans": {
     "free": 100,

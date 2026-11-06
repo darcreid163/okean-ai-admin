@@ -45,12 +45,16 @@ At handoff, report changed files, commit/PR, test commands and results, known ga
 
 Use the current approved tariff policy as the starting baseline; verify it against the actual Cloud configuration and tests before changing it:
 
-| Tariff | Included quota |
-|---|---:|
-| Free | 100 actions / month |
-| Pro | 2,000 actions / month |
-| Business | 5,000 actions / month |
-| BusinessPro | 10,000 actions / month |
+| Tariff | Slug | Included quota |
+|---|---|---:|
+| Free | `free` | 100 actions / UTC day |
+| Daily | `daily` | 500 actions / UTC day |
+| Pro | `pro` | 2,000 actions / UTC day |
+| Business | `business` | 5,000 actions / UTC day |
+
+The canonical tariff table is the Native table above (owner decision 06.11.2026). There is no `BusinessPro` tier. Every current tariff uses the UTC calendar day as its quota period. Legacy monthly accounts and plans (`legacy_monthly_v1`) keep their existing monthly terms until an explicit, audited transfer; they are never silently re-rated. Retired current-scheme slugs `biznes`/`biznespro` are migrated to `business` without lowering their limit.
+
+`wp-ai-admin-cloud/config/plans.json` and `QuotaPolicy` are the server-side source for these tariffs; the plugin dashboard displays server-returned values only.
 
 All tools remain available on Free unless the owner explicitly changes this product decision. Tariffs primarily differentiate included quota. Do not introduce automatic billing or charge a payment method. Paid plan changes and payments require the user's explicit confirmation through the account cabinet. YooKassa is the planned payment provider; do not activate live payments as part of beta without separate approval.
 

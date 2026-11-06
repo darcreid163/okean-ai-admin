@@ -96,7 +96,7 @@ batchCheck($moreUnknown['pending_units']===1&&$moreUnknown['charged_units']===0,
     'Second unknown outcome lost its reservation');
 batchCheck($core->usage('1',$now)['used']===2&&$core->usage('1',$now)['reserved']===2,
     'Unknown reservation must not silently settle');
-batchReject(fn()=>$core->call($actor,$site['id'],'wp_get_site',[],'beyond-limit',$now),'monthly_quota_exhausted');
+batchReject(fn()=>$core->call($actor,$site['id'],'wp_get_site',[],'beyond-limit',$now),'daily_quota_exhausted');
 batchReject(fn()=>BatchAccounting::items([['id'=>'one','tool'=>'woocommerce_update_product_sandbox','arguments'=>['changes'=>['variations'=>[['id'=>3]]]]]]),'batch_multiple_targets_not_allowed');
 echo 'PASS '.$checks.' Batch v2 receipt/idempotency/tenant/uncertain/quota assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
 } finally {

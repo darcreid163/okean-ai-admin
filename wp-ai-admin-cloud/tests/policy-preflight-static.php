@@ -14,13 +14,14 @@ $p=json_decode(file_get_contents($root.'/config/plans.json'),true,32,JSON_THROW_
 Policy::validate($p);
 $ok(($p['automatic_money_debits']??null)===false,'Automatic money debit unexpectedly enabled');
 $ok(($p['batch']??'')==='disabled_until_receipt_accounting_contract','Production batch activated');
-foreach(['free'=>[100,Policy::MONTH],'pro'=>[500,Policy::DAY],'biznes'=>[2000,Policy::DAY],'biznespro'=>[5000,Policy::DAY]] as $plan=>$expected){
+foreach(['free'=>[100,Policy::DAY],'daily'=>[500,Policy::DAY],'pro'=>[2000,Policy::DAY],'business'=>[5000,Policy::DAY]] as $plan=>$expected){
     $t=Policy::terms($p,['quota_scheme'=>Policy::CURRENT,'plan'=>$plan]);
     $ok($t['limit']===$expected[0]&&$t['period_kind']===$expected[1],'Bad tariff '.$plan);
     $w=Policy::window($t,strtotime('2026-10-21T23:59:59Z'));
     $next=Policy::window($t,strtotime('2026-10-22T00:00:00Z'));
-    $ok($plan==='free'?$w['period']==='2026-10'&&$next['period']==='2026-10':$w['period']==='2026-10-21'&&$next['period']==='2026-10-22','UTC boundary '.$plan);
+    $ok($w['period']==='2026-10-21'&&$next['period']==='2026-10-22','UTC boundary '.$plan);
 }
+$refuse(fn()=>Policy::terms($p,['quota_scheme'=>Policy::CURRENT,'plan'=>'biznes']),'plan_unavailable');
 $legacy=Policy::terms($p,['plan'=>'free','quota_scheme'=>Policy::LEGACY]);
 $ok($legacy['quota_scheme']===Policy::LEGACY&&$legacy['period_kind']===Policy::MONTH,'Legacy free plan not preserved');
 $items=Batch::items([['id'=>'1','tool'=>'wp.get_site','arguments'=>[]],['id'=>'2','tool'=>'woocommerce.update_product_sandbox','arguments'=>['id'=>42,'changes'=>['regular_price'=>'10']]]]);

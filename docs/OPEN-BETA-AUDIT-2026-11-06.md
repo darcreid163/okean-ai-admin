@@ -340,3 +340,9 @@ unrecoverable upgrade; **P1** = core workflow/compatibility failure; **P2** = us
 
 **Next action:** #134 (tariff alignment) — it unblocks #135, #136 and every quota test, and it is the
 only P0 that needs no further product decision.
+
+## 10. Remediation log
+
+| Issue | Status | Change | Verification |
+|---|---|---|---|
+| #134 | implemented (pending merge) | `config/plans.json` and `QuotaPolicy` now use the canonical Native table `free` 100 / `daily` 500 / `pro` 2000 / `business` 5000, all as UTC calendar days; policy version prefix bumped to `tariffs-v3-`. Retired current-scheme slugs `biznes`/`biznespro` are migrated to `business` by an idempotent, audited helper; `legacy_monthly_v1` accounts are untouched and `wpai_gateway_db_version` stays `4`. Mission §4 rewritten. | `policy-preflight-static`, `quota-migration-v4` (alias migration, legacy preservation, idempotency), `run.php`, `multisite-account`, `compatibility`, `frontend-session.py`; CI on the PR HEAD. |

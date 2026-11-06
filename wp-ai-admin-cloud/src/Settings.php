@@ -64,7 +64,7 @@ final class Settings {
         $policy=self::catalogPolicy();
         $policy['legacy_plans']=$plans;
         $policy['batch']=$batch?BatchAccounting::POLICY:'disabled_until_receipt_accounting_contract';
-        $policy['version']='tariffs-v2-'.substr(hash('sha256',Security::canonical([$policy,$rows??[]])),0,24);
+        $policy['version']='tariffs-v3-'.substr(hash('sha256',Security::canonical([$policy,$rows??[]])),0,24);
         QuotaPolicy::validate($policy);
         return $policy;
     }

@@ -37,10 +37,17 @@ final class WordPress {
         $store=self::database();
         if ((string)get_option('wpai_gateway_db_version','')==='4') {
             $store->assertSchema();
-            return;
+        } else {
+            $store->migrate();
+            update_option('wpai_gateway_db_version','4',false);
         }
-        $store->migrate();
-        update_option('wpai_gateway_db_version','4',false);
+        // Separate idempotent flag: the schema version stays 4 so historical
+        // upgrade/restore snapshots keep working. Only current-scheme accounts
+        // with the retired v2 plan slugs are rewritten.
+        if ((string)get_option('wpai_gateway_plan_alias_v1','')!=='1') {
+            Core::migratePlanAliases($store,time());
+            update_option('wpai_gateway_plan_alias_v1','1',false);
+        }
     }
     public static function statusPage(): void { Admin::page(); }
     public static function enable(): void {
