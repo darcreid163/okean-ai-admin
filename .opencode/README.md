@@ -1,6 +1,6 @@
 # WP AI Admin OpenCode Engineering Pack
 
-15 project Skills and 8 specialist agents. Open the repository root in OpenCode.
+15 project Skills and 8 specialist agents; release packaging and documentation are owned by the Release Lead.. Open the repository root in OpenCode.
 
 - Root opencode.json loads AGENTS.md and the shared Open Beta mission.
 - Skills are stored in .opencode/skills/<name>/SKILL.md and loaded on demand with OpenCode's built-in skill tool.
@@ -32,6 +32,5 @@
 - billing
 - security
 - qa
-- release-engineer
 
 These instructions do not grant extra tool permissions or bypass root safety rules. No deployment, repo visibility change, public release tag, live billing or live data migration without explicit owner approval.
