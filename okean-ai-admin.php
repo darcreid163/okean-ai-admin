@@ -18,6 +18,7 @@ define('OAI_RELEASE_CHANNEL','commercial_beta');
 define('OAI_RELEASE_PROFILE','commercial_beta_candidate');
 define('OAI_RELEASE_CANDIDATE',true);
 define('OAI_DIR',plugin_dir_path(__FILE__));
+require_once OAI_DIR.'includes/class-oai-creation-intent.php';
 require_once OAI_DIR.'includes/class-oai-db.php';
 require_once OAI_DIR.'includes/class-oai-operations-cleanup.php';
 require_once OAI_DIR.'includes/class-oai-creation-claim-audit.php';

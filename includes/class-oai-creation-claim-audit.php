@@ -61,6 +61,8 @@ final class OAI_Creation_Claim_Audit {
     'referenced_operation_same_type'=>0,'referenced_operation_other_type'=>0,
     'referenced_operation_missing'=>0,'with_creation_time'=>0,
     'older_than_24h'=>0,'unreadable_metadata'=>0,
+    'with_canonical_fingerprint'=>0,'without_canonical_fingerprint'=>0,
+    'legacy_unverifiable'=>0,
     'workspace_id_unverifiable'=>0,'workspace_root_unavailable'=>0,
     'workspace_directory_present'=>0,'workspace_directory_absent'=>0,
     'workspace_metadata_present'=>0,'workspace_symlink_rejected'=>0
@@ -73,6 +75,14 @@ final class OAI_Creation_Claim_Audit {
    foreach($rows as $record){
     $meta=self::metadata($record['option_value']??null);
     if($meta===null){$group['unreadable_metadata']++;$group['state_unknown']++;continue;}
+    if(OAI_Creation_Intent::has_canonical($meta))$group['with_canonical_fingerprint']++;
+    else{
+     $group['without_canonical_fingerprint']++;
+     // A legacy hash may look comparable, but it was produced by an older,
+     // non-canonical payload. Never report it as a verified match.
+     if(isset($meta['payload_hash'])&&is_string($meta['payload_hash'])&&preg_match('/^[a-f0-9]{64}$/D',$meta['payload_hash']))
+      $group['legacy_unverifiable']++;
+    }
     if($family==='workspace'){
      $candidate=$meta['id']??null;
      // Real OAI_Operations::new_id('ws') format only. Never append untrusted
