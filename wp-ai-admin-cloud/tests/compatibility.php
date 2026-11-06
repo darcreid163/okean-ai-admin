@@ -112,7 +112,9 @@ check(Settings::keys()===$keys && $snapshot()===$before,'Reload check changed ex
 check(get_option('wpai_gateway_db_version')==='4','Gateway migration not recorded');
 check($snapshot()===$before,'Gateway migration modified legacy data');
 WordPress::enable(); check($snapshot()===$before && Settings::keys()===$keys,'Repeated update changed core data or keys');
-check(Settings::policy()['plans']===['free'=>100,'pro'=>500,'biznes'=>2000,'biznespro'=>5000],'Recovered v2 tariff policy differs from approved limits');
+check(Settings::policy()['plans']===['free'=>100,'daily'=>500,'pro'=>2000,'business'=>5000],'Approved v3 tariff policy differs from the Native table');
+check(Settings::policy()['periods']===['free'=>'calendar_day_utc','daily'=>'calendar_day_utc','pro'=>'calendar_day_utc','business'=>'calendar_day_utc'],'Approved v3 policy must use UTC calendar days');
+check(str_starts_with(Settings::policy()['version'],'tariffs-v3-'),'Quota policy version was not bumped to v3');
 check(Settings::policy()['legacy_plans']===['agency'=>5000,'free'=>100,'power'=>2000,'pro'=>500,'scale'=>10000],'Legacy Core plan limits changed');
 Settings::account('42');check($snapshot()===$before,'Existing account changed by bridge');
 $wpdb->query("UPDATE ".WPAI_Cloud_DB::table('accounts')." SET status='suspended' WHERE wp_user_id=42");
@@ -126,7 +128,8 @@ foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledge
 check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1/plans'])===1,'Legacy public routes overwritten');
 check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.13-dev','Candidate status version');
 $publishedPlans=WPAI_Cloud_REST::plans()->data['data']['items'];
-check(array_column($publishedPlans,'slug')===['free','pro','biznes','biznespro'],'Approved four-plan catalog differs from recovered v2 policy');
+check(array_column($publishedPlans,'slug')===['free','daily','pro','business'],'Published plan catalog differs from the approved v3 policy');
+check(array_column($publishedPlans,'name')===['Free','Daily','Pro','Business'],'Published plan names differ from the approved catalog');
 check(WPAI_Cloud_REST::plans()->data['data']['automatic_money_debits']===false,'Automatic debits unexpectedly active');
 $loggedIn=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Anonymous provisioning');
 $loggedIn=true;$admin=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Subscriber provisioning');

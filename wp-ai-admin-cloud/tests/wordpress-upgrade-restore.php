@@ -137,7 +137,14 @@ cloudUpgradeAssert(count($core->catalog($actor,$state['site']['id'],time()))===2
 $cached=$core->call($actor,$state['site']['id'],'wp_get_site',[],'synthetic-upgrade-read',$state['now']);
 cloudUpgradeAssert(cloudUpgradeSame($cached,$state['receipt']) && $transport->executions===0,'Cached receipt lost/decryption failed/re-executed');
 cloudUpgradeReject(fn()=>$core->call($actor,$state['site']['id'],'operation_apply',[],'synthetic-upgrade-uncertain',$state['now']),'request_outcome_pending_reconciliation');
-cloudUpgradeAssert($transport->executions===0 && cloudUpgradeSame($core->usage('1',$state['now']),$state['usage']),'Uncertain replay executed or altered quota/terms');
+$currentUsage=$core->usage('1',$state['now']);
+$expectedUsage=$state['usage'];
+// The policy version is a release identifier, not a quota term: it must move
+// to the candidate version while every quota figure stays byte-equivalent.
+unset($currentUsage['policy_version'],$expectedUsage['policy_version']);
+cloudUpgradeAssert($transport->executions===0 && cloudUpgradeSame($currentUsage,$expectedUsage),'Uncertain replay executed or altered quota/terms');
+$policyPrefix=WPAI_CLOUD_VERSION==='0.3.11'?'tariffs-v2-':'tariffs-v3-';
+cloudUpgradeAssert(str_starts_with($core->usage('1',$state['now'])['policy_version'],$policyPrefix),'Quota policy version does not match the installed source');
 $health=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'))->get_data();
 cloudUpgradeAssert($health['configured']===true && $health['oauth']===true && $health['version']===WPAI_CLOUD_VERSION,'Health REST handler failed');
 $init=cloudUpgradeMcp($state['token']['access_token'],'initialize',['protocolVersion'=>'2025-06-18','capabilities'=>(object)[],'clientInfo'=>['name'=>'upgrade-fixture','version'=>'1']]);

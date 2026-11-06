@@ -44,7 +44,7 @@ class WPAI_Cloud_REST {
             return new WP_REST_Response(array('success'=>false,'data'=>null,'error'=>'plan_catalog_unavailable'),503);
         }
         $batch=in_array(get_option('wpai_gateway_batch_object_v1',false),array(true,1,'1'),true);
-        $names=array('free'=>'Free','pro'=>'Pro','biznes'=>'Biznes','biznespro'=>'BiznesPro');
+        $names=array('free'=>'Free','daily'=>'Daily','pro'=>'Pro','business'=>'Business');
         $plans=array();
         foreach ($policy['plans'] as $slug=>$limit) {
             $period=$policy['periods'][$slug];

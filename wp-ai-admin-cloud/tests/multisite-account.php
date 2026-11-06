@@ -17,7 +17,7 @@ $sites=[];
 foreach(['https://wpaiadmin.ru','https://okean.market','https://third.example.com'] as $home)$sites[]=$core->connect('71',$home,'fixture-multisite-admin-token-'.hash('sha256',$home),$now);
 $other=$core->connect('72','https://other.example.com','fixture-other-admin-token-aaaaaaaa',$now);
 check(count($core->sites('71'))===3,'One account must hold three sites');
-check($core->usage('71',$now)['plan']==='pro'&&$core->usage('71',$now)['limit']===500,'Plan must belong to account');
+check($core->usage('71',$now)['plan']==='pro'&&$core->usage('71',$now)['limit']===2000,'Plan must belong to account');
 check($core->usage('71',$now)['used']===0,'Registration must not consume action quota');
 $ids=array_column($sites,'id');
 check(count(array_unique($ids))===3,'Separate sites need separate registration IDs');
@@ -40,7 +40,7 @@ foreach($sites as $i=>$site){
  check($result['state']==='succeeded'&&$result['site_id']===$site['id'],'Wrong selected site routing');
  check($core->usage('71',$now)['used']===$i+1,'Shared plan must accumulate actions from every site');
 }
-check($core->usage('71',$now)['remaining']===497,'Quota must not reset per site');
+check($core->usage('71',$now)['remaining']===1997,'Quota must not reset per site');
 check($core->usage('72',$now)['used']===0,'Another account usage leaked');
 $failed=$core->call($actor,$ids[1],'wp_get_site',['fail'=>true],'failed-second-site',$now);
 check($failed['charged_units']===0&&$core->usage('71',$now)['used']===3,'Failed second-site action charged');
@@ -52,8 +52,8 @@ rejects(fn()=>$core->catalog($actor,$other['id'],$now),'scope_or_site_denied');
 $extra=$core->connect('71','https://fourth.example.com','fixture-fourth-site-token-aaaaaaaa',$now);
 rejects(fn()=>$core->catalog($actor,$extra['id'],$now),'scope_or_site_denied');
 check(count($core->sites('71'))===4,'Adding a fourth site replaced earlier sites');
-$core->setPlan('operator','71','biznes',$now);
-check($core->usage('71',$now)['limit']===2000&&$core->usage('71',$now)['used']===3,'Plan upgrade must preserve shared balance');
+$core->setPlan('operator','71','business',$now);
+check($core->usage('71',$now)['limit']===5000&&$core->usage('71',$now)['used']===3,'Plan upgrade must preserve shared balance');
 check(sameIds(array_column($core->sites('71'),'id'),array_merge($ids,[$extra['id']])),'Plan upgrade changed registration identities');
 // Every plan uses the same registration capacity; reconnect at capacity is still allowed.
 $core->ensureAccount('73');

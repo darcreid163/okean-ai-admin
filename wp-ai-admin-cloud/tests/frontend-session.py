@@ -146,7 +146,7 @@ class FrontendSession(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('Один аккаунт и один тариф', body)
         self.assertIn('<strong>PRO</strong>', body)
-        self.assertIn('Осталось: 492', body)
+        self.assertIn('Осталось: 1992', body)
         self.assertIn('Подключено сайтов: <strong>2</strong>', body)
         self.assertIn('owned-site', body)
         self.assertIn('second-site', body)
@@ -161,12 +161,12 @@ class FrontendSession(unittest.TestCase):
         self.assertNotIn('Сохранены прежние месячные условия', body)
         self.assertNotIn('Сервис подключения временно недоступен', body)
 
-    def test_free_uses_monthly_utc_window(self):
+    def test_free_uses_daily_utc_window(self):
         status, _, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session; fixture_plan=free')
         self.assertEqual(status, 200)
         self.assertIn('<strong>FREE</strong>', body)
-        self.assertIn('Период учёта: месяц (UTC)', body)
-        self.assertIn('2026-11-01T00:00:00Z', body)
+        self.assertIn('Период учёта: сутки (UTC)', body)
+        self.assertIn('2026-10-23T00:00:00Z', body)
         self.assertIn('Подключить автоматически', body)
 
     def test_legacy_pro_retains_monthly_terms(self):

@@ -48,8 +48,8 @@ $executions=$transport->executions;
 rejects(fn()=>$core->call($actor,$site['id'],'wp_get_site',['uncertain'=>true],'timeout-1',$now),'request_outcome_pending_reconciliation');
 check($transport->executions===$executions && $core->usage('1',$now)['reserved']===1,'Uncertain action retried or released');
 check($core->usage('2',$now)['used']===0,'Cross-account balance leak');
-check($core->usage('1',strtotime('2026-11-01T00:00:00Z'))['used']===0,'Month did not reset');
-check($core->usage('1',$now)['used']===1,'Past month balance changed');
+check($core->usage('1',strtotime('2026-11-01T00:00:00Z'))['used']===0,'Day did not reset');
+check($core->usage('1',$now)['used']===1,'Earlier balance changed');
 $core->throttle('1','test_rate',$now,2); $core->throttle('1','test_rate',$now,2);
 rejects(fn()=>$core->throttle('1','test_rate',$now,2),'rate_limit_exceeded');
 $core->throttle('1','test_rate',$now+60,2);
@@ -64,11 +64,11 @@ $reconciledRetry=$core->call($actor,$site['id'],'wp_get_site',['uncertain'=>true
 check($reconciledRetry['reconciled']===true && $transport->executions===$before,'Reconciled action redispatched');
 $core->setPlan('operator','1','pro',$now);
 $proUsage=$core->usage('1',$now);
-check($proUsage['limit']===500 && $proUsage['used']===0 && $proUsage['period_kind']===WPAICloudGateway\QuotaPolicy::DAY,'Upgraded Pro must start in its own daily UTC quota window');
-$oldBalance=$store->row('SELECT used,reserved FROM '.$store->table('balances').' WHERE owner=? AND period=?',['1',gmdate('Y-m',$now)]);
-check($oldBalance !== null && (int)$oldBalance['used']===1 && (int)$oldBalance['reserved']===0,'Upgrade modified historical Free monthly balance');
+check($proUsage['limit']===2000 && $proUsage['used']===1 && $proUsage['period_kind']===WPAICloudGateway\QuotaPolicy::DAY,'Upgraded Pro must share the same UTC daily quota window');
+$oldBalance=$store->row('SELECT used,reserved FROM '.$store->table('balances').' WHERE owner=? AND period=?',['1',gmdate('Y-m-d',$now)]);
+check($oldBalance !== null && (int)$oldBalance['used']===1 && (int)$oldBalance['reserved']===0,'Upgrade modified the current Free daily balance');
 $core->setPlan('operator','1','free',$now);
-check($core->usage('1',$now)['used']===1 && $core->usage('1',$now)['period_kind']===WPAICloudGateway\QuotaPolicy::MONTH,'Returning to Free lost historical monthly consumption');
+check($core->usage('1',$now)['used']===1 && $core->usage('1',$now)['period_kind']===WPAICloudGateway\QuotaPolicy::DAY,'Returning to Free lost current daily consumption');
 rejects(fn()=>$core->setPlan('operator','1','unlimited',$now),'unknown_plan');
 $core->revokeToken('1',hash('sha256',$read['access_token']),$now);
 rejects(fn()=>$core->authenticate($read['access_token'],$now),'invalid_or_expired_token');
@@ -122,8 +122,8 @@ check($store->row('SELECT token_sealed FROM '.$store->table('sites').' WHERE id=
 $core->ensureAccount('recovery'); $recoverSite=$core->connect('recovery','https://recovery.example.com','fixture-site-admin-token-recovery',$now);
 $recoverToken=$core->mint('recovery',[$recoverSite['id']],['mcp:read','mcp:write'],$now);
 $recoverActor=$core->authenticate($recoverToken['access_token'],$now);
-$store->execute('INSERT INTO '.$store->table('balances').' (owner,period,used,reserved) VALUES (?,?,?,?)',['recovery',gmdate('Y-m',$now),100,0]);
-rejects(fn()=>$core->call($recoverActor,$recoverSite['id'],'wp_get_site',[],'quota-denied',$now),'monthly_quota_exhausted');
+$store->execute('INSERT INTO '.$store->table('balances').' (owner,period,used,reserved) VALUES (?,?,?,?)',['recovery',gmdate('Y-m-d',$now),100,0]);
+rejects(fn()=>$core->call($recoverActor,$recoverSite['id'],'wp_get_site',[],'quota-denied',$now),'daily_quota_exhausted');
 foreach (['operation_verify','operation_get_receipt','operation_rollback','batch_rollback'] as $tool) {
     $result=$core->call($recoverActor,$recoverSite['id'],$tool,[],'free-'.$tool,$now);
     check($result['state']==='succeeded' && $result['charged_units']===0,'Recovery tool charged or blocked: '.$tool);
@@ -156,7 +156,7 @@ $workers=[]; putenv('CLOUD_TEST_TOKEN='.$pToken['access_token']);
 $executionLog=tempnam(sys_get_temp_dir(),'wpai-executions-'); putenv('CLOUD_TEST_EXECUTION_LOG='.$executionLog);
 for($i=0;$i<10;$i++) { $pipes=[]; $handle=proc_open([...$command,'parallel-'.$i],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes); fclose($pipes[0]); $workers[]=[$handle,$pipes]; }
 $ok=0; $denied=0;
-foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])); $err=stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit=proc_close($handle); check($exit===0,'Worker failed: '.$err.' '.$out); if($out==='success')$ok++; elseif($out==='monthly_quota_exhausted')$denied++; else throw new RuntimeException($out); }
+foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])); $err=stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit=proc_close($handle); check($exit===0,'Worker failed: '.$err.' '.$out); if($out==='success')$ok++; elseif($out==='daily_quota_exhausted')$denied++; else throw new RuntimeException($out); }
 putenv('CLOUD_TEST_TOKEN');
 check($ok===3 && $denied===7,'Concurrent quota overrun');
 check($core->usage('parallel',$now)['used']===3 && $core->usage('parallel',$now)['reserved']===0,'Concurrent balance wrong');

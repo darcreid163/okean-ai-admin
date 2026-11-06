@@ -5,6 +5,7 @@ require dirname(__DIR__).'/src/Security.php';
 require dirname(__DIR__).'/src/Store.php';
 require dirname(__DIR__).'/src/BatchAccounting.php';
 require dirname(__DIR__).'/src/QuotaPolicy.php';
+require dirname(__DIR__).'/src/Core.php';
 use WPAICloudGateway\{Store,QuotaPolicy,Fault};
 $checks=0;
 function migrationCheck(bool $ok,string $label): void { global $checks; ++$checks; if(!$ok) throw new RuntimeException($label); }
@@ -40,7 +41,7 @@ try {
     $before=QuotaPolicy::window($legacy,strtotime('2026-10-31T23:59:59Z'));
     $after=QuotaPolicy::window($legacy,strtotime('2026-11-01T00:00:00Z'));
     migrationCheck($before['period']==='2026-10'&&$before['next_period_at']===strtotime('2026-11-01T00:00:00Z')&&$after['period']==='2026-11','UTC monthly rollover failed');
-    foreach(['free'=>[100,QuotaPolicy::MONTH],'pro'=>[500,QuotaPolicy::DAY],'biznes'=>[2000,QuotaPolicy::DAY],'biznespro'=>[5000,QuotaPolicy::DAY]] as $plan=>[$limit,$kind]){
+    foreach(['free'=>[100,QuotaPolicy::DAY],'daily'=>[500,QuotaPolicy::DAY],'pro'=>[2000,QuotaPolicy::DAY],'business'=>[5000,QuotaPolicy::DAY]] as $plan=>[$limit,$kind]){
         $terms=QuotaPolicy::terms($policy,['plan'=>$plan,'quota_scheme'=>QuotaPolicy::CURRENT]);
         migrationCheck($terms['limit']===$limit&&$terms['period_kind']===$kind,'Bad approved limit for '.$plan);
         if($kind===QuotaPolicy::DAY){
@@ -53,6 +54,22 @@ try {
     migrationCheck(QuotaPolicy::terms($policy,$updated)['period_kind']===QuotaPolicy::DAY,'Explicit daily assignment failed');
     $historic=$store->row('SELECT * FROM '.$store->table('balances').' WHERE owner=? AND period=?',['owner1','2026-10']);
     migrationCheck((int)$historic['used']===17&&(int)$historic['reserved']===3,'Changing plans rewrote historic balance');
+    // Retired v2 plan slugs are rewritten only for current-scheme accounts, are
+    // audited, and remain idempotent across repeated boots.
+    $store->execute('INSERT INTO '.$store->table('accounts').' (owner,plan,quota_scheme) VALUES (?,?,?)',['alias-biznes','biznes',QuotaPolicy::CURRENT]);
+    $store->execute('INSERT INTO '.$store->table('accounts').' (owner,plan,quota_scheme) VALUES (?,?,?)',['alias-biznespro','biznespro',QuotaPolicy::CURRENT]);
+    $store->execute('INSERT INTO '.$store->table('accounts').' (owner,plan,quota_scheme) VALUES (?,?,?)',['alias-legacy','biznes',QuotaPolicy::LEGACY]);
+    migrationCheck(\WPAICloudGateway\Core::migratePlanAliases($store,1790000000)===2,'Alias migration skipped current accounts');
+    migrationCheck(\WPAICloudGateway\Core::migratePlanAliases($store,1790000000)===0,'Alias migration is not idempotent');
+    foreach(['alias-biznes','alias-biznespro'] as $owner) {
+        $row=$store->row('SELECT * FROM '.$store->table('accounts').' WHERE owner=?',[$owner]);
+        migrationCheck($row['plan']==='business'&&(int)$row['sequence']===2,'Current plan alias not rewritten: '.$owner);
+        migrationCheck(QuotaPolicy::terms($policy,$row)['limit']===5000,'Aliased plan lost its limit: '.$owner);
+    }
+    $legacyAlias=$store->row('SELECT * FROM '.$store->table('accounts').' WHERE owner=?',['alias-legacy']);
+    migrationCheck($legacyAlias['plan']==='biznes'&&(int)$legacyAlias['sequence']===1,'Legacy plan alias was rewritten');
+    $aliasAudit=$store->row('SELECT COUNT(*) AS n FROM '.$store->table('audit').' WHERE event=?',['plan_alias_migrated']);
+    migrationCheck((int)$aliasAudit['n']===2,'Alias migration audit trail incomplete');
     $bad=$policy; $bad['plans']['pro']='500';
     try{QuotaPolicy::validate($bad);throw new RuntimeException('String limit incorrectly accepted');}
     catch(Fault $e){migrationCheck($e->reason==='invalid_plan_limit','Wrong quota validation fault');}

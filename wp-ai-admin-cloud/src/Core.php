@@ -19,6 +19,27 @@ final class Core {
         Security::identifier($owner,64);
         $this->store->execute($this->store->ignore().' INTO '.$this->store->table('accounts').' (owner,plan,quota_scheme) VALUES (?,?,?)',[$owner,'free',QuotaPolicy::scheme($this->policy)]);
     }
+    /**
+     * Repairs retired v2 plan slugs that are still attached to the current
+     * tariff scheme. Legacy monthly accounts are never touched. The update is
+     * guarded by the old slug, so repeated or interrupted runs are harmless.
+     */
+    public static function migratePlanAliases(Store $store,int $now): int {
+        $aliases=['biznes'=>'business','biznespro'=>'business'];
+        return (int)$store->transaction(function() use($store,$now,$aliases): int {
+            $rows=$store->rows('SELECT owner,plan FROM '.$store->table('accounts').' WHERE quota_scheme=? AND (plan=? OR plan=?) ORDER BY owner',[QuotaPolicy::CURRENT,'biznes','biznespro']);
+            $changed=0;
+            foreach($rows as $row) {
+                $target=$aliases[$row['plan']]??null;
+                if($target===null) continue;
+                $updated=$store->execute('UPDATE '.$store->table('accounts').' SET plan=?,sequence=sequence+1 WHERE owner=? AND plan=? AND quota_scheme=?',[$target,$row['owner'],$row['plan'],QuotaPolicy::CURRENT])->rowCount();
+                if($updated!==1) continue;
+                $store->audit($row['owner'],'','plan_alias_migrated',hash('sha256',$row['owner'].'|'.$row['plan'].'|'.$target),$now);
+                ++$changed;
+            }
+            return $changed;
+        });
+    }
     private function account(string $owner,bool $lock=false): array {
         $a=$this->store->row('SELECT * FROM '.$this->store->table('accounts').' WHERE owner=?'.($lock?$this->store->lock():''),[$owner]);
         if (!$a || (int)$a['disabled']!==0) throw new Fault('account_unavailable',403);

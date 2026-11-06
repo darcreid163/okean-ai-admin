@@ -69,7 +69,7 @@ async function ready(url) {
       await page.waitForURL(central+'/wpai-cloud/connect?connected=1',{timeout:5000});
       verify((await page.content()).includes('second-site'), 'Second site not shown after callback');
       verify((await page.content()).includes('Подключено сайтов: <strong>2</strong>'), 'Multi-site account count wrong');
-      verify((await page.content()).includes('Осталось: 492'), 'Shared account balance missing');
+      verify((await page.content()).includes('Осталось: 1992'), 'Shared account balance missing');
       await page.locator('input[name=home]').first().fill('https://okean.market');
       await Promise.all([
         page.waitForNavigation({waitUntil:'load'}),
