@@ -13,23 +13,73 @@ class OAI_Gutenberg_Resolver {
  public static function resolve_post($id){$r=OAI_WP_Post_Resolver::resolve($id);if(is_wp_error($r))return $r;if($r['builder']==='elementor')return new WP_Error('oai_builder_elementor','Post is owned by Elementor; use Elementor resolver',array('status'=>409,'resolver'=>'elementor','post_id'=>$r['post_id']));$p=get_post($r['post_id']);if(!$p)return new WP_Error('oai_post_not_found','Post not found',array('status'=>404));if(!function_exists('parse_blocks'))return new WP_Error('oai_blocks_unavailable','parse_blocks is unavailable',array('status'=>503));$content=(string)$p->post_content;$blocks=parse_blocks($content);$has_native_blocks=false;foreach($blocks as $b){if(is_array($b)&&!empty($b['blockName'])){$has_native_blocks=true;break;}}return array_merge($r,array('blocks'=>self::normalize($blocks),'content_mode'=>$has_native_blocks?'gutenberg':'freeform_html','has_native_blocks'=>$has_native_blocks,'raw_content'=>$content));}
  public static function normalize($blocks,$path=array()){$out=array();foreach((array)$blocks as $i=>$b){if(!is_array($b))continue;$p=$path; $p[]=$i;$children=self::normalize($b['innerBlocks']??array(),$p);$attrs=is_array($b['attrs']??null)?$b['attrs']:array();$out[]=array('index'=>(int)$i,'path'=>implode('.',$p),'blockName'=>(string)($b['blockName']??''),'attrs'=>$attrs,'innerHTML'=>(string)($b['innerHTML']??''),'innerContent'=>is_array($b['innerContent']??null)?$b['innerContent']:array(),'innerBlocks'=>$children); }return $out;}
  public static function locate($id,$selector=array()){$r=self::resolve_post($id);if(is_wp_error($r))return $r;$blocks=$r['blocks'];if(empty($r['has_native_blocks']))return self::locate_freeform($id,$r['raw_content'],$selector);$want_name=sanitize_text_field((string)($selector['block_name']??''));$path=(string)($selector['path']??'');$needle=(string)($selector['text']??'');$html=(string)($selector['html_contains']??'');$matches=array();$walk=function($nodes)use(&$walk,&$matches,$want_name,$path,$needle,$html){foreach($nodes as $n){$ok=true;if($want_name!==''&&$n['blockName']!==$want_name)$ok=false;if($path!==''&&$n['path']!==$path)$ok=false;if($needle!==''&&stripos($n['innerHTML'],$needle)===false)$ok=false;if($html!==''&&stripos($n['innerHTML'],$html)===false)$ok=false;if($ok)$matches[]=$n;if(!empty($n['innerBlocks']))$walk($n['innerBlocks']);}};$walk($blocks);return array('post_id'=>$id,'matches'=>$matches,'count'=>count($matches));}
- public static function patch($id,$selector,$new_attrs=null,$new_html=null){
+ public static function patch($id,$selector,$new_attrs=null,$new_html=null,$attrs_remove=array(),$inner_content_index=null){
   $r=self::resolve_post($id); if(is_wp_error($r))return $r;
   if(!is_array($selector))return new WP_Error('oai_block_selector','Block selector must be an object',array('status'=>400));
   $has_selector=false; foreach(array('path','block_name','text','html_contains') as $k)if(isset($selector[$k])&&(string)$selector[$k]!==''){$has_selector=true;break;}
   if(!$has_selector)return new WP_Error('oai_block_selector','Specify path, block_name, text or html_contains',array('status'=>400));
-  if($new_attrs===null&&$new_html===null)return new WP_Error('oai_block_patch_empty','No block changes supplied',array('status'=>400));
-  if(empty($r['has_native_blocks']))return self::patch_freeform($r,$selector,$new_attrs,$new_html);
-  $p=get_post($id); $blocks=parse_blocks((string)$p->post_content); $matches=self::find_raw_matches($blocks,$selector);
+  if($attrs_remove===null)$attrs_remove=array();
+  if(!is_array($attrs_remove))return new WP_Error('oai_block_attrs_remove','attrs_remove must be a list of attribute names',array('status'=>400));
+  $remove=array(); foreach($attrs_remove as $name){if(!is_string($name)||$name==='')return new WP_Error('oai_block_attrs_remove','attrs_remove must contain non-empty attribute names',array('status'=>400));$remove[]=$name;}
+  $remove=array_values(array_unique($remove));
+  if($inner_content_index!==null&&$inner_content_index!==''){
+   if(is_int($inner_content_index))$inner_content_index=(int)$inner_content_index;
+   elseif(is_string($inner_content_index)&&ctype_digit($inner_content_index))$inner_content_index=(int)$inner_content_index;
+   else return new WP_Error('oai_block_inner_content_index','inner_content_index must be a non-negative integer',array('status'=>400));
+  } else $inner_content_index=null;
+  if($new_attrs!==null&&!is_array($new_attrs))return new WP_Error('oai_block_attrs','attrs must be an object',array('status'=>400));
+  if($new_html!==null&&!is_string($new_html))return new WP_Error('oai_block_html','html must be a string',array('status'=>400));
+  if($new_attrs===null&&$new_html===null&&!$remove)return new WP_Error('oai_block_patch_empty','No block changes supplied',array('status'=>400));
+  if(empty($r['has_native_blocks']))return self::patch_freeform($r,$selector,$new_attrs,$new_html,$remove,$inner_content_index);
+  $before=(string)$r['raw_content'];
+  $blocks=parse_blocks($before); $matches=self::find_raw_matches($blocks,$selector);
   if(!$matches)return new WP_Error('oai_block_not_found','Gutenberg block not found',array('status'=>404));
   if(count($matches)>1)return new WP_Error('oai_block_ambiguous','Block selector matches multiple blocks; use an exact path',array('status'=>409,'matches'=>count($matches)));
-  $path=$matches[0]['path']; $node=&$matches[0]['node']; $before=serialize_blocks($blocks);
-  if($new_attrs!==null)$node['attrs']=is_array($new_attrs)?$new_attrs:$node['attrs'];
-  if($new_html!==null){if(!empty($node['innerBlocks']))return new WP_Error('oai_block_html_container','Direct HTML patch is not supported for a container block; patch its inner block instead',array('status'=>422));$node['innerHTML']=(string)$new_html;$node['innerContent']=array((string)$new_html);}
-  $after=serialize_blocks($blocks);$reparsed=parse_blocks($after);$roundtrip=serialize_blocks($reparsed);
-  if($roundtrip!==$after)return new WP_Error('oai_block_invalid','Patched Gutenberg markup failed serialization round-trip validation',array('status'=>422));
-  return array('before'=>$before,'after'=>$after,'match'=>$node,'path'=>$path,'validation'=>array('parse_blocks'=>true,'serialize_blocks'=>true,'round_trip'=>true));
+  $path=$matches[0]['path']; $node=&$matches[0]['node']; $original=$node; $patched=array();
+  $normalized_before=serialize_blocks($blocks);
+  if($new_attrs!==null){$node['attrs']=array_replace(is_array($node['attrs']??null)?$node['attrs']:array(),$new_attrs);$patched['attrs_merged']=array_keys($new_attrs);}
+  if($remove){
+   $existing=is_array($node['attrs']??null)?$node['attrs']:array(); $removed=array();
+   foreach($remove as $name){if(array_key_exists($name,$existing)){unset($existing[$name]);$removed[]=$name;}}
+   $node['attrs']=$existing; $patched['attrs_removed']=$removed;
+  }
+  if($new_html!==null){
+   if(!empty($node['innerBlocks']))return new WP_Error('oai_block_html_container','Direct HTML patch is not supported for a container block; patch its inner block instead',array('status'=>422));
+   $parts=is_array($node['innerContent']??null)?array_values($node['innerContent']):array();
+   $index=self::inner_content_target($parts,$inner_content_index);
+   if(is_wp_error($index))return $index;
+   $parts[$index]=(string)$new_html;
+   $node['innerContent']=$parts;
+   $node['innerHTML']=implode('',array_map(array(__CLASS__,'inner_content_string'),$parts));
+   $patched['inner_content_index']=$index;
+  }
+  if(!$patched)return new WP_Error('oai_block_patch_empty','No block changes supplied',array('status'=>400));
+  $normalized_after=serialize_blocks($blocks);
+  // Prefer replacing only the matched block's exact raw markup, so unrelated
+  // blocks keep their original bytes. Fall back to document serialization when
+  // the source markup is not a unique byte-exact substring of post_content.
+  $scope='document_reserialize'; $after=null;
+  $original_markup=function_exists('serialize_block')?serialize_block($original):'';
+  if($original_markup!==''&&substr_count($before,$original_markup)===1){$after=str_replace($original_markup,serialize_block($node),$before);$scope='block_splice';}
+  if($after===null)$after=$normalized_after;
+  // Canonical comparison of the whole patched document against the intended
+  // block tree. A splice that dropped or duplicated markers cannot pass, and a
+  // container whose innerContent was collapsed cannot pretend to round-trip.
+  if(serialize_blocks(parse_blocks($after))!==$normalized_after)return new WP_Error('oai_block_invalid','Patched Gutenberg markup failed serialization round-trip validation',array('status'=>422));
+  if($after===$before)return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409));
+  return array('before'=>$before,'after'=>$after,'match'=>$node,'path'=>$path,'validation'=>array_merge($patched,array('parse_blocks'=>true,'serialize_blocks'=>true,'round_trip'=>true,'patch_scope'=>$scope,'before_sha256'=>hash('sha256',$before),'after_sha256'=>hash('sha256',$after),'normalized_before_sha256'=>hash('sha256',$normalized_before),'normalized_after_sha256'=>hash('sha256',$normalized_after))));
  }
+ private static function inner_content_target($parts,$requested){
+  if($requested!==null){
+   if(!array_key_exists($requested,$parts)||!is_string($parts[$requested]))return new WP_Error('oai_block_inner_content_index','inner_content_index does not address a replaceable innerContent part',array('status'=>422,'parts'=>count($parts),'requested'=>$requested));
+   return $requested;
+  }
+  if(count($parts)===0)return 0;
+  if(count($parts)===1&&is_string($parts[0]))return 0;
+  $replaceable=array(); foreach($parts as $i=>$part)if(is_string($part))$replaceable[]=(int)$i;
+  return new WP_Error('oai_block_inner_content_ambiguous','Block innerContent has multiple parts; supply inner_content_index',array('status'=>422,'parts'=>count($parts),'replaceable_indexes'=>$replaceable));
+ }
+ public static function inner_content_string($part){return is_string($part)?$part:'';}
  private static function locate_freeform($id,$content,$selector){
   $text=trim((string)($selector['text']??''));$fragment=trim((string)($selector['html_contains']??''));$needle=$text!==''?$text:$fragment;
   if($needle==='')return new WP_Error('oai_block_selector','Freeform HTML requires text or html_contains selector',array('status'=>400));
@@ -38,8 +88,9 @@ class OAI_Gutenberg_Resolver {
   if($count>1)return new WP_Error('oai_block_ambiguous','Freeform selector matches multiple occurrences; use a more exact selector',array('status'=>409,'matches'=>$count));
   return array('post_id'=>$id,'matches'=>array(array('index'=>0,'path'=>'html:root','blockName'=>'oai/freeform-html','attrs'=>array(),'innerHTML'=>$content,'innerContent'=>array($content),'selector'=>$needle)),'count'=>1,'content_mode'=>'freeform_html');
  }
- private static function patch_freeform($r,$selector,$new_attrs,$new_html){
-  if($new_attrs!==null)return new WP_Error('oai_freeform_attrs','Attributes patch is not supported for freeform HTML; provide html replacement',array('status'=>422));
+ private static function patch_freeform($r,$selector,$new_attrs,$new_html,$attrs_remove=array(),$inner_content_index=null){
+  if($new_attrs!==null||$attrs_remove)return new WP_Error('oai_freeform_attrs','Attributes patch is not supported for freeform HTML; provide html replacement',array('status'=>422));
+  if($inner_content_index!==null)return new WP_Error('oai_freeform_inner_content','inner_content_index is not supported for freeform HTML',array('status'=>422));
   if($new_html===null)return new WP_Error('oai_freeform_html_required','Freeform HTML patch requires html replacement',array('status'=>422));
   $content=(string)$r['raw_content'];$text=trim((string)($selector['text']??''));$fragment=trim((string)($selector['html_contains']??''));$needle=$text!==''?$text:$fragment;
   if($needle==='')return new WP_Error('oai_block_selector','Freeform HTML requires text or html_contains selector',array('status'=>400));
@@ -48,7 +99,7 @@ class OAI_Gutenberg_Resolver {
   if($count>1)return new WP_Error('oai_block_ambiguous','Freeform selector matches multiple occurrences; use a more exact selector',array('status'=>409,'matches'=>$count));
   $before=$content;$after=str_replace($needle,(string)$new_html,$content,$replaced);
   if($replaced!==1)return new WP_Error('oai_block_invalid','Freeform HTML replacement was not applied exactly once',array('status'=>422));
-  return array('before'=>$before,'after'=>$after,'match'=>array('path'=>'html:root','blockName'=>'oai/freeform-html','selector'=>$needle),'path'=>'html:root','validation'=>array('parse_blocks'=>true,'serialize_blocks'=>false,'round_trip'=>false,'freeform_html'=>true,'replacement_count'=>1));
+  return array('before'=>$before,'after'=>$after,'match'=>array('path'=>'html:root','blockName'=>'oai/freeform-html','selector'=>$needle),'path'=>'html:root','validation'=>array('parse_blocks'=>true,'serialize_blocks'=>false,'round_trip'=>false,'freeform_html'=>true,'replacement_count'=>1,'before_sha256'=>hash('sha256',$before),'after_sha256'=>hash('sha256',$after)));
  }
  private static function find_raw_matches(&$blocks,$selector,$path=array(),&$out=array()){foreach($blocks as $i=>&$b){$p=$path;$p[]=$i;$ok=true;if(isset($selector['path'])&&$selector['path']!==''&&$selector['path']!==implode('.',$p))$ok=false;if(isset($selector['block_name'])&&$selector['block_name']!==''&&(string)($b['blockName']??'')!==$selector['block_name'])$ok=false;if(isset($selector['text'])&&$selector['text']!==''&&stripos((string)($b['innerHTML']??''),(string)$selector['text'])===false)$ok=false;if(isset($selector['html_contains'])&&$selector['html_contains']!==''&&stripos((string)($b['innerHTML']??''),(string)$selector['html_contains'])===false)$ok=false;if($ok)$out[]=array('node'=>&$b,'path'=>implode('.',$p));if(!empty($b['innerBlocks']))self::find_raw_matches($b['innerBlocks'],$selector,$p,$out);}return $out;}
  private static function locate_in_raw(&$blocks,$selector,$path=array()){foreach($blocks as $i=>&$b){$p=$path;$p[]=$i;$ok=true;if(isset($selector['path'])&&$selector['path']!==''&&$selector['path']!==implode('.',$p))$ok=false;if(isset($selector['block_name'])&&$selector['block_name']!==''&&(string)($b['blockName']??'')!==$selector['block_name'])$ok=false;if(isset($selector['text'])&&$selector['text']!==''&&stripos((string)($b['innerHTML']??''),(string)$selector['text'])===false)$ok=false;if($ok)return array('node'=>&$b,'path'=>implode('.',$p));if(!empty($b['innerBlocks'])){$x=self::locate_in_raw($b['innerBlocks'],$selector,$p);if($x)return $x;}}return new WP_Error('oai_block_not_found','Gutenberg block not found',array('status'=>404));}
