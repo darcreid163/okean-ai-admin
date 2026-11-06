@@ -15,3 +15,11 @@
 - The mission covers the Open Beta acceptance scope for WordPress core, WooCommerce, Elementor, classic/block editor, classic themes and Woodmart; server-authoritative tariffs/quota ledger; plugin dashboard reconciliation; code audit; GitHub Actions; disposable virtual test environments; and periodic installable beta artifacts.
 - Keep the mission document and this file aligned. Update the mission when the owner changes product scope or billing policy; do not silently reinterpret approved decisions.
 - The release mission does not override this file's security, repository separation, branch/PR, data-integrity or explicit-owner-approval requirements.
+
+## OpenCode Engineering Skills Pack
+
+- Use opencode.json, specialist agents in .opencode/agents/, and 15 project Skills in .opencode/skills/.
+- Start coordinated work with release-lead; delegate focused tasks to WordPress, WooCommerce, Elementor/theme, Cloud Core, Billing, Security, QA and Release Engineer agents.
+- Load Skills on demand with OpenCode's built-in skill tool. Do not claim a Skill or agent ran unless it was actually invoked.
+- Root rules and docs/OPEN-BETA-RELEASE-MISSION.md are mandatory and take precedence over specialist guidance.
+- Specialist agents work on focused branches or separated tasks and return exact diffs, tests and evidence to the Release Lead.
