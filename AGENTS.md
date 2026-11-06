@@ -8,3 +8,10 @@
 - Gateway Ledger alone computes quotas; per-successful-object Batch, atomic reservation/idempotency and uncertain outcomes are P0.
 - One issue/branch per change, exact-HEAD CI logs before merge, evidence-backed review. No force-push/branch deletion for unfinished PRs. Production deployment, account/tariff migration, release tags and repo visibility changes require separate explicit authorization.
 - Historic public disclosure cannot be reversed by making repo private; inspect exposures before release.
+
+## Shared open-beta mission
+
+- Before any task, read `docs/OPEN-BETA-RELEASE-MISSION.md`. It is the canonical shared product/release brief for all coding, review, QA and release agents.
+- The mission covers the Open Beta acceptance scope for WordPress core, WooCommerce, Elementor, classic/block editor, classic themes and Woodmart; server-authoritative tariffs/quota ledger; plugin dashboard reconciliation; code audit; GitHub Actions; disposable virtual test environments; and periodic installable beta artifacts.
+- Keep the mission document and this file aligned. Update the mission when the owner changes product scope or billing policy; do not silently reinterpret approved decisions.
+- The release mission does not override this file's security, repository separation, branch/PR, data-integrity or explicit-owner-approval requirements.
