@@ -84,6 +84,8 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-mc
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-evidence-cleanup.php"
 # Failed rollback / failed verification evidence is protected unless explicitly opted in (issue #143).
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-operations-cleanup-policy.php"
+# Plugin header and README.txt completeness: Requires at least/PHP/Tested up to/WC (issue #144).
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-plugin-metadata.php"
 
 # Durable navigation-menu item creation: retries, actor isolation and six workers.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-menu-item-creation.php"
