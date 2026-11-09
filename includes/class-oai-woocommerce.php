@@ -299,6 +299,15 @@ class OAI_WooCommerce {
   if(!is_array($changes))$changes=array();$type=sanitize_key((string)($changes['type']??'simple'));
   if(!in_array($type,array('simple','variable'),true))return new WP_Error('oai_woo_type','P0 create supports simple or variable products',array('status'=>422));
   if(!current_user_can('edit_products'))return new WP_Error('oai_woo_permission','Product edit permission required',array('status'=>403));
+  // Issue #140: validate every variation row before the idempotency claim is
+  // reserved, so invalid or duplicate child input returns 422 with no claim,
+  // no operation row and no draft product.
+  $variations=$changes['variations']??array();
+  if($type==='variable'){
+   $valid=self::validate_variations($variations);if(is_wp_error($valid))return $valid;
+  }elseif(!empty($variations)){
+   return new WP_Error('oai_woo_variations','Variations require a variable product',array('status'=>422));
+  }
   if(!is_string($request_key)||($request_key!==''&&!preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$request_key)))
    return new WP_Error('oai_product_request_key','Invalid product idempotency_key',array('status'=>400));
   $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
@@ -323,16 +332,8 @@ class OAI_WooCommerce {
   if(is_wp_error($admission))return $admission;
   if($admission!==true)
    return new WP_Error('oai_product_creation_pending','Product creation requires result reconciliation',array('status'=>409));
-  // Issue #140: validate every variation row BEFORE any product is written, so
-  // invalid/duplicate child input returns 422 with no operation row and no
-  // draft product, and wrap the child loop so a mid-loop failure cleans up
-  // every variation created by this operation plus the parent draft.
-  $variations=$changes['variations']??array();
-  if($type==='variable'){
-   $valid=self::validate_variations($variations);if(is_wp_error($valid))return $valid;
-  }elseif(!empty($variations)){
-   return new WP_Error('oai_woo_variations','Variations require a variable product',array('status'=>422));
-  }
+  // The child loop is wrapped so a mid-loop failure cleans up every variation
+  // created by this operation plus the parent draft.
   $p=$type==='variable'?new WC_Product_Variable():new WC_Product_Simple();$p->set_name(wp_strip_all_tags((string)($changes['name']??'AI Admin draft product')));$p->set_status('draft');$id=$p->save();
   if(!$id)return new WP_Error('oai_woo_create','Failed to create draft product',array('status'=>500));
   update_post_meta($id,'_oai_sandbox_artifact','1');
