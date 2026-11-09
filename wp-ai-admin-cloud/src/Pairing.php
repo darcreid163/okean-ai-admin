@@ -34,9 +34,24 @@ final class Pairing {
         wp_schedule_single_event($record['expires'],'wpai_gateway_pair_cleanup',[self::key($state)]);
         return $home.'/wp-admin/admin-post.php?action=oai_gateway_pair&state='.rawurlencode($state);
     }
+    /**
+     * Both sides derive the same site-scoped read key from the one-use pairing
+     * state and the PKCE verifier that already travelled over the pinned back
+     * channel. It authorizes only the read-only usage projection.
+     */
+    public static function siteStatusKey(string $state,string $verifier): string {
+        return hash_hmac('sha256','wpai-site-status-v1|'.$state,$verifier);
+    }
     public function descriptor(string $state,int $now): array {
         $r=$this->pending($state,$now);
-        return ['protocol'=>'wpai-browser-pairing-v1','state'=>$state,'site_url'=>$r['home'],'gateway'=>'https://wpaiadmin.ru','callback'=>self::CALLBACK,'account_id'=>$r['owner'],'account_label'=>$r['label'],'challenge'=>$r['challenge'],'expires'=>$r['expires']];
+        $descriptor=['protocol'=>'wpai-browser-pairing-v1','state'=>$state,'site_url'=>$r['home'],'gateway'=>'https://wpaiadmin.ru','callback'=>self::CALLBACK,'account_id'=>$r['owner'],'account_label'=>$r['label'],'challenge'=>$r['challenge'],'expires'=>$r['expires']];
+        $public=$this->core->signingPublicKey();
+        if($public!==null) {
+            $descriptor['signing_public_key']=$public;
+            $descriptor['signing_key_id']=(string)$this->core->signingKeyId();
+            $descriptor['usage_projection']='wpai-site-usage-v1';
+        }
+        return $descriptor;
     }
     private function claim(string $owner,string $state,int $now): array {
         $r=$this->pending($state,$now);
@@ -49,8 +64,9 @@ final class Pairing {
     public function complete(string $owner,string $state,string $code,int $now): array {
         if(!preg_match('/^[A-Za-z0-9_-]{43}$/D',$code))throw new Fault('invalid_pairing_code');
         $r=$this->claim($owner,$state,$now);
-        $reply=$this->transport->pairing($r['home'],'exchange',['state'=>$state,'code'=>$code,'verifier'=>$this->vault->open($r['verifier'],'pairing:'.$state),'callback'=>self::CALLBACK]);
+        $verifier=$this->vault->open($r['verifier'],'pairing:'.$state);
+        $reply=$this->transport->pairing($r['home'],'exchange',['state'=>$state,'code'=>$code,'verifier'=>$verifier,'callback'=>self::CALLBACK]);
         if(($reply['site_url']??null)!==$r['home']||!is_string($reply['token']??null)||!preg_match('/^oai_pair_[A-Za-z0-9_-]{43}$/D',$reply['token']))throw new Fault('invalid_pairing_response',502);
-        return $this->core->connect($owner,$r['home'],$reply['token'],$now,true);
+        return $this->core->connect($owner,$r['home'],$reply['token'],$now,true,hash('sha256',self::siteStatusKey($state,$verifier)));
     }
 }

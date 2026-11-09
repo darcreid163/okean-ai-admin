@@ -33,7 +33,7 @@ class OAI_REST {public static function site(){return ['url'=>home_url('/')];}}
 function at($host,$user,callable $fn){global $origin,$uid;$old=[$origin,$uid];$origin=$host;$uid=$user;try{return $fn();}finally{[$origin,$uid]=$old;}}
 function check($ok,$message){global $checks;$checks++;if(!$ok)throw new RuntimeException($message);}
 function rejects(callable $fn,$reason){try{$fn();}catch(Fault $e){check($e->reason===$reason,'Wrong fault: '.$e->reason);return;}throw new RuntimeException('Expected '.$reason);}
-foreach(['Security','Transport','Store','Core','Gateway','Pairing'] as $file)require dirname(__DIR__).'/wp-ai-admin-cloud/src/'.$file.'.php';
+foreach(['Security','Transport','Store','QuotaPolicy','BatchAccounting','AbilitiesPolicy','Core','Skills','Unsplash','MediaPolicy','Gateway','Pairing'] as $file)require dirname(__DIR__).'/wp-ai-admin-cloud/src/'.$file.'.php';
 require dirname(__DIR__).'/includes/class-oai-gateway-pairing.php';require dirname(__DIR__).'/includes/class-oai-mcp.php';
 class BrowserTransport implements Transport,PairingTransport {
  public $wrongSite=false;public $lastToken='';
@@ -60,6 +60,7 @@ function begin($home){global $pairing,$now;$url=$pairing->start('42',$home,'Ни
 function approve($home,$state){global $now;return at($home,7,function()use($state){global $now;$r=OAI_Gateway_Pairing::request($state,$now);check(!is_wp_error($r),'Trusted descriptor rejected');return OAI_Gateway_Pairing::issue_code($r,$now);});}
 $state=begin('https://okean.market');$descriptor=$pairing->descriptor($state,$now);check(!isset($descriptor['verifier']),'PKCE verifier leaked');
 check($descriptor['callback']===Pairing::CALLBACK&&$descriptor['account_label']==='Николай','Wrong callback/account identity');
+check(($descriptor['usage_projection']??null)==='wpai-site-usage-v1'&&is_string($descriptor['signing_public_key']??null)&&preg_match('/^[a-f0-9]{16}$/D',$descriptor['signing_key_id']??'')===1,'Pairing did not publish the usage projection key');
 $code=approve('https://okean.market',$state);check(is_string($code)&&strlen($code)===43,'Code missing');
 $pending=get_option('wpai_pair_request_'.hash('sha256',$state));$verifier=$vault->open($pending['verifier'],'pairing:'.$state);
 at('https://okean.market',7,function()use($state,$code){global $now;$r=OAI_Gateway_Pairing::exchange(['state'=>$state,'code'=>$code,'verifier'=>str_repeat('x',43),'callback'=>Pairing::CALLBACK],$now);check(is_wp_error($r),'Wrong verifier accepted');});
@@ -67,6 +68,12 @@ rejects(fn()=>$pairing->complete('99',$state,$code,$now),'pairing_account_mismat
 $site=$pairing->complete('42',$state,$code,$now);$token=$transport->lastToken;
 check($site['home']==='https://okean.market'&&count($core->sites('42'))===1,'Automatic registration failed');
 check(!str_contains(json_encode($options['https://okean.market']),$token),'Native credential stored in plaintext');
+$credential=null;foreach($options['https://okean.market'] as $key=>$value){if(str_starts_with($key,OAI_Gateway_Pairing::CREDENTIAL_PREFIX))$credential=$value;}
+check(is_array($credential)&&($credential['status_key']??'')===OAI_Gateway_Pairing::site_status_key($state,$verifier),'Native read key not derived from the PKCE verifier');
+check(($credential['usage_projection']??'')==='wpai-site-usage-v1'&&($credential['signing_public_key']??'')===$descriptor['signing_public_key'],'Native projection key binding lost');
+$usage=$core->siteUsage('https://okean.market',$credential['status_key'],$now);
+check(($usage['contract']??'')==='wpai-site-usage-v1'&&($usage['site_id']??'')===$site['id'],'Cloud usage projection missing after pairing');
+check(!str_contains(json_encode($usage),$token),'Projection exposed the site token');
 $row=$store->row('SELECT * FROM '.$store->table('sites').' WHERE id=?',[$site['id']]);check(!str_contains($row['token_sealed'],$token),'Central token stored in plaintext');
 rejects(fn()=>$pairing->complete('42',$state,$code,$now),'pairing_request_expired');
 at('https://okean.market',7,function()use($state,$code,$verifier){global $now;$r=OAI_Gateway_Pairing::exchange(['state'=>$state,'code'=>$code,'verifier'=>$verifier,'callback'=>Pairing::CALLBACK],$now);check(is_wp_error($r),'Code replay accepted');});
@@ -78,7 +85,7 @@ $state3=begin('https://okean.market');$code3=approve('https://okean.market',$sta
 $freshToken=$transport->lastToken;$core->disconnect('42',$site['id'],$now);
 $state4=begin('https://okean.market');$code4=approve('https://okean.market',$state4);$restored=$pairing->complete('42',$state4,$code4,$now);check($restored['id']!==$site['id'],'Revoked registration ID reused');
 rejects(fn()=>$core->catalog($actor,$restored['id'],$now),'scope_or_site_denied');
-at('https://okean.market',7,function()use($freshToken){global $now,$admin;$r=OAI_Gateway_Pairing::authenticate($freshToken,$now);check($r['user']->ID===7,'Credential owner lost');$admin=false;check(OAI_Gateway_Pairing::authenticate($freshToken,$now)===false,'Demoted administrator retained access');$admin=true;check(OAI_Gateway_Pairing::revoke(hash('sha256',$freshToken))===true,'Revocation failed');check(OAI_Gateway_Pairing::authenticate($freshToken,$now)===false,'Revoked credential accepted');});
+at('https://okean.market',7,function()use($freshToken){global $now,$admin;$usageKey='oai_cloud_usage_'.substr(hash('sha256',$freshToken),0,32);add_option($usageKey,['cached'=>true],'',false);$r=OAI_Gateway_Pairing::authenticate($freshToken,$now);check($r['user']->ID===7,'Credential owner lost');$admin=false;check(OAI_Gateway_Pairing::authenticate($freshToken,$now)===false,'Demoted administrator retained access');$admin=true;check(OAI_Gateway_Pairing::revoke(hash('sha256',$freshToken))===true,'Revocation failed');check(get_option($usageKey)===false,'Revocation kept a stale usage projection');check(OAI_Gateway_Pairing::authenticate($freshToken,$now)===false,'Revoked credential accepted');});
 $cancel=begin('https://cancel.example');$pairing->cancel('42',$cancel,$now);rejects(fn()=>$pairing->descriptor($cancel,$now),'pairing_request_expired');
 $expired=begin('https://expire.example');rejects(fn()=>$pairing->descriptor($expired,$now+601),'pairing_request_expired');
 $bad=begin('https://bad.example');$httpOverride=['response'=>['code'=>200],'body'=>json_encode($pairing->descriptor($bad,$now)+[])];
