@@ -149,7 +149,12 @@ class OAI_WooCommerce {
    if($before['type']!=='variable')return new WP_Error('oai_woo_variations','Variations require a variable product',array('status'=>422));
    if(!is_array($changes['variations']))return new WP_Error('oai_woo_variations','variations must be an array',array('status'=>422));
    $map=array();foreach($after['variations'] as $i=>$v)$map[(int)$v['id']]=$i;
-   foreach($changes['variations'] as $v){$n=self::normalize_variation_update($v);if(is_wp_error($n))return $n;$vid=(int)$n['id'];if(!isset($map[$vid]))return new WP_Error('oai_woo_variation_parent','Variation does not belong to product',array('status'=>422,'variation_id'=>$vid));$after['variations'][$map[$vid]]=array_merge($after['variations'][$map[$vid]],$n);}
+   foreach($changes['variations'] as $v){$n=self::normalize_variation_update($v);if(is_wp_error($n))return $n;$vid=(int)$n['id'];if(!isset($map[$vid]))return new WP_Error('oai_woo_variation_parent','Variation does not belong to product',array('status'=>422,'variation_id'=>$vid));$row=array_merge($after['variations'][$map[$vid]],$n);
+    // The variation snapshot carries WooCommerce's derived `price`. Recompute it
+    // from the merged regular/sale values exactly as the parent price below, so
+    // the approved `after` matches what WooCommerce persists on apply.
+    $row['price']=(string)$row['sale_price']!==''?$row['sale_price']:$row['regular_price'];
+    $after['variations'][$map[$vid]]=$row;}
   }
   if(array_key_exists('seo',$changes)){
    if(!is_array($changes['seo']))return new WP_Error('oai_woo_seo','seo must be an object',array('status'=>422));
@@ -175,6 +180,25 @@ class OAI_WooCommerce {
    }
   }
   foreach($changes as $change=>$unused){
+   if($change==='variations'){
+    // Variations live in a nested array. Compare only the rows and fields the
+    // caller actually requested, keyed by id, instead of the whole array. The
+    // derived `price` is recomputed in patch(); never compare it unless asked.
+    $requested=is_array($changes['variations'])?$changes['variations']:array();
+    $before_map=array();foreach((array)($before['variations']??array()) as $row)if(isset($row['id']))$before_map[(int)$row['id']]=$row;
+    $expected_map=array();foreach((array)($expected['variations']??array()) as $row)if(isset($row['id']))$expected_map[(int)$row['id']]=$row;
+    $actual_map=array();foreach((array)($actual['variations']??array()) as $row)if(isset($row['id']))$actual_map[(int)$row['id']]=$row;
+    foreach($requested as $req_row){
+     $vid=isset($req_row['id'])?(int)$req_row['id']:0;
+     if(!$vid)continue;
+     foreach(array_keys((array)$req_row) as $field){
+      if($field==='id')continue;
+      $exp=array_key_exists($field,$expected_map[$vid]??array())?$expected_map[$vid][$field]:(array_key_exists($field,$before_map[$vid]??array())?$before_map[$vid][$field]:null);
+      if(!OAI_Verify::same($actual_map[$vid][$field]??null,$exp))return new WP_Error('oai_woo_runtime','WooCommerce runtime did not persist requested variation field: '.$field,array('status'=>409,'variation_id'=>$vid,'field'=>$field,'expected'=>$exp,'actual'=>$actual_map[$vid][$field]??null));
+     }
+    }
+    continue;
+   }
    $fields=$change==='stock_quantity'?array('stock'):($change==='images'?array('image_id','gallery_ids'):array($change));
    if($change==='stock_quantity'&&!array_key_exists('stock_status',$changes)&&array_key_exists('stock_status',$expected))$fields[]='stock_status';
    foreach($fields as $field){
