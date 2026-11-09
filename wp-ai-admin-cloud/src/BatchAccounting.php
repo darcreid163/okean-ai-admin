@@ -119,7 +119,7 @@ final class BatchAccounting {
             try{
                 if(!isset($names[$item['tool']]))$reply=['jsonrpc'=>'2.0','id'=>$request['id'],'error'=>['code'=>-32602,'message'=>'Unknown site tool']];
                 else $reply=$this->transport->rpc($site['home'],$this->vault->open($site['token_sealed'],'site:'.$owner.':'.$site['id']),$request);
-                RpcReply::validate($reply,$request);$ok=!isset($reply['error'])&&($reply['result']['isError']??false)===false;$operation=null;
+                RpcReply::validate($reply,$request);$ok=RpcReply::succeeded($reply);$operation=null;
                 if($ok&&Core::writes($item['tool'],$item['arguments'])){
                     foreach($reply['result']['content'] as $block)if(($block['type']??'')==='text'){$data=json_decode($block['text'],true);if(is_array($data)&&($parsed=self::operationId($data['id']??null))!==null){$operation=$parsed;break;}}
                     if($operation===null)throw new Fault('batch_operation_receipt_missing',502);
