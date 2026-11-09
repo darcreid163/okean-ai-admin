@@ -58,6 +58,8 @@ wp_set_current_user(0);pcErr(pcCreate($payload,'product-anonymous-123456'),'oai_
 pcAssert(pcCount()===$start+4,'Anonymous created product');
 // Issue #140: invalid variation input must be rejected before any product or
 // operation row exists, and a duplicate child SKU must not leave orphan data.
+// Restore the authorized actor: validation, not permissions, is under test.
+wp_set_current_user((int)$actor);
 $preCount=pcCount();$preOps=OAI_DB::count_all();
 pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Invalid Variation','variations'=>[['regular_price'=>'12,50']]],'product-invalid-comma-123456'),'oai_woo_price');
 pcAssert(pcCount()===$preCount&&OAI_DB::count_all()===$preOps,'Comma-decimal variation left a product or operation');
