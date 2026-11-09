@@ -61,8 +61,6 @@ pcAssert(pcCount()===$start+4,'Anonymous created product');
 // Restore the authorized actor: validation, not permissions, is under test.
 wp_set_current_user((int)$actor);
 $preCount=pcCount();$preOps=OAI_DB::count_all();
-pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Invalid Variation','variations'=>[['regular_price'=>'12,50']]],'product-invalid-comma-123456'),'oai_woo_price');
-pcAssert(pcCount()===$preCount&&OAI_DB::count_all()===$preOps,'Comma-decimal variation left a product or operation');
 pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Negative Variation','variations'=>[['regular_price'=>'-5']]],'product-invalid-neg-123456'),'oai_woo_price');
 pcAssert(pcCount()===$preCount&&OAI_DB::count_all()===$preOps,'Negative variation price left a product or operation');
 pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Sale Variation','variations'=>[['regular_price'=>'10.00','sale_price'=>'20.00']]],'product-invalid-sale-123456'),'oai_woo_sale_price');
@@ -73,4 +71,7 @@ pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Unknown Field','variations'=>[
 pcAssert(pcCount()===$preCount&&OAI_DB::count_all()===$preOps,'Unknown variation field left a product or operation');
 global $wpdb;
 pcAssert((int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type='product_variation'")===0,'Orphan variation row survived rejected input');
+// Comma-decimal input is normalised, not rejected (issue #140 requires parity).
+$comma=pcCreate(['type'=>'variable','name'=>'WP AI Comma Decimal','variations'=>[['regular_price'=>'12,50']]],'product-comma-decimal-123456');
+pcAssert(!is_wp_error($comma),'Comma-decimal variation was rejected: '.(is_wp_error($comma)?$comma->get_error_code():''));
 echo "PASS product creation admission: ".ProductCreationChecks::$count." assertions and six WP processes\n";
