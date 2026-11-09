@@ -27,12 +27,30 @@ class WP_REST_Request {
     public function get_param($key) { return $this->params[$key] ?? null; }
 }
 
+class FixtureUser {
+    public $ID;
+    public $user_login;
+    public $user_email;
+    public $display_name;
+    public $roles;
+    public $user_registered;
+    public function __construct($id, $login, $email, $display_name, $roles, $registered) {
+        $this->ID = $id;
+        $this->user_login = $login;
+        $this->user_email = $email;
+        $this->display_name = $display_name;
+        $this->roles = $roles;
+        $this->user_registered = $registered;
+    }
+}
+
 /** Current user id used by the projection fixture. 0 means anonymous. */
 $GLOBALS['oai_test_user_id'] = 0;
 $GLOBALS['oai_test_admin_id'] = 7;
+// Real WP_User rows always carry an email; the projection under test must not.
 $GLOBALS['oai_test_users'] = array(
-    array('id' => 7, 'login' => 'ci-admin', 'display_name' => 'CI Admin', 'roles' => array('administrator'), 'registered' => '2026-01-01 00:00:00'),
-    array('id' => 8, 'login' => 'ci-editor', 'display_name' => 'CI Editor', 'roles' => array('editor'), 'registered' => '2026-01-02 00:00:00'),
+    new FixtureUser(7, 'ci-admin', 'admin@example.invalid', 'CI Admin', array('administrator'), '2026-01-01 00:00:00'),
+    new FixtureUser(8, 'ci-editor', 'editor@example.invalid', 'CI Editor', array('editor'), '2026-01-02 00:00:00'),
 );
 
 function get_current_user_id() { return (int) $GLOBALS['oai_test_user_id']; }
