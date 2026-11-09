@@ -58,6 +58,8 @@ jobs:
         run: php tests/cli-expanded-commands.php
       - name: Abilities opt-in discovery contract
         run: php tests/abilities-discovery.php
+      - name: Self-test catalog and privacy contract
+        run: php tests/self-test-contract.php
 
   wordpress-smoke:
     runs-on: ubuntu-latest
