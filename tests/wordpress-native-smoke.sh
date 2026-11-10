@@ -23,7 +23,7 @@ install_ci_plugin woocommerce "${WOO_TEST_VERSION:-latest}"
 # the remaining smoke suites, including their unlicensed-denial assertions.
 OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/site" "$WORK/wp-cli.phar"
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
-cp -R okean-ai-admin.php includes starter-themes "$WORK/site/wp-content/plugins/okean-ai-admin/"
+cp -R okean-ai-admin.php includes starter-themes README.txt "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin
 # Disposable site only: exercise the additive Native 23 -> 24 schema migration,
 # preserving paired identity, registered OAuth client and pending operations.
