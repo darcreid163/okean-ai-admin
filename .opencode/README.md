@@ -1,7 +1,7 @@
 # OpenCode project setup
 
-This repository uses OpenCode's built-in `build` and `plan` agents. Project-specific agent and skill packs have been removed to keep the setup minimal.
+The repository intentionally has no project-specific agents or Skills. Use OpenCode's normal single-session workflow with the built-in default coding mode; do not configure agent teams, specialist roles or delegation.
 
 OpenCode loads only the concise root `AGENTS.md`. Consult `docs/OPEN-BETA-RELEASE-MISSION.md` manually for release-scope or beta-acceptance work; do not load it for routine coding tasks.
 
-Keep context narrow: ask for specific files, use focused diffs, summarize test output, and delegate only when independent parallel work is genuinely useful.
+Keep context narrow: inspect only relevant files, use focused diffs, and summarize test output. Work sequentially unless the owner explicitly requests another workflow.
