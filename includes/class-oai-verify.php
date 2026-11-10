@@ -125,6 +125,20 @@ class OAI_Verify {
    return $result;
   }
 
+  if($row['type']==='woocommerce_order'){
+   list($exists,$current)=OAI_REST::snapshot_for_verify($row['type'],$row['target']);
+   if(is_wp_error($current)){$result['checks'][]=array('name'=>'read_current','ok'=>false,'message'=>$current->get_error_message());return $result;}
+   $result['current']=$current;
+   $before_exists=array_key_exists('before_exists',$meta)?(bool)$meta['before_exists']:true;
+   $after_exists=array_key_exists('after_exists',$meta)?(bool)$meta['after_exists']:true;
+   $expected_exists=$phase==='rollback'?$before_exists:$after_exists;
+   $result['checks'][]=array('name'=>'exists','ok'=>($exists===$expected_exists),'expected'=>$expected_exists,'actual'=>$exists);
+   $same=$exists&&class_exists('OAI_WooCommerce')&&OAI_WooCommerce::order_verification_matches($current,$expected);
+   $result['checks'][]=array('name'=>'order_semantic_match','ok'=>$same);
+   $result['verified']=self::all_checks_ok($result['checks']);
+   return $result;
+  }
+
   list($exists,$current)=OAI_REST::snapshot_for_verify($row['type'],$row['target']);
   if(is_wp_error($current)){$result['checks'][]=array('name'=>'read_current','ok'=>false,'message'=>$current->get_error_message());return $result;}
   $result['current']=$current;

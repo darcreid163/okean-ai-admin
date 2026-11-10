@@ -40,6 +40,8 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-co
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-gutenberg-preservation.php"
 # Normal Native license/approval/rollback lifecycle, temporary product only.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-lifecycle.php"
+# Order lifecycle (#142): approval, addresses/quantities, WooCommerce totals, 409 and rollback.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-order-lifecycle.php"
 # Current target policy also applies to historical pending/approved options.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-option-policy.php"
 # Decode real images before upload, then exercise approval/verify/rollback.
