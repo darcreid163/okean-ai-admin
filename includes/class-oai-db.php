@@ -106,7 +106,7 @@ class OAI_DB {
   */
  public static function insert_creation_claim($name,array $claim){
   global $wpdb;
-  if(!is_string($name)||!preg_match('/^oai_(?:workspace|menu|menu_item|product|elementor_page)_creation_[a-f0-9]{64}$/D',$name))
+  if(!is_string($name)||!preg_match('/^oai_(?:workspace|menu|menu_item|product|post|elementor_page)_creation_[a-f0-9]{64}$/D',$name))
    return new WP_Error('oai_creation_claim_name','Invalid internal creation claim name',array('status'=>400));
   $ready=self::intent_autocommit();if(is_wp_error($ready))return $ready;
   $value=maybe_serialize($claim);
