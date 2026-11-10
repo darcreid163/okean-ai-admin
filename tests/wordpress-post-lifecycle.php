@@ -16,7 +16,8 @@ if (getenv('OAI_DISPOSABLE_WP_TEST') !== '1' ||
 final class PostLifecycleChecks {public static int $count = 0;}
 function plcAssert($ok, $msg) { ++PostLifecycleChecks::$count; if (!$ok) throw new RuntimeException($msg); }
 function plcOk($value, $msg) {
-    if (is_wp_error($value)) throw new RuntimeException($msg.': '.$value->get_error_code());
+    if (is_wp_error($value)) throw new RuntimeException($msg.': '.$value->get_error_code()
+        .' '.wp_json_encode($value->get_error_data(), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
     plcAssert(true, $msg);
     return $value;
 }

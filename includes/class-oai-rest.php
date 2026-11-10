@@ -321,7 +321,12 @@ class OAI_REST {
   if(is_wp_error($admission))return $admission;
   if($admission!==true)
    return new WP_Error('oai_post_creation_pending','Post creation requires result reconciliation',array('status'=>409));
-  $created=wp_insert_post(array('post_type'=>$post_type,'post_status'=>'draft','post_title'=>$title,'post_excerpt'=>$excerpt,'post_content'=>$content,'post_name'=>($slug!==''?$slug:null)),true);
+  // Give the sandbox draft its final slug up front: a draft keeps an empty
+  // post_name, but WordPress generates one from the title on draft->publish.
+  // Without this the post_create after_data name (captured while still a draft)
+  // could never match the published name, so verify would reject every publish
+  // apply instead of committing the intended preview.
+  $created=wp_insert_post(array('post_type'=>$post_type,'post_status'=>'draft','post_title'=>$title,'post_excerpt'=>$excerpt,'post_content'=>$content,'post_name'=>($slug!==''?$slug:sanitize_title($title))),true);
   if(is_wp_error($created))return $created;
   $post_id=(int)$created;
   update_post_meta($post_id,'_oai_sandbox_artifact',array('kind'=>'post_create','created_by'=>$actor,'created_at'=>time()));
