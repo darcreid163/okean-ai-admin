@@ -124,6 +124,14 @@ final class WordPress {
         $route('/tokens','POST',function($r) { $p=self::body($r); if (!is_array($p['site_ids']??null)||!is_array($p['scopes']??null)) throw new Fault('token_policy_required'); return self::core()->mint(self::owner(),$p['site_ids'],$p['scopes'],time()); });
         $route('/tokens/(?P<hash>[a-f0-9]{64})','DELETE',function($r) { self::core()->revokeToken(self::owner(),$r['hash'],time()); return ['revoked'=>true]; });
         $route('/usage','GET',fn($r)=>self::core()->usage(self::owner(),time()));
+        // Paired-site read-only usage projection. Authenticated by the site
+        // read key derived at pairing, never by a WordPress cookie or a Cloud
+        // bearer token. One site can only read its own owner's projection.
+        register_rest_route('wpai-cloud/v1','/site/usage',['methods'=>'POST','permission_callback'=>'__return_true','callback'=>fn($r)=>self::safe(function() use($r) {
+            $p=self::body($r);
+            if(!is_string($p['site_url']??null)||!is_string($p['status_key']??null)) throw new Fault('site_usage_credentials_required');
+            return self::response(self::core()->siteUsage($p['site_url'],$p['status_key'],time()));
+        })]);
         $route('/connection-check','GET',function($r) { $home=$r['home']; if(!is_string($home)||strlen($home)>512)throw new Fault('invalid_site_input'); return self::pairing()->checkSite(self::owner(),$home,time()); });
         $route('/ledger','GET',fn($r)=>self::core()->ledger(self::owner()));
         $route('/account/closure-preview','GET',fn($r)=>self::core()->closureInventory(self::owner()));
