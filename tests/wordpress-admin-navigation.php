@@ -6,6 +6,10 @@ global $menu,$submenu,$admin_page_hooks,$_registered_pages,$_parent_pages,$_wp_r
 global $parent_file,$submenu_file,$self,$plugin_page,$typenow,$wpdb;
 require_once ABSPATH.'wp-admin/includes/plugin.php';
 wp_set_current_user(1);
+// A real site has persistent identity before the first admin page render; seed it
+// so the snapshot below asserts that navigation does not mint or rotate it.
+OAI_Platform::site_id();
+OAI_Platform::installation_id();
 $menu=$submenu=$admin_page_hooks=$_registered_pages=$_parent_pages=$_wp_real_parent_file=$_wp_submenu_nopriv=$_wp_menu_nopriv=array();
 $parent_file='';$submenu_file=null;$plugin_page='';$typenow='';$_SERVER['PHP_SELF']='/wp-admin/admin.php';
 $_SERVER['REQUEST_METHOD']='GET';$_POST=$_REQUEST=array();

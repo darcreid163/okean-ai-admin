@@ -13,6 +13,12 @@ $name='oai-acceptance/read-example';
 if (!wp_get_ability($name)) throw new RuntimeException('CI MU plugin did not register Ability at init');
 $names=array_column(OAI_Abilities::discover(),'name');
 if (!in_array($name,$names,true)) throw new RuntimeException('Registered REST-visible Ability missing from discovery');
+// Native's own abilities must register on the real WordPress 6.9+ Abilities API
+// with the required category/execute_callback arguments and stay discoverable.
+foreach (['okean-ai/get-site-info','okean-ai/list-operations'] as $nativeAbility) {
+    if (!wp_get_ability($nativeAbility)) throw new RuntimeException('Native Ability did not register: '.$nativeAbility);
+    if (!in_array($nativeAbility,$names,true)) throw new RuntimeException('Native Ability missing from discovery: '.$nativeAbility);
+}
 $info=OAI_Abilities::info($name);
 if (!is_array($info) || $info['execution']!=='disabled_until_explicit_policy') throw new RuntimeException('Ability metadata not protected');
 // Exercise Native MCP tool registry and JSON-RPC tool dispatcher in the
