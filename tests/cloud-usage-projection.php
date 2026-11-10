@@ -141,4 +141,27 @@ $GLOBALS['wpai_test_options']['oai_cloud_usage_'.substr($hash,0,32)]['verified_a
 $stale=OAI_Cloud_Usage::status();
 usageAssert($stale['state']==='stale'&&$stale['available']===true,'Old verified projection not labelled stale');
 
-echo "PASS 38 cloud usage projection assertions\n";
+// #147 regression: the dashboard "update server quota" button handler must
+// actually execute for every server state it can render. A missing "$" here is
+// an undefined constant: php -l and a green CI that never presses the button
+// cannot see it, but the real admin POST would fail at runtime.
+require dirname(__DIR__).'/includes/class-oai-admin.php';
+if(!function_exists('esc_html')){function esc_html($value){return htmlspecialchars((string)$value,ENT_QUOTES,'UTF-8');}}
+if(!function_exists('esc_attr')){function esc_attr($value){return htmlspecialchars((string)$value,ENT_QUOTES,'UTF-8');}}
+$handler_states=array(
+    'verified'=>array('state'=>'verified','available'=>true,'reason'=>'','projection'=>array('remaining'=>1990)),
+    'stale'=>array('state'=>'stale','available'=>true,'reason'=>'stale','projection'=>array('remaining'=>1990)),
+    'unknown'=>array('state'=>'unknown','available'=>false,'reason'=>'signature','projection'=>null),
+    'unpaired'=>array('state'=>'unpaired','available'=>false,'reason'=>'not_paired','projection'=>null),
+);
+foreach($handler_states as $handler_state=>$handler_fresh){
+    $handler_notice=OAI_Admin::cloud_usage_refresh_notice($handler_fresh);
+    $handler_class=in_array($handler_state,array('verified','stale'),true)?'notice-success':'notice-error';
+    usageAssert(strpos($handler_notice,'notice '.$handler_class)!==false,'Quota button handler rendered the wrong notice class for '.$handler_state);
+    usageAssert($handler_class==='notice-error'||strpos($handler_notice,'notice-error')===false,'Quota button handler mixed success and error classes for '.$handler_state);
+}
+// Drive the real status() output (not a hand-built array) through the same handler.
+$handler_real=OAI_Admin::cloud_usage_refresh_notice(OAI_Cloud_Usage::status());
+usageAssert(strpos($handler_real,'notice-success')!==false,'Quota button handler rejected the real verified/stale status()');
+
+echo "PASS 38 cloud usage projection assertions + 9 quota button handler assertions\n";

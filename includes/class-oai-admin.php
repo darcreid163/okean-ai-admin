@@ -53,6 +53,14 @@ class OAI_Admin {
   }
   return array('enabled'=>$enabled);
  }
+ /** Dashboard "update server quota" button handler: render the confirmation or
+  *  error notice for the server-projection state. Extracted so tests execute the
+  *  exact button path; a missing "$" here is invisible to php -l and green CI. */
+ public static function cloud_usage_refresh_notice($fresh_usage){
+  $confirmed=in_array($fresh_usage['state'],array('verified','stale'),true);
+  $message=$confirmed?($fresh_usage['state']==='verified'?'Серверные данные квоты обновлены и подтверждены подписью.':'Серверные данные получены, но подтверждение уже устарело.'):('Нет подтверждённых серверных данных о квоте ('.$fresh_usage['reason'].').');
+  return '<div class="notice '.($confirmed?'notice-success':'notice-error').'"><p>'.esc_html($message).'</p></div>';
+ }
  private static function sandbox_admin_action($id,$action){
   if(!current_user_can('manage_options'))return new WP_Error('oai_forbidden','Administrator capability required',array('status'=>403));
   if(!in_array($action,array('approve','reject','apply','rollback'),true))return new WP_Error('oai_action','Unknown sandbox action',array('status'=>400));
@@ -91,10 +99,7 @@ class OAI_Admin {
    echo '<div class="notice '.(is_wp_error($mcp_toggle)?'notice-error':'notice-success').'"><p>'.esc_html(is_wp_error($mcp_toggle)?$mcp_toggle->get_error_message():($mcp_toggle['enabled']?'MCP включён. Подключите этот сайт через OAuth.':'MCP выключен. Автоматические режимы остановлены; OAuth-подключения сохранены.')).'</p></div>';
   }
   if(isset($_POST['oai_cloud_usage_refresh']) && check_admin_referer('oai_cloud_usage_refresh')){
-   $fresh_usage=OAI_Cloud_Usage::status(true);
-   $confirmed=in_array($fresh_usage['state'],array('verified','stale'),true);
-   $message=$confirmed?($fresh_usage['state']==='verified'?'Серверные данные квоты обновлены и подтверждены подписью.':'Серверные данные получены, но подтверждение уже устарело.'):('Нет подтверждённых серверных данных о квоте ('.$fresh_usage['reason'].').');
-   echo '<div class="notice '.(confirmed?'notice-success':'notice-error').'"><p>'.esc_html($message).'</p></div>';
+   echo self::cloud_usage_refresh_notice(OAI_Cloud_Usage::status(true));
   }
   if(isset($_POST['oai_content_navigation_state']) && check_admin_referer('oai_content_navigation_state')){
    $state=sanitize_key(wp_unslash((string)$_POST['oai_content_navigation_state']));
