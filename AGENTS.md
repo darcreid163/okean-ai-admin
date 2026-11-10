@@ -8,4 +8,4 @@
 - Gateway Ledger is authoritative for quota. Preserve successful-operation accounting, atomic reservation/idempotency and explicit handling of uncertain outcomes.
 - Use one issue and focused branch per change. Require exact-HEAD CI evidence and review before merge. Do not force-push or delete branches for unfinished PRs.
 - Read `docs/OPEN-BETA-RELEASE-MISSION.md` only when a task requires the broader release scope, compatibility matrix or beta acceptance criteria. It is reference material, not an always-loaded instruction.
-- Keep task context narrow: inspect only relevant files, summarize command output, avoid full-repository dumps and unnecessary agent delegation.
+- Keep work single-threaded and context narrow: inspect only relevant files, summarize command output, avoid full-repository dumps. Do not create, invoke or require project-specific agents, agent teams, delegation workflows or skill packs.
