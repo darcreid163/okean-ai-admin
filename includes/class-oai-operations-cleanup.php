@@ -6,7 +6,7 @@ class OAI_Operations_Cleanup {
  const ACTIVE_STATUSES=array('pending','approved','applying','rollback_pending','rolling_back');
  const TERMINAL_STATUSES=array('rolled_back','rejected','expired','cancelled','failed','apply_failed','rollback_failed','verification_failed');
  // Created artifacts can outlive a lost response and must remain reconcilable.
- const CREATION_EVIDENCE_TYPES=array('media_upload','menu_create','menu_add_item','woocommerce_product_create','elementor_page_create');
+ const CREATION_EVIDENCE_TYPES=array('media_upload','menu_create','menu_add_item','woocommerce_product_create','elementor_page_create','post_create');
 
  public static function self_test_contract(){
   return array(
