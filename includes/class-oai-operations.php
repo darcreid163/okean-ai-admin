@@ -26,7 +26,7 @@ class OAI_Operations {
   if(in_array($type,array('post_title','post_excerpt'),true))return 'low';
   if(in_array($type,array(
    'post_content','content_patch','workspace_write','post_update','post_create',
-   'woo_product_price','woo_product_stock','woocommerce_patch','woocommerce_product','woocommerce_product_create',
+   'woo_product_price','woo_product_stock','woocommerce_patch','woocommerce_product','woocommerce_product_create','woocommerce_order',
    'elementor_widget_html','elementor_widget_settings','elementor_page_create','elementor_page_layout',
    'media_alt','media_title','media_featured','media_upload',
    'menu_create','menu_add_item','menu_remove_item','menu_move_item','menu_assign_location'
