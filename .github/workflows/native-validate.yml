@@ -60,6 +60,8 @@ jobs:
         run: php tests/abilities-discovery.php
       - name: Cloud usage projection verification (Issue #135)
         run: php tests/cloud-usage-projection.php
+      - name: MCP result failure contract (Issue #136)
+        run: php tests/mcp-result-contract.php
       - name: Browser pairing and site usage projection contract (Issue #135)
         run: php tests/browser-pairing.php
 

@@ -77,6 +77,9 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-po
 # One canonical fingerprint across REST and MCP; legacy rows stay held.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-intent.php"
 
+# Every non-WP_Error business failure is isError:true for the Gateway Ledger.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-mcp-error-contract.php"
+
 # Preserve created artifact operation evidence before any operator-only reconciliation.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-evidence-cleanup.php"
 

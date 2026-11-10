@@ -345,7 +345,7 @@ final class Core {
                 $reply=$this->upstream($site,['jsonrpc'=>'2.0','id'=>$key,'method'=>'tools/call','params'=>['name'=>$name,'arguments'=>$args ?: (object)[]]]);
             }
             RpcReply::validate($reply,['jsonrpc'=>'2.0','id'=>$key,'method'=>'tools/call']);
-            $success=!isset($reply['error']) && ($reply['result']['isError']??false)===false;
+            $success=RpcReply::succeeded($reply);
             $receipt=['request_key'=>$key,'state'=>$success?'succeeded':'failed','charged_units'=>$success?$units:0,'site_id'=>$siteId,'policy_version'=>$this->policy['version'],'upstream'=>$reply];
             $this->finish($actor['owner'],$siteId,$key,$reservation['period'],$receipt,$success,$now);
             return $receipt;

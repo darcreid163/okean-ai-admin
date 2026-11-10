@@ -609,7 +609,23 @@ class OAI_MCP {
    $metadata_tools=array('wp_get_site','wp_health','wp_diagnostics','system_manifest','system_capabilities','system_tool_catalog','system_security_status','wp_list_operations','operation_get','operation_status','operation_diff','operation_verify','verify_operation','operation_proof','proof_operation','operation_get_receipt','batch_receipt','batch_proof');
    if(in_array($name,$metadata_tools,true)||(is_array($out)&&isset($out['operation_id'],$out['type'])))$out=OAI_Security::public_evidence($out);
   }
+  return self::tool_result($id,$out);
+ }
+
+ /**
+  * Single transport boundary for a tools/call payload. Every non-WP_Error
+  * business failure is surfaced as `isError: true` so the Gateway Ledger never
+  * settles a failed operation as charged (#136).
+  */
+ public static function tool_result($id,$out){
   if(is_wp_error($out))return self::response($id,null,array('code'=>-32000,'message'=>$out->get_error_message(),'data'=>$out->get_error_data()));
-  return self::response($id,array('content'=>array(array('type'=>'text','text'=>wp_json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)))));
+  $payload=$out instanceof WP_REST_Response?$out->get_data():$out;
+  $failure=class_exists('OAI_Errors')?OAI_Errors::failure($out):null;
+  $result=array('content'=>array(array('type'=>'text','text'=>wp_json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES))));
+  if($failure!==null){
+   $result['isError']=true;
+   if(is_array($payload)&&!array_key_exists('ok',$payload))$result['content'][0]['text']=wp_json_encode(array('ok'=>false,'error'=>$failure)+$payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  }
+  return self::response($id,$result);
  }
 }

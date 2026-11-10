@@ -118,17 +118,10 @@ class OAI_Quota {
  }
 
  private static function successful_result($result){
-  if(is_wp_error($result)||$result===false||$result===null)return false;
-  if($result instanceof WP_REST_Response){
-   if($result->get_status()>=400)return false;
-   return self::successful_result($result->get_data());
-  }
-  if(!is_array($result))return true;
-  if(array_key_exists('jsonrpc',$result)){
-   return !array_key_exists('error',$result)&&isset($result['result']['content'])&&is_array($result['result']['content'])&&empty($result['result']['isError']);
-  }
-  if(isset($result['http_status']))return (int)$result['http_status']<400&&array_key_exists('data',$result)&&self::successful_result($result['data']);
-  return (!array_key_exists('ok',$result)||$result['ok']!==false)&&empty($result['isError'])&&empty($result['error']);
+  if($result===false||$result===null)return false;
+  // One shared, enumerable failure contract for the local meter and the MCP
+  // transport (#136): a business failure must never settle as succeeded.
+  return !OAI_Errors::failed($result);
  }
 
  public static function without_local_metering($callback){
