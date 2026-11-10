@@ -1119,6 +1119,7 @@ frame.addEventListener('load',function(){
   return is_scalar($value)||$value===null?(string)$value:$value;
  }
  public static function same_snapshot($type,$current,$expected){
+  if($type==='woocommerce_product'&&class_exists('OAI_WooCommerce'))return OAI_WooCommerce::rollback_snapshot_matches($current,$expected);
   if($type==='woocommerce_order'&&class_exists('OAI_WooCommerce'))return OAI_WooCommerce::order_snapshot_matches($current,$expected);
   if(in_array($type,array('option_update','woodmart_theme_setting'),true)){
    return self::same_option_value($current,$expected);
@@ -1702,7 +1703,11 @@ frame.addEventListener('load',function(){
 
   if($exists){
    if($type==='woocommerce_product'){
-    if(!self::snapshot_fields_match($current,$applied,array('id','sku','name','regular_price','sale_price','price','stock','stock_status','manage_stock','status')))return new WP_Error('oai_rollback_conflict','WooCommerce product changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
+    // Rollback writes the entire product snapshot, including variations,
+    // taxonomy terms, media, attributes, descriptions and SEO. Compare the
+    // complete authoritative snapshot so newer edits to any written field
+    // block destructive rollback (issue #141).
+    if(!class_exists('OAI_WooCommerce')||!OAI_WooCommerce::rollback_snapshot_matches($current,$applied))return new WP_Error('oai_rollback_conflict','WooCommerce product changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
    } elseif($type==='woocommerce_order'){
     if(!class_exists('OAI_WooCommerce')||!OAI_WooCommerce::order_snapshot_matches($current,$applied))return new WP_Error('oai_rollback_conflict','WooCommerce order changed after Apply; rollback was blocked',array('status'=>409,'current'=>$current,'expected_applied'=>$applied,'type'=>$type,'target'=>$target));
    } elseif(in_array($type,array('woo_product_price','woo_product_stock'),true)){

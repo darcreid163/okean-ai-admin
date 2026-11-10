@@ -196,6 +196,16 @@ class OAI_WooCommerce {
   }
   return OAI_Verify::same($a,$e);
  }
+ public static function rollback_snapshot_matches($current,$expected){
+  if(!is_array($current)||!is_array($expected))return false;
+  $actual=$current;$applied=$expected;
+  // Rollback restores the complete snapshot written by Apply. WooCommerce
+  // recalculates these parent aggregates from child variation prices/stock
+  // after save, so ignore only those derived fields and compare every other
+  // product, variation, taxonomy, media, attribute, description and SEO field.
+  if(($applied['type']??'')==='variable')unset($actual['price'],$actual['stock_status'],$applied['price'],$applied['stock_status']);
+  return OAI_Verify::same($actual,$applied);
+ }
  public static function apply($id,$data){
   $valid=self::validate_snapshot($data);if(is_wp_error($valid))return $valid;
   $p=wc_get_product((int)$id);if(!$p)return new WP_Error('oai_not_found','Product not found',array('status'=>404));
