@@ -1,6 +1,9 @@
 <?php
 // Executed through WP-CLI against a disposable, fully installed WordPress.
 function oai_boot_expect($ok,$message){if(!$ok)throw new RuntimeException($message);}
+// The scoped Test Automation session requires the acting administrator identity
+// in this WP-CLI request; activation records the same owner.
+wp_set_current_user(1);
 if(getenv('OAI_BOOT_CASE')==='seed'){
  $session=OAI_Test_Automation::enable(60,array(),array(),1);
  oai_boot_expect(!is_wp_error($session),'test session setup failed');
