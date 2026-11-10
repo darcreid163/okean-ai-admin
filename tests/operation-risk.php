@@ -8,7 +8,7 @@ function riskAssert($ok,$message){if(!$ok)throw new RuntimeException($message);}
 $expected=array(
  'woodmart_theme_setting'=>'high','option_update'=>'high','post_title'=>'low','post_excerpt'=>'low',
  'post_content'=>'medium','content_patch'=>'medium','workspace_write'=>'medium',
- 'woo_product_price'=>'medium','woo_product_stock'=>'medium','woocommerce_product'=>'medium','woocommerce_patch'=>'medium','woocommerce_product_create'=>'medium',
+ 'woo_product_price'=>'medium','woo_product_stock'=>'medium','woocommerce_product'=>'medium','woocommerce_patch'=>'medium','woocommerce_product_create'=>'medium','woocommerce_order'=>'medium',
  'elementor_widget_html'=>'medium','elementor_widget_settings'=>'medium','elementor_page_create'=>'medium','elementor_page_layout'=>'medium',
  'media_alt'=>'medium','media_title'=>'medium','media_featured'=>'medium','media_upload'=>'medium',
  'menu_create'=>'medium','menu_add_item'=>'medium','menu_remove_item'=>'medium','menu_move_item'=>'medium','menu_assign_location'=>'medium',
@@ -31,4 +31,4 @@ riskAssert($details['risk']==='low'&&$details['verified']===true&&$row['risk']==
 OAI_Audit::log('created',array_replace($row,array('risk'=>'medium')),array('risk'=>'low','fixture'=>true));
 $details=json_decode(OAI_DB::$audit['details'],true);
 riskAssert($details['risk']==='medium'&&$details['fixture']===true,'Audit risk disagrees with stored row');
-echo "PASS: 28 operation classes, catalog agreement, conservative unknown types and original stored-risk audit semantics\n";
+echo "PASS: 29 operation classes, catalog agreement, conservative unknown types and original stored-risk audit semantics\n";

@@ -31,7 +31,7 @@ if($phase==='plan'){
  oai_wm_expect(OAI_REST::same_option_value(get_option('xts-woodmart-options'),$baseline),'planning has no writes');
  oai_wm_expect((int)get_option('oai_ci_css_theme_settings_default_reset',0)===0,'planning does not invalidate CSS');
  update_option('oai_ci_woodmart_baseline',$baseline,false);update_option('oai_ci_woodmart_plans',$plans,false);
- $names=array_column(OAI_MCP::tool_definitions(),'name');oai_wm_expect(count($names)===120&&count($names)===count(array_unique($names)),'120 unique tool exports');
+ $names=array_column(OAI_MCP::tool_definitions(),'name');oai_wm_expect(count($names)===122&&count($names)===count(array_unique($names)),'122 unique tool exports');
  oai_wm_expect(count(array_diff(OAI_Platform::expected_tools(),$names))===0,'catalog and export agree');
  foreach(OAI_MCP::tool_definitions() as $tool)if(strpos($tool['name'],'woodmart.')===0){$write=$tool['name']==='woodmart.update_setting_sandbox';oai_wm_expect(($tool['securitySchemes'][0]['scopes'][0]??'')===($write?'mcp:write':'mcp:read'),'Woodmart OAuth scope');}
  $route=rest_do_request(new WP_REST_Request('GET','/okean-ai/v1/woodmart/status'));oai_wm_expect($route->get_status()===200&&!empty($route->get_data()['available']),'REST status route');
