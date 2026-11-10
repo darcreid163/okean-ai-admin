@@ -102,17 +102,18 @@ final class Core {
             ];
         });
     }
-    public function connect(string $owner,string $home,string $token,int $now,bool $replace=false): array {
+    public function connect(string $owner,string $home,string $token,int $now,bool $replace=false,?string $statusHash=null): array {
         $this->account($owner); $home=Security::home($home);
         $this->throttle($owner,'site_proof',$now,10);
         if (!preg_match('/^[A-Za-z0-9._~-]{20,512}$/D',$token)) throw new Fault('invalid_site_token');
+        if ($statusHash!==null && !preg_match('/^[a-f0-9]{64}$/D',$statusHash)) throw new Fault('invalid_site_status_hash');
         $reply=$this->transport->rpc($home,$token,['jsonrpc'=>'2.0','id'=>'cloud-proof-'.bin2hex(random_bytes(8)),'method'=>'tools/call','params'=>['name'=>'system_manifest','arguments'=>(object)[]]]);
         if (isset($reply['error']) || !empty($reply['result']['isError'])) throw new Fault('site_admin_proof_failed',403);
         $texts=$reply['result']['content']??[]; $manifest=null;
         foreach ($texts as $block) if (($block['type']??'')==='text') { $v=json_decode($block['text']??'',true); if (is_array($v) && isset($v['site_id'],$v['installation_id'])) { $manifest=$v; break; } }
         if (!$manifest || ($manifest['plugin_name']??'')!=='WP AI Admin' || ($manifest['release']['production_defaults']['direct_live_writes']??null)!==false) throw new Fault('site_manifest_incompatible',422);
         $pluginSite=Security::identifier($manifest['site_id']); $installation=Security::identifier($manifest['installation_id']);
-        return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now,$replace) {
+        return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now,$replace,$statusHash) {
             $this->account($owner,true);
             $hash=hash('sha256',$home); $existing=$this->store->row('SELECT * FROM '.$this->store->table('sites').' WHERE url_hash=?',[$hash]);
             if($existing) {
@@ -120,14 +121,14 @@ final class Core {
                 if($existing['plugin_site_id']!==$pluginSite||$existing['installation_id']!==$installation)throw new Fault('site_identity_changed',409);
                 // A revoked registration gets a fresh ID: old grants must not regain access.
                 $id=$existing['status']==='active'?$existing['id']:'reg_'.bin2hex(random_bytes(16));
-                $this->store->execute('UPDATE '.$this->store->table('sites').' SET id=?,token_sealed=?,status=?,created_at=? WHERE id=?',[$id,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now,$existing['id']]);
+                $this->store->execute('UPDATE '.$this->store->table('sites').' SET id=?,token_sealed=?,status=?,created_at=? WHERE id=?',[$id,$this->sealSiteCredential($token,$owner,$id,$statusHash),'active',$now,$existing['id']]);
                 $this->store->audit($owner,$id,'site_reconnected','',$now);
                 return ['id'=>$id,'home'=>$home,'plugin_site_id'=>$pluginSite,'installation_id'=>$installation,'status'=>'active'];
             }
             if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=?',[$owner])['n']>=self::MAX_SITES) throw new Fault('pilot_site_count_limit',409);
             $id='reg_'.bin2hex(random_bytes(16));
             try {
-                $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->vault->seal($token,'site:'.$owner.':'.$id),'active',$now]);
+                $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->sealSiteCredential($token,$owner,$id,$statusHash),'active',$now]);
             } catch (\PDOException $e) {
                 // Another request may have registered the same canonical URL
                 // after our initial lookup but before this INSERT. On MySQL the
@@ -194,9 +195,32 @@ final class Core {
         if (!in_array($scope,$actor['scopes'],true) || !in_array($site,$actor['site_ids'],true)) throw new Fault('scope_or_site_denied',403);
         $this->account($actor['owner']); return $this->ownedSite($actor['owner'],$site);
     }
+    public function signingPublicKey(): ?string { return $this->signer?->publicKey(); }
+    public function signingKeyId(): ?string { return $this->signer?->keyId(); }
+    /**
+     * The site credential is a sealed JSON document when a status read key was
+     * negotiated during pairing; otherwise it keeps the historical raw token.
+     * Both forms stay opaque at rest and are never returned by an API.
+     */
+    private function sealSiteCredential(string $token,string $owner,string $id,?string $statusHash): string {
+        $value=$statusHash===null?$token:Security::canonical(['token'=>$token,'status_hash'=>$statusHash]);
+        return $this->vault->seal($value,'site:'.$owner.':'.$id);
+    }
+    private function siteCredential(array $site): array {
+        $value=$this->vault->open((string)$site['token_sealed'],'site:'.$site['owner'].':'.$site['id']);
+        if($value!=='' && $value[0]==='{') {
+            try { $decoded=json_decode($value,true,8,JSON_THROW_ON_ERROR); }
+            catch(\Throwable $e) { throw new Fault('invalid_site_credential',503); }
+            if(!is_array($decoded)||!is_string($decoded['token']??null)||!preg_match('/^[A-Za-z0-9._~-]{20,512}$/D',$decoded['token'])) throw new Fault('invalid_site_credential',503);
+            $status=$decoded['status_hash']??null;
+            if($status!==null && (!is_string($status)||!preg_match('/^[a-f0-9]{64}$/D',$status))) throw new Fault('invalid_site_credential',503);
+            return ['token'=>$decoded['token'],'status_hash'=>$status];
+        }
+        return ['token'=>$value,'status_hash'=>null];
+    }
     private function upstream(array $site,array $request): array {
-        $token=$this->vault->open($site['token_sealed'],'site:'.$site['owner'].':'.$site['id']);
-        return $this->transport->rpc($site['home'],$token,$request);
+        $credential=$this->siteCredential($site);
+        return $this->transport->rpc($site['home'],$credential['token'],$request);
     }
     public function catalog(array $actor,string $siteId,int $now): array {
         $site=$this->authorize($actor,$siteId,'mcp:read',$now);
@@ -216,6 +240,42 @@ final class Core {
         $b=$this->store->row('SELECT used,reserved FROM '.$this->store->table('balances').' WHERE owner=? AND period=?',[$owner,$period]) ?? ['used'=>0,'reserved'=>0];
         $limit=$terms['limit'];
         return $window+$terms+['plan'=>$a['plan'],'timezone'=>'UTC','limit'=>$limit,'used'=>(int)$b['used'],'reserved'=>(int)$b['reserved'],'remaining'=>max(0,$limit-(int)$b['used']-(int)$b['reserved']),'policy_version'=>$this->policy['version'],'batch_available'=>$this->batchAvailable()];
+    }
+    /**
+     * Site-scoped, read-only usage projection for the paired Native plugin.
+     * The caller proves possession of the read key derived during pairing; the
+     * lookup is fenced to the site's own owner and a revoked site loses access.
+     * No other account's or site's data can be reached through this method.
+     */
+    public function siteUsage(string $home,string $statusKey,int $now): array {
+        if(!preg_match('/^[a-f0-9]{64}$/D',$statusKey)) throw new Fault('site_usage_denied',401);
+        $home=Security::home($home);
+        $site=$this->store->row('SELECT * FROM '.$this->store->table('sites').' WHERE url_hash=?',[hash('sha256',$home)]);
+        if(!$site || ($site['home']??'')!==$home || ($site['status']??'')!=='active') throw new Fault('site_usage_denied',401);
+        try { $credential=$this->siteCredential($site); }
+        catch(\Throwable $e) { throw new Fault('site_usage_denied',401); }
+        if(!is_string($credential['status_hash']) || !hash_equals($credential['status_hash'],hash('sha256',$statusKey))) throw new Fault('site_usage_denied',401);
+        $this->throttle($site['owner'],'site_usage',$now,120);
+        if(!$this->signer) throw new Fault('signer_not_configured',503);
+        $u=$this->usage($site['owner'],$now);
+        $claims=[
+            'site_url'=>$home,
+            'site_id'=>(string)$site['id'],
+            'account_id'=>(string)$site['owner'],
+            'plan'=>(string)$u['plan'],
+            'limit'=>(int)$u['limit'],
+            'used'=>(int)$u['used'],
+            'reserved'=>(int)$u['reserved'],
+            'remaining'=>(int)$u['remaining'],
+            'period'=>(string)$u['period'],
+            'period_kind'=>(string)$u['period_kind'],
+            'quota_scheme'=>(string)$u['quota_scheme'],
+            'period_start_utc'=>(string)$u['period_start_utc'],
+            'period_end_utc'=>(string)$u['period_end_utc'],
+            'policy_version'=>(string)$u['policy_version'],
+            'timezone'=>'UTC',
+        ];
+        return ['contract'=>'wpai-site-usage-v1','site_url'=>$home,'site_id'=>(string)$site['id'],'envelope'=>$this->signer->siteUsage($claims,$now)];
     }
     public function batchAvailable(): bool {return ($this->policy['batch']??'')===BatchAccounting::POLICY;}
     private function batchAccounting(): BatchAccounting {return new BatchAccounting($this->store,$this->vault,$this->transport,$this->policy);}
@@ -285,7 +345,7 @@ final class Core {
                 $reply=$this->upstream($site,['jsonrpc'=>'2.0','id'=>$key,'method'=>'tools/call','params'=>['name'=>$name,'arguments'=>$args ?: (object)[]]]);
             }
             RpcReply::validate($reply,['jsonrpc'=>'2.0','id'=>$key,'method'=>'tools/call']);
-            $success=!isset($reply['error']) && ($reply['result']['isError']??false)===false;
+            $success=RpcReply::succeeded($reply);
             $receipt=['request_key'=>$key,'state'=>$success?'succeeded':'failed','charged_units'=>$success?$units:0,'site_id'=>$siteId,'policy_version'=>$this->policy['version'],'upstream'=>$reply];
             $this->finish($actor['owner'],$siteId,$key,$reservation['period'],$receipt,$success,$now);
             return $receipt;

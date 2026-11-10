@@ -59,6 +59,7 @@ require_once OAI_DIR.'includes/class-oai-quota.php';
 require_once OAI_DIR.'includes/class-oai-entitlements.php';
 require_once OAI_DIR.'includes/class-oai-mcp-oauth.php';
 require_once OAI_DIR.'includes/class-oai-gateway-pairing.php';
+require_once OAI_DIR.'includes/class-oai-cloud-usage.php';
 require_once OAI_DIR.'includes/class-oai-mcp.php';
 require_once OAI_DIR.'includes/class-oai-rest.php';
 require_once OAI_DIR.'includes/class-oai-agent.php';

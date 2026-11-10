@@ -89,6 +89,42 @@ class OAI_Verify {
    return $result;
   }
 
+  if($row['type']==='post_create'){
+   $post_id=absint($meta['preview_post_id']??0);
+   if(!$post_id){
+    $parts=explode(':',(string)$row['target'],2); $post_id=absint($parts[1]??0);
+   }
+   $result['post_id']=$post_id;
+   if(!$post_id){$result['checks'][]=array('name'=>'post_id','ok'=>false,'message'=>'Created post id is missing');return $result;}
+   if($phase==='rollback'){
+    $absence=self::created_post_absence($post_id);
+    $result['current']=$absence['current'];
+    $result['checks']=$absence['checks'];
+    $result['verified']=$absence['verified'];
+    $result['expected_deleted_object']=true;
+    $result['cleanup_effective']=$absence['verified'];
+    $result['verification_source']=$absence['verification_source'];
+    return $result;
+   }
+   list($exists,$current)=OAI_REST::snapshot_for_verify($row['type'],$row['target']);
+   if(is_wp_error($current)){$result['checks'][]=array('name'=>'read_current','ok'=>false,'message'=>$current->get_error_message());return $result;}
+   $result['current']=$current;
+   $result['checks'][]=array('name'=>'exists','ok'=>$exists,'expected'=>true,'actual'=>$exists);
+   $expected=is_array($expected)?$expected:array();
+   foreach(array('title','excerpt','status','post_type','name') as $field){
+    $a=is_array($current)&&array_key_exists($field,$current)?$current[$field]:null;
+    $b=array_key_exists($field,$expected)?$expected[$field]:null;
+    $result['checks'][]=array('name'=>'created_post_'.$field,'ok'=>self::same($a,$b),'expected'=>$b,'actual'=>$a);
+   }
+   $content_current=is_array($current)&&array_key_exists('content',$current)?$current['content']:null;
+   $content_expected=array_key_exists('content',$expected)?$expected['content']:null;
+   $content_bytes_matched=is_string($content_current)&&is_string($content_expected)&&hash_equals(hash('sha256',$content_current),hash('sha256',$content_expected));
+   $result['checks'][]=array('name'=>'created_post_content','ok'=>$content_bytes_matched,'expected_sha256'=>is_string($content_expected)?hash('sha256',$content_expected):null,'actual_sha256'=>is_string($content_current)?hash('sha256',$content_current):null,'expected_bytes'=>is_string($content_expected)?strlen($content_expected):null,'actual_bytes'=>is_string($content_current)?strlen($content_current):null);
+   $result['checks'][]=array('name'=>'byte_exact_post_content','ok'=>$content_bytes_matched);
+   $result['verified']=self::all_checks_ok($result['checks']);
+   return $result;
+  }
+
   list($exists,$current)=OAI_REST::snapshot_for_verify($row['type'],$row['target']);
   if(is_wp_error($current)){$result['checks'][]=array('name'=>'read_current','ok'=>false,'message'=>$current->get_error_message());return $result;}
   $result['current']=$current;
@@ -122,6 +158,16 @@ class OAI_Verify {
     $result['checks'][]=array('name'=>'byte_exact_post_content','ok'=>$byte_exact,'expected_sha256'=>is_string($expected)?hash('sha256',$expected):null,'actual_sha256'=>is_string($auth_current)?hash('sha256',$auth_current):null,'expected_bytes'=>is_string($expected)?strlen($expected):null,'actual_bytes'=>is_string($auth_current)?strlen($auth_current):null);
     $same=$byte_exact;
    }
+   // post_update applies title/excerpt/content as one atomic bundle. The stored
+   // post_content must be byte-identical to the intended value; semantic
+   // canonicalisation must not hide a save filter that rewrote the document.
+   if($same && $expected_exists && $row['type']==='post_update' && is_array($auth_current) && is_array($expected)){
+    $auth_content=$auth_current['content']??null;
+    $exp_content=$expected['content']??null;
+    $byte_exact=is_string($auth_content)&&is_string($exp_content)&&hash_equals(hash('sha256',$auth_content),hash('sha256',$exp_content));
+    $result['checks'][]=array('name'=>'byte_exact_post_content','ok'=>$byte_exact,'expected_sha256'=>is_string($exp_content)?hash('sha256',$exp_content):null,'actual_sha256'=>is_string($auth_content)?hash('sha256',$auth_content):null,'expected_bytes'=>is_string($exp_content)?strlen($exp_content):null,'actual_bytes'=>is_string($auth_content)?strlen($auth_content):null);
+    $same=$byte_exact;
+   }
    $result['checks'][]=array('name'=>'value_match','ok'=>$same);
    $result['checks'][]=array('name'=>'authoritative_value_match','ok'=>$same);
    $result['verified']=self::all_checks_ok($result['checks']);
@@ -141,6 +187,10 @@ class OAI_Verify {
   if(in_array($type,array('post_title','post_excerpt','post_content'),true)){
    $parts=explode(':',(string)$target,2);
    return OAI_Authoritative::post_field(absint($parts[0]??0),$parts[1]??'');
+  }
+  if($type==='post_update'){
+   $parts=explode(':',(string)$target,2);
+   return OAI_Authoritative::post_snapshot(absint($parts[0]??0));
   }
   if(in_array($type,array('elementor_widget_html','elementor_widget_settings'),true)){
    $parts=explode(':',(string)$target,2);
@@ -210,6 +260,26 @@ class OAI_Verify {
   if(function_exists('clean_post_cache'))clean_post_cache($page_id);
   $wp_post=get_post($page_id);
   $db_id=isset($wpdb)&&isset($wpdb->posts)?$wpdb->get_var($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE ID = %d LIMIT 1",$page_id)):null;
+  $wp_absent=!$wp_post;$db_absent=empty($db_id);
+  $checks=array(
+   array('name'=>'wp_post_absent','ok'=>$wp_absent,'expected'=>true,'actual'=>$wp_absent),
+   array('name'=>'database_post_absent','ok'=>$db_absent,'expected'=>true,'actual'=>$db_absent)
+  );
+  return array(
+   'verified'=>$wp_absent&&$db_absent,
+   'current'=>($wp_absent&&$db_absent)?null:array('wp_exists'=>!$wp_absent,'database_exists'=>!$db_absent,'post_status'=>$wp_post?(string)$wp_post->post_status:null),
+   'verification_source'=>($wp_absent&&$db_absent)?'dual_absence':'conflict',
+   'checks'=>$checks
+  );
+ }
+
+ public static function created_post_absence($post_id){
+  global $wpdb;
+  $post_id=absint($post_id);
+  if(!$post_id)return array('verified'=>false,'current'=>null,'verification_source'=>'invalid_post_id','checks'=>array(array('name'=>'post_id','ok'=>false,'message'=>'Created post id is missing')));
+  if(function_exists('clean_post_cache'))clean_post_cache($post_id);
+  $wp_post=get_post($post_id);
+  $db_id=isset($wpdb)&&isset($wpdb->posts)?$wpdb->get_var($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE ID = %d LIMIT 1",$post_id)):null;
   $wp_absent=!$wp_post;$db_absent=empty($db_id);
   $checks=array(
    array('name'=>'wp_post_absent','ok'=>$wp_absent,'expected'=>true,'actual'=>$wp_absent),

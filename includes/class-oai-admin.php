@@ -53,6 +53,14 @@ class OAI_Admin {
   }
   return array('enabled'=>$enabled);
  }
+ /** Dashboard "update server quota" button handler: render the confirmation or
+  *  error notice for the server-projection state. Extracted so tests execute the
+  *  exact button path; a missing "$" here is invisible to php -l and green CI. */
+ public static function cloud_usage_refresh_notice($fresh_usage){
+  $confirmed=in_array($fresh_usage['state'],array('verified','stale'),true);
+  $message=$confirmed?($fresh_usage['state']==='verified'?'Серверные данные квоты обновлены и подтверждены подписью.':'Серверные данные получены, но подтверждение уже устарело.'):('Нет подтверждённых серверных данных о квоте ('.$fresh_usage['reason'].').');
+  return '<div class="notice '.($confirmed?'notice-success':'notice-error').'"><p>'.esc_html($message).'</p></div>';
+ }
  private static function sandbox_admin_action($id,$action){
   if(!current_user_can('manage_options'))return new WP_Error('oai_forbidden','Administrator capability required',array('status'=>403));
   if(!in_array($action,array('approve','reject','apply','rollback'),true))return new WP_Error('oai_action','Unknown sandbox action',array('status'=>400));
@@ -89,6 +97,9 @@ class OAI_Admin {
   $mcp_toggle=self::handle_mcp_toggle();
   if($mcp_toggle!==null){
    echo '<div class="notice '.(is_wp_error($mcp_toggle)?'notice-error':'notice-success').'"><p>'.esc_html(is_wp_error($mcp_toggle)?$mcp_toggle->get_error_message():($mcp_toggle['enabled']?'MCP включён. Подключите этот сайт через OAuth.':'MCP выключен. Автоматические режимы остановлены; OAuth-подключения сохранены.')).'</p></div>';
+  }
+  if(isset($_POST['oai_cloud_usage_refresh']) && check_admin_referer('oai_cloud_usage_refresh')){
+   echo self::cloud_usage_refresh_notice(OAI_Cloud_Usage::status(true));
   }
   if(isset($_POST['oai_content_navigation_state']) && check_admin_referer('oai_content_navigation_state')){
    $state=sanitize_key(wp_unslash((string)$_POST['oai_content_navigation_state']));
@@ -143,6 +154,7 @@ class OAI_Admin {
   $test_auto=OAI_Test_Automation::status();
   $ai_lifecycle=OAI_AI_Lifecycle_Control::status();
   $quota=OAI_Quota::status();
+ $cloud_usage=OAI_Cloud_Usage::status();
   $release=OAI_Platform::release_profile();
   $test_pages=get_posts(array('post_type'=>'page','post_status'=>array('draft','private'),'posts_per_page'=>100,'orderby'=>'modified','order'=>'DESC','suppress_filters'=>false));
   $action_statuses=array('pending','approved');$pending=OAI_DB::count_by_status($action_statuses);$action_rows=OAI_DB::by_status($action_statuses,self::ACTION_TABLE_LIMIT,0);
@@ -160,7 +172,7 @@ class OAI_Admin {
   <section class="oai-panel oai-section"><div class="oai-section-head"><h2>Commercial Beta Candidate</h2><span class="oai-badge">WP AI Admin <?php echo esc_html(OAI_VERSION);?></span></div><p><strong>Профиль:</strong> <?php echo esc_html($release['profile']??'commercial_beta_candidate');?> · <strong>Режим:</strong> <?php echo esc_html($release['effective_state']['mode']??'human_approval_only');?></p><p class="oai-muted">Безопасность по умолчанию: direct live writes — <strong>OFF</strong>, ручное подтверждение — <strong>ON</strong>. AI Lifecycle Control и Test Automation включаются только отдельно администратором и сбрасывают активность при смене сборки. OAuth-подключение и installation identity сохраняются при обычном обновлении плагина.</p><p class="oai-muted">Control Plane: <?php echo !empty($release['control_plane']['foundation_available'])?'foundation готов':'недоступен';?>; удалённые лицензии/entitlements для локальной beta не обязательны и пока не принудительно применяются.</p></section>
   <div class="oai-grid"><section class="oai-panel"><h2>Подключение</h2><span class="oai-badge <?php echo $active_clients?'':'oai-warn';?>"><?php echo $active_clients?'Подключено':'Нет подключения';?></span><p class="oai-muted"><?php echo !empty($ai_lifecycle['active'])?'AI Lifecycle Control активен: AI и администратор могут параллельно управлять sandbox lifecycle.':(!empty($test_auto['active'])?'ВНИМАНИЕ: активен ограниченный Test Automation Mode.':'По умолчанию lifecycle управляется вручную администратором.');?></p><?php if($active_clients):?><form method="post"><?php wp_nonce_field('oai_disconnect_all');?><button class="button oai-danger" name="oai_disconnect_all" value="1" onclick="return confirm('Отключить WP AI Admin от всех подключённых AI-клиентов? Для повторного подключения потребуется авторизация.')">Отключить</button></form><?php endif;?></section>
   <section class="oai-panel"><h2>Ожидают решения</h2><div class="oai-kpi"><?php echo (int)$pending;?></div><a href="#oai-operations">Просмотреть операции ↓</a></section>
-  <section class="oai-panel"><h2>Вызовы AI Admin</h2><div class="oai-kpi"><?php echo (int)$quota['remaining'];?> / <?php echo (int)$quota['limit'];?></div><div class="oai-muted">Осталось в локальном плане <?php echo esc_html($quota['label']);?>; использовано <?php echo (int)$quota['used'];?>. Лимит тарифа ChatGPT не передаётся плагину.</div></section></div>
+  <section class="oai-panel"><h2>Квота на сервере WP AI Admin</h2><?php $projection=$cloud_usage['projection'];if(!empty($cloud_usage['available'])&&is_array($projection)):?><div class="oai-kpi"><?php echo (int)$projection['remaining'];?> / <?php echo (int)$projection['limit'];?></div><div class="oai-muted">Осталось в текущем периоде по данным сервера. Использовано <?php echo (int)$projection['used'];?>, зарезервировано <?php echo (int)$projection['reserved'];?>. Тариф <?php echo esc_html($projection['plan']);?>, период <?php echo esc_html($projection['period']);?> UTC. <?php echo $cloud_usage['state']==='verified'?'Подтверждено подписью сервера.':'Последние подтверждённые данные устарели; они показаны до следующего успешного обновления.';?></div><?php else:?><div class="oai-kpi">—</div><div class="oai-muted">Нет подтверждённых серверных данных о квоте. <?php echo $cloud_usage['state']==='unpaired'?'Подключите сайт в кабинете WP AI Admin, чтобы получать серверную квоту.':'Серверная проекция недоступна; локальный счётчик плагина не является серверным лимитом.';?></div><?php endif;?><?php if(!empty($cloud_usage['hash'])):?><form method="post"><?php wp_nonce_field('oai_cloud_usage_refresh');?><input type="hidden" name="oai_cloud_usage_refresh" value="1"><button class="button" type="submit">Обновить серверные данные</button></form><?php endif;?><p class="oai-muted">Локальный счётчик плагина: использовано <?php echo (int)$quota['used'];?>, осталось <?php echo (int)$quota['remaining'];?> из <?php echo (int)$quota['limit'];?> (<?php echo esc_html($quota['label']);?>). Это не серверный лимит тарифа. Списание за отдельную операцию показывается в её результате; здесь — суммарное использование периода.</p></section></div>
   <section class="oai-panel oai-section"><h2>Как работает доступ</h2><p>AI-клиент читает разрешённые данные сайта и создаёт операции в песочнице. Просмотрите изменения ниже: подтвердите и примените их либо отклоните. После применения доступен откат, если операция его поддерживает.</p><p class="oai-muted">Адрес сервера: <code><?php echo esc_html(rest_url('okean-ai/mcp'));?></code>. Доступ выдаётся при подключении через OAuth. Секреты здесь не показываются.</p></section>
   <section class="oai-panel oai-section">
    <div class="oai-section-head"><h2>Подключение MCP</h2><span class="oai-badge <?php echo get_option('oai_mcp_enabled',false)?'':'oai-warn';?>"><?php echo get_option('oai_mcp_enabled',false)?'Включён':'Выключен';?></span></div>

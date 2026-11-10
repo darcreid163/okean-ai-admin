@@ -9,6 +9,7 @@ class OAI_Lifecycle {
  public static function descriptor($type,$target,$before,$meta=array()){
   $exists=array_key_exists('before_exists',$meta)?(bool)$meta['before_exists']:true;
   if($type==='elementor_page_create')return array('action'=>'delete_created_object','post_id'=>absint($meta['preview_page_id']??0),'post_type'=>'page','created_by_ai_admin'=>true);
+  if($type==='post_create')return array('action'=>'delete_created_object','post_id'=>absint($meta['preview_post_id']??0),'post_type'=>(string)($meta['post_type']??'post'),'created_by_ai_admin'=>true);
   if($type==='media_upload')return array('action'=>'delete_created_attachment','attachment_id'=>absint($meta['attachment_id']??$target),'created_by_ai_admin'=>true);
   if($type==='menu_create')return array('action'=>'delete_created_menu','menu_id'=>absint($meta['menu_id']??$target),'created_by_ai_admin'=>true);
   if($type==='menu_add_item')return array('action'=>'delete_created_menu_item','item_id'=>absint($meta['item_id']??$target),'created_by_ai_admin'=>true);

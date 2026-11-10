@@ -70,8 +70,15 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-pr
 # Reserve Elementor drafts before post creation; exercise random wrappers and 6 workers.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-elementor-creation.php"
 
+# Post/page lifecycle (#138): creation-intent idempotency, atomic bundle apply/
+# verify/rollback with byte-exact content, reject cleanup and proof/receipt.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-post-lifecycle.php"
+
 # One canonical fingerprint across REST and MCP; legacy rows stay held.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-intent.php"
+
+# Every non-WP_Error business failure is isError:true for the Gateway Ledger.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-mcp-error-contract.php"
 
 # Preserve created artifact operation evidence before any operator-only reconciliation.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-evidence-cleanup.php"

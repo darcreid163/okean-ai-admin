@@ -75,10 +75,12 @@ final class Vault {
 
 final class Signer {
     public const FEATURES = ['read','plan','sandbox','preview','verify','proof','rollback','elementor','gutenberg','woocommerce','wp_cli','mcp','mcp_apply','mcp_rollback','agent'];
+    public const USAGE_DOMAIN = "OAI-SITE-USAGE-V1\n";
     public function __construct(private readonly string $secret) {
         if (strlen($secret) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) throw new Fault('invalid_signing_key', 503);
     }
     public function publicKey(): string { return Security::b64(sodium_crypto_sign_publickey_from_secretkey($this->secret)); }
+    public function keyId(): string { return substr(hash('sha256',sodium_crypto_sign_publickey_from_secretkey($this->secret)),0,16); }
     /** V1 interoperability proof only. Never describe this legacy daily allowance as a commercial monthly entitlement. */
     public function foundation(array $site, int $sequence, int $now): array {
         $claims = ['contract_version'=>1,'issuer'=>'okean-control-plane','audience'=>'wp-ai-admin',
@@ -86,8 +88,19 @@ final class Signer {
             'issued_at'=>$now,'not_before'=>$now,'expires_at'=>$now+300,'policy_sequence'=>$sequence,
             'plan'=>'free','active'=>true,'write_frozen'=>false,'features'=>self::FEATURES,'quota'=>['limit'=>100,'period'=>'day']];
         $payload = Security::b64(Security::canonical($claims));
-        $public = sodium_crypto_sign_publickey_from_secretkey($this->secret);
-        return ['alg'=>'Ed25519','key_id'=>substr(hash('sha256',$public),0,16),'payload'=>$payload,
+        return ['alg'=>'Ed25519','key_id'=>$this->keyId(),'payload'=>$payload,
             'signature'=>Security::b64(sodium_crypto_sign_detached("OAI-ENTITLEMENT-V1\n".$payload,$this->secret))];
+    }
+    /**
+     * Signed read-only usage projection for one paired site. It carries the
+     * authoritative account balance for display only; it never grants an
+     * entitlement and never mutates a balance.
+     */
+    public function siteUsage(array $claims, int $now): array {
+        $claims = ['contract_version'=>1,'issuer'=>'okean-cloud-gateway','audience'=>'wp-ai-admin-native',
+            'issued_at'=>$now,'expires_at'=>$now+300] + $claims;
+        $payload = Security::b64(Security::canonical($claims));
+        return ['alg'=>'Ed25519','key_id'=>$this->keyId(),'payload'=>$payload,
+            'signature'=>Security::b64(sodium_crypto_sign_detached(self::USAGE_DOMAIN.$payload,$this->secret))];
     }
 }

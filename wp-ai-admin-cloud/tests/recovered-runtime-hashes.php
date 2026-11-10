@@ -8,7 +8,7 @@ declare(strict_types=1);
 $root=dirname(__DIR__);
 $manifest=file($root.'/docs/RECOVERED-CLOUD-RUNTIME.sha256',FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
 if(!is_array($manifest)||count($manifest)!==20)throw new RuntimeException('Unexpected recovered source manifest');
-$intentional=['config/plans.json'=>true,'includes/class-wpai-cloud-rest.php'=>true,'src/Admin.php'=>true,'src/Core.php'=>true,'src/Gateway.php'=>true,'src/QuotaPolicy.php'=>true,'src/Settings.php'=>true,'src/WordPress.php'=>true,'wp-ai-admin-cloud.php'=>true];
+$intentional=['config/plans.json'=>true,'includes/class-wpai-cloud-rest.php'=>true,'src/Admin.php'=>true,'src/BatchAccounting.php'=>true,'src/Core.php'=>true,'src/Gateway.php'=>true,'src/Pairing.php'=>true,'src/QuotaPolicy.php'=>true,'src/Security.php'=>true,'src/Settings.php'=>true,'src/Transport.php'=>true,'src/WordPress.php'=>true,'wp-ai-admin-cloud.php'=>true];
 $seen=[];$base=0;$changed=0;
 foreach($manifest as $line){
     if(!preg_match('/^([a-f0-9]{64})  ([A-Za-z0-9_\/.-]+)$/D',$line,$match))
@@ -28,7 +28,7 @@ foreach($manifest as $line){
         ++$base;
     }
 }
-if($base!==11||$changed!==9||
+if($base!==7||$changed!==13||
    !isset($seen['src/Core.php'],$seen['src/Store.php'],$seen['src/OAuth.php'],$seen['src/QuotaPolicy.php'],$seen['src/BatchAccounting.php'],$seen['config/plans.json']))
     throw new RuntimeException('Inconsistent recovered 0.3.11 baseline or unlisted code change');
 $plugin=file_get_contents($root.'/wp-ai-admin-cloud.php');
@@ -40,4 +40,4 @@ if(!str_contains($plugin,"define('WPAI_CLOUD_VERSION', '0.3.13-dev')")||
    !str_contains($gateway,"$"."tool('cloud_skill_load'")||
    !str_contains($gateway,"$"."tool('cloud_media_search_images'"))
     throw new RuntimeException('Candidate is not independently marked, safely bootstrapped, or complete');
-echo "PASS: 11/11 unchanged 0.3.11 baseline SHA-256 + 9 explicitly changed 0.3.13-dev files; historic manifest not rewritten\n";
+echo "PASS: 7/7 unchanged 0.3.11 baseline SHA-256 + 13 explicitly changed 0.3.13-dev files; historic manifest not rewritten\n";
