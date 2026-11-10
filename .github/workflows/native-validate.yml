@@ -64,6 +64,8 @@ jobs:
         run: php tests/mcp-result-contract.php
       - name: Browser pairing and site usage projection contract (Issue #135)
         run: php tests/browser-pairing.php
+      - name: Self-test catalog and privacy contract
+        run: php tests/self-test-contract.php
 
   wordpress-smoke:
     runs-on: ubuntu-latest
