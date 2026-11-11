@@ -54,6 +54,9 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-me
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-operation-risk.php"
 # Atomic duplicate rejection for new existing-target intents (six WP workers).
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-pending-intent.php"
+# #124: one creation key through Native REST and the MCP adapter, plus zero
+# local ledger writes for central-gateway MCP calls.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-transport.php"
 # Historical evidence is projected without rewriting raw records or proof hashes.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-public-evidence.php"
 
