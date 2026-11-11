@@ -38,8 +38,8 @@ class OAI_Abilities {
  public static function register(){
   if(!function_exists('wp_register_ability'))return;
   $defs=array(
-   array('name'=>'okean-ai/get-site-info','label'=>'Okean AI: Site info','description'=>'Read basic site information.','callback'=>function(){return OAI_REST::site();},'permission_callback'=>function(){return current_user_can('manage_options');}),
-   array('name'=>'okean-ai/list-operations','label'=>'Okean AI: List operations','description'=>'List sandbox operations.','callback'=>function(){return OAI_REST::sandbox_list();},'permission_callback'=>function(){return current_user_can('manage_options');})
+   array('name'=>'okean-ai/get-site-info','label'=>'Okean AI: Site info','description'=>'Read basic site information.','category'=>'site','execute_callback'=>function(){return OAI_REST::site();},'permission_callback'=>function(){return current_user_can('manage_options');},'meta'=>array('show_in_rest'=>true,'annotations'=>array('readonly'=>true))),
+   array('name'=>'okean-ai/list-operations','label'=>'Okean AI: List operations','description'=>'List sandbox operations.','category'=>'site','execute_callback'=>function(){return OAI_REST::sandbox_list();},'permission_callback'=>function(){return current_user_can('manage_options');},'meta'=>array('show_in_rest'=>true,'annotations'=>array('readonly'=>true)))
   );
   foreach($defs as $d){try{wp_register_ability($d['name'],$d);}catch(Throwable $e){}}
  }

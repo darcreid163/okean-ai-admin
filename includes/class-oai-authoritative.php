@@ -19,6 +19,16 @@ class OAI_Authoritative {
   $value=$wpdb->get_var($wpdb->prepare("SELECT {$field} FROM {$wpdb->posts} WHERE ID=%d LIMIT 1",$id));
   return array('source'=>'database','exists'=>true,'value'=>$value===null?'':(string)$value,'post_id'=>$id,'field'=>$field);
  }
+
+ public static function post_snapshot($id){
+  global $wpdb;
+  $id=absint($id);
+  if(!$id)return new WP_Error('oai_authoritative_target','Invalid post id',array('status'=>400));
+  $row=$wpdb->get_row($wpdb->prepare("SELECT post_title AS title,post_excerpt AS excerpt,post_content AS content FROM {$wpdb->posts} WHERE ID=%d LIMIT 1",$id),ARRAY_A);
+  if(!$row)return array('source'=>'database','exists'=>false,'value'=>null,'post_id'=>$id);
+  return array('source'=>'database','exists'=>true,'value'=>array('title'=>(string)($row['title']??''),'excerpt'=>(string)($row['excerpt']??''),'content'=>(string)($row['content']??'')),'post_id'=>$id);
+ }
+
  public static function elementor_widget($id,$widget_id,$field){
   if(!in_array($field,array('settings','html'),true))return new WP_Error('oai_authoritative_target','Unsupported Elementor field',array('status'=>400));
   $snapshot=self::post_meta($id,'_elementor_data');

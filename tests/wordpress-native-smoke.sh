@@ -23,7 +23,7 @@ install_ci_plugin woocommerce "${WOO_TEST_VERSION:-latest}"
 # the remaining smoke suites, including their unlicensed-denial assertions.
 OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/site" "$WORK/wp-cli.phar"
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
-cp -R okean-ai-admin.php includes starter-themes "$WORK/site/wp-content/plugins/okean-ai-admin/"
+cp -R okean-ai-admin.php includes starter-themes README.txt "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin
 # Disposable site only: exercise the additive Native 23 -> 24 schema migration,
 # preserving paired identity, registered OAuth client and pending operations.
@@ -40,6 +40,10 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-co
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-gutenberg-preservation.php"
 # Normal Native license/approval/rollback lifecycle, temporary product only.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-lifecycle.php"
+# Rollback compares the complete product snapshot; newer variation/taxonomy edits block it (issue #141).
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-rollback-parity.php"
+# Order lifecycle (#142): approval, addresses/quantities, WooCommerce totals, 409 and rollback.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-order-lifecycle.php"
 # Current target policy also applies to historical pending/approved options.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-option-policy.php"
 # Decode real images before upload, then exercise approval/verify/rollback.
@@ -70,11 +74,22 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-pr
 # Reserve Elementor drafts before post creation; exercise random wrappers and 6 workers.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-elementor-creation.php"
 
+# Post/page lifecycle (#138): creation-intent idempotency, atomic bundle apply/
+# verify/rollback with byte-exact content, reject cleanup and proof/receipt.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-post-lifecycle.php"
+
 # One canonical fingerprint across REST and MCP; legacy rows stay held.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-intent.php"
 
+# Every non-WP_Error business failure is isError:true for the Gateway Ledger.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-mcp-error-contract.php"
+
 # Preserve created artifact operation evidence before any operator-only reconciliation.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-evidence-cleanup.php"
+# Failed rollback / failed verification evidence is protected unless explicitly opted in (issue #143).
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-operations-cleanup-policy.php"
+# Plugin header and README.txt completeness: Requires at least/PHP/Tested up to/WC (issue #144).
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-plugin-metadata.php"
 
 # Durable navigation-menu item creation: retries, actor isolation and six workers.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-menu-item-creation.php"

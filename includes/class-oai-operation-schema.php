@@ -23,6 +23,7 @@ class OAI_Operation_Schema {
    'file_write'=>array('domain'=>'files','mutating'=>true,'target'=>'scope:path','value'=>'text','approval'=>true),
    'content_patch'=>array('domain'=>'content','mutating'=>true,'target'=>'post_id:field','value'=>'patch','approval'=>true),
    'woocommerce_patch'=>array('domain'=>'woocommerce','mutating'=>true,'target'=>'product_id','value'=>'patch','approval'=>true),
+   'woocommerce_order'=>array('domain'=>'woocommerce','mutating'=>true,'target'=>'order_id:order','value'=>'order_snapshot','approval'=>true),
    'workspace_write'=>array('domain'=>'workspace','mutating'=>true,'target'=>'workspace_surface','value'=>'text|json','approval'=>true),
   );
   foreach($catalog as $type=>&$schema)$schema['risk']=OAI_Operations::risk($type,'');

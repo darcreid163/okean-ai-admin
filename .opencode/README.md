@@ -23,14 +23,6 @@
 - playwright-e2e
 - release-engineering
 
-## Agents (8)
-- release-lead
-- wordpress
-- woocommerce
-- elementor-theme
-- cloud-core
-- billing
-- security
-- qa
+
 
 These instructions do not grant extra tool permissions or bypass root safety rules. No deployment, repo visibility change, public release tag, live billing or live data migration without explicit owner approval.

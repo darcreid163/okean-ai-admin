@@ -62,7 +62,7 @@ class OAI_MCP {
   return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope,'_meta'=>$meta));
  }
  private static function tool_requires_write($name,$args){
-  if(in_array($name,array('woodmart_update_setting_sandbox','wp_option_update_sandbox','system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_import_url_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
+  if(in_array($name,array('woodmart_update_setting_sandbox','wp_option_update_sandbox','system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_update_order_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_import_url_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','wordpress_create_draft','wordpress_update_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
   if($name==='wordpress_execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
   return false;
  }
@@ -184,6 +184,8 @@ class OAI_MCP {
    'ability.list'=>array('type'=>'object','additionalProperties'=>false),
    'ability.get'=>array('type'=>'object','required'=>array('name'),'additionalProperties'=>false,'properties'=>array('name'=>array('type'=>'string','minLength'=>3,'maxLength'=>120))),
    'wordpress.execute'=>array('type'=>'object','required'=>array('command'),'additionalProperties'=>false,'properties'=>array('command'=>array('type'=>'string','minLength'=>1),'mode'=>array('type'=>'string','enum'=>array('read','plan')))),
+   'wordpress.create_draft'=>array('type'=>'object','required'=>array('title'),'additionalProperties'=>false,'properties'=>array('title'=>array('type'=>'string','minLength'=>1),'excerpt'=>array('type'=>'string'),'content'=>array('type'=>'string'),'post_type'=>array('type'=>'string','enum'=>array('post','page')),'final_status'=>array('type'=>'string','enum'=>array('draft','publish','private')),'slug'=>array('type'=>'string'),'idempotency_key'=>array('type'=>'string','minLength'=>16,'maxLength'=>128))),
+   'wordpress.update_sandbox'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'title'=>array('type'=>'string'),'excerpt'=>array('type'=>'string'),'content'=>array('type'=>'string'))),
    'gutenberg.get_blocks'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'view'=>array('type'=>'string','enum'=>array('outline','full')))),
    'gutenberg.get_outline'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1))),
    'gutenberg.locate_block'=>array('type'=>'object','required'=>array('post_id'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'block_name'=>array('type'=>'string'),'path'=>array('type'=>'string'),'text'=>array('type'=>'string'),'html_contains'=>array('type'=>'string'),'view'=>array('type'=>'string','enum'=>array('outline','full')))),
@@ -257,7 +259,7 @@ class OAI_MCP {
     )
    ,'system.regression_history'=>array('type'=>'object','properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>50),'kind'=>array('type'=>'string','enum'=>array('all','regression_run','regression_matrix')),'include_tools'=>array('type'=>'boolean')),'additionalProperties'=>false)
    ,'system.coverage_report'=>array('type'=>'object','properties'=>array('limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>50)),'additionalProperties'=>false)
-   ,'system.operations_cleanup'=>array('type'=>'object','properties'=>array('dry_run'=>array('type'=>'boolean','description'=>'Defaults to true.'),'include_applied'=>array('type'=>'boolean','description'=>'Explicit opt-in required to delete applied operations and give up their rollback records.'),'max_id'=>array('type'=>'integer','minimum'=>1,'description'=>'Optional upper operation id bound.')),'additionalProperties'=>false)
+   ,'system.operations_cleanup'=>array('type'=>'object','properties'=>array('dry_run'=>array('type'=>'boolean','description'=>'Defaults to true.'),'include_applied'=>array('type'=>'boolean','description'=>'Explicit opt-in required to delete applied operations and give up their rollback records.'),'include_failed_recovery'=>array('type'=>'boolean','description'=>'Separate explicit opt-in required to delete rollback_failed and verification_failed operations. Those rows hold the only copy of before_data needed to repair a failed rollback or verification, so they are protected by default.'),'max_id'=>array('type'=>'integer','minimum'=>1,'description'=>'Optional upper operation id bound.')),'additionalProperties'=>false)
    ,'system.security_fuzz'=>array('type'=>'object','properties'=>array('iterations'=>array('type'=>'integer','minimum'=>1,'maximum'=>10)),'additionalProperties'=>false)
    ,'batch.plan'=>array('type'=>'object','required'=>array('items'),'properties'=>array('items'=>array('type'=>'array','minItems'=>1,'maxItems'=>100,'items'=>array('type'=>'object','required'=>array('tool'),'properties'=>array('tool'=>array('type'=>'string','minLength'=>1),'arguments'=>array('type'=>'object')),'additionalProperties'=>false))),'additionalProperties'=>false)
    ,'batch.preflight'=>array('type'=>'object','required'=>array('items'),'properties'=>array('items'=>array('type'=>'array','minItems'=>1,'maxItems'=>100,'items'=>array('type'=>'object','required'=>array('tool'),'properties'=>array('id'=>array('type'=>'string','minLength'=>1),'tool'=>array('type'=>'string','minLength'=>1),'arguments'=>array('type'=>'object'),'depends_on'=>array('type'=>'array','items'=>array('type'=>'string'))),'additionalProperties'=>false))),'additionalProperties'=>false)
@@ -282,6 +284,7 @@ class OAI_MCP {
   $schemas['elementor.patch_container_settings']=array('type'=>'object','required'=>array('post_id','container_id','changes'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'container_id'=>array('type'=>'string','minLength'=>1),'changes'=>array('type'=>'object','minProperties'=>1)));
   $schemas['elementor.patch_page_layout']=array('type'=>'object','required'=>array('post_id','page_template'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'page_template'=>array('type'=>'string','enum'=>array('default','elementor_canvas','elementor_header_footer'))));
   $schemas['woocommerce.get_product_full']=array('type'=>'object','required'=>array('product_id'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1)));
+  $schemas['woocommerce.get_order']=array('type'=>'object','required'=>array('order_id'),'additionalProperties'=>false,'properties'=>array('order_id'=>array('type'=>'integer','minimum'=>1)));
   $product_changes=array(
    'type'=>'object','additionalProperties'=>false,'properties'=>array(
     'name'=>array('type'=>'string'),'slug'=>array('type'=>'string'),'description'=>array('type'=>'string'),'short_description'=>array('type'=>'string'),'sku'=>array('type'=>'string'),
@@ -294,6 +297,19 @@ class OAI_MCP {
    )
   );
   $schemas['woocommerce.update_product_sandbox']=array('type'=>'object','required'=>array('product_id','changes'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1),'changes'=>$product_changes));
+  $order_address=array('type'=>'object','additionalProperties'=>false,'properties'=>array(
+   'first_name'=>array('type'=>'string'),'last_name'=>array('type'=>'string'),'company'=>array('type'=>'string'),
+   'address_1'=>array('type'=>'string'),'address_2'=>array('type'=>'string'),'city'=>array('type'=>'string'),
+   'state'=>array('type'=>'string'),'postcode'=>array('type'=>'string'),'country'=>array('type'=>'string'),
+   'email'=>array('type'=>'string'),'phone'=>array('type'=>'string')
+  ));
+  $order_changes=array('type'=>'object','additionalProperties'=>false,'minProperties'=>1,'properties'=>array(
+   'status'=>array('type'=>'string','minLength'=>1),
+   'billing'=>$order_address,'shipping'=>$order_address,
+   'customer_note'=>array('type'=>'string'),
+   'line_items'=>array('type'=>'array','items'=>array('type'=>'object','required'=>array('id','quantity'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1),'quantity'=>array('type'=>'number','exclusiveMinimum'=>0,'maximum'=>1000000))))
+  ));
+  $schemas['woocommerce.update_order_sandbox']=array('type'=>'object','required'=>array('order_id','changes'),'additionalProperties'=>false,'properties'=>array('order_id'=>array('type'=>'integer','minimum'=>1),'changes'=>$order_changes));
   $create_product_changes=$product_changes;$create_product_changes['properties']['type']=array('type'=>'string','enum'=>array('simple','variable'));
   $schemas['woocommerce.create_product_sandbox']=array('type'=>'object','required'=>array('product'),'additionalProperties'=>false,'properties'=>array('product'=>$create_product_changes,'idempotency_key'=>array('type'=>'string','minLength'=>16,'maxLength'=>128)));
   $schemas['media.upload_sandbox']=array('type'=>'object','required'=>array('filename','content_base64'),'additionalProperties'=>false,'properties'=>array('filename'=>array('type'=>'string','minLength'=>1),'content_base64'=>array('type'=>'string','minLength'=>4),'mime_type'=>array('type'=>'string'),'title'=>array('type'=>'string'),'alt'=>array('type'=>'string')));
@@ -309,7 +325,7 @@ class OAI_MCP {
   $read=array(
    'woodmart.status','woodmart.list_settings','woodmart.get_setting',
    'wp.get_site','wp.inspect_html','wp.visual_qa_result','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
-   'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','elementor.get_container','elementor.get_page_layout','woocommerce.get_product','woocommerce.get_product_full','operation.get_receipt',
+   'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','elementor.get_container','elementor.get_page_layout','woocommerce.get_product','woocommerce.get_product_full','woocommerce.get_order','operation.get_receipt',
    'ability.list','ability.get','gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
    'wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.list','batch.status','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_history','system.coverage_report','system.security_fuzz'
   );
@@ -329,6 +345,7 @@ class OAI_MCP {
    'wp.rest_read'=>'Call a registered same-site WordPress REST GET route through a redacted, bounded resolver; external URLs, WordPress user endpoints and sensitive/internal routes are blocked.',
    'woocommerce.get_variations'=>'Read paginated WooCommerce product variations without customer data.',
    'woocommerce.search_orders'=>'Read paginated WooCommerce order summaries without customer PII.',
+   'woocommerce.get_order'=>'Read one WooCommerce order with line items and totals. Customer contact and address PII are redacted unless the caller can edit shop orders.',
    'batch.preflight'=>'Validate a dependency-aware batch graph and execution order without executing any child operation.',
    'batch.dry_run'=>'Validate executor support, dependency depth, payload size and expected sandbox pause points without creating a job.',
    'batch.list'=>'List resumable batch jobs created by this MCP client.',
@@ -363,10 +380,13 @@ class OAI_MCP {
   $tools[]=self::tool('batch.cancel','Cancel remaining pending batch steps without silently rejecting or applying child operations.',$schemas['batch.cancel'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('batch.rollback','Reconcile applied batch child operations in reverse order. Outside Test Automation, live rollback still requires wp-admin human confirmation.',$schemas['batch.rollback'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('wordpress.execute','Universal WordPress command resolver. Reads execute directly; writes remain plan-only.',array('type'=>'object','required'=>array('command'),'additionalProperties'=>false,'properties'=>array('command'=>array('type'=>'string','minLength'=>1),'mode'=>array('type'=>'string','enum'=>array('read','plan')))),array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('wordpress.create_draft','Create a post or page as a draft sandbox artifact with reserved creation intent. Apply commits it to the configured final status via the normal lifecycle; rollback deletes only the post created by this operation. Live content is not written until human approval.',$schemas['wordpress.create_draft'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('wordpress.update_sandbox','Create a normal sandbox operation that atomically updates the title, excerpt and content of one existing post or page as a bundle; live data is not written until human approval and apply.',$schemas['wordpress.update_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('gutenberg.patch','Create a sandbox Gutenberg patch; live content is not written. Attributes are merged and unnamed/third-party attributes are preserved; remove an attribute only through attrs_remove. An html patch replaces one innerContent part and requires inner_content_index when the block has several parts.',array('type'=>'object','required'=>array('post_id','selector'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'selector'=>array('type'=>'object'),'attrs'=>array('type'=>'object'),'attrs_remove'=>array('type'=>'array','items'=>array('type'=>'string','minLength'=>1),'maxItems'=>100),'html'=>array('type'=>'string'),'inner_content_index'=>array('type'=>'integer','minimum'=>0))),array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('content.patch','Create a sandbox content patch; live content is not written.',array('type'=>'object','required'=>array('post_id','field','old_content','new_content'),'additionalProperties'=>false,'properties'=>array('post_id'=>array('type'=>'integer','minimum'=>1),'field'=>array('type'=>'string'),'old_content'=>array('type'=>'string'),'new_content'=>array('type'=>'string'),'replace_all'=>array('type'=>'boolean'))),array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.patch','Create a sandbox WooCommerce product patch; live data is not written.',array('type'=>'object','required'=>array('product_id','changes'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1),'changes'=>array('type'=>'object'))),array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.update_product_sandbox','Modernized WooCommerce sandbox update. Strict product fields only; live data is not written until human approval.', $schemas['woocommerce.update_product_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('woocommerce.update_order_sandbox','Create a sandbox WooCommerce order update for status, billing/shipping addresses, customer note or existing line item quantities. Totals are recalculated by WooCommerce; live data is not written until human approval.', $schemas['woocommerce.update_order_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.create_product_sandbox','Create a WooCommerce product as a draft sandbox artifact. Apply commits the draft to the normal lifecycle; rollback deletes only the product created by this operation.',$schemas['woocommerce.create_product_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('media.upload_sandbox','Upload a decodable JPEG, PNG, GIF or WebP image (up to 10 MiB and 20 megapixels) as a private sandbox attachment. Filename, optional MIME and bytes must agree; server image decoder required. Apply activates the attachment; rollback removes only the attachment created by this operation.',$schemas['media.upload_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('media.import_url_sandbox','Safely download a public HTTP(S) JPEG, PNG, GIF or WebP image (up to 10 MiB and 20 megapixels) into a private sandbox attachment. Validates URL, size, real MIME and image decoding, normalizing the filename extension. Apply activates the attachment and rollback deletes it.',$schemas['media.import_url_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
@@ -389,7 +409,7 @@ class OAI_MCP {
   $tools[]=self::tool('operation.reject','Reject requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations.', $schemas['operation.reject'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.approve','Approval requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.apply','Apply requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations and still runs conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
-  $tools[]=self::tool('system.operations_cleanup','Safely inspect or delete terminal operation ledger rows. Dry-run is default. Active pending/approved/applying/rollback_pending/rolling_back operations are always protected. Applied rows require explicit include_applied=true. Audit log is preserved.',$schemas['system.operations_cleanup'],array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('system.operations_cleanup','Safely inspect or delete terminal operation ledger rows. Dry-run is default. Active pending/approved/applying/rollback_pending/rolling_back operations are always protected. Applied rows require explicit include_applied=true. rollback_failed and verification_failed rows hold recovery evidence (the only copy of before_data needed to repair a failed rollback or verification) and are protected unless include_failed_recovery=true is set separately. Audit log is preserved.',$schemas['system.operations_cleanup'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.rollback','Rollback requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations and still runs rollback conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
   return $tools;
  }
@@ -444,6 +464,7 @@ class OAI_MCP {
    case 'woocommerce_search_products':$out=OAI_WooCommerce::search((string)($a['query']??''),(string)($a['sku']??''),absint($a['limit']??20),absint($a['page']??1),(string)($a['fields']??'all'));break;
    case 'woocommerce_get_variations':$out=OAI_WooCommerce::variations(absint($a['product_id']??0),absint($a['page']??1),absint($a['limit']??20));break;
    case 'woocommerce_search_orders':$out=OAI_WooCommerce::orders(absint($a['page']??1),absint($a['limit']??20),(string)($a['status']??'any'));break;
+   case 'woocommerce_get_order':$oid=absint($a['order_id']??0);$rr=new WP_REST_Request('GET','/okean-ai/v1/read/orders/'.$oid);$rr->set_url_params(array('id'=>$oid));$out=OAI_REST::woocommerce_order($rr);break;
    case 'operation_status':
    case 'operation_diff':$oid=absint($a['id']??0);$rr=new WP_REST_Request('GET','/okean-ai/v1/operations/'.$oid);$rr->set_url_params(array('id'=>$oid));$out=OAI_REST::operation($rr);break;
    case 'preview_get':$oid=absint($a['id']??0);$rr=new WP_REST_Request('GET','/okean-ai/v1/preview-link/'.$oid);$rr->set_url_params(array('id'=>$oid));$out=OAI_REST::preview_link($rr);break;
@@ -564,10 +585,13 @@ class OAI_MCP {
    case 'menu_assign_location_sandbox':$out=OAI_P0::menu_assign_location($a);break;
    case 'woocommerce_update_product_sandbox':
    case 'woocommerce_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_patch($r);break;
+   case 'woocommerce_update_order_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/order-patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_order_patch($r);break;
    case 'elementor_patch_container_settings':
     $r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch');$r->set_param('target',absint($a['post_id']??0).':'.sanitize_text_field((string)($a['container_id']??'')));$r->set_param('changes',is_array($a['changes']??null)?$a['changes']:array());$out=OAI_REST::elementor_patch($r);break;
    case 'elementor_patch_page_layout':$out=OAI_P0::elementor_page_layout($a);break;
    case 'elementor_create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_create_page($r);break;
+   case 'wordpress_create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/posts/create');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::post_create_draft($r);break;
+   case 'wordpress_update_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/posts/update');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::post_update_draft($r);break;
    case 'elementor_patch_widget':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-widget');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_patch_widget($r);break;
    case 'elementor_patch_fragment':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch-fragment');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::elementor_patch_fragment($r);break;
    case 'wp_option_update_sandbox':
@@ -593,7 +617,7 @@ class OAI_MCP {
     return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin unless AI Lifecycle Control is active'));
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
   }
-  $sandbox_tools=array('woodmart_update_setting_sandbox','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox');
+  $sandbox_tools=array('woodmart_update_setting_sandbox','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_update_order_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox','wordpress_create_draft','wordpress_update_sandbox');
   if(!is_wp_error($out) && in_array($name,$sandbox_tools,true) && is_array($out) && !empty($out['id']) && class_exists('OAI_Test_Automation')){
    $tag=OAI_Test_Automation::tag_operation(absint($out['id']),$raw_name,(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));
    if(is_array($tag))$out['test_automation']=$tag;
@@ -603,7 +627,23 @@ class OAI_MCP {
    $metadata_tools=array('wp_get_site','wp_health','wp_diagnostics','system_manifest','system_capabilities','system_tool_catalog','system_security_status','wp_list_operations','operation_get','operation_status','operation_diff','operation_verify','verify_operation','operation_proof','proof_operation','operation_get_receipt','batch_receipt','batch_proof');
    if(in_array($name,$metadata_tools,true)||(is_array($out)&&isset($out['operation_id'],$out['type'])))$out=OAI_Security::public_evidence($out);
   }
+  return self::tool_result($id,$out);
+ }
+
+ /**
+  * Single transport boundary for a tools/call payload. Every non-WP_Error
+  * business failure is surfaced as `isError: true` so the Gateway Ledger never
+  * settles a failed operation as charged (#136).
+  */
+ public static function tool_result($id,$out){
   if(is_wp_error($out))return self::response($id,null,array('code'=>-32000,'message'=>$out->get_error_message(),'data'=>$out->get_error_data()));
-  return self::response($id,array('content'=>array(array('type'=>'text','text'=>wp_json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)))));
+  $payload=$out instanceof WP_REST_Response?$out->get_data():$out;
+  $failure=class_exists('OAI_Errors')?OAI_Errors::failure($out):null;
+  $result=array('content'=>array(array('type'=>'text','text'=>wp_json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES))));
+  if($failure!==null){
+   $result['isError']=true;
+   if(is_array($payload)&&!array_key_exists('ok',$payload))$result['content'][0]['text']=wp_json_encode(array('ok'=>false,'error'=>$failure)+$payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  }
+  return self::response($id,$result);
  }
 }

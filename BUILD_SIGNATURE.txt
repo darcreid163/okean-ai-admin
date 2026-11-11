@@ -4,7 +4,7 @@ Build ID: 2.1.17-usage-batch-v1-20261019
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
 Purpose: public-release hardening; atomic lifecycle claims, crash-safe Apply/Rollback reconciliation, control-plane option protection, OAuth demotion checks, deactivation safety, and expanded release qualification
-Expected catalog: 116 tools
+Expected catalog: 120 tools
 Inherited self-test checks: 79 (runtime retest required after installation)
 Security fuzz at 10 iterations: 220 (runtime retest required after installation)
 Direct live writes: false
