@@ -130,9 +130,15 @@ for($i=0;$i<Core::MAX_SITES;$i++) {
 }
 rejects(fn()=>$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$capacityNow),'pilot_site_count_limit');
 $core->disconnect('capacity',$capacitySites[0]['id'],$capacityNow);
+$capacityNow+=60;
 $replacementSite=$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$capacityNow);
-check($replacementSite['id']!==$capacitySites[0]['id'],'Reconnecting a revoked site must issue a fresh registration ID');
-check(count($core->sites('capacity'))===Core::MAX_SITES,'Disconnect must release active-site capacity');
+rejects(fn()=>$core->connect('capacity','https://capacity-0.example.com','fixture-site-admin-token-capacity-0',$capacityNow+60),'pilot_site_count_limit');
+check(count($core->sites('capacity'))===Core::MAX_SITES,'New site must fill the released active-site slot');
+$core->disconnect('capacity',$replacementSite['id'],$capacityNow+60);
+$capacityNow+=120;
+$reactivatedSite=$core->connect('capacity','https://capacity-0.example.com','fixture-site-admin-token-capacity-0',$capacityNow);
+check($reactivatedSite['id']!==$capacitySites[0]['id'],'Reconnecting a revoked site must issue a fresh registration ID');
+check(count($core->sites('capacity'))===Core::MAX_SITES,'Reactivation must consume one active-site slot');
 
 // Recovery remains available with no quota. Each call still requires a live token, owned site and appropriate scope.
 $core->ensureAccount('recovery'); $recoverSite=$core->connect('recovery','https://recovery.example.com','fixture-site-admin-token-recovery',$now);
