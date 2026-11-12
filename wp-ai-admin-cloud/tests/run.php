@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
-use WPAICloudGateway\{Fault,Security,Vault,Signer,Gateway};
+use WPAICloudGateway\{Fault,Security,Vault,Signer,Gateway,Core};
 
 $checks=0;
 function check(bool $ok,string $message): void { global $checks; $checks++; if (!$ok) throw new RuntimeException($message); }
@@ -16,6 +16,8 @@ $site=$core->connect('1','https://site-a.example.com','fixture-site-admin-token-
 $site2=$core->connect('1','https://site-b.example.com','fixture-site-admin-token-bbbbbbbb',$now);
 $other=$core->connect('2','https://other.example.com','fixture-site-admin-token-cccccccc',$now);
 check(count($core->sites('1'))===2,'Tenant site list leaked');
+$repeatSite=$core->connect('1','https://site-a.example.com','fixture-site-admin-token-aaaaaaaa',$now);
+check($repeatSite['id']===$site['id']&&count($core->sites('1'))===2,'Same-account repeat connection must preserve the active registration');
 rejects(fn()=>$core->connect('2','https://site-a.example.com','fixture-site-admin-token-aaaaaaaa',$now),'site_already_registered');
 $read=$core->mint('1',[$site['id']],['mcp:read'],$now);
 $write=$core->mint('1',[$site['id'],$site2['id']],['mcp:read','mcp:write'],$now);
@@ -117,6 +119,26 @@ check(OAI_Control_Plane::verify($envelope,$signer->publicKey(),$row['plugin_site
 $core->disconnect('1',$site2['id'],$now);
 rejects(fn()=>$core->catalog($actor,$site2['id'],$now),'site_unavailable');
 check($store->row('SELECT token_sealed FROM '.$store->table('sites').' WHERE id=?',[$site2['id']])['token_sealed']==='','Disconnect retained credential');
+
+// The site cap applies to active registrations only. Historical disconnected
+// rows remain auditable, while a released slot can be reused immediately.
+$core->ensureAccount('capacity');
+$capacitySites=[];$capacityNow=$now;
+for($i=0;$i<Core::MAX_SITES;$i++) {
+    $capacitySites[]=$core->connect('capacity','https://capacity-'.$i.'.example.com','fixture-site-admin-token-capacity-'.$i,$capacityNow);
+    $capacityNow+=60; // stay below the per-minute proof throttle while filling the fixture
+}
+rejects(fn()=>$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$capacityNow),'pilot_site_count_limit');
+$core->disconnect('capacity',$capacitySites[0]['id'],$capacityNow);
+$capacityNow+=60;
+$replacementSite=$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$capacityNow);
+rejects(fn()=>$core->connect('capacity','https://capacity-0.example.com','fixture-site-admin-token-capacity-0',$capacityNow+60),'pilot_site_count_limit');
+check(count($core->sites('capacity'))===Core::MAX_SITES,'New site must fill the released active-site slot');
+$core->disconnect('capacity',$replacementSite['id'],$capacityNow+60);
+$capacityNow+=120;
+$reactivatedSite=$core->connect('capacity','https://capacity-0.example.com','fixture-site-admin-token-capacity-0',$capacityNow);
+check($reactivatedSite['id']!==$capacitySites[0]['id'],'Reconnecting a revoked site must issue a fresh registration ID');
+check(count($core->sites('capacity'))===Core::MAX_SITES,'Reactivation must consume one active-site slot');
 
 // Recovery remains available with no quota. Each call still requires a live token, owned site and appropriate scope.
 $core->ensureAccount('recovery'); $recoverSite=$core->connect('recovery','https://recovery.example.com','fixture-site-admin-token-recovery',$now);
