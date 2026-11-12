@@ -34,8 +34,9 @@ clone setting, changed new-menu name, changed item menu target, and exact old
 candidate claim matching, in addition to existing six-worker races and
 approve/verify/rollback suites. Cloud quota/idempotency remains independent
 and is not double-charged by Native denial without a confirmed successful
-operation. A dedicated cross-version operator reconciliation/retention tool
-remains an open P0 task in #103 and release tracker #40.
+operation. Operator reconciliation and retention are implemented in #123; see
+`docs/CREATION-CLAIM-RECONCILIATION.md` for the administrator-only procedure,
+compare-and-swap generation rule, audit event and retention policy.
 
 ## Transport parity and Gateway accounting (#124)
 

@@ -99,6 +99,9 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-me
 
 # Read-only privileged claim inventory on synthetic options; never a reconciliation/cleanup.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-claim-audit.php"
+# Explicit administrator reconciliation with exact-generation CAS, evidence,
+# audit and retention; must run after the read-only inventory fixture.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-creation-claim-reconciliation.php"
 
 # Classic (non-block) theme surface: theme mods, nav-menu locations, classic
 # content and theme file scopes. Runs last because it switches the active theme.

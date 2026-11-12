@@ -72,12 +72,14 @@ SQL-вставкой одного победителя; exact-HEAD CI зелён
 один pending, а разные payload/actor — независимые операции. Контракт:
 `docs/CREATION-INTENT-IDENTITY.md`.
 
-**2.2. Операторская сверка и retention.**
+**2.2. Операторская сверка и retention.** (#123, реализовано)
 Уже есть read-only диагностика (`/diagnostics/creation-intents`) — она ничего
-не освобождает и это правильно. Нужен отдельный согласованный дизайн
-reconciliation: сопоставление claim ↔ артефакт ↔ операция ↔ approval/Verify ↔
-proof/receipt, затем явное действие, и только потом retention. Никакого TTL и
-автоудаления. Тесты на синтетических фикстурах + реальный WP/MySQL.
+не освобождает и это правильно. Отдельное администраторское действие
+(`POST /diagnostics/creation-intents/reconcile`) реализовано в #123:
+сопоставление claim ↔ артефакт ↔ операция ↔ approval/Verify ↔ proof/receipt,
+явное действие оператора с evidence и audit, exact-generation CAS и retention
+без TTL/автоудаления. Контракт: `docs/CREATION-CLAIM-RECONCILIATION.md`.
+Тесты на синтетических фикстурах + реальный WP/MySQL.
 
 **2.3. Транспорт и биллинг.**
 Проверить повтор с тем же request key через REST/MCP/Cloud, неопределённый

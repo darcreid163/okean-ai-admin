@@ -39,7 +39,8 @@ files contain these changes.
    be matched to the old claim. **Block unattended creation writes** if such
    claims might be outstanding; first reconcile all uncertain claims against
    original site identity, request/intent evidence, actual artifact(s),
-   operations and Verify/Receipt. Never automatically clear an old claim because
+   operations and Verify/Receipt using the explicit administrator procedure in
+   `CREATION-CLAIM-RECONCILIATION.md`. Never automatically clear an old claim because
    it is aged, absent from a metadata file or listed as failed.
 5. **Known uncertain outcomes:** reserve and reconcile separately:
    - A reserved claim plus linked, verified artifact and ledger operation requires

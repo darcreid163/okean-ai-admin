@@ -27,6 +27,7 @@ require_once OAI_DIR.'includes/class-oai-creation-intent.php';
 require_once OAI_DIR.'includes/class-oai-db.php';
 require_once OAI_DIR.'includes/class-oai-operations-cleanup.php';
 require_once OAI_DIR.'includes/class-oai-creation-claim-audit.php';
+require_once OAI_DIR.'includes/class-oai-creation-claim-reconciler.php';
 require_once OAI_DIR.'includes/class-oai-errors.php';
 require_once OAI_DIR.'includes/class-oai-operation-schema.php';
 require_once OAI_DIR.'includes/class-oai-intent.php';
