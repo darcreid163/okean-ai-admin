@@ -123,13 +123,14 @@ check($store->row('SELECT token_sealed FROM '.$store->table('sites').' WHERE id=
 // The site cap applies to active registrations only. Historical disconnected
 // rows remain auditable, while a released slot can be reused immediately.
 $core->ensureAccount('capacity');
-$capacitySites=[];
+$capacitySites=[];$capacityNow=$now;
 for($i=0;$i<Core::MAX_SITES;$i++) {
-    $capacitySites[]=$core->connect('capacity','https://capacity-'.$i.'.example.com','fixture-site-admin-token-capacity-'.$i,$now);
+    $capacitySites[]=$core->connect('capacity','https://capacity-'.$i.'.example.com','fixture-site-admin-token-capacity-'.$i,$capacityNow);
+    $capacityNow+=60; // stay below the per-minute proof throttle while filling the fixture
 }
-rejects(fn()=>$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$now),'pilot_site_count_limit');
-$core->disconnect('capacity',$capacitySites[0]['id'],$now);
-$replacementSite=$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$now);
+rejects(fn()=>$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$capacityNow),'pilot_site_count_limit');
+$core->disconnect('capacity',$capacitySites[0]['id'],$capacityNow);
+$replacementSite=$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$capacityNow);
 check($replacementSite['id']!==$capacitySites[0]['id'],'Reconnecting a revoked site must issue a fresh registration ID');
 check(count($core->sites('capacity'))===Core::MAX_SITES,'Disconnect must release active-site capacity');
 
