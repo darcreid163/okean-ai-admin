@@ -47,7 +47,12 @@ final class Surface {
         if(!in_array($kind,['portal','consent','pair_callback'],true))throw new Fault('invalid_login_surface');
         if(is_user_logged_in())return null;
         $return=home_url(match($kind){'portal'=>'/wpai-cloud/connect','pair_callback'=>'/wpai-cloud/pair/callback',default=>'/wpai-cloud/oauth/authorize'});
-        if($kind==='consent'||$kind==='pair_callback') {
+        if($kind==='portal') {
+            // Preserve only a canonical HTTPS suggestion across the login round-trip.
+            // It remains editable and is not proof of ownership.
+            $home=self::suggestedHome();
+            if($home!=='')$return=add_query_arg('home',$home,$return);
+        } elseif($kind==='consent'||$kind==='pair_callback') {
             $query=[];
             $names=$kind==='pair_callback'?['state','code','error']:['client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method','resource'];
             foreach($names as $name) {
