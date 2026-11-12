@@ -66,6 +66,8 @@ jobs:
         run: php tests/browser-pairing.php
       - name: Self-test catalog and privacy contract
         run: php tests/self-test-contract.php
+      - name: Tool classification parity (Native / Cloud)
+        run: php tests/tool-classification-parity.php
 
   wordpress-smoke:
     runs-on: ubuntu-latest
