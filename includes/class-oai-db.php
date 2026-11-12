@@ -130,6 +130,25 @@ class OAI_DB {
   if($exists!==null)return false;
   return new WP_Error('oai_creation_claim_storage','Creation reservation storage unavailable',array('status'=>503));
  }
+ /**
+  * Compare-and-swap an existing creation claim. The exact stored option_value
+  * is the generation token: a stale operator view can never overwrite a newer
+  * claim. Returns true on swap, false on conflict, WP_Error on storage failure.
+  */
+ public static function cas_creation_claim($name,$expected_raw,$next_raw){
+  global $wpdb;
+  if(!is_string($name)||!preg_match('/^oai_(?:media|workspace|menu|menu_item|product|post|elementor_page)_creation_[a-f0-9]{64}$/D',$name))
+   return new WP_Error('oai_creation_claim_name','Invalid internal creation claim name',array('status'=>400));
+  if(!is_string($expected_raw)||$expected_raw===''||!is_string($next_raw)||$next_raw==='')
+   return new WP_Error('oai_creation_claim_value','Invalid creation claim generation',array('status'=>400));
+  $updated=$wpdb->query($wpdb->prepare(
+   "UPDATE {$wpdb->options} SET option_value=%s WHERE option_name=%s AND BINARY option_value=%s",
+   $next_raw,$name,$expected_raw
+  ));
+  wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');
+  if($updated===false)return new WP_Error('oai_creation_claim_storage','Creation claim storage unavailable',array('status'=>503));
+  return $updated===1;
+ }
  public static function intent_autocommit(){
   global $wpdb;
   if((string)$wpdb->get_var('SELECT @@session.autocommit')!=='1')return new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503));

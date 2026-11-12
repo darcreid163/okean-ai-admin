@@ -63,6 +63,8 @@ final class OAI_Creation_Claim_Audit {
     'older_than_24h'=>0,'unreadable_metadata'=>0,
     'with_canonical_fingerprint'=>0,'without_canonical_fingerprint'=>0,
     'legacy_unverifiable'=>0,
+    'reconciled_created'=>0,'reconciled_absent'=>0,'reconciled_other'=>0,
+    'needs_reconciliation'=>0,
     'workspace_id_unverifiable'=>0,'workspace_root_unavailable'=>0,
     'workspace_directory_present'=>0,'workspace_directory_absent'=>0,
     'workspace_metadata_present'=>0,'workspace_symlink_rejected'=>0
@@ -105,8 +107,12 @@ final class OAI_Creation_Claim_Audit {
     }
     $state=$meta['state']??null;
     if($state==='reserved')$group['declared_reserved']++;
+    elseif($state==='reconciled_created')$group['reconciled_created']++;
+    elseif($state==='reconciled_absent')$group['reconciled_absent']++;
+    elseif(is_string($state)&&strpos($state,'reconciled_')===0)$group['reconciled_other']++;
     elseif(is_string($state)&&$state!=='')$group['declared_other_state']++;
     else $group['state_unknown']++;
+    if($state===null||$state===''||$state==='reserved')$group['needs_reconciliation']++;
     if(isset($meta['operation_id'])&&$meta['operation_id']!==''&&$meta['operation_id']!==null){
      $group['with_operation_reference']++;
      $reference=$meta['operation_id'];
@@ -148,6 +154,9 @@ final class OAI_Creation_Claim_Audit {
    'per_family_limit'=>$limit,'complete'=>!array_reduce($results,static function($carry,$r){return $carry||$r['truncated'];},false),
    'families'=>$results,
    'reconciliation'=>'not_performed',
+   'retention'=>class_exists('OAI_Creation_Claim_Reconciler')
+    ?OAI_Creation_Claim_Reconciler::retention_policy()
+    :array('policy_version'=>'oai/creation-claim-retention/v1','automatic_deletion'=>false,'age_or_missing_reply_releases'=>false),
    'warning'=>'Counts and stored states are not proof of whether an artifact was created. Do not release a reservation by age or missing operation reference.'
   );
  }

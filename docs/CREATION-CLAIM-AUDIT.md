@@ -52,7 +52,9 @@ corresponding operation type in this lifecycle. Only aggregated counters are
 returned. A same-type reference is **not proof of ownership, payload match,
 approval or successful application**. Nor does an absent reference prove
 nothing was created: a crash could have happened before storing it. Actual
-reconciliation requires independent corroboration and is not implemented.
+reconciliation requires independent corroboration; the administrator-only,
+exact-generation action is documented in `CREATION-CLAIM-RECONCILIATION.md`.
+This inventory route remains read-only.
 Batch lookup is bounded by the same per-family limit; it does not run a query
 per claim or mutate the ledger.
 
@@ -87,16 +89,19 @@ workspace.json containing a synthetic secret, a missing directory, a
 symlink and path traversal input; none are disclosed or followed. Only
 test-created resources are removed in fixture teardown.
 
-## Remaining operator reconciliation gate
+## Operator reconciliation
 
-To actually release a blocked creation intent requires a **separate,
-explicitly approved** reconciliation design using original actor/site
-identity, option record, requested artifact (including filesystem or Woo
-variations), operation lifecycle, approval, Verify and signed proof/receipt.
-Old reservations can predate payload hashes or lack a saved artifact pointer.
-An expired timestamp, absent operation link, missing current WordPress object
-or a stale browser response cannot by itself justify claim deletion. A
-reconciliation action must not be added to this read-only route.
+A separate administrator-only action is implemented in #123; see
+`CREATION-CLAIM-RECONCILIATION.md` for the exact-generation rule, required
+artifact/operation evidence, explicit absence confirmation, audit event and
+retention policy. It never releases a claim by age, a missing response or a
+single failed lookup, and never deletes a claim or artifact. The read-only
+route above is unchanged and must not be turned into a reconciliation action.
+
+Old reservations can predate payload hashes or lack a saved artifact pointer;
+the operator must supply independent evidence. An expired timestamp, absent
+operation link, missing current WordPress object or stale browser response
+cannot by itself justify a decision.
 
 No production site, tariff, Cloud ledger or customer data has been modified.
 This does not complete issue #103 or justify release #40.
