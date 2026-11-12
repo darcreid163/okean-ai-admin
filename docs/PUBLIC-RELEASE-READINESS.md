@@ -76,7 +76,7 @@ Confirm from a clean external ChatGPT account:
 - `tools/list` / site catalog remains stable enough for the client;
 - central endpoint works without manual WordPress passwords, copied site tokens or provider API keys.
 
-Real access-token expiry and re-authorization in ChatGPT (#92) require owner action with a live client. Automated fixtures alone do not close this gate.
+Real access-token expiry and re-authorization in ChatGPT (#92) require owner action with a live client. Automated fixtures alone do not close this gate. Use the sanitized, executable procedure in `docs/CHATGPT-TOKEN-RENEWAL-QUALIFICATION.md` and attach its evidence table to #92.
 
 ### 4. Release CI gate — AUTOMATED GREEN / exact release commit still to be frozen
 

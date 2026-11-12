@@ -37,3 +37,22 @@ and is not double-charged by Native denial without a confirmed successful
 operation. Operator reconciliation and retention are implemented in #123; see
 `docs/CREATION-CLAIM-RECONCILIATION.md` for the administrator-only procedure,
 compare-and-swap generation rule, audit event and retention policy.
+
+## Transport parity and Gateway accounting (#124)
+
+The durable claim is transport-neutral: whichever of the Native REST route or
+the MCP adapter arrives first creates the single option claim, and the other
+transport returns the same privacy-preserving 409 (`pending` or `intent
+conflict`) without a second artifact, operation, claim or charge. A different
+key with the same payload remains a new, allowed creation.
+
+Cloud Core is the only quota authority. A central-gateway paired MCP call runs
+with `OAI_Quota::without_local_metering()` and writes no local quota event or
+usage row, including when the Native side answers 409. A Native 409 is a failed
+object on the Cloud ledger (`RpcReply::succeeded()` is false), never a refund,
+rollback or successful charge. Batch settlement remains per successfully
+processed object; an uncertain object keeps its reservation until an authorized
+operator reconciles it with independent receipt evidence.
+
+Acceptance: `tests/wordpress-creation-transport.php` (Native smoke) and
+`wp-ai-admin-cloud/tests/creation-transport-accounting.php` (SQLite + MySQL).
