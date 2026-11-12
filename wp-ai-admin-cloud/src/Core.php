@@ -123,6 +123,10 @@ final class Core {
                 // Repeating the connection for this same owned installation is idempotent.
                 // Keep its registration ID (and existing usage-projection key for token-only
                 // reconnects), so valid grants are not needlessly invalidated.
+                if($existing['status']!=='active') {
+                    $activeCount=(int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=? AND status=?',[$owner,'active'])['n'];
+                    if($activeCount>=self::MAX_SITES)throw new Fault('pilot_site_count_limit',409);
+                }
                 $id=$existing['status']==='active'?$existing['id']:'reg_'.bin2hex(random_bytes(16));
                 $effectiveStatusHash=$statusHash;
                 if($existing['status']==='active'&&$effectiveStatusHash===null) {
