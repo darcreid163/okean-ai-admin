@@ -30,6 +30,7 @@ try {
  $manualHash=get_option('oai_mcp_token_hash','');$nativeClients=$wpdb->get_var('SELECT COUNT(*) FROM '.OAI_MCP_OAuth::clients_table());
  $url=$pairing->start('1','https://wpaiadmin.ru','Real WP administrator',$now);parse_str(parse_url($url,PHP_URL_QUERY),$query);$state=$query['state'];$descriptor=OAI_Gateway_Pairing::request($state,$now);pair_expect(!is_wp_error($descriptor),'Trusted server descriptor rejected');
  pair_expect(!isset($descriptor['verifier'])&&$descriptor['callback']===Pairing::CALLBACK,'Secret/callback descriptor invalid');
+ pair_expect(($descriptor['usage_projection']??null)==='wpai-site-usage-v1'&&is_string($descriptor['signing_public_key']??null)&&preg_match('/^[a-f0-9]{16}$/D',$descriptor['signing_key_id']??'')===1,'Descriptor omitted the usage projection key');
  $nonce=wp_create_nonce('oai_gateway_pair_'.$state);pair_expect(wp_verify_nonce($nonce,'oai_gateway_pair_'.$state)!==false,'Administrator nonce failed');pair_expect(wp_verify_nonce($nonce,'oai_gateway_pair_other_state')===false,'Nonce was not request-bound');
  wp_set_current_user($subscriber);pair_expect(is_wp_error(OAI_Gateway_Pairing::issue_code($descriptor,$now)),'Subscriber could approve');wp_set_current_user(1);
  $code=OAI_Gateway_Pairing::issue_code($descriptor,$now);pair_expect(is_string($code)&&strlen($code)===43,'Native code was not issued');
@@ -38,13 +39,15 @@ try {
  $site=$pairing->complete('1',$state,$code,$now);$token=$transport->lastToken;pair_expect($site['home']==='https://wpaiadmin.ru'&&count($core->sites('1'))===1,'Real WordPress pairing did not register');
  pair_expect(get_option('oai_mcp_token_hash','')===$manualHash,'Pairing rotated old manual token');pair_expect((string)$wpdb->get_var('SELECT COUNT(*) FROM '.OAI_MCP_OAuth::clients_table())===(string)$nativeClients,'Pairing rewrote OAuth clients');
  $stored=get_option(OAI_Gateway_Pairing::CREDENTIAL_PREFIX.hash('sha256',$token));pair_expect(is_array($stored)&&!str_contains(wp_json_encode($stored),$token),'Native token stored plaintext');
+ pair_expect(($stored['usage_projection']??null)==='wpai-site-usage-v1'&&preg_match('/^[a-f0-9]{64}$/D',$stored['status_key']??'')===1,'Native credential missing the read key');
+ $usage=$core->siteUsage('https://wpaiadmin.ru',$stored['status_key'],$now);pair_expect(($usage['contract']??null)==='wpai-site-usage-v1'&&($usage['site_id']??null)===$site['id'],'Server usage projection missing after real pairing');
  $row=$store->row('SELECT token_sealed FROM '.$store->table('sites').' WHERE id=?',[$site['id']]);pair_expect(!str_contains($row['token_sealed'],$token),'Gateway token stored plaintext');
  $access=$core->mint('1',[$site['id']],['mcp:read','mcp:write'],$now);$actor=$core->authenticate($access['access_token'],$now);$reply=$core->call($actor,$site['id'],'wp.get_site',[],'real-wp-pair-read',$now);pair_expect($reply['state']==='succeeded','Real MCP read failed');
  $data=json_decode($reply['upstream']['result']['content'][0]['text'],true);pair_expect(str_starts_with($data['url'],'https://wpaiadmin.ru'),'MCP read selected wrong site');
  pair_reject(fn()=>$pairing->complete('1',$state,$code,$now),'pairing_request_expired');
  $req=new WP_REST_Request('POST','/okean-ai/mcp');$req->set_header('content-type','application/json');$req->set_body(wp_json_encode(['jsonrpc'=>'2.0','id'=>'apply-guard','method'=>'tools/call','params'=>['name'=>'operation_apply','arguments'=>['id'=>1]]]));$_SERVER['HTTP_AUTHORIZATION']='Bearer '.$token;
  OAI_AI_Lifecycle_Control::disable(1);OAI_Test_Automation::disable();$guard=rest_do_request($req)->get_data();pair_expect(($guard['error']['code']??0)===-32003,'Pairing bypassed apply approval');
- pair_expect(OAI_Gateway_Pairing::revoke(hash('sha256',$token))===true,'Native revoke failed');pair_expect(OAI_Gateway_Pairing::authenticate($token,$now)===false,'Revoked key still authenticated');
+ $usageCache='oai_cloud_usage_'.substr(hash('sha256',$token),0,32);add_option($usageCache,['cached'=>true],'',false);pair_expect(OAI_Gateway_Pairing::revoke(hash('sha256',$token))===true,'Native revoke failed');pair_expect(get_option($usageCache,false)===false,'Revocation kept a stale usage projection');pair_expect(OAI_Gateway_Pairing::authenticate($token,$now)===false,'Revoked key still authenticated');
  $_SERVER['HTTP_AUTHORIZATION']='Bearer '.$token;pair_expect(rest_do_request($req)->get_status()===401,'Revoked key passed actual MCP REST authentication');
  echo 'PASS '.$pair_checks.' real WordPress browser pairing checks; WP '.get_bloginfo('version').', native '.OAI_VERSION."\n";
 }finally{

@@ -40,6 +40,35 @@ final class RpcReply {
         }
     }
     private static function invalid(): never { throw new Fault('upstream_outcome_unknown',502); }
+
+    /**
+     * Billing-grade success decision (#136). The JSON-RPC flag is authoritative,
+     * but a business failure returned as ordinary content by an older Native
+     * build must never settle as charged. Only object-shaped top-level payloads
+     * are inspected; lists of rows may legitimately contain failed children.
+     */
+    public static function succeeded(array $reply): bool {
+        if (isset($reply['error'])) return false;
+        $result=$reply['result']??null;
+        if (!is_array($result)) return false;
+        if (($result['isError']??false)===true) return false;
+        if (isset($result['structuredContent']) && is_array($result['structuredContent']) && self::failedPayload($result['structuredContent'])) return false;
+        foreach (($result['content']??[]) as $block) {
+            if (!is_array($block) || ($block['type']??'')!=='text' || !is_string($block['text']??null)) continue;
+            $decoded=json_decode($block['text'],true,32);
+            if (is_array($decoded) && !array_is_list($decoded) && self::failedPayload($decoded)) return false;
+        }
+        return true;
+    }
+    private static function failedPayload(array $value): bool {
+        if (($value['isError']??null)===true) return true;
+        if (($value['ok']??null)===false) return true;
+        if (($value['success']??null)===false) return true;
+        if (isset($value['http_status']) && is_numeric($value['http_status']) && (int)$value['http_status']>=400) return true;
+        if (isset($value['status']) && is_int($value['status']) && $value['status']>=400) return true;
+        if (array_key_exists('error',$value) && !empty($value['error'])) return true;
+        return false;
+    }
 }
 
 final class HttpsTransport implements Transport,PairingTransport {

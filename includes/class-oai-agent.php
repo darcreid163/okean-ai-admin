@@ -71,7 +71,7 @@ class OAI_Agent {
  }
  private static function scope_for($action){
   if(in_array($action,array('status','diagnostics','foundation_capabilities','intent_normalize','agent_plan','operation_catalog','read_discover','error_contract','operation_receipt','workspace_status','workspace_files','workspace_read','workspace_surfaces','surfaces_catalog','search_files','operation','proof','mcp_status','license_status'),true) || strpos($action,'read_')===0) return 'read';
-  if($action==='sandbox_create' || $action==='sandbox_list' || $action==='elementor_create_page' || $action==='content_patch' || $action==='woocommerce_patch' || $action==='workspace_create' || $action==='workspace_write') return 'sandbox';
+  if($action==='sandbox_create' || $action==='sandbox_list' || $action==='elementor_create_page' || $action==='post_create_draft' || $action==='post_update_draft' || $action==='content_patch' || $action==='woocommerce_patch' || $action==='workspace_create' || $action==='workspace_write') return 'sandbox';
   if($action==='preview_link' || $action==='preview_page') return 'preview';
   if($action==='verify') return 'verify';
   if($action==='approve') return 'approve';
@@ -131,6 +131,8 @@ class OAI_Agent {
    'sandbox_list'=>array('GET','/okean-ai/v1/sandbox'),
    'sandbox_create'=>array('POST','/okean-ai/v1/sandbox'),
    'elementor_create_page'=>array('POST','/okean-ai/v1/elementor/create-page'),
+   'post_create_draft'=>array('POST','/okean-ai/v1/posts/create'),
+   'post_update_draft'=>array('POST','/okean-ai/v1/posts/update'),
    'preview_link'=>array('GET','/okean-ai/v1/preview-link/{id}'),
    'preview_page'=>array('GET','/okean-ai/v1/preview-page/{id}'),
    'verify'=>array('GET','/okean-ai/v1/verify/{id}'),
@@ -214,6 +216,8 @@ class OAI_Agent {
    'sandbox_list'=>array('OAI_REST','sandbox_list'),
    'sandbox_create'=>array('OAI_REST','sandbox_create'),
    'elementor_create_page'=>array('OAI_REST','elementor_create_page'),
+   'post_create_draft'=>array('OAI_REST','post_create_draft'),
+   'post_update_draft'=>array('OAI_REST','post_update_draft'),
    'preview_link'=>array('OAI_REST','preview_link'),
    'preview_page'=>array('OAI_REST','preview_page'),
    'verify'=>array('OAI_REST','verify'),

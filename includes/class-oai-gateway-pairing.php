@@ -18,12 +18,28 @@ class OAI_Gateway_Pairing {
  private static function fail($code,$status=400){return new WP_Error($code,'Не удалось завершить подключение. Начните подключение заново в кабинете WP AI Admin.',array('status'=>$status));}
  private static function valid($value){return is_string($value)&&preg_match('/^[A-Za-z0-9_-]{43}$/D',$value);}
  private static function b64($bytes){return rtrim(strtr(base64_encode($bytes),'+/','-_'),'=');}
+ private static function valid_public_key($value){
+  if(!is_string($value)||!preg_match('/^[A-Za-z0-9_-]{43}$/D',$value)||!function_exists('sodium_crypto_sign_verify_detached'))return false;
+  $decoded=base64_decode(strtr($value,'-_','+/').'=',true);
+  return $decoded!==false&&defined('SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES')&&strlen($decoded)===SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES;
+ }
+ /**
+  * Paired-site read key. Cloud and Native derive the same value from the
+  * one-use state and the PKCE verifier; it is only accepted for the
+  * read-only usage projection.
+  */
+ public static function site_status_key($state,$verifier){
+  return self::valid($state)&&self::valid($verifier)?hash_hmac('sha256','wpai-site-status-v1|'.$state,$verifier):'';
+ }
  public static function request($state,$now){
   if(!self::valid($state))return self::fail('oai_pair_state');
   $response=wp_remote_get(self::GATEWAY.'/wp-json/wpai-cloud/v1/pairing/request?state='.rawurlencode($state),array('timeout'=>10,'redirection'=>0,'sslverify'=>true,'limit_response_size'=>8192,'headers'=>array('Accept'=>'application/json')));
   if(is_wp_error($response)||wp_remote_retrieve_response_code($response)!==200)return self::fail('oai_pair_request_unavailable',502);
   $r=json_decode(wp_remote_retrieve_body($response),true);
   if(!is_array($r)||($r['protocol']??'')!=='wpai-browser-pairing-v1'||($r['state']??'')!==$state||($r['site_url']??'')!==untrailingslashit(home_url('/'))||($r['gateway']??'')!==self::GATEWAY||($r['callback']??'')!==self::CALLBACK||!self::valid($r['challenge']??null)||!is_string($r['account_id']??null)||!preg_match('/^[1-9][0-9]{0,19}$/D',$r['account_id'])||!is_string($r['account_label']??null)||strlen($r['account_label'])>400||!is_int($r['expires']??null)||$r['expires']<=$now||$r['expires']>$now+600)return self::fail('oai_pair_request_invalid');
+  if(!array_key_exists('signing_public_key',$r)&&!array_key_exists('signing_key_id',$r)&&!array_key_exists('usage_projection',$r)){
+   $r['signing_public_key']=null;$r['signing_key_id']=null;$r['usage_projection']=null;
+  }elseif(($r['usage_projection']??null)!=='wpai-site-usage-v1'||!self::valid_public_key($r['signing_public_key']??null)||!is_string($r['signing_key_id']??null)||!preg_match('/^[a-f0-9]{16}$/D',$r['signing_key_id']))return self::fail('oai_pair_request_invalid');
   return $r;
  }
  public static function issue_code($r,$now){
@@ -36,7 +52,7 @@ class OAI_Gateway_Pairing {
   }
   $license=OAI_License::can('mcp');if(is_wp_error($license))return $license;
   $code=self::b64(random_bytes(32));$key='oai_pair_code_'.hash('sha256',$code);
-  $record=array('user_id'=>get_current_user_id(),'state'=>$r['state'],'challenge'=>$r['challenge'],'account_id'=>$r['account_id'],'account_label'=>$r['account_label'],'expires'=>min($r['expires'],$now+120));
+  $record=array('user_id'=>get_current_user_id(),'state'=>$r['state'],'challenge'=>$r['challenge'],'account_id'=>$r['account_id'],'account_label'=>$r['account_label'],'signing_public_key'=>$r['signing_public_key'],'signing_key_id'=>$r['signing_key_id'],'usage_projection'=>$r['usage_projection'],'expires'=>min($r['expires'],$now+120));
   if(!add_option($key,$record,'',false))return self::fail('oai_pair_conflict',409);
   wp_schedule_single_event($record['expires'],'oai_gateway_pair_cleanup',array($key));
   update_option('oai_mcp_enabled',true,false);
@@ -51,7 +67,8 @@ class OAI_Gateway_Pairing {
   if(!$user||!user_can($user,'manage_options'))return self::fail('oai_pair_admin_revoked',403);
   if(!delete_option($key))return self::fail('oai_pair_code_used',409);
   $token='oai_pair_'.self::b64(random_bytes(32));$hash=hash('sha256',$token);
-  $record=array('user_id'=>$r['user_id'],'account_id'=>$r['account_id'],'account_label'=>$r['account_label'],'created_at'=>$now);
+  $record=array('user_id'=>$r['user_id'],'account_id'=>$r['account_id'],'account_label'=>$r['account_label'],'site_url'=>untrailingslashit(home_url('/')),'created_at'=>$now,'signing_public_key'=>$r['signing_public_key']??null,'signing_key_id'=>$r['signing_key_id']??null,'usage_projection'=>$r['usage_projection']??null);
+  if(($r['usage_projection']??null)==='wpai-site-usage-v1')$record['status_key']=self::site_status_key($r['state'],$p['verifier']);
   if(!add_option(self::CREDENTIAL_PREFIX.$hash,$record,'',false))return self::fail('oai_pair_conflict',409);
   return array('token'=>$token,'site_url'=>untrailingslashit(home_url('/')));
  }
@@ -73,7 +90,7 @@ class OAI_Gateway_Pairing {
   if(!current_user_can('manage_options')||!is_string($hash)||!preg_match('/^[a-f0-9]{64}$/D',$hash))return self::fail('oai_pair_revoke_denied',403);
   $key=self::CREDENTIAL_PREFIX.$hash;$r=get_option($key,null);
   if(!is_array($r)||(int)$r['user_id']!==get_current_user_id())return self::fail('oai_pair_revoke_denied',403);
-  delete_option($key);return true;
+  delete_option($key);delete_option('oai_cloud_usage_'.substr($hash,0,32));return true;
  }
  public static function cleanup($key){
   if(!is_string($key)||!preg_match('/^oai_pair_code_[a-f0-9]{64}$/D',$key))return;

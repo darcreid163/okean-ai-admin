@@ -3,6 +3,11 @@
  * Plugin Name: WP AI Admin
  * Description: Universal AI Admin for WordPress with sandbox, diff, preview, approval, verification, rollback, Elementor, WooCommerce, Gutenberg, files and MCP.
  * Version: 2.1.17
+ * Requires at least: 6.4
+ * Requires PHP: 8.2
+ * Tested up to: 7.1
+ * WC requires at least: 8.0
+ * WC tested up to: 11.2
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Author: Андриянов Н.Г.
@@ -59,6 +64,7 @@ require_once OAI_DIR.'includes/class-oai-quota.php';
 require_once OAI_DIR.'includes/class-oai-entitlements.php';
 require_once OAI_DIR.'includes/class-oai-mcp-oauth.php';
 require_once OAI_DIR.'includes/class-oai-gateway-pairing.php';
+require_once OAI_DIR.'includes/class-oai-cloud-usage.php';
 require_once OAI_DIR.'includes/class-oai-mcp.php';
 require_once OAI_DIR.'includes/class-oai-rest.php';
 require_once OAI_DIR.'includes/class-oai-agent.php';

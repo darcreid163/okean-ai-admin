@@ -251,6 +251,16 @@ class OAI_WooCommerce {
   }
   return OAI_Verify::same($a,$e);
  }
+ public static function rollback_snapshot_matches($current,$expected){
+  if(!is_array($current)||!is_array($expected))return false;
+  $actual=$current;$applied=$expected;
+  // Rollback restores the complete snapshot written by Apply. WooCommerce
+  // recalculates these parent aggregates from child variation prices/stock
+  // after save, so ignore only those derived fields and compare every other
+  // product, variation, taxonomy, media, attribute, description and SEO field.
+  if(($applied['type']??'')==='variable')unset($actual['price'],$actual['stock_status'],$applied['price'],$applied['stock_status']);
+  return OAI_Verify::same($actual,$applied);
+ }
  public static function apply($id,$data){
   $valid=self::validate_snapshot($data);if(is_wp_error($valid))return $valid;
   $p=wc_get_product((int)$id);if(!$p)return new WP_Error('oai_not_found','Product not found',array('status'=>404));
@@ -352,6 +362,269 @@ class OAI_WooCommerce {
   $full=self::get_full($id);
   if($type==='variable'&&is_array($variations)&&count($created_variations)!==count($variations)){foreach($created_variations as $vid){$cv=wc_get_product($vid);if($cv)$cv->delete(true);}wp_delete_post($id,true);return new WP_Error('oai_woo_variation_create','Not all variations were created; draft and children were cleaned up',array('status'=>422));}
   return $full;
+ }
+
+ public static function order_write_permission(){
+  if(!current_user_can('edit_shop_orders'))return new WP_Error('oai_woo_permission','WooCommerce order edit permission required',array('status'=>403));
+  return true;
+ }
+ private static function order_address_fields(){return array('first_name','last_name','company','address_1','address_2','city','state','postcode','country','email','phone');}
+ private static function normalize_order_status($status){
+  $status=sanitize_key((string)$status);
+  if(strpos($status,'wc-')===0)$status=substr($status,3);
+  return $status;
+ }
+ private static function order_status_allowed($status){
+  $status=self::normalize_order_status($status);
+  if($status==='')return false;
+  if(!function_exists('wc_get_order_statuses'))return in_array($status,array('pending','processing','on-hold','completed','cancelled','refunded','failed'),true);
+  $allowed=array();
+  foreach(array_keys((array)wc_get_order_statuses()) as $key){$key=(string)$key;if(strpos($key,'wc-')===0)$key=substr($key,3);$allowed[]=$key;}
+  return in_array($status,$allowed,true);
+ }
+ private static function validate_order_address($address,$type,$strict=true){
+  if(!is_array($address))return new WP_Error('oai_woo_order_address','WooCommerce '.$type.' address must be an object',array('status'=>422));
+  $clean=array();
+  foreach(self::order_address_fields() as $field){
+   if(!array_key_exists($field,$address))continue;
+   $value=is_scalar($address[$field])?trim((string)$address[$field]):'';
+   if($strict&&$field==='email'&&$value!==''&&!is_email($value))return new WP_Error('oai_woo_order_email','Invalid WooCommerce billing email',array('status'=>422,'field'=>$field));
+   if($field==='country')$value=strtoupper($value);
+   if($field==='email')$value=sanitize_email($value);
+   else $value=sanitize_text_field($value);
+   $clean[$field]=$value;
+  }
+  if(!$clean)return new WP_Error('oai_noop','No WooCommerce order address fields supplied',array('status'=>400));
+  return $clean;
+ }
+ private static function order_item_taxes($item){
+  $taxes=$item->get_taxes();$out=array('total'=>array(),'subtotal'=>array());
+  foreach(array('total','subtotal') as $kind){
+   if(!isset($taxes[$kind])||!is_array($taxes[$kind]))continue;
+   foreach($taxes[$kind] as $rate_id=>$amount)$out[$kind][(string)$rate_id]=(string)$amount;
+  }
+  return $out;
+ }
+ private static function order_item_snapshot($item){
+  return array(
+   'id'=>(int)$item->get_id(),'name'=>(string)$item->get_name(),'product_id'=>(int)$item->get_product_id(),
+   'variation_id'=>(int)$item->get_variation_id(),'tax_class'=>(string)$item->get_tax_class(),
+   'quantity'=>(float)$item->get_quantity(),'subtotal'=>(string)$item->get_subtotal(),
+   'subtotal_tax'=>(string)$item->get_subtotal_tax(),'total'=>(string)$item->get_total(),
+   'total_tax'=>(string)$item->get_total_tax(),'taxes'=>self::order_item_taxes($item)
+  );
+ }
+ private static function order_fee_snapshot($item){
+  return array('id'=>(int)$item->get_id(),'name'=>(string)$item->get_name(),'total'=>(string)$item->get_total(),'total_tax'=>(string)$item->get_total_tax(),'taxes'=>self::order_item_taxes($item));
+ }
+ private static function order_shipping_snapshot($item){
+  return array('id'=>(int)$item->get_id(),'method_id'=>(string)$item->get_method_id(),'method_title'=>(string)$item->get_method_title(),'total'=>(string)$item->get_total(),'total_tax'=>(string)$item->get_total_tax(),'taxes'=>self::order_item_taxes($item));
+ }
+ private static function order_date_iso($date){return $date instanceof DateTimeInterface?$date->format('c'):null;}
+ private static function order_snapshot($order){
+  $billing=array();$shipping=array();
+  $billing_raw=$order->get_address('billing');$shipping_raw=$order->get_address('shipping');
+  foreach(self::order_address_fields() as $field){
+   $billing[$field]=isset($billing_raw[$field])?(string)$billing_raw[$field]:'';
+   $shipping[$field]=isset($shipping_raw[$field])?(string)$shipping_raw[$field]:'';
+  }
+  $line_items=array();foreach($order->get_items('line_item') as $item){$row=self::order_item_snapshot($item);$line_items[$row['id']]=$row;}ksort($line_items);
+  $fees=array();foreach($order->get_items('fee') as $item){$row=self::order_fee_snapshot($item);$fees[$row['id']]=$row;}ksort($fees);
+  $shipping_lines=array();foreach($order->get_items('shipping') as $item){$row=self::order_shipping_snapshot($item);$shipping_lines[$row['id']]=$row;}ksort($shipping_lines);
+  return array(
+   'id'=>(int)$order->get_id(),'status'=>(string)$order->get_status(),'currency'=>(string)$order->get_currency(),
+   'customer_id'=>(int)$order->get_customer_id(),'customer_note'=>(string)$order->get_customer_note(),
+   'billing'=>$billing,'shipping'=>$shipping,
+   'line_items'=>array_values($line_items),'fee_lines'=>array_values($fees),'shipping_lines'=>array_values($shipping_lines),
+   'totals'=>array(
+    'discount_total'=>(string)$order->get_discount_total(),'discount_tax'=>(string)$order->get_discount_tax(),
+    'shipping_total'=>(string)$order->get_shipping_total(),'shipping_tax'=>(string)$order->get_shipping_tax(),
+    'cart_tax'=>(string)$order->get_cart_tax(),'total_tax'=>(string)$order->get_total_tax(),
+    'total'=>(string)$order->get_total()
+   ),
+   'date_created'=>self::order_date_iso($order->get_date_created()),'date_modified'=>self::order_date_iso($order->get_date_modified()),
+   'date_paid'=>self::order_date_iso($order->get_date_paid()),'date_completed'=>self::order_date_iso($order->get_date_completed())
+  );
+ }
+ public static function get_order($id,$include_pii=false){
+  if(!function_exists('wc_get_order'))return new WP_Error('oai_woo','WooCommerce order API unavailable',array('status'=>503));
+  $order=wc_get_order(absint($id));
+  if(!$order||!($order instanceof WC_Order))return new WP_Error('oai_not_found','Order not found',array('status'=>404));
+  $snapshot=self::order_snapshot($order);
+  if($include_pii)return $snapshot;
+  foreach(array('billing','shipping') as $type)foreach($snapshot[$type] as $field=>$value)$snapshot[$type][$field]=in_array($field,array('email','phone'),true)?'***':'';
+  $snapshot['customer_note']='';
+  $snapshot['privacy']='redacted_no_edit_shop_orders';
+  return $snapshot;
+ }
+ public static function order_snapshot_for_operation($id){
+  $permission=self::order_write_permission();if(is_wp_error($permission))return $permission;
+  return self::get_order($id,true);
+ }
+ public static function validate_order_snapshot($data){
+  if(!is_array($data)||empty($data))return new WP_Error('oai_woo_order_snapshot','Invalid WooCommerce order snapshot',array('status'=>422));
+  if(array_key_exists('id',$data)&&absint($data['id'])<=0)return new WP_Error('oai_woo_order_snapshot','Invalid WooCommerce order id',array('status'=>422));
+  if(array_key_exists('status',$data)&&!self::order_status_allowed($data['status']))return new WP_Error('oai_woo_order_status','Invalid WooCommerce order status',array('status'=>422));
+  foreach(array('billing','shipping') as $type){
+   if(!array_key_exists($type,$data))continue;
+   $valid=self::validate_order_address($data[$type],$type,false);if(is_wp_error($valid))return $valid;
+  }
+  if(array_key_exists('customer_note',$data)&&$data['customer_note']!==null&&!is_scalar($data['customer_note']))return new WP_Error('oai_woo_order_note','Invalid WooCommerce customer note',array('status'=>422));
+  if(array_key_exists('line_items',$data)){
+   if(!is_array($data['line_items']))return new WP_Error('oai_woo_order_items','WooCommerce line_items must be an array',array('status'=>422));
+   $seen=array();
+   foreach($data['line_items'] as $row){
+    if(!is_array($row))return new WP_Error('oai_woo_order_items','Invalid WooCommerce line item',array('status'=>422));
+    $item_id=absint($row['id']??0);if(!$item_id||isset($seen[$item_id]))return new WP_Error('oai_woo_order_item','Invalid or duplicate WooCommerce line item id',array('status'=>422));
+    $seen[$item_id]=true;
+    if(!array_key_exists('quantity',$row)||!is_numeric($row['quantity'])||!is_finite((float)$row['quantity'])||(float)$row['quantity']<=0)return new WP_Error('oai_woo_quantity','Invalid WooCommerce line item quantity',array('status'=>422));
+    foreach(array('subtotal','subtotal_tax','total','total_tax') as $field)if(array_key_exists($field,$row)&&!is_numeric($row[$field]))return new WP_Error('oai_woo_order_items','Invalid WooCommerce line item amount: '.$field,array('status'=>422));
+   }
+  }
+  if(array_key_exists('totals',$data)){
+   if(!is_array($data['totals']))return new WP_Error('oai_woo_order_totals','WooCommerce totals must be an object',array('status'=>422));
+   foreach(array('discount_total','discount_tax','shipping_total','shipping_tax','cart_tax','total_tax','total') as $field)if(array_key_exists($field,$data['totals'])&&!is_numeric($data['totals'][$field]))return new WP_Error('oai_woo_order_totals','Invalid WooCommerce total: '.$field,array('status'=>422));
+  }
+  return true;
+ }
+ private static function scale_order_amount($amount,$old_quantity,$new_quantity){
+  if(!is_numeric($amount)||(float)$old_quantity<=0)return (string)$amount;
+  return wc_format_decimal((float)$amount*((float)$new_quantity/(float)$old_quantity));
+ }
+ private static function order_item_after_quantity($item,$new_quantity){
+  $old_quantity=(float)($item['quantity']??0);if($old_quantity<=0||$new_quantity===$old_quantity)return $item;
+  $item['quantity']=$new_quantity;
+  foreach(array('subtotal','total') as $field)$item[$field]=self::scale_order_amount($item[$field]??'0',$old_quantity,$new_quantity);
+  foreach(array('subtotal_tax','total_tax') as $field)$item[$field]=self::scale_order_amount($item[$field]??'0',$old_quantity,$new_quantity);
+  foreach(array('subtotal','total') as $kind)if(isset($item['taxes'][$kind])&&is_array($item['taxes'][$kind]))foreach($item['taxes'][$kind] as $rate_id=>$amount)$item['taxes'][$kind][$rate_id]=self::scale_order_amount($amount,$old_quantity,$new_quantity);
+  return $item;
+ }
+ public static function patch_order($id,$changes){
+  $permission=self::order_write_permission();if(is_wp_error($permission))return $permission;
+  if(!is_array($changes)||!$changes)return new WP_Error('oai_noop','No WooCommerce order changes supplied',array('status'=>400));
+  $allowed=array('status','billing','shipping','customer_note','line_items');
+  foreach($changes as $key=>$value)if(!in_array($key,$allowed,true))return new WP_Error('oai_field','WooCommerce order field is not allowed: '.$key,array('status'=>400,'allowed'=>$allowed));
+  $before=self::get_order($id,true);if(is_wp_error($before))return $before;
+  $after=$before;
+  if(array_key_exists('status',$changes)){
+   $status=self::normalize_order_status($changes['status']);
+   if(!self::order_status_allowed($status))return new WP_Error('oai_woo_order_status','Invalid WooCommerce order status',array('status'=>422));
+   $after['status']=$status;
+  }
+  foreach(array('billing','shipping') as $type){
+   if(!array_key_exists($type,$changes))continue;
+   $address=self::validate_order_address($changes[$type],$type,true);if(is_wp_error($address))return $address;
+   foreach($address as $field=>$value)$after[$type][$field]=$value;
+  }
+  if(array_key_exists('customer_note',$changes))$after['customer_note']=sanitize_textarea_field((string)$changes['customer_note']);
+  if(array_key_exists('line_items',$changes)){
+   if(!is_array($changes['line_items']))return new WP_Error('oai_woo_order_items','WooCommerce line_items must be an array',array('status'=>422));
+   $index=array();foreach($after['line_items'] as $position=>$row)$index[(int)$row['id']]=$position;
+   foreach($changes['line_items'] as $row){
+    if(!is_array($row)||!array_key_exists('id',$row)||!array_key_exists('quantity',$row))return new WP_Error('oai_woo_order_item','Each line item change requires id and quantity',array('status'=>422));
+    $item_id=absint($row['id']);if(!$item_id||!isset($index[$item_id]))return new WP_Error('oai_woo_order_item','Order line item does not belong to this order: '.$item_id,array('status'=>422));
+    $quantity=(float)$row['quantity'];if(!is_finite($quantity)||$quantity<=0||$quantity>1000000)return new WP_Error('oai_woo_quantity','Invalid WooCommerce line item quantity',array('status'=>422));
+    $after['line_items'][$index[$item_id]]=self::order_item_after_quantity($after['line_items'][$index[$item_id]],round($quantity,6));
+   }
+  }
+  if(OAI_Verify::same($before,$after))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409));
+  return array('before'=>$before,'after'=>$after,'changes'=>$changes,'id'=>(int)$id);
+ }
+ public static function apply_order($id,$data){
+  $permission=self::order_write_permission();if(is_wp_error($permission))return $permission;
+  $valid=self::validate_order_snapshot($data);if(is_wp_error($valid))return $valid;
+  $order=wc_get_order(absint($id));if(!$order||!($order instanceof WC_Order))return new WP_Error('oai_not_found','Order not found',array('status'=>404));
+  if(isset($data['id'])&&(int)$data['id']!==(int)$order->get_id())return new WP_Error('oai_woo_order_id','WooCommerce order id mismatch',array('status'=>422));
+  try{
+   if(array_key_exists('status',$data))$order->set_status(self::normalize_order_status($data['status']));
+   if(array_key_exists('billing',$data)&&is_array($data['billing']))$order->set_billing_address($data['billing']);
+   if(array_key_exists('shipping',$data)&&is_array($data['shipping']))$order->set_shipping_address($data['shipping']);
+   if(array_key_exists('customer_note',$data))$order->set_customer_note((string)$data['customer_note']);
+   if(isset($data['line_items'])&&is_array($data['line_items'])){
+    $items=$order->get_items('line_item');
+    foreach($data['line_items'] as $row){
+     $item_id=absint($row['id']??0);$item=isset($items[$item_id])?$items[$item_id]:null;
+     if(!$item)return new WP_Error('oai_woo_order_item','Order line item not found: '.$item_id,array('status'=>409));
+     $new_quantity=(float)($row['quantity']??0);$old_quantity=(float)$item->get_quantity();
+     if($new_quantity<=0)return new WP_Error('oai_woo_quantity','Invalid WooCommerce line item quantity',array('status'=>422));
+     if($new_quantity!==$old_quantity){
+      $item->set_quantity($new_quantity);
+      $item->set_subtotal(self::scale_order_amount($item->get_subtotal(),$old_quantity,$new_quantity));
+      $item->set_total(self::scale_order_amount($item->get_total(),$old_quantity,$new_quantity));
+      $item->save();
+     }
+    }
+   }
+   $order->calculate_totals(true);
+   return self::get_order((int)$order->get_id(),true);
+  }catch(Throwable $e){return new WP_Error('oai_woo_order_apply',$e->getMessage(),array('status'=>422));}
+ }
+ public static function restore_order($id,$snapshot){
+  $permission=self::order_write_permission();if(is_wp_error($permission))return $permission;
+  $valid=self::validate_order_snapshot($snapshot);if(is_wp_error($valid))return $valid;
+  $order=wc_get_order(absint($id));if(!$order||!($order instanceof WC_Order))return new WP_Error('oai_not_found','Order not found',array('status'=>404));
+  if(isset($snapshot['id'])&&(int)$snapshot['id']!==(int)$order->get_id())return new WP_Error('oai_woo_order_id','WooCommerce order id mismatch',array('status'=>422));
+  try{
+   if(array_key_exists('status',$snapshot))$order->set_status(self::normalize_order_status($snapshot['status']));
+   if(array_key_exists('billing',$snapshot)&&is_array($snapshot['billing']))$order->set_billing_address($snapshot['billing']);
+   if(array_key_exists('shipping',$snapshot)&&is_array($snapshot['shipping']))$order->set_shipping_address($snapshot['shipping']);
+   if(array_key_exists('customer_note',$snapshot))$order->set_customer_note((string)$snapshot['customer_note']);
+   if(array_key_exists('date_paid',$snapshot))$order->set_date_paid($snapshot['date_paid']?:null);
+   if(array_key_exists('date_completed',$snapshot))$order->set_date_completed($snapshot['date_completed']?:null);
+   $items=$order->get_items('line_item');
+   foreach((array)($snapshot['line_items']??array()) as $row){
+    $item_id=absint($row['id']??0);$item=isset($items[$item_id])?$items[$item_id]:null;
+    if(!$item)return new WP_Error('oai_woo_order_item','Order line item not found: '.$item_id,array('status'=>409));
+    $item->set_quantity((float)($row['quantity']??0));
+    $item->set_subtotal((string)($row['subtotal']??'0'));
+    $item->set_total((string)($row['total']??'0'));
+    $item->set_taxes(array('total'=>(array)($row['taxes']['total']??array()),'subtotal'=>(array)($row['taxes']['subtotal']??array())));
+    $item->save();
+   }
+   $fees=$order->get_items('fee');
+   foreach((array)($snapshot['fee_lines']??array()) as $row){
+    $item_id=absint($row['id']??0);$item=isset($fees[$item_id])?$fees[$item_id]:null;
+    if(!$item)return new WP_Error('oai_woo_order_fee','Order fee line not found: '.$item_id,array('status'=>409));
+    $item->set_total((string)($row['total']??'0'));
+    $item->set_taxes(array('total'=>(array)($row['taxes']['total']??array())));
+    $item->save();
+   }
+   $shipping=$order->get_items('shipping');
+   foreach((array)($snapshot['shipping_lines']??array()) as $row){
+    $item_id=absint($row['id']??0);$item=isset($shipping[$item_id])?$shipping[$item_id]:null;
+    if(!$item)return new WP_Error('oai_woo_order_shipping','Order shipping line not found: '.$item_id,array('status'=>409));
+    $item->set_total((string)($row['total']??'0'));
+    $item->set_taxes(array('total'=>(array)($row['taxes']['total']??array())));
+    $item->save();
+   }
+   // set_cart_tax() derives the protected total_tax aggregate from cart+shipping
+   // tax in WooCommerce; setting it directly is not part of the public API.
+   $total_setters=array('discount_total'=>'set_discount_total','discount_tax'=>'set_discount_tax','shipping_total'=>'set_shipping_total','shipping_tax'=>'set_shipping_tax','cart_tax'=>'set_cart_tax','total'=>'set_total');
+   foreach($total_setters as $field=>$method)if(array_key_exists($field,(array)($snapshot['totals']??array())))$order->$method((string)$snapshot['totals'][$field]);
+   $order->save();
+   return true;
+  }catch(Throwable $e){return new WP_Error('oai_woo_order_restore',$e->getMessage(),array('status'=>422));}
+ }
+ public static function order_snapshot_matches($current,$expected,$ignore_volatile=false){
+  if(!is_array($current)||!is_array($expected))return false;
+  if($ignore_volatile)return self::order_verification_matches($current,$expected);
+  return OAI_Verify::same($current,$expected);
+ }
+ public static function order_verification_matches($current,$expected){
+  if(!is_array($current)||!is_array($expected))return false;
+  $actual=$current;$wanted=$expected;
+  foreach(array('date_modified','date_paid','date_completed') as $field)unset($actual[$field],$wanted[$field]);
+  return OAI_Verify::same($actual,$wanted);
+ }
+ public static function order_runtime_matches($actual,$expected){
+  if(!is_array($actual)||!is_array($expected))return new WP_Error('oai_woo_order_runtime','Invalid WooCommerce order runtime snapshot',array('status'=>500));
+  foreach(array('status','customer_note') as $field)if(array_key_exists($field,$expected)&&!OAI_Verify::same($actual[$field]??null,$expected[$field]))return new WP_Error('oai_woo_order_runtime','WooCommerce order did not persist requested field: '.$field,array('status'=>409,'field'=>$field,'expected'=>$expected[$field],'actual'=>$actual[$field]??null));
+  foreach(array('billing','shipping') as $type)if(isset($expected[$type])&&is_array($expected[$type]))foreach($expected[$type] as $field=>$value)if(array_key_exists($field,$actual[$type]??array())&&!OAI_Verify::same($actual[$type][$field],$value))return new WP_Error('oai_woo_order_runtime','WooCommerce order did not persist '.$type.' field: '.$field,array('status'=>409,'field'=>$field,'expected'=>$value,'actual'=>$actual[$type][$field]));
+  $actual_items=array();foreach((array)($actual['line_items']??array()) as $row)$actual_items[(int)$row['id']]=(float)$row['quantity'];
+  $expected_items=array();foreach((array)($expected['line_items']??array()) as $row)$expected_items[(int)$row['id']]=(float)$row['quantity'];
+  if(count($actual_items)!==count($expected_items))return new WP_Error('oai_woo_order_runtime','WooCommerce order line item count changed',array('status'=>409));
+  foreach($expected_items as $item_id=>$quantity)if(!array_key_exists($item_id,$actual_items)||$actual_items[$item_id]!==$quantity)return new WP_Error('oai_woo_order_runtime','WooCommerce order did not persist line item quantity: '.$item_id,array('status'=>409,'item_id'=>$item_id,'expected'=>$quantity,'actual'=>$actual_items[$item_id]??null));
+  return true;
  }
 
 }
