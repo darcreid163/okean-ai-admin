@@ -125,6 +125,8 @@ class OAI_Gateway_Pairing {
   nocache_headers();header('Content-Type: text/html; charset=utf-8');header('X-Content-Type-Options: nosniff');header('X-Frame-Options: DENY');header('Referrer-Policy: no-referrer');header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
  }
  public static function connections_url(){return admin_url('admin.php?page=oai-gateway-connections');}
+ /** Central portal URL with this installation suggested, never trusted as proof of site ownership. */
+ public static function portal_url(){return add_query_arg('home',untrailingslashit(home_url('/')),self::GATEWAY.'/wpai-cloud/connect');}
  public static function menu(){add_submenu_page('okean-ai-admin','WP AI Admin — Подключения к gateway','Подключения к gateway','manage_options','oai-gateway-connections',array(__CLASS__,'page'));}
  public static function page(){
   if(!current_user_can('manage_options'))return;
@@ -133,7 +135,7 @@ class OAI_Gateway_Pairing {
    check_admin_referer('oai_gateway_revoke_'.$hash,'oai_pair_nonce');$result=self::revoke($hash);
    echo '<div class="notice '.(is_wp_error($result)?'notice-error':'notice-success').'"><p>'.esc_html(is_wp_error($result)?$result->get_error_message():'Доступ отозван.').'</p></div>';
   }
-  echo '<div class="wrap"><h1>Подключения к gateway</h1><p><a class="button" href="'.esc_url(OAI_Admin::dashboard_url()).'">Рабочий стол WP AI Admin</a> <a class="button button-primary" href="https://wpaiadmin.ru/wpai-cloud/connect">Подключить сайт</a></p><p>Здесь можно отозвать доступ к этому сайту. Автоматическое подключение выполняется в кабинете WP AI Admin.</p>';
+  echo '<div class="wrap"><h1>Подключения к gateway</h1><p><a class="button" href="'.esc_url(OAI_Admin::dashboard_url()).'">Рабочий стол WP AI Admin</a> <a class="button button-primary" href="' . esc_url(self::portal_url()) . '">Подключить сайт</a></p><p>Здесь можно отозвать доступ к этому сайту. Автоматическое подключение выполняется в кабинете WP AI Admin.</p>';
   global $wpdb;$keys=$wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 1000",$wpdb->esc_like(self::CREDENTIAL_PREFIX).'%'));
   $count=0;foreach($keys as $key){$r=get_option($key,null);if(!is_array($r)||(int)$r['user_id']!==get_current_user_id())continue;$hash=substr($key,strlen(self::CREDENTIAL_PREFIX));$count++;
    echo '<p>Кабинет: <strong>'.esc_html($r['account_label']).'</strong> · '.esc_html(gmdate('Y-m-d H:i',$r['created_at'])).' UTC</p><form method="post">';wp_nonce_field('oai_gateway_revoke_'.$hash,'oai_pair_nonce');echo '<input type="hidden" name="credential_hash" value="'.esc_attr($hash).'"><button class="button" type="submit">Отозвать доступ</button></form>';
