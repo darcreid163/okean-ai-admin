@@ -111,6 +111,35 @@ final class Surface {
         try { return Security::home(wp_unslash($value)); }
         catch(Fault $e) { return ''; }
     }
+    /** Render only safe ledger metadata; never expose request keys, prompts, arguments or upstream receipts. */
+    private static function renderHistory(array $history,array $sites,bool $unavailable=false): void {
+        echo '<h2>История действий</h2>';
+        if($unavailable) { echo '<p>История действий временно недоступна. Попробуйте позже.</p>'; return; }
+        if(!$history) { echo '<p>Пока нет действий.</p>'; return; }
+        $siteNames=[];
+        foreach($sites as $site) {
+            if(is_array($site)&&is_string($site['id']??null)&&is_string($site['home']??null)) $siteNames[$site['id']]=$site['home'];
+        }
+        $states=['succeeded'=>'Успешно','failed'=>'Ошибка','uncertain'=>'Требует сверки','dispatching'=>'В обработке'];
+        echo '<table style="width:100%;border-collapse:collapse"><thead><tr><th>Дата (UTC)</th><th>Сайт</th><th>Действие</th><th>Статус</th><th>Списано</th></tr></thead><tbody>';
+        foreach($history as $row) {
+            if(!is_array($row)) continue;
+            $created=(int)($row['created_at']??0);
+            $date=$created>0?gmdate('Y-m-d H:i:s',$created).' UTC':'—';
+            $siteId=is_string($row['site_id']??null)?$row['site_id']:'';
+            $siteName=$siteNames[$siteId]??'Отключённый сайт';
+            $tool=is_string($row['tool']??null)?$row['tool']:'—';
+            $state=is_string($row['state']??null)?$row['state']:'';
+            $status=$states[$state]??'Неизвестно';
+            $units=$row['charged_units']??null;
+            $charge=is_int($units)&&$units>=0?(string)$units.' д.':'Ожидает сверки';
+            $pending=$row['pending_units']??null;
+            if(is_int($pending)&&$pending>0)$charge.=' · в обработке: '.$pending;
+            echo '<tr><td>'.esc_html($date).'</td><td>'.esc_html($siteName).'</td><td><code>'.esc_html($tool).'</code></td><td>'.esc_html($status).'</td><td>'.esc_html($charge).'</td></tr>';
+        }
+        echo '</tbody></table><p>Показаны последние '.count($history).' записей. Содержимое запросов и ответов инструментов в журнале кабинета не раскрывается.</p>';
+    }
+
     private static function portal(string $owner,Core $core): void {
         if(($_GET['connected']??'')==='1')echo '<p>Сайт подключён. Теперь его можно выбрать при подключении ИИ.</p>';
         if(($_GET['cancelled']??'')==='1')echo '<p>Подключение отменено.</p>';
@@ -137,6 +166,9 @@ final class Surface {
             }
         }
         $sites=$core->sites($owner);$usage=$core->usage($owner,time());
+        $history=[];$historyUnavailable=false;
+        try { $history=$core->ledger($owner,20); }
+        catch(Fault $e) { $historyUnavailable=true; }
         echo '<h2>Обзор аккаунта</h2><p>Один аккаунт и один тариф для всех подключённых сайтов. Действия списываются из общего лимита аккаунта.</p><p>Тариф: <strong>'.esc_html(strtoupper($usage['plan'])).'</strong> · Лимит: '.(int)$usage['limit'].' · Использовано: '.(int)$usage['used'].' · В обработке: '.(int)$usage['reserved'].' · Осталось: '.(int)$usage['remaining'].'</p><p>Подключено сайтов: <strong>'.count($sites).'</strong>. В тестовом режиме доступно до '.Core::MAX_SITES.' регистраций на аккаунт; отдельная подписка для каждого сайта не требуется.</p>';
         $periodLabel=$usage['period_kind']===QuotaPolicy::DAY?'сутки':'месяц';
         echo '<p>Период учёта: '.esc_html($periodLabel).' (UTC). Следующий период: '.esc_html($usage['period_end_utc']).'. Неиспользованные действия не переносятся.</p>';
@@ -150,7 +182,8 @@ final class Surface {
             }
             echo '</tbody></table><p>После добавления нового сайта повторите авторизацию WP AI Admin в ChatGPT и отметьте все нужные сайты.</p>';
         }
-        echo '<h2>Подключение ChatGPT</h2><p>Используйте центральный MCP: <code>'.esc_html(Settings::endpoint()).'</code>. При авторизации выберите нужные сайты.</p><h2>История действий</h2><p>История операций доступна в журнале Cloud Gateway и на подключённых сайтах.</p>';
+        echo '<h2>Подключение ChatGPT</h2><p>Используйте центральный MCP: <code>'.esc_html(Settings::endpoint()).'</code>. При авторизации выберите нужные сайты.</p>';
+        self::renderHistory($history,$sites,$historyUnavailable);
         echo '<h2>Добавить сайт</h2><p>Адрес текущего сайта подставляется автоматически. При необходимости его можно изменить вручную. Затем войдите на целевом сайте как администратор и подтвердите подключение.</p>';
         echo '<form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
         echo '<label>Адрес WordPress-сайта <input type="url" name="home" value="' . esc_attr(self::suggestedHome()) . '" placeholder="https://example.ru" required></label><button type="submit" name="connect_mode" value="automatic">Подключить автоматически</button> <button type="submit" name="connect_mode" value="check">Проверить связь</button></form>';
