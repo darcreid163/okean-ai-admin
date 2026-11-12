@@ -113,19 +113,29 @@ final class Core {
         foreach ($texts as $block) if (($block['type']??'')==='text') { $v=json_decode($block['text']??'',true); if (is_array($v) && isset($v['site_id'],$v['installation_id'])) { $manifest=$v; break; } }
         if (!$manifest || ($manifest['plugin_name']??'')!=='WP AI Admin' || ($manifest['release']['production_defaults']['direct_live_writes']??null)!==false) throw new Fault('site_manifest_incompatible',422);
         $pluginSite=Security::identifier($manifest['site_id']); $installation=Security::identifier($manifest['installation_id']);
-        return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now,$replace,$statusHash) {
+        return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now,$statusHash) {
             $this->account($owner,true);
             $hash=hash('sha256',$home); $existing=$this->store->row('SELECT * FROM '.$this->store->table('sites').' WHERE url_hash=?',[$hash]);
             if($existing) {
-                if(!$replace||$existing['owner']!==$owner)throw new Fault('site_already_registered',409);
+                // A URL can never be claimed by another account, even if its old row is revoked.
+                if($existing['owner']!==$owner)throw new Fault('site_already_registered',409);
                 if($existing['plugin_site_id']!==$pluginSite||$existing['installation_id']!==$installation)throw new Fault('site_identity_changed',409);
-                // A revoked registration gets a fresh ID: old grants must not regain access.
+                // Repeating the connection for this same owned installation is idempotent.
+                // Keep its registration ID (and existing usage-projection key for token-only
+                // reconnects), so valid grants are not needlessly invalidated.
                 $id=$existing['status']==='active'?$existing['id']:'reg_'.bin2hex(random_bytes(16));
-                $this->store->execute('UPDATE '.$this->store->table('sites').' SET id=?,token_sealed=?,status=?,created_at=? WHERE id=?',[$id,$this->sealSiteCredential($token,$owner,$id,$statusHash),'active',$now,$existing['id']]);
+                $effectiveStatusHash=$statusHash;
+                if($existing['status']==='active'&&$effectiveStatusHash===null) {
+                    $previous=$this->siteCredential($existing);
+                    $effectiveStatusHash=$previous['status_hash'];
+                }
+                $this->store->execute('UPDATE '.$this->store->table('sites').' SET id=?,token_sealed=?,status=?,created_at=? WHERE id=?',[$id,$this->sealSiteCredential($token,$owner,$id,$effectiveStatusHash),'active',$now,$existing['id']]);
                 $this->store->audit($owner,$id,'site_reconnected','',$now);
                 return ['id'=>$id,'home'=>$home,'plugin_site_id'=>$pluginSite,'installation_id'=>$installation,'status'=>'active'];
             }
-            if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=?',[$owner])['n']>=self::MAX_SITES) throw new Fault('pilot_site_count_limit',409);
+            // Disconnected registrations remain in the audit history but do not
+            // consume the account's active-site capacity.
+            if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=? AND status=?',[$owner,'active'])['n']>=self::MAX_SITES) throw new Fault('pilot_site_count_limit',409);
             $id='reg_'.bin2hex(random_bytes(16));
             try {
                 $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->sealSiteCredential($token,$owner,$id,$statusHash),'active',$now]);
