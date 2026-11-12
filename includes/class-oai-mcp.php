@@ -326,7 +326,7 @@ class OAI_MCP {
   $schemas['menu.assign_location_sandbox']=array('type'=>'object','required'=>array('location','menu_id'),'additionalProperties'=>false,'properties'=>array('location'=>array('type'=>'string','minLength'=>1),'menu_id'=>array('type'=>'integer','minimum'=>0)));
   $read=array(
    'woodmart.status','woodmart.list_settings','woodmart.get_setting',
-   'wp.get_site','wp.inspect_html','wp.visual_qa_result','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
+   'wp.get_site','wp.inspect_html','wp.visual_qa_start','wp.visual_qa_result','system.page_qa_run','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
    'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','elementor.get_container','elementor.get_page_layout','woocommerce.get_product','woocommerce.get_product_full','woocommerce.get_order','operation.get_receipt',
    'ability.list','ability.get','gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
    'wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','woocommerce.search_customers','woocommerce.get_customer','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.list','batch.status','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_history','system.coverage_report','system.security_fuzz'
@@ -337,6 +337,8 @@ class OAI_MCP {
    'woodmart.list_settings'=>'Read bounded Woodmart field descriptors with base/preset distinction; restricted fields are excluded.',
    'woodmart.get_setting'=>'Read one Woodmart setting with native value format, saved base value and preset-override flag.',
    'wp.inspect_html'=>'Inspect public or authenticated draft server-rendered HTML. JavaScript is not executed.',
+   'wp.visual_qa_start'=>'Create a short-lived signed browser Visual QA probe for one editable WordPress post. It does not publish or modify content; opening the returned URL executes viewport measurements and stores a bounded report.',
+   'system.page_qa_run'=>'Run unified page QA. First call with post_id performs static DOM/accessibility/link checks and creates a browser Visual QA probe. After opening browser_url, call the same tool again with post_id and probe_id to receive one combined PASS/WARN report. It never publishes or changes page content.',
    'wp.visual_qa_result'=>'Read a completed browser Visual QA report for desktop, tablet and mobile viewports.',
    'wp.file.outline'=>'List file landmarks and line numbers without returning the full file; use file.read with a line range next.',
    'file.read'=>'Read a scoped theme file; start_line and end_line return a bounded excerpt with snapshot hash.',
@@ -363,8 +365,6 @@ class OAI_MCP {
    $tools[]=self::tool($name,$description,$schemas[$name]??array('type'=>'object'),array('readOnlyHint'=>true,'destructiveHint'=>false));
   }
   $tools[]=self::tool('woodmart.update_setting_sandbox','Create a normal sandbox operation for one Woodmart base setting. Native normalization, full-option/preset conflict guards, verification, CSS invalidation and exact rollback; never writes live during planning.',$schemas['woodmart.update_setting_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>true));
-  $tools[]=self::tool('wp.visual_qa_start','Create a short-lived signed browser Visual QA probe for one editable WordPress post. It does not publish or modify content; opening the returned URL executes viewport measurements and stores a bounded report.',$schemas['wp.visual_qa_start'],array('readOnlyHint'=>false,'destructiveHint'=>false));
-  $tools[]=self::tool('system.page_qa_run','Run unified page QA. First call with post_id performs static DOM/accessibility/link checks and creates a browser Visual QA probe. After opening browser_url, call the same tool again with post_id and probe_id to receive one combined PASS/WARN report. It never publishes or changes page content.',$schemas['system.page_qa_run'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool(
    'system.regression_run',
    'Run a strictly sequential reversible regression suite inside an active scoped Test Automation session. Each mutation uses the normal sandbox lifecycle and must be rolled back and verified before the next scenario starts.',

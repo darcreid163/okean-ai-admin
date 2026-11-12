@@ -152,7 +152,7 @@ class OAI_MCP_OAuth {
 
  private static function cimd_client($client_id){
   $client_id=(string)$client_id;
-  if(!preg_match('#^https://chatgpt\.com/oauth/(?:client\.json|[A-Za-z0-9_-]{6,128}/client\.json)$#',$client_id)) return null;
+  if(!preg_match('#^https://chatgpt\.com/oauth/(?:client\.json|[A-Za-z0-9_-]{6,128}/client\.json)$#D',$client_id)) return null;
 
   $cached=get_transient('oai_cimd_'.hash('sha256',$client_id));
   if(is_array($cached)) return $cached;
