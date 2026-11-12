@@ -80,11 +80,41 @@ class OAI_WooCommerce {
   if(!is_array($v))return new WP_Error('oai_woo_variation','Invalid variation payload',array('status'=>422));
   $id=absint($v['id']??0);if(!$id)return new WP_Error('oai_woo_variation_id','Existing product variation updates require id',array('status'=>422));
   $out=array('id'=>$id);
-  foreach(array('sku','regular_price','sale_price','stock_status','status') as $k)if(array_key_exists($k,$v))$out[$k]=sanitize_text_field((string)$v[$k]);
+  foreach(array('sku','stock_status','status') as $k)if(array_key_exists($k,$v))$out[$k]=sanitize_text_field((string)$v[$k]);
+  foreach(array('regular_price','sale_price') as $k)if(array_key_exists($k,$v))$out[$k]=self::normalize_variation_price($v[$k],$k);
   if(array_key_exists('stock_quantity',$v)){ $stock=self::normalize_stock_amount($v['stock_quantity']);if(is_wp_error($stock))return $stock;$out['stock']=$stock;}
   if(array_key_exists('manage_stock',$v))$out['manage_stock']=(bool)$v['manage_stock'];
   if(array_key_exists('attributes',$v))$out['attributes']=(array)$v['attributes'];
   return $out;
+ }
+ // Issue #140: shared strict variation validation for both patch() and apply().
+ private static function validate_variations($rows){
+  if(!is_array($rows))return new WP_Error('oai_woo_variations','variations must be an array',array('status'=>422));
+  $allowed=array('id','sku','regular_price','sale_price','stock_quantity','stock_status','manage_stock','status','attributes');
+  $statuses=array('draft','publish','private','pending','custom');
+  $stock_statuses=array('instock','outofstock','onbackorder');
+  $seen=array();
+  foreach($rows as $i=>$row){
+   if(!is_array($row))return new WP_Error('oai_woo_variation','Invalid variation payload',array('status'=>422,'index'=>$i));
+   foreach($row as $k=>$unused)if(!in_array($k,$allowed,true))return new WP_Error('oai_woo_variation_field','Unsupported variation field: '.$k,array('status'=>422,'index'=>$i,'allowed'=>$allowed));
+   $regular=array_key_exists('regular_price',$row)?self::normalize_variation_price($row['regular_price'],'regular_price'):'';
+   if(is_wp_error($regular))return $regular;
+   $sale=array_key_exists('sale_price',$row)?self::normalize_variation_price($row['sale_price'],'sale_price'):'';
+   if(is_wp_error($sale))return $sale;
+   if(!is_wp_error($regular)&&!is_wp_error($sale)&&(string)$sale!==''&&(string)$regular!==''&&(float)$sale>(float)$regular)return new WP_Error('oai_woo_sale_price','Sale price exceeds regular price',array('status'=>422,'index'=>$i));
+   if(array_key_exists('stock_status',$row)&&!in_array((string)$row['stock_status'],$stock_statuses,true))return new WP_Error('oai_woo_stock_status','Invalid WooCommerce stock_status',array('status'=>422,'index'=>$i));
+   if(array_key_exists('status',$row)&&!in_array((string)$row['status'],$statuses,true))return new WP_Error('oai_woo_status','Invalid variation status',array('status'=>422,'index'=>$i));
+   if(array_key_exists('stock_quantity',$row)){$stock=self::normalize_stock_amount($row['stock_quantity']);if(is_wp_error($stock))return $stock;}
+   if(array_key_exists('attributes',$row)&&!is_array($row['attributes']))return new WP_Error('oai_woo_variation_attributes','Variation attributes must be an object',array('status'=>422,'index'=>$i));
+   if(!empty($row['id'])){$key='v'.absint($row['id']);if(isset($seen[$key]))return new WP_Error('oai_woo_variation_duplicate','Duplicate variation id in one request',array('status'=>422,'variation_id'=>absint($row['id'])));$seen[$key]=true;}
+   if(isset($row['sku'])&&(string)$row['sku']!==''){$key='s'.strtolower((string)$row['sku']);if(isset($seen[$key]))return new WP_Error('oai_woo_variation_duplicate_sku','Duplicate child SKU in one request',array('status'=>422,'sku'=>$row['sku']));$seen[$key]=true;}
+  }
+  return true;
+ }
+ private static function normalize_variation_price($raw,$field){
+  if($raw===null||$raw==='')return '';
+  $valid=self::validate_price($raw,$field);if(is_wp_error($valid))return $valid;
+  return wc_format_decimal($raw);
  }
  private static function seo_meta_map(){return array('yoast_title'=>'_yoast_wpseo_title','yoast_description'=>'_yoast_wpseo_metadesc','rank_math_title'=>'rank_math_title','rank_math_description'=>'rank_math_description','aioseo_title'=>'_aioseo_title','aioseo_description'=>'_aioseo_description');}
 
@@ -148,6 +178,7 @@ class OAI_WooCommerce {
   if(array_key_exists('variations',$changes)){
    if($before['type']!=='variable')return new WP_Error('oai_woo_variations','Variations require a variable product',array('status'=>422));
    if(!is_array($changes['variations']))return new WP_Error('oai_woo_variations','variations must be an array',array('status'=>422));
+   $valid=self::validate_variations($changes['variations']);if(is_wp_error($valid))return $valid;
    $map=array();foreach($after['variations'] as $i=>$v)$map[(int)$v['id']]=$i;
    foreach($changes['variations'] as $v){$n=self::normalize_variation_update($v);if(is_wp_error($n))return $n;$vid=(int)$n['id'];if(!isset($map[$vid]))return new WP_Error('oai_woo_variation_parent','Variation does not belong to product',array('status'=>422,'variation_id'=>$vid));$row=array_merge($after['variations'][$map[$vid]],$n);
     // The variation snapshot carries WooCommerce's derived `price`. Recompute it
@@ -278,6 +309,15 @@ class OAI_WooCommerce {
   if(!is_array($changes))$changes=array();$type=sanitize_key((string)($changes['type']??'simple'));
   if(!in_array($type,array('simple','variable'),true))return new WP_Error('oai_woo_type','P0 create supports simple or variable products',array('status'=>422));
   if(!current_user_can('edit_products'))return new WP_Error('oai_woo_permission','Product edit permission required',array('status'=>403));
+  // Issue #140: validate every variation row before the idempotency claim is
+  // reserved, so invalid or duplicate child input returns 422 with no claim,
+  // no operation row and no draft product.
+  $variations=$changes['variations']??array();
+  if($type==='variable'){
+   $valid=self::validate_variations($variations);if(is_wp_error($valid))return $valid;
+  }elseif(!empty($variations)){
+   return new WP_Error('oai_woo_variations','Variations require a variable product',array('status'=>422));
+  }
   if(!is_string($request_key)||($request_key!==''&&!preg_match('/^[A-Za-z0-9._~-]{16,128}$/D',$request_key)))
    return new WP_Error('oai_product_request_key','Invalid product idempotency_key',array('status'=>400));
   $ready=OAI_DB::intent_autocommit();if(is_wp_error($ready))return $ready;
@@ -302,15 +342,26 @@ class OAI_WooCommerce {
   if(is_wp_error($admission))return $admission;
   if($admission!==true)
    return new WP_Error('oai_product_creation_pending','Product creation requires result reconciliation',array('status'=>409));
+  // The child loop is wrapped so a mid-loop failure cleans up every variation
+  // created by this operation plus the parent draft.
   $p=$type==='variable'?new WC_Product_Variable():new WC_Product_Simple();$p->set_name(wp_strip_all_tags((string)($changes['name']??'AI Admin draft product')));$p->set_status('draft');$id=$p->save();
   if(!$id)return new WP_Error('oai_woo_create','Failed to create draft product',array('status'=>500));
   update_post_meta($id,'_oai_sandbox_artifact','1');
-  $variations=$changes['variations']??array();unset($changes['variations'],$changes['type']);$changes['status']='draft';
+  unset($changes['variations'],$changes['type']);$changes['status']='draft';
   $x=self::patch($id,$changes);if(is_wp_error($x)){wp_delete_post($id,true);return $x;}$applied=self::apply($id,$x['after']);if(is_wp_error($applied)){wp_delete_post($id,true);return $applied;}
+  $created_variations=array();
   if($type==='variable'&&is_array($variations)){
-   foreach($variations as $row){if(!is_array($row))continue;$v=new WC_Product_Variation();$v->set_parent_id($id);$v->set_status('publish');if(isset($row['sku']))$v->set_sku(wc_clean((string)$row['sku']));if(isset($row['regular_price']))$v->set_regular_price(wc_format_decimal($row['regular_price']));if(isset($row['sale_price']))$v->set_sale_price(wc_format_decimal($row['sale_price']));if(isset($row['manage_stock']))$v->set_manage_stock((bool)$row['manage_stock']);if(array_key_exists('stock_quantity',$row)){ $stock=self::normalize_stock_amount($row['stock_quantity']);if(is_wp_error($stock)){wp_delete_post($id,true);return $stock;}$v->set_stock_quantity($stock); }if(isset($row['stock_status']))$v->set_stock_status(sanitize_key((string)$row['stock_status']));if(isset($row['attributes']))$v->set_attributes((array)$row['attributes']);$v->save();}
+   try{
+    foreach($variations as $row){if(!is_array($row))continue;$v=new WC_Product_Variation();$v->set_parent_id($id);$v->set_status('publish');if(isset($row['sku']))$v->set_sku(wc_clean((string)$row['sku']));if(array_key_exists('regular_price',$row))$v->set_regular_price(self::normalize_variation_price($row['regular_price'],'regular_price'));if(array_key_exists('sale_price',$row))$v->set_sale_price(self::normalize_variation_price($row['sale_price'],'sale_price'));if(isset($row['manage_stock']))$v->set_manage_stock((bool)$row['manage_stock']);if(array_key_exists('stock_quantity',$row)){$stock=self::normalize_stock_amount($row['stock_quantity']);if(is_wp_error($stock))throw new Exception('Invalid stock quantity');$v->set_stock_quantity($stock);}if(isset($row['stock_status']))$v->set_stock_status(sanitize_key((string)$row['stock_status']));if(isset($row['attributes']))$v->set_attributes((array)$row['attributes']);$vid=$v->save();if($vid)$created_variations[]=$vid;}
+   }catch(Throwable $e){
+    foreach($created_variations as $vid){$cv=wc_get_product($vid);if($cv)$cv->delete(true);}
+    wp_delete_post($id,true);
+    return new WP_Error('oai_woo_variation_create','Variation creation failed; draft and children were cleaned up',array('status'=>422,'reason'=>$e->getMessage()));
+   }
   }
-  return self::get_full($id);
+  $full=self::get_full($id);
+  if($type==='variable'&&is_array($variations)&&count($created_variations)!==count($variations)){foreach($created_variations as $vid){$cv=wc_get_product($vid);if($cv)$cv->delete(true);}wp_delete_post($id,true);return new WP_Error('oai_woo_variation_create','Not all variations were created; draft and children were cleaned up',array('status'=>422));}
+  return $full;
  }
 
  public static function order_write_permission(){
