@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
-use WPAICloudGateway\{Fault,Security,Vault,Signer,Gateway};
+use WPAICloudGateway\{Fault,Security,Vault,Signer,Gateway,Core};
 
 $checks=0;
 function check(bool $ok,string $message): void { global $checks; $checks++; if (!$ok) throw new RuntimeException($message); }
@@ -124,14 +124,14 @@ check($store->row('SELECT token_sealed FROM '.$store->table('sites').' WHERE id=
 // rows remain auditable, while a released slot can be reused immediately.
 $core->ensureAccount('capacity');
 $capacitySites=[];
-for($i=0;$i<WPAICloudGateway\\Core::MAX_SITES;$i++) {
+for($i=0;$i<Core::MAX_SITES;$i++) {
     $capacitySites[]=$core->connect('capacity','https://capacity-'.$i.'.example.com','fixture-site-admin-token-capacity-'.$i,$now);
 }
 rejects(fn()=>$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$now),'pilot_site_count_limit');
 $core->disconnect('capacity',$capacitySites[0]['id'],$now);
 $replacementSite=$core->connect('capacity','https://capacity-50.example.com','fixture-site-admin-token-capacity-50',$now);
 check($replacementSite['id']!==$capacitySites[0]['id'],'Reconnecting a revoked site must issue a fresh registration ID');
-check(count($core->sites('capacity'))===WPAICloudGateway\\Core::MAX_SITES,'Disconnect must release active-site capacity');
+check(count($core->sites('capacity'))===Core::MAX_SITES,'Disconnect must release active-site capacity');
 
 // Recovery remains available with no quota. Each call still requires a live token, owned site and appropriate scope.
 $core->ensureAccount('recovery'); $recoverSite=$core->connect('recovery','https://recovery.example.com','fixture-site-admin-token-recovery',$now);
