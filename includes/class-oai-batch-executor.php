@@ -97,7 +97,7 @@ class OAI_Batch_Executor {
   return array(
    // Safe read steps.
    'wp.get_site','wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_read',
-   'woocommerce.get_product','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders',
+   'woocommerce.get_product','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','woocommerce.search_customers','woocommerce.get_customer',
    'gutenberg.get_outline','builder.detect','file.read',
    // Write steps create sandbox operations only; never direct live writes.
    'content.patch','gutenberg.patch','woocommerce.patch','woocommerce.update_product_sandbox',
@@ -189,6 +189,8 @@ class OAI_Batch_Executor {
    case 'woocommerce.search_products':return OAI_WooCommerce::search((string)($a['query']??''),(string)($a['sku']??''),absint($a['limit']??20),absint($a['page']??1),(string)($a['fields']??'all'));
    case 'woocommerce.get_variations':return OAI_WooCommerce::variations(absint($a['product_id']??0),absint($a['page']??1),absint($a['limit']??20));
    case 'woocommerce.search_orders':return OAI_WooCommerce::orders(absint($a['page']??1),absint($a['limit']??20),(string)($a['status']??'any'));
+   case 'woocommerce.search_customers':return OAI_WooCommerce::customers((string)($a['query']??''),(string)($a['email']??''),absint($a['page']??1),absint($a['limit']??20),OAI_WooCommerce::customer_pii_allowed());
+   case 'woocommerce.get_customer':$cid=absint($a['customer_id']??0);$r=new WP_REST_Request('GET','/okean-ai/v1/read/customers/'.$cid);$r->set_url_params(array('id'=>$cid));return OAI_REST::woocommerce_customer($r);
    case 'gutenberg.get_outline':$r=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0));$r->set_url_params(array('id'=>absint($a['post_id']??0)));$r->set_param('view','outline');return OAI_REST::gutenberg_resolved($r);
    case 'builder.detect':return OAI_Adapter_Catalog::detect(absint($a['post_id']??0));
    case 'file.read':$r=new WP_REST_Request('GET','/okean-ai/v1/files/read');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::files_read($r);

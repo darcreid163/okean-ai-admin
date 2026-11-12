@@ -160,6 +160,8 @@ class OAI_REST {
   register_rest_route($n,'/read/gutenberg/(?P<id>\d+)',array('methods'=>'GET','callback'=>array(__CLASS__,'gutenberg'))+$args);
   register_rest_route($n,'/read/woocommerce/(?P<id>\d+)',array('methods'=>'GET','callback'=>array(__CLASS__,'woocommerce'))+$args);
   register_rest_route($n,'/read/orders/(?P<id>\d+)',array('methods'=>'GET','callback'=>array(__CLASS__,'woocommerce_order'))+$args);
+  register_rest_route($n,'/read/customers',array('methods'=>'GET','callback'=>array(__CLASS__,'woocommerce_customers'))+$args);
+  register_rest_route($n,'/read/customers/(?P<id>\d+)',array('methods'=>'GET','callback'=>array(__CLASS__,'woocommerce_customer'))+$args);
   register_rest_route($n,'/content/patch',array('methods'=>'POST','callback'=>array(__CLASS__,'content_patch'))+$args);
   register_rest_route($n,'/posts/create',array('methods'=>'POST','callback'=>array(__CLASS__,'post_create_draft'))+$args);
   register_rest_route($n,'/posts/update',array('methods'=>'POST','callback'=>array(__CLASS__,'post_update_draft'))+$args);
@@ -1887,6 +1889,8 @@ frame.addEventListener('load',function(){
  public static function content_patch($req){$id=absint($req->get_param('post_id'));$field=sanitize_key((string)$req->get_param('field'));$old=(string)$req->get_param('old_content');$new=(string)$req->get_param('new_content');$all=filter_var($req->get_param('replace_all'),FILTER_VALIDATE_BOOLEAN);$x=OAI_Content::patch($id,$field,$old,$new,$all);if(is_wp_error($x))return $x;return self::sandbox_create_from_patch($field,$id,$field,$x['before'],$x['after'],array('kind'=>'content_patch','field'=>$field,'before_exists'=>true));}
  public static function woocommerce_patch($req){$license=OAI_License::can('woocommerce');if(is_wp_error($license))return $license;$id=absint($req->get_param('product_id'));$changes=$req->get_param('changes');if(is_string($changes))$changes=json_decode($changes,true);$x=OAI_WooCommerce::patch($id,is_array($changes)?$changes:array());if(is_wp_error($x))return $x;return self::sandbox_create_from_patch('woocommerce_product',$id,'product',$x['before'],$x['after'],array('kind'=>'woocommerce_patch','changes'=>$changes));}
  public static function woocommerce_order($req){return OAI_WooCommerce::get_order(absint($req['id']),current_user_can('edit_shop_orders'));}
+ public static function woocommerce_customers($req){return OAI_WooCommerce::customers((string)$req->get_param('query'),(string)$req->get_param('email'),absint($req->get_param('page')?:1),absint($req->get_param('limit')?:20),OAI_WooCommerce::customer_pii_allowed());}
+ public static function woocommerce_customer($req){return OAI_WooCommerce::get_customer(absint($req['id']),OAI_WooCommerce::customer_pii_allowed());}
  public static function woocommerce_order_patch($req){
   $license=OAI_License::can('woocommerce');if(is_wp_error($license))return $license;
   $id=absint($req->get_param('order_id'));

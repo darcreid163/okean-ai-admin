@@ -150,6 +150,71 @@ class OAI_WooCommerce {
   $items=array();foreach((array)$result->orders as $o){if(!is_object($o))continue;$created=$o->get_date_created();$items[]=array('id'=>$o->get_id(),'status'=>$o->get_status(),'date_created'=>$created?$created->date('c'):null,'currency'=>$o->get_currency(),'total'=>$o->get_total(),'payment_method'=>$o->get_payment_method(),'line_items'=>count($o->get_items('line_item')),'shipping_items'=>count($o->get_items('shipping')));}
   return array('page'=>$page,'limit'=>$limit,'status'=>$status?:'any','count'=>count($items),'total'=>(int)$result->total,'total_pages'=>(int)$result->max_num_pages,'has_more'=>$page<(int)$result->max_num_pages,'privacy'=>'summary_no_customer_pii','items'=>$items);
  }
+ public static function customer_access_allowed(){
+  return current_user_can('edit_shop_orders')||current_user_can('manage_woocommerce')||current_user_can('list_users');
+ }
+ public static function customer_pii_allowed(){
+  return current_user_can('manage_woocommerce')||current_user_can('list_users');
+ }
+ private static function customer_date($mysql){
+  $mysql=(string)$mysql;if($mysql==='')return null;
+  $formatted=mysql2date('c',$mysql,false);return is_string($formatted)&&$formatted!==''?$formatted:null;
+ }
+ private static function customer_address($id,$type,$contact){
+  $fields=array('first_name','last_name','company','address_1','address_2','city','state','postcode','country');
+  if($contact){$fields[]='email';$fields[]='phone';}
+  $out=array();foreach($fields as $f)$out[$f]=(string)get_user_meta($id,$type.'_'.$f,true);return $out;
+ }
+ private static function customer_snapshot($user,$include_pii){
+  $id=(int)$user->ID;
+  $out=array(
+   'id'=>$id,
+   'orders_count'=>function_exists('wc_get_customer_order_count')?(int)wc_get_customer_order_count($id):0,
+   'total_spent'=>function_exists('wc_get_customer_total_spent')?(string)wc_get_customer_total_spent($id):'0',
+   'is_paying_customer'=>get_user_meta($id,'paying_customer',true)==='1',
+   'date_created'=>self::customer_date($user->user_registered)
+  );
+  if(!$include_pii){$out['privacy']='redacted_customer_pii';return $out;}
+  $last_active=get_user_meta($id,'wc_last_active',true);
+  $out['username']=(string)$user->user_login;
+  $out['display_name']=(string)$user->display_name;
+  $out['email']=(string)$user->user_email;
+  $out['first_name']=(string)get_user_meta($id,'first_name',true);
+  $out['last_name']=(string)get_user_meta($id,'last_name',true);
+  $out['billing']=self::customer_address($id,'billing',true);
+  $out['shipping']=self::customer_address($id,'shipping',false);
+  $out['last_active']=is_numeric($last_active)&&(int)$last_active>0?gmdate('c',(int)$last_active):null;
+  $out['privacy']='full_customer_pii';
+  return $out;
+ }
+ public static function customers($query='',$email='',$page=1,$limit=20,$include_pii=false){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  if(!self::customer_access_allowed())return new WP_Error('oai_forbidden','Customer read requires edit_shop_orders, manage_woocommerce or list_users',array('status'=>403));
+  $page=max(1,min(10000,absint($page?:1)));$limit=max(1,min(100,absint($limit?:20)));
+  $query=sanitize_text_field((string)$query);
+  $raw_email=trim((string)$email);$email=sanitize_email($raw_email);
+  if($raw_email!==''&&($email===''||!is_email($email)))return new WP_Error('oai_woo_customer_email','Invalid customer email',array('status'=>422));
+  if($email!==''&&!$include_pii)return new WP_Error('oai_woo_customer_pii','Customer email lookup requires manage_woocommerce or list_users',array('status'=>403));
+  $base=array('page'=>$page,'limit'=>$limit,'query'=>$query,'email'=>$email,'privacy'=>$include_pii?'full_customer_pii':'redacted_customer_pii');
+  if($email!==''){
+   $user=get_user_by('email',$email);
+   $items=($user&&in_array('customer',(array)$user->roles,true))?array(self::customer_snapshot($user,$include_pii)):array();
+   return array_merge($base,array('count'=>count($items),'total'=>count($items),'total_pages'=>1,'has_more'=>false,'items'=>$items));
+  }
+  $args=array('role'=>'customer','number'=>$limit,'offset'=>($page-1)*$limit,'count_total'=>true,'orderby'=>'registered','order'=>'DESC','fields'=>'all');
+  if($query!==''){$args['search']='*'.$query.'*';$args['search_columns']=$include_pii?array('user_login','user_email','display_name'):array('user_login','display_name');}
+  $q=new WP_User_Query($args);$users=$q->get_results();$items=array();
+  foreach((array)$users as $u)if($u instanceof WP_User)$items[]=self::customer_snapshot($u,$include_pii);
+  $total=(int)$q->get_total();$pages=max(1,(int)ceil($total/$limit));
+  return array_merge($base,array('count'=>count($items),'total'=>$total,'total_pages'=>$pages,'has_more'=>$page<$pages,'items'=>$items));
+ }
+ public static function get_customer($id,$include_pii=false){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  if(!self::customer_access_allowed())return new WP_Error('oai_forbidden','Customer read requires edit_shop_orders, manage_woocommerce or list_users',array('status'=>403));
+  $user=get_user_by('id',absint($id));
+  if(!$user||!in_array('customer',(array)$user->roles,true))return new WP_Error('oai_not_found','Customer not found',array('status'=>404));
+  return self::customer_snapshot($user,$include_pii);
+ }
  public static function patch($id,$changes){
   $p=wc_get_product((int)$id);if(!$p)return new WP_Error('oai_not_found','Product not found',array('status'=>404));
   if(!is_array($changes)||!$changes)return new WP_Error('oai_noop','No WooCommerce changes supplied',array('status'=>400));
