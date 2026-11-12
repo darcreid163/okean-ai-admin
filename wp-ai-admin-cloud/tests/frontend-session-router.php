@@ -25,6 +25,13 @@ namespace WPAICloudGateway {
             return QuotaPolicy::window($terms,strtotime('2026-10-22T12:00:00Z'))+$terms+
                 ['plan'=>$plan,'used'=>7,'reserved'=>1,'remaining'=>$terms['limit']-8,'timezone'=>'UTC','policy_version'=>$policy['version'],'batch_available'=>false];
         }
+        public function ledger(string $owner,int $limit=50,?array $allowedSiteIds=null): array {
+            $rows=[
+                ['request_key'=>'fixture-private-request-key','site_id'=>'owned-site','period'=>'2026-10-22','tool'=>'wp_get_site','state'=>'succeeded','policy_version'=>'fixture-v1','created_at'=>1792670400,'updated_at'=>1792670400,'charged_units'=>1],
+                ['request_key'=>'fixture-private-uncertain-key','site_id'=>'second-site','period'=>'2026-10-22','tool'=>'elementor_create_draft','state'=>'uncertain','policy_version'=>'fixture-v1','created_at'=>1792670460,'updated_at'=>1792670460,'charged_units'=>null,'pending_units'=>1]
+            ];
+            return array_slice($rows,0,max(1,min(100,$limit)));
+        }
         public function connect(string $owner,string $home,string $token,int $now): void {echo '<p>fixture-connect-called</p>';}
     }
     final class Security {public static function canonical(mixed $value): string {return json_encode($value,JSON_THROW_ON_ERROR);}}
