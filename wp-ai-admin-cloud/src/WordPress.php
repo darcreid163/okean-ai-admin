@@ -88,7 +88,7 @@ final class WordPress {
     private static function safe(callable $fn): \WP_REST_Response {
         try { return $fn(); }
         catch (Fault $e) { $r=self::response(['error'=>$e->reason],$e->status); if ($e->status===401) $r->header('WWW-Authenticate',Surface::challenge()); return $r; }
-        catch (\Throwable $e) { return self::response(['error'=>'cloud_service_unavailable'],503); }
+        catch (\Throwable $e) { error_log('WP AI Admin Cloud: '.get_class($e).': '.$e->getMessage()); return self::response(['error'=>'cloud_service_unavailable'],503); }
     }
     public static function provisioningPermission(): bool|\WP_Error {
         // WordPress validates application passwords or cookie+REST nonce. Cloud bearer tokens never authorize provisioning.
