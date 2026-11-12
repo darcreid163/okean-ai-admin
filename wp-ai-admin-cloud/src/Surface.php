@@ -111,6 +111,11 @@ final class Surface {
         try { return Security::home(wp_unslash($value)); }
         catch(Fault $e) { return ''; }
     }
+    private static function actionCount(int $count): string {
+        $lastTwo=$count%100;$lastOne=$count%10;
+        $word=($lastTwo>=11&&$lastTwo<=14)?'действий':($lastOne===1?'действие':(($lastOne>=2&&$lastOne<=4)?'действия':'действий'));
+        return $count.' '.$word;
+    }
     /** Render only safe ledger metadata; never expose request keys, prompts, arguments or upstream receipts. */
     private static function renderHistory(array $history,array $sites,bool $unavailable=false): void {
         echo '<h2>История действий</h2>';
@@ -132,9 +137,9 @@ final class Surface {
             $state=is_string($row['state']??null)?$row['state']:'';
             $status=$states[$state]??'Неизвестно';
             $units=$row['charged_units']??null;
-            $charge=is_int($units)&&$units>=0?(string)$units.' д.':'Ожидает сверки';
+            $charge=is_int($units)&&$units>=0?self::actionCount($units):'Ожидает сверки';
             $pending=$row['pending_units']??null;
-            if(is_int($pending)&&$pending>0)$charge.=' · в обработке: '.$pending;
+            if(is_int($pending)&&$pending>0)$charge.=' · в обработке: '.self::actionCount($pending);
             echo '<tr><td>'.esc_html($date).'</td><td>'.esc_html($siteName).'</td><td><code>'.esc_html($tool).'</code></td><td>'.esc_html($status).'</td><td>'.esc_html($charge).'</td></tr>';
         }
         echo '</tbody></table><p>Показаны последние '.count($history).' записей. Содержимое запросов и ответов инструментов в журнале кабинета не раскрывается.</p>';
