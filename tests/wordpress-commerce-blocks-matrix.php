@@ -103,6 +103,34 @@ try {
         'Variation update plan failed');
     oai_matrix_assert((float)wc_get_product($variation)->get_regular_price()===19.5,
         'Variation plan wrote to WordPress');
+    // Issue #139: the planned `after` must carry the recomputed derived price,
+    // and runtime verification must compare only the requested variation fields.
+    $planned=$change['after']['variations'][0];
+    oai_matrix_assert((float)$planned['price']===21.0,
+        'Variation plan did not recompute derived price from regular_price');
+    $actual_runtime=OAI_WooCommerce::get_full($variable);
+    $match=OAI_WooCommerce::runtime_matches_changes(
+        ['type'=>$actual_runtime['type'],'id'=>$actual_runtime['id'],
+         'variations'=>[['id'=>$variation,'regular_price'=>'21.00','price'=>'21.00']]],
+        ['variations'=>[['id'=>$variation,'regular_price'=>'21.00']]],
+        $actual_runtime,['variations'=>[['id'=>$variation,'regular_price'=>'21.00']]]);
+    oai_matrix_assert($match===true,
+        'Runtime guard rejected a matching requested variation field');
+    $mismatch=OAI_WooCommerce::runtime_matches_changes(
+        ['type'=>$actual_runtime['type'],'id'=>$actual_runtime['id'],
+         'variations'=>[['id'=>$variation,'regular_price'=>'99.00']]],
+        ['variations'=>[['id'=>$variation,'regular_price'=>'21.00']]],
+        $actual_runtime,['variations'=>[['id'=>$variation,'regular_price'=>'21.00']]]);
+    oai_matrix_assert(is_wp_error($mismatch) &&
+        $mismatch->get_error_code()==='oai_woo_runtime',
+        'Runtime guard accepted a diverging variation price');
+    $sale_clear=oai_matrix_ok(OAI_WooCommerce::patch($variable,[
+        'variations'=>[['id'=>$variation,'sale_price'=>'']]
+    ]),'Plan variation sale clearing');
+    $cleared=$sale_clear['after']['variations'][0];
+    oai_matrix_assert((string)$cleared['sale_price']==='' &&
+        (float)$cleared['price']===(float)$cleared['regular_price'],
+        'Clearing a variation sale price did not restore the derived price');
     $cross=OAI_WooCommerce::patch($simple,[
         'variations'=>[['id'=>$variation,'regular_price'=>'25.00']]
     ]);

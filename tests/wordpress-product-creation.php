@@ -56,4 +56,22 @@ pcAssert($wins===1&&$denied===5,'Concurrent product winner count '.$wins.'/'.$de
 pcAssert(pcCount()===$start+4&&OAI_DB::count_all()===$ops+4,'Concurrent products/ops mismatch '.pcCount().'/'.OAI_DB::count_all());
 wp_set_current_user(0);pcErr(pcCreate($payload,'product-anonymous-123456'),'oai_woo_permission');
 pcAssert(pcCount()===$start+4,'Anonymous created product');
+// Issue #140: invalid variation input must be rejected before any product or
+// operation row exists, and a duplicate child SKU must not leave orphan data.
+// Restore the authorized actor: validation, not permissions, is under test.
+wp_set_current_user((int)$actor);
+$preCount=pcCount();$preOps=OAI_DB::count_all();
+pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Negative Variation','variations'=>[['regular_price'=>'-5']]],'product-invalid-neg-123456'),'oai_woo_price');
+pcAssert(pcCount()===$preCount&&OAI_DB::count_all()===$preOps,'Negative variation price left a product or operation');
+pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Sale Variation','variations'=>[['regular_price'=>'10.00','sale_price'=>'20.00']]],'product-invalid-sale-123456'),'oai_woo_sale_price');
+pcAssert(pcCount()===$preCount&&OAI_DB::count_all()===$preOps,'Sale-above-regular variation left a product or operation');
+pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Dup SKU Variation','variations'=>[['sku'=>'DUP-SKU-CI','regular_price'=>'5.00'],['sku'=>'DUP-SKU-CI','regular_price'=>'6.00']]],'product-dup-sku-123456'),'oai_woo_variation_duplicate_sku');
+pcAssert(pcCount()===$preCount&&OAI_DB::count_all()===$preOps,'Duplicate child SKU left a product or operation');
+pcErr(pcCreate(['type'=>'variable','name'=>'WP AI Unknown Field','variations'=>[['regular_price'=>'5.00','bogus'=>'1']]],'product-unknown-field-123456'),'oai_woo_variation_field');
+pcAssert(pcCount()===$preCount&&OAI_DB::count_all()===$preOps,'Unknown variation field left a product or operation');
+global $wpdb;
+pcAssert((int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type='product_variation'")===0,'Orphan variation row survived rejected input');
+// Comma-decimal input is normalised, not rejected (issue #140 requires parity).
+$comma=pcCreate(['type'=>'variable','name'=>'WP AI Comma Decimal','variations'=>[['regular_price'=>'12,50']]],'product-comma-decimal-123456');
+pcAssert(!is_wp_error($comma),'Comma-decimal variation was rejected: '.(is_wp_error($comma)?$comma->get_error_code():''));
 echo "PASS product creation admission: ".ProductCreationChecks::$count." assertions and six WP processes\n";
