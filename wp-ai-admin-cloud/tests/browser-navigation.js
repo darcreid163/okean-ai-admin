@@ -70,6 +70,11 @@ async function ready(url) {
       verify((await page.content()).includes('second-site'), 'Second site not shown after callback');
       verify((await page.content()).includes('Подключено сайтов: <strong>2</strong>'), 'Multi-site account count wrong');
       verify((await page.content()).includes('Осталось: 1992'), 'Shared account balance missing');
+      const dashboard = await page.content();
+      verify(dashboard.includes('История действий'), 'Account action history section missing');
+      verify(dashboard.includes('wp_get_site') && dashboard.includes('elementor_create_draft'), 'Safe ledger action rows missing');
+      verify(dashboard.includes('Требует сверки') && dashboard.includes('в обработке: 1'), 'Uncertain ledger state/reservation missing');
+      verify(!dashboard.includes('fixture-private-request-key') && !dashboard.includes('fixture-private-uncertain-key'), 'Private ledger request key leaked into account dashboard');
       await page.locator('input[name=home]').first().fill('https://okean.market');
       await Promise.all([
         page.waitForNavigation({waitUntil:'load'}),
