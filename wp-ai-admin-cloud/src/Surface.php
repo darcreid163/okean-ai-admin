@@ -83,7 +83,7 @@ final class Surface {
                 'site_dns_unavailable'=>'Сервер не смог определить адрес сайта. Проверьте DNS домена и повторите попытку.',
                 'private_site_address_blocked'=>'Адрес сайта не является публичным. Нужен доступный в интернете HTTPS-сайт.',
                 'public_https_site_required','invalid_site_host','invalid_site_path'=>'Введите полный адрес WordPress-сайта вида https://example.ru без пути входа и параметров.',
-                'pilot_site_count_limit'=>'Достигнут тестовый лимит регистраций сайтов для этого аккаунта.',
+                'pilot_site_count_limit'=>'Достигнут лимит активных сайтов для этого аккаунта. Отключите ненужный сайт и повторите подключение.',
                 'site_already_registered'=>'Этот WordPress-сайт уже подключён к другому аккаунту WP AI Admin. Для защиты от перехвата сайта повторное подключение другим аккаунтом запрещено. Используйте другой тестовый сайт либо сначала отключите сайт в аккаунте-владельце.',
                 default=>$e->reason
             };
@@ -98,6 +98,13 @@ final class Surface {
         // Only call with Pairing::start's verified site URL or the registered OAuth redirect.
         // Meta refresh starts a new navigation, so the strict form-action policy remains intact.
         echo '<meta http-equiv="refresh" content="'.esc_attr('0;url='.$url).'"><p>Продолжаем подключение…</p><p><a href="'.esc_url($url).'" rel="noreferrer">Продолжить подключение</a></p>';
+    }
+    /** A suggested site URL is display-only input; pairing still proves ownership on the target site. */
+    private static function suggestedHome(): string {
+        $value=$_GET['home']??'';
+        if(!is_string($value)||$value===''||strlen($value)>512)return '';
+        try { return Security::home(wp_unslash($value)); }
+        catch(Fault $e) { return ''; }
     }
     private static function portal(string $owner,Core $core): void {
         if(($_GET['connected']??'')==='1')echo '<p>Сайт подключён. Теперь его можно выбрать при подключении ИИ.</p>';
@@ -139,11 +146,11 @@ final class Surface {
             echo '</tbody></table><p>После добавления нового сайта повторите авторизацию WP AI Admin в ChatGPT и отметьте все нужные сайты.</p>';
         }
         echo '<h2>Подключение ChatGPT</h2><p>Используйте центральный MCP: <code>'.esc_html(Settings::endpoint()).'</code>. При авторизации выберите нужные сайты.</p><h2>История действий</h2><p>История операций доступна в журнале Cloud Gateway и на подключённых сайтах.</p>';
-        echo '<h2>Добавить сайт</h2><p>Укажите адрес, войдите на этом сайте как администратор и подтвердите подключение. Сайт появится в этом кабинете автоматически.</p>';
+        echo '<h2>Добавить сайт</h2><p>Адрес текущего сайта подставляется автоматически. При необходимости его можно изменить вручную. Затем войдите на целевом сайте как администратор и подтвердите подключение.</p>';
         echo '<form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
-        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><button type="submit" name="connect_mode" value="automatic">Подключить автоматически</button> <button type="submit" name="connect_mode" value="check">Проверить связь</button></form>';
+        echo '<label>Адрес WordPress-сайта <input type="url" name="home" value="' . esc_attr(self::suggestedHome()) . '" placeholder="https://example.ru" required></label><button type="submit" name="connect_mode" value="automatic">Подключить автоматически</button> <button type="submit" name="connect_mode" value="check">Проверить связь</button></form>';
         echo '<details><summary>Подключить существующим MCP-токеном</summary><form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
-        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><label>MCP-токен администратора <input type="password" name="site_token" autocomplete="new-password" required></label><button type="submit">Подключить сайт</button></form></details>';
+        echo '<label>Адрес WordPress-сайта <input type="url" name="home" value="' . esc_attr(self::suggestedHome()) . '" placeholder="https://example.ru" required></label><label>MCP-токен администратора <input type="password" name="site_token" autocomplete="new-password" required></label><button type="submit">Подключить сайт</button></form></details>';
     }
     private static function paired(string $owner): void {
         $state=$_GET['state']??'';$code=$_GET['code']??'';$error=$_GET['error']??'';
