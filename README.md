@@ -25,10 +25,12 @@ The old `wp-ai-cloud` pilot 0.1.0 and former bundled Cloud Core 0.3.6 are **not*
 
 | Plan | Successful actions | Quota period |
 |---|---:|---|
-| Free | 100 | month |
-| Pro | 500 | day |
-| Business | 2,000 | day |
-| BusinessPro | 5,000 | day |
+| Free | 100 | day |
+| Daily | 500 | day |
+| Pro | 2,000 | day |
+| Business | 5,000 | day |
+
+Canonical tariff source: `wp-ai-admin-cloud/config/plans.json` (`tariffs-v3-20261106`); all quota periods are UTC calendar days. Legacy accounts keep their previously approved monthly terms until a separately authorized migration.
 
 Successful reads/Sandbox calls count; every successful Batch object is one action; failed calls/rollback/idempotent retry are not billed again. **Gateway Ledger is sole charging authority, no telemetry charging, no automatic payment debit.** These are required rules; the live v2 tariff migration and Batch activation are not assumed complete.
 
