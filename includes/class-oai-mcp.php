@@ -337,6 +337,8 @@ class OAI_MCP {
    'woodmart.list_settings'=>'Read bounded Woodmart field descriptors with base/preset distinction; restricted fields are excluded.',
    'woodmart.get_setting'=>'Read one Woodmart setting with native value format, saved base value and preset-override flag.',
    'wp.inspect_html'=>'Inspect public or authenticated draft server-rendered HTML. JavaScript is not executed.',
+   'wp.visual_qa_start'=>'Create a short-lived signed browser Visual QA probe for one editable WordPress post. It does not publish or modify content; opening the returned URL executes viewport measurements and stores a bounded report.',
+   'system.page_qa_run'=>'Run unified page QA. First call with post_id performs static DOM/accessibility/link checks and creates a browser Visual QA probe. After opening browser_url, call the same tool again with post_id and probe_id to receive one combined PASS/WARN report. It never publishes or changes page content.',
    'wp.visual_qa_result'=>'Read a completed browser Visual QA report for desktop, tablet and mobile viewports.',
    'wp.file.outline'=>'List file landmarks and line numbers without returning the full file; use file.read with a line range next.',
    'file.read'=>'Read a scoped theme file; start_line and end_line return a bounded excerpt with snapshot hash.',
@@ -363,8 +365,6 @@ class OAI_MCP {
    $tools[]=self::tool($name,$description,$schemas[$name]??array('type'=>'object'),array('readOnlyHint'=>true,'destructiveHint'=>false));
   }
   $tools[]=self::tool('woodmart.update_setting_sandbox','Create a normal sandbox operation for one Woodmart base setting. Native normalization, full-option/preset conflict guards, verification, CSS invalidation and exact rollback; never writes live during planning.',$schemas['woodmart.update_setting_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>true));
-  $tools[]=self::tool('wp.visual_qa_start','Create a short-lived signed browser Visual QA probe for one editable WordPress post. It does not publish or modify content; opening the returned URL executes viewport measurements and stores a bounded report.',$schemas['wp.visual_qa_start'],array('readOnlyHint'=>false,'destructiveHint'=>false));
-  $tools[]=self::tool('system.page_qa_run','Run unified page QA. First call with post_id performs static DOM/accessibility/link checks and creates a browser Visual QA probe. After opening browser_url, call the same tool again with post_id and probe_id to receive one combined PASS/WARN report. It never publishes or changes page content.',$schemas['system.page_qa_run'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool(
    'system.regression_run',
    'Run a strictly sequential reversible regression suite inside an active scoped Test Automation session. Each mutation uses the normal sandbox lifecycle and must be rolled back and verified before the next scenario starts.',
