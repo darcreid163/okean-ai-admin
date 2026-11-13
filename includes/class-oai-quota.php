@@ -27,6 +27,9 @@ class OAI_Quota {
  }
 
  public static function is_engineering_access(){
+  // A paired site is commercially metered by Cloud Core. It must never grant
+  // itself an unlimited local plan, even if a local-owner license exists.
+  if(class_exists('OAI_Gateway_Pairing')&&OAI_Gateway_Pairing::is_connected())return false;
   $s=OAI_License::status();
   return !empty($s['active'])
    && ($s['mode']??'')===OAI_License::LOCAL_MODE

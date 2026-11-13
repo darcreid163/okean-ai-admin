@@ -5,6 +5,8 @@ class OAI_Gateway_Pairing {
  const GATEWAY='https://wpaiadmin.ru';
  const CALLBACK='https://wpaiadmin.ru/wpai-cloud/pair/callback';
  const CREDENTIAL_PREFIX='oai_pair_credential_';
+ const CONNECTED_OPTION='oai_gateway_paired';
+ private static $connected=null;
  public static function boot(){
   add_action('admin_post_oai_gateway_pair',array(__CLASS__,'authorize'));
   add_action('admin_post_nopriv_oai_gateway_pair',array(__CLASS__,'authorize'));
@@ -22,6 +24,28 @@ class OAI_Gateway_Pairing {
   if(!is_string($value)||!preg_match('/^[A-Za-z0-9_-]{43}$/D',$value)||!function_exists('sodium_crypto_sign_verify_detached'))return false;
   $decoded=base64_decode(strtr($value,'-_','+/').'=',true);
   return $decoded!==false&&defined('SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES')&&strlen($decoded)===SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES;
+ }
+ private static function has_credentials(){
+  global $wpdb;
+  if(!is_object($wpdb)||!method_exists($wpdb,'get_var')||!method_exists($wpdb,'esc_like')||!isset($wpdb->options))return false;
+  $like=$wpdb->esc_like(self::CREDENTIAL_PREFIX).'%';
+  return (bool)$wpdb->get_var($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 1",$like));
+ }
+ /**
+  * A paired site must not fall back to unlimited local usage. Scanning the
+  * credentials also covers pairings created before the flag option existed.
+  */
+ public static function is_connected(){
+  if(self::$connected!==null)return self::$connected;
+  if(get_option(self::CONNECTED_OPTION,false)){
+   if(self::has_credentials())return self::$connected=true;
+   // Self-heal a stale flag left behind by manual cleanup or a database restore.
+   delete_option(self::CONNECTED_OPTION);
+   return self::$connected=false;
+  }
+  if(!self::has_credentials())return self::$connected=false;
+  update_option(self::CONNECTED_OPTION,1,false);
+  return self::$connected=true;
  }
  /**
   * Paired-site read key. Cloud and Native derive the same value from the
@@ -70,6 +94,7 @@ class OAI_Gateway_Pairing {
   $record=array('user_id'=>$r['user_id'],'account_id'=>$r['account_id'],'account_label'=>$r['account_label'],'site_url'=>untrailingslashit(home_url('/')),'created_at'=>$now,'signing_public_key'=>$r['signing_public_key']??null,'signing_key_id'=>$r['signing_key_id']??null,'usage_projection'=>$r['usage_projection']??null);
   if(($r['usage_projection']??null)==='wpai-site-usage-v1')$record['status_key']=self::site_status_key($r['state'],$p['verifier']);
   if(!add_option(self::CREDENTIAL_PREFIX.$hash,$record,'',false))return self::fail('oai_pair_conflict',409);
+ update_option(self::CONNECTED_OPTION,1,false);
   return array('token'=>$token,'site_url'=>untrailingslashit(home_url('/')));
  }
  public static function exchange_route($req){
@@ -90,7 +115,9 @@ class OAI_Gateway_Pairing {
   if(!current_user_can('manage_options')||!is_string($hash)||!preg_match('/^[a-f0-9]{64}$/D',$hash))return self::fail('oai_pair_revoke_denied',403);
   $key=self::CREDENTIAL_PREFIX.$hash;$r=get_option($key,null);
   if(!is_array($r)||(int)$r['user_id']!==get_current_user_id())return self::fail('oai_pair_revoke_denied',403);
-  delete_option($key);delete_option('oai_cloud_usage_'.substr($hash,0,32));return true;
+  delete_option($key);delete_option('oai_cloud_usage_'.substr($hash,0,32));
+  if(!self::has_credentials()){delete_option(self::CONNECTED_OPTION);self::$connected=false;}
+  return true;
  }
  public static function cleanup($key){
   if(!is_string($key)||!preg_match('/^oai_pair_code_[a-f0-9]{64}$/D',$key))return;
