@@ -62,7 +62,7 @@ class OAI_MCP {
   return self::response($id,null,array('code'=>-32010,'message'=>'OAuth scope required: '.$scope,'_meta'=>$meta));
  }
  private static function tool_requires_write($name,$args){
-  if(in_array($name,array('woodmart_update_setting_sandbox','wp_option_update_sandbox','system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_update_order_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_import_url_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','wordpress_create_draft','wordpress_update_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
+  if(in_array($name,array('woodmart_update_setting_sandbox','wp_option_update_sandbox','system_regression_run','system_regression_matrix','system_operations_cleanup','batch_create','batch_resume','batch_pause','batch_retry','batch_cancel','batch_rollback','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_update_order_sandbox','woocommerce_create_product_sandbox','woocommerce_create_coupon_sandbox','woocommerce_update_coupon_sandbox','media_upload_sandbox','media_import_url_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','file_write_sandbox','wordpress_create_draft','wordpress_update_sandbox','operation_reject','operation_approve','operation_apply','operation_rollback'),true)) return true;
   if($name==='wordpress_execute') return sanitize_key((string)($args['mode']??'read'))!=='read';
   return false;
  }
@@ -214,6 +214,8 @@ class OAI_MCP {
    ,'woocommerce.search_orders'=>array('type'=>'object','properties'=>array('page'=>array('type'=>'integer','minimum'=>1,'maximum'=>10000),'limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100),'status'=>array('type'=>'string')),'additionalProperties'=>false)
    ,'woocommerce.search_customers'=>array('type'=>'object','properties'=>array('query'=>array('type'=>'string'),'email'=>array('type'=>'string'),'page'=>array('type'=>'integer','minimum'=>1,'maximum'=>10000),'limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100)),'additionalProperties'=>false)
    ,'woocommerce.get_customer'=>array('type'=>'object','required'=>array('customer_id'),'properties'=>array('customer_id'=>array('type'=>'integer','minimum'=>1)),'additionalProperties'=>false)
+   ,'woocommerce.search_coupons'=>array('type'=>'object','properties'=>array('search'=>array('type'=>'string'),'status'=>array('type'=>'string'),'page'=>array('type'=>'integer','minimum'=>1,'maximum'=>10000),'limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>100)),'additionalProperties'=>false)
+   ,'woocommerce.get_coupon'=>array('type'=>'object','required'=>array('coupon_id'),'properties'=>array('coupon_id'=>array('type'=>'integer','minimum'=>1)),'additionalProperties'=>false)
    ,'woocommerce.update_product_sandbox'=>array('type'=>'object','required'=>array('product_id','changes'),'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1),'changes'=>array('type'=>'object','properties'=>array('regular_price'=>array('type'=>array('string','number')),'sale_price'=>array('type'=>array('string','number')),'stock_quantity'=>array('type'=>array('integer','number','null')),'stock_status'=>array('type'=>'string','enum'=>array('instock','outofstock','onbackorder')),'manage_stock'=>array('type'=>'boolean')),'additionalProperties'=>false)),'additionalProperties'=>false)
    ,'operation.status'=>array('type'=>'object','required'=>array('id'),'properties'=>array('id'=>array('type'=>'integer','minimum'=>1)),'additionalProperties'=>false)
    ,'operation.diff'=>array('type'=>'object','required'=>array('id'),'properties'=>array('id'=>array('type'=>'integer','minimum'=>1)),'additionalProperties'=>false)
@@ -312,6 +314,29 @@ class OAI_MCP {
    'line_items'=>array('type'=>'array','items'=>array('type'=>'object','required'=>array('id','quantity'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1),'quantity'=>array('type'=>'number','exclusiveMinimum'=>0,'maximum'=>1000000))))
   ));
   $schemas['woocommerce.update_order_sandbox']=array('type'=>'object','required'=>array('order_id','changes'),'additionalProperties'=>false,'properties'=>array('order_id'=>array('type'=>'integer','minimum'=>1),'changes'=>$order_changes));
+  $coupon_changes=array('type'=>'object','additionalProperties'=>false,'minProperties'=>1,'properties'=>array(
+   'code'=>array('type'=>'string','minLength'=>1,'maxLength'=>200),
+   'description'=>array('type'=>'string'),
+   'discount_type'=>array('type'=>'string'),
+   'amount'=>array('type'=>array('string','number')),
+   'date_expires'=>array('type'=>array('string','integer','null')),
+   'usage_limit'=>array('type'=>'integer','minimum'=>0),
+   'usage_limit_per_user'=>array('type'=>'integer','minimum'=>0),
+   'limit_usage_to_x_items'=>array('type'=>array('integer','null'),'minimum'=>0),
+   'free_shipping'=>array('type'=>'boolean'),
+   'product_ids'=>array('type'=>'array','items'=>array('type'=>'integer','minimum'=>1),'maxItems'=>200),
+   'excluded_product_ids'=>array('type'=>'array','items'=>array('type'=>'integer','minimum'=>1),'maxItems'=>200),
+   'product_categories'=>array('type'=>'array','items'=>array('type'=>'integer','minimum'=>1),'maxItems'=>200),
+   'excluded_product_categories'=>array('type'=>'array','items'=>array('type'=>'integer','minimum'=>1),'maxItems'=>200),
+   'exclude_sale_items'=>array('type'=>'boolean'),
+   'minimum_amount'=>array('type'=>array('string','number')),
+   'maximum_amount'=>array('type'=>array('string','number')),
+   'email_restrictions'=>array('type'=>'array','items'=>array('type'=>'string'),'maxItems'=>100),
+   'individual_use'=>array('type'=>'boolean')
+  ));
+  $create_coupon_changes=$coupon_changes;$create_coupon_changes['required']=array('code');
+  $schemas['woocommerce.create_coupon_sandbox']=array('type'=>'object','required'=>array('coupon'),'additionalProperties'=>false,'properties'=>array('coupon'=>$create_coupon_changes));
+  $schemas['woocommerce.update_coupon_sandbox']=array('type'=>'object','required'=>array('coupon_id','changes'),'additionalProperties'=>false,'properties'=>array('coupon_id'=>array('type'=>'integer','minimum'=>1),'changes'=>$coupon_changes));
   $create_product_changes=$product_changes;$create_product_changes['properties']['type']=array('type'=>'string','enum'=>array('simple','variable'));
   $schemas['woocommerce.create_product_sandbox']=array('type'=>'object','required'=>array('product'),'additionalProperties'=>false,'properties'=>array('product'=>$create_product_changes,'idempotency_key'=>array('type'=>'string','minLength'=>16,'maxLength'=>128)));
   $schemas['media.upload_sandbox']=array('type'=>'object','required'=>array('filename','content_base64'),'additionalProperties'=>false,'properties'=>array('filename'=>array('type'=>'string','minLength'=>1),'content_base64'=>array('type'=>'string','minLength'=>4),'mime_type'=>array('type'=>'string'),'title'=>array('type'=>'string'),'alt'=>array('type'=>'string')));
@@ -329,7 +354,7 @@ class OAI_MCP {
    'wp.get_site','wp.inspect_html','wp.visual_qa_result','wp.get_theme_mods','wp.list_plugins','wp.list_themes','wp.list_post_types','wp.list_taxonomies','wp.list_media','wp.list_menus','wp.list_options','wp.list_users','wp.list_comments','wp.list_widgets','wp.health','wp.diagnostics','wp.list_operations','operation.get','operation.verify','operation.proof','operation.preview_link',
    'wp.list_files','wp.search_files','wp.execution_readiness','elementor.get_structure','elementor.get_widget','elementor.get_schema','elementor.get_globals','elementor.get_container','elementor.get_page_layout','woocommerce.get_product','woocommerce.get_product_full','woocommerce.get_order','operation.get_receipt',
    'ability.list','ability.get','gutenberg.get_blocks','gutenberg.get_outline','gutenberg.locate_block','builder.catalog','builder.detect','system.capabilities',
-   'wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','woocommerce.search_customers','woocommerce.get_customer','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.list','batch.status','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_history','system.coverage_report','system.security_fuzz'
+   'wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_routes','wp.rest_read','file.read','wp.file.outline','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','woocommerce.search_customers','woocommerce.get_customer','woocommerce.search_coupons','woocommerce.get_coupon','operation.status','operation.diff','preview.get','verify.operation','proof.operation','elementor.inspect_page','elementor.inspect_widget','system.manifest','batch.plan','batch.preflight','batch.dry_run','batch.list','batch.status','batch.receipt','batch.proof','file.diff','system.tool_catalog','system.self_test','system.security_status','system.test_automation_status','system.regression_history','system.coverage_report','system.security_fuzz'
   );
   $tools=array();
   $descriptions=array(
@@ -350,6 +375,8 @@ class OAI_MCP {
    'woocommerce.get_order'=>'Read one WooCommerce order with line items and totals. Customer contact and address PII are redacted unless the caller can edit shop orders.',
    'woocommerce.search_customers'=>'Read paginated registered WooCommerce customers. Contact and address PII are returned only to callers with manage_woocommerce or list_users; other authorized callers receive a redacted projection.',
    'woocommerce.get_customer'=>'Read one registered WooCommerce customer. Contact and address PII are returned only to callers with manage_woocommerce or list_users; other authorized callers receive a redacted projection.',
+   'woocommerce.search_coupons'=>'Read paginated WooCommerce coupons with discount, usage-limit, expiry, product/category and email-restriction fields. Requires manage_woocommerce or edit_shop_coupons.',
+   'woocommerce.get_coupon'=>'Read one WooCommerce coupon by id. Requires manage_woocommerce or edit_shop_coupons.',
    'batch.preflight'=>'Validate a dependency-aware batch graph and execution order without executing any child operation.',
    'batch.dry_run'=>'Validate executor support, dependency depth, payload size and expected sandbox pause points without creating a job.',
    'batch.list'=>'List resumable batch jobs created by this MCP client.',
@@ -391,6 +418,8 @@ class OAI_MCP {
   $tools[]=self::tool('woocommerce.patch','Create a sandbox WooCommerce product patch; live data is not written.',array('type'=>'object','required'=>array('product_id','changes'),'additionalProperties'=>false,'properties'=>array('product_id'=>array('type'=>'integer','minimum'=>1),'changes'=>array('type'=>'object'))),array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.update_product_sandbox','Modernized WooCommerce sandbox update. Strict product fields only; live data is not written until human approval.', $schemas['woocommerce.update_product_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.update_order_sandbox','Create a sandbox WooCommerce order update for status, billing/shipping addresses, customer note or existing line item quantities. Totals are recalculated by WooCommerce; live data is not written until human approval.', $schemas['woocommerce.update_order_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('woocommerce.create_coupon_sandbox','Create a WooCommerce coupon sandbox operation. A duplicate code is rejected before any write; live data is not written until human approval. Rollback deletes only the coupon created by this operation.',$schemas['woocommerce.create_coupon_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
+  $tools[]=self::tool('woocommerce.update_coupon_sandbox','Create a sandbox WooCommerce coupon update for discount, usage, expiry, restrictions and totals. Duplicate codes and no-op updates are rejected before any write; live data is not written until human approval.',$schemas['woocommerce.update_coupon_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('woocommerce.create_product_sandbox','Create a WooCommerce product as a draft sandbox artifact. Apply commits the draft to the normal lifecycle; rollback deletes only the product created by this operation.',$schemas['woocommerce.create_product_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('media.upload_sandbox','Upload a decodable JPEG, PNG, GIF or WebP image (up to 10 MiB and 20 megapixels) as a private sandbox attachment. Filename, optional MIME and bytes must agree; server image decoder required. Apply activates the attachment; rollback removes only the attachment created by this operation.',$schemas['media.upload_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('media.import_url_sandbox','Safely download a public HTTP(S) JPEG, PNG, GIF or WebP image (up to 10 MiB and 20 megapixels) into a private sandbox attachment. Validates URL, size, real MIME and image decoding, normalizing the filename extension. Apply activates the attachment and rollback deletes it.',$schemas['media.import_url_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
@@ -470,6 +499,8 @@ class OAI_MCP {
    case 'woocommerce_search_orders':$out=OAI_WooCommerce::orders(absint($a['page']??1),absint($a['limit']??20),(string)($a['status']??'any'));break;
    case 'woocommerce_search_customers':$out=OAI_WooCommerce::customers((string)($a['query']??''),(string)($a['email']??''),absint($a['page']??1),absint($a['limit']??20),OAI_WooCommerce::customer_pii_allowed());break;
    case 'woocommerce_get_customer':$cid=absint($a['customer_id']??0);$rr=new WP_REST_Request('GET','/okean-ai/v1/read/customers/'.$cid);$rr->set_url_params(array('id'=>$cid));$out=OAI_REST::woocommerce_customer($rr);break;
+   case 'woocommerce_search_coupons':$out=OAI_WooCommerce::coupons(absint($a['page']??1),absint($a['limit']??20),(string)($a['search']??''),(string)($a['status']??'any'));break;
+   case 'woocommerce_get_coupon':$cid=absint($a['coupon_id']??0);$rr=new WP_REST_Request('GET','/okean-ai/v1/read/coupons/'.$cid);$rr->set_url_params(array('id'=>$cid));$out=OAI_REST::woocommerce_coupon($rr);break;
    case 'woocommerce_get_order':$oid=absint($a['order_id']??0);$rr=new WP_REST_Request('GET','/okean-ai/v1/read/orders/'.$oid);$rr->set_url_params(array('id'=>$oid));$out=OAI_REST::woocommerce_order($rr);break;
    case 'operation_status':
    case 'operation_diff':$oid=absint($a['id']??0);$rr=new WP_REST_Request('GET','/okean-ai/v1/operations/'.$oid);$rr->set_url_params(array('id'=>$oid));$out=OAI_REST::operation($rr);break;
@@ -592,6 +623,8 @@ class OAI_MCP {
    case 'woocommerce_update_product_sandbox':
    case 'woocommerce_patch':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_patch($r);break;
    case 'woocommerce_update_order_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/order-patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_order_patch($r);break;
+   case 'woocommerce_create_coupon_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/coupon-create');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_coupon_create($r);break;
+   case 'woocommerce_update_coupon_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/coupon-patch');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::woocommerce_coupon_patch($r);break;
    case 'elementor_patch_container_settings':
     $r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch');$r->set_param('target',absint($a['post_id']??0).':'.sanitize_text_field((string)($a['container_id']??'')));$r->set_param('changes',is_array($a['changes']??null)?$a['changes']:array());$out=OAI_REST::elementor_patch($r);break;
    case 'elementor_patch_page_layout':$out=OAI_P0::elementor_page_layout($a);break;
@@ -623,7 +656,7 @@ class OAI_MCP {
     return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin unless AI Lifecycle Control is active'));
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
   }
-  $sandbox_tools=array('woodmart_update_setting_sandbox','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_update_order_sandbox','woocommerce_create_product_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox','wordpress_create_draft','wordpress_update_sandbox');
+  $sandbox_tools=array('woodmart_update_setting_sandbox','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_update_order_sandbox','woocommerce_create_product_sandbox','woocommerce_create_coupon_sandbox','woocommerce_update_coupon_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox','wordpress_create_draft','wordpress_update_sandbox');
   if(!is_wp_error($out) && in_array($name,$sandbox_tools,true) && is_array($out) && !empty($out['id']) && class_exists('OAI_Test_Automation')){
    $tag=OAI_Test_Automation::tag_operation(absint($out['id']),$raw_name,(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));
    if(is_array($tag))$out['test_automation']=$tag;

@@ -139,6 +139,32 @@ class OAI_Verify {
    return $result;
   }
 
+  if($row['type']==='woocommerce_coupon'){
+   $created=strpos((string)$row['target'],'new:')===0;
+   if($created&&$phase==='rollback'){
+    $coupon_id=absint($meta['coupon_id']??0);
+    if(!$coupon_id&&class_exists('OAI_WooCommerce'))$coupon_id=OAI_WooCommerce::coupon_id_by_code(substr((string)$row['target'],4));
+    $current=$coupon_id&&class_exists('OAI_WooCommerce')?OAI_WooCommerce::coupon_snapshot_by_id($coupon_id):null;
+    $result['current']=$current;
+    $result['checks'][]=array('name'=>'created_coupon_absent','ok'=>$current===null,'expected'=>false,'actual'=>$current!==null);
+    $result['verified']=self::all_checks_ok($result['checks']);
+    $result['expected_deleted_object']=true;
+    $result['cleanup_effective']=$result['verified'];
+    return $result;
+   }
+   list($exists,$current)=OAI_REST::snapshot_for_verify($row['type'],$row['target']);
+   if(is_wp_error($current)){$result['checks'][]=array('name'=>'read_current','ok'=>false,'message'=>$current->get_error_message());return $result;}
+   $result['current']=$current;
+   $before_exists=array_key_exists('before_exists',$meta)?(bool)$meta['before_exists']:!$created;
+   $after_exists=array_key_exists('after_exists',$meta)?(bool)$meta['after_exists']:true;
+   $expected_exists=$phase==='rollback'?$before_exists:$after_exists;
+   $result['checks'][]=array('name'=>'exists','ok'=>($exists===$expected_exists),'expected'=>$expected_exists,'actual'=>$exists);
+   $same=$exists&&class_exists('OAI_WooCommerce')&&OAI_WooCommerce::coupon_verification_matches($current,$expected);
+   $result['checks'][]=array('name'=>'coupon_semantic_match','ok'=>$same);
+   $result['verified']=self::all_checks_ok($result['checks']);
+   return $result;
+  }
+
   list($exists,$current)=OAI_REST::snapshot_for_verify($row['type'],$row['target']);
   if(is_wp_error($current)){$result['checks'][]=array('name'=>'read_current','ok'=>false,'message'=>$current->get_error_message());return $result;}
   $result['current']=$current;

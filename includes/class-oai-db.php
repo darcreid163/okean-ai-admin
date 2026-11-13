@@ -332,7 +332,7 @@ class OAI_DB {
   global $wpdb;
   if(self::$media_creation!==null)return self::insert_media_creation($data);
   $actor=function_exists('get_current_user_id')?(int)get_current_user_id():0;
-  $guarded=array('woodmart_theme_setting','option_update','post_title','post_excerpt','post_content','woo_product_price','woo_product_stock','woocommerce_product','woocommerce_order','elementor_widget_html','elementor_widget_settings','elementor_page_layout','file_write','media_alt','media_title','media_featured','menu_remove_item','menu_move_item','menu_assign_location');
+  $guarded=array('woodmart_theme_setting','option_update','post_title','post_excerpt','post_content','woo_product_price','woo_product_stock','woocommerce_product','woocommerce_order','woocommerce_coupon','elementor_widget_html','elementor_widget_settings','elementor_page_layout','file_write','media_alt','media_title','media_featured','menu_remove_item','menu_move_item','menu_assign_location');
   if($actor>0&&($data['status']??'')==='pending'&&in_array($data['type']??'',$guarded,true))return self::insert_pending_intent($data,$actor);
   $ok=$wpdb->insert(self::table(),$data);
   if(!$ok)return new WP_Error('oai_db','Could not create operation',array('status'=>500,'db_error'=>$wpdb->last_error));
