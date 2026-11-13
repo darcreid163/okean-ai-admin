@@ -97,14 +97,14 @@ class OAI_Batch_Executor {
   return array(
    // Safe read steps.
    'wp.get_site','wp.read_content','wp.read_post','wp.read_meta','wp.read_option','wp.rest_read',
-   'woocommerce.get_product','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','woocommerce.search_customers','woocommerce.get_customer',
+   'woocommerce.get_product','woocommerce.search_products','woocommerce.get_variations','woocommerce.search_orders','woocommerce.search_customers','woocommerce.get_customer','woocommerce.search_coupons','woocommerce.get_coupon',
    'gutenberg.get_outline','builder.detect','file.read',
    // Write steps create sandbox operations only; never direct live writes.
-   'content.patch','gutenberg.patch','woocommerce.patch','woocommerce.update_product_sandbox',
+   'content.patch','gutenberg.patch','woocommerce.patch','woocommerce.update_product_sandbox','woocommerce.create_coupon_sandbox','woocommerce.update_coupon_sandbox',
    'elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','file.write_sandbox','wordpress.create_draft','wordpress.update_sandbox'
   );
  }
- private static function sandbox_tools(){return array('content.patch','gutenberg.patch','woocommerce.patch','woocommerce.update_product_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','file.write_sandbox','wordpress.create_draft','wordpress.update_sandbox');}
+ private static function sandbox_tools(){return array('content.patch','gutenberg.patch','woocommerce.patch','woocommerce.update_product_sandbox','woocommerce.create_coupon_sandbox','woocommerce.update_coupon_sandbox','elementor.create_draft','elementor.patch_widget','elementor.patch_fragment','elementor.patch_settings','file.write_sandbox','wordpress.create_draft','wordpress.update_sandbox');}
  private static function is_sandbox_tool($tool){return in_array((string)$tool,self::sandbox_tools(),true);}
 
  private static function compact_result($value){
@@ -191,6 +191,8 @@ class OAI_Batch_Executor {
    case 'woocommerce.search_orders':return OAI_WooCommerce::orders(absint($a['page']??1),absint($a['limit']??20),(string)($a['status']??'any'));
    case 'woocommerce.search_customers':return OAI_WooCommerce::customers((string)($a['query']??''),(string)($a['email']??''),absint($a['page']??1),absint($a['limit']??20),OAI_WooCommerce::customer_pii_allowed());
    case 'woocommerce.get_customer':$cid=absint($a['customer_id']??0);$r=new WP_REST_Request('GET','/okean-ai/v1/read/customers/'.$cid);$r->set_url_params(array('id'=>$cid));return OAI_REST::woocommerce_customer($r);
+   case 'woocommerce.search_coupons':return OAI_WooCommerce::coupons(absint($a['page']??1),absint($a['limit']??20),(string)($a['search']??''),(string)($a['status']??'any'));
+   case 'woocommerce.get_coupon':$cid=absint($a['coupon_id']??0);$r=new WP_REST_Request('GET','/okean-ai/v1/read/coupons/'.$cid);$r->set_url_params(array('id'=>$cid));return OAI_REST::woocommerce_coupon($r);
    case 'gutenberg.get_outline':$r=new WP_REST_Request('GET','/okean-ai/v1/read/gutenberg/'.absint($a['post_id']??0));$r->set_url_params(array('id'=>absint($a['post_id']??0)));$r->set_param('view','outline');return OAI_REST::gutenberg_resolved($r);
    case 'builder.detect':return OAI_Adapter_Catalog::detect(absint($a['post_id']??0));
    case 'file.read':$r=new WP_REST_Request('GET','/okean-ai/v1/files/read');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::files_read($r);
@@ -202,6 +204,8 @@ class OAI_Batch_Executor {
    case 'content.patch':$r=new WP_REST_Request('POST','/okean-ai/v1/content/patch');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::content_patch($r);
    case 'gutenberg.patch':$r=new WP_REST_Request('POST','/okean-ai/v1/gutenberg/patch');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::gutenberg_patch($r);
    case 'woocommerce.patch':case 'woocommerce.update_product_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/patch');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::woocommerce_patch($r);
+   case 'woocommerce.create_coupon_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/coupon-create');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::woocommerce_coupon_create($r);
+   case 'woocommerce.update_coupon_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/woocommerce/coupon-patch');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::woocommerce_coupon_patch($r);
    case 'elementor.create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/create-page');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::elementor_create_page($r);
    case 'wordpress.create_draft':$r=new WP_REST_Request('POST','/okean-ai/v1/posts/create');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::post_create_draft($r);
    case 'wordpress.update_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/posts/update');foreach($a as $k=>$v)$r->set_param($k,$v);return OAI_REST::post_update_draft($r);

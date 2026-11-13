@@ -692,5 +692,263 @@ class OAI_WooCommerce {
   return true;
  }
 
+ public static function coupon_read_allowed(){return current_user_can('manage_woocommerce')||current_user_can('edit_shop_coupons');}
+ public static function coupon_create_allowed(){return current_user_can('manage_woocommerce')||current_user_can('publish_shop_coupons');}
+ public static function coupon_update_allowed(){return current_user_can('manage_woocommerce')||current_user_can('edit_shop_coupons');}
+ private static function coupon_types(){return function_exists('wc_get_coupon_types')?array_keys((array)wc_get_coupon_types()):array('fixed_cart','percent','fixed_product');}
+ private static function coupon_date($date){return $date instanceof DateTimeInterface?gmdate('c',$date->getTimestamp()):null;}
+ private static function coupon_load($id){
+  $id=absint($id);if(!$id||get_post_type($id)!=='shop_coupon'||get_post_status($id)==='trash')return null;
+  try{$coupon=new WC_Coupon($id);}catch(Throwable $e){return null;}
+  return $coupon instanceof WC_Coupon&&(int)$coupon->get_id()===$id?$coupon:null;
+ }
+ public static function coupon_snapshot_by_id($id){$coupon=self::coupon_load($id);return $coupon?self::coupon_snapshot($coupon):null;}
+ private static function coupon_snapshot($coupon){
+  return array(
+   'id'=>(int)$coupon->get_id(),
+   'code'=>(string)$coupon->get_code(),
+   'description'=>(string)$coupon->get_description(),
+   'discount_type'=>(string)$coupon->get_discount_type(),
+   'amount'=>(string)$coupon->get_amount(),
+   'date_expires'=>self::coupon_date($coupon->get_date_expires()),
+   'usage_count'=>(int)$coupon->get_usage_count(),
+   'usage_limit'=>(int)$coupon->get_usage_limit(),
+   'usage_limit_per_user'=>(int)$coupon->get_usage_limit_per_user(),
+   'limit_usage_to_x_items'=>$coupon->get_limit_usage_to_x_items()===null?null:(int)$coupon->get_limit_usage_to_x_items(),
+   'free_shipping'=>(bool)$coupon->get_free_shipping(),
+   'product_ids'=>array_values(array_map('intval',(array)$coupon->get_product_ids())),
+   'excluded_product_ids'=>array_values(array_map('intval',(array)$coupon->get_excluded_product_ids())),
+   'product_categories'=>array_values(array_map('intval',(array)$coupon->get_product_categories())),
+   'excluded_product_categories'=>array_values(array_map('intval',(array)$coupon->get_excluded_product_categories())),
+   'exclude_sale_items'=>(bool)$coupon->get_exclude_sale_items(),
+   'minimum_amount'=>(string)$coupon->get_minimum_amount(),
+   'maximum_amount'=>(string)$coupon->get_maximum_amount(),
+   'email_restrictions'=>array_values(array_map('strval',(array)$coupon->get_email_restrictions())),
+   'individual_use'=>(bool)$coupon->get_individual_use(),
+   'date_created'=>self::coupon_date($coupon->get_date_created()),
+   'date_modified'=>self::coupon_date($coupon->get_date_modified())
+  );
+ }
+ private static function coupon_defaults(){
+  return array('id'=>0,'code'=>'','description'=>'','discount_type'=>'fixed_cart','amount'=>'0','date_expires'=>null,'usage_count'=>0,'usage_limit'=>0,'usage_limit_per_user'=>0,'limit_usage_to_x_items'=>null,'free_shipping'=>false,'product_ids'=>array(),'excluded_product_ids'=>array(),'product_categories'=>array(),'excluded_product_categories'=>array(),'exclude_sale_items'=>false,'minimum_amount'=>'0','maximum_amount'=>'0','email_restrictions'=>array(),'individual_use'=>false,'date_created'=>null,'date_modified'=>null);
+ }
+ private static function coupon_code_value($raw){
+  if(!is_scalar($raw))return new WP_Error('oai_woo_coupon_code','Coupon code must be a string',array('status'=>422));
+  $code=function_exists('wc_sanitize_coupon_code')?wc_sanitize_coupon_code((string)$raw):sanitize_text_field((string)$raw);
+  $code=trim((string)$code);
+  // WooCommerce stores coupon codes through wc_format_coupon_code(), which its
+  // own wc_strtolower filter normalizes to lowercase. The sandbox snapshot,
+  // target and Verify must use that same stored form, otherwise a valid Apply
+  // looks like a persistence mismatch.
+  $code=function_exists('wc_format_coupon_code')?wc_format_coupon_code($code):(function_exists('wc_strtolower')?wc_strtolower($code):strtolower($code));
+  $code=trim((string)$code);
+  if($code===''||strlen($code)>200)return new WP_Error('oai_woo_coupon_code','Coupon code must be 1-200 characters',array('status'=>422));
+  return $code;
+ }
+ private static function coupon_amount_value($raw,$type){
+  $normalized=is_scalar($raw)?str_replace(',','.',trim((string)$raw)):'';
+  if($normalized===''||!is_numeric($normalized)||!is_finite((float)$normalized)||(float)$normalized<0||(float)$normalized>1000000000000)return new WP_Error('oai_woo_coupon_amount','Invalid coupon amount',array('status'=>422));
+  if($type==='percent'&&(float)$normalized>100)return new WP_Error('oai_woo_coupon_amount','Percentage coupon amount cannot exceed 100',array('status'=>422));
+  $amount=wc_format_decimal($normalized);
+  // Match WC_Coupon::set_amount(): strip leading zeros but keep a zero before the decimal point.
+  if($amount!==''&&is_string($amount)){$amount=ltrim($amount,'0');if($amount===''||$amount[0]==='.')$amount='0'.$amount;}
+  return $amount;
+ }
+ private static function coupon_expiry_value($raw){
+  if($raw===null||$raw===''||$raw===false)return null;
+  if(is_int($raw)||(is_string($raw)&&preg_match('/^\d+$/D',$raw))){$ts=(int)$raw;if($ts<=0)return new WP_Error('oai_woo_coupon_expiry','Invalid coupon expiry timestamp',array('status'=>422));}
+  elseif(is_string($raw)){$ts=strtotime($raw);if($ts===false)return new WP_Error('oai_woo_coupon_expiry','Invalid coupon expiry date',array('status'=>422));}
+  else return new WP_Error('oai_woo_coupon_expiry','Invalid coupon expiry date',array('status'=>422));
+  return gmdate('c',$ts);
+ }
+ private static function coupon_bool_value($raw,$field){
+  $value=filter_var($raw,FILTER_VALIDATE_BOOLEAN,FILTER_NULL_ON_FAILURE);
+  if($value===null)return new WP_Error('oai_woo_coupon_bool','Invalid coupon boolean field: '.$field,array('status'=>422,'field'=>$field));
+  return (bool)$value;
+ }
+ private static function coupon_int_value($raw,$field){
+  if(is_int($raw))$value=$raw;
+  elseif(is_string($raw)&&preg_match('/^\d+$/D',$raw))$value=(int)$raw;
+  else return new WP_Error('oai_woo_coupon_int','Invalid coupon integer field: '.$field,array('status'=>422,'field'=>$field));
+  if($value<0||$value>1000000000)return new WP_Error('oai_woo_coupon_int','Coupon integer field is out of range: '.$field,array('status'=>422,'field'=>$field));
+  return $value;
+ }
+ private static function coupon_ids_value($raw,$kind,$field){
+  if(!is_array($raw)||count($raw)>200)return new WP_Error('oai_woo_coupon_ids','Coupon '.$field.' must be an array of at most 200 ids',array('status'=>422,'field'=>$field));
+  $ids=array();
+  foreach($raw as $item){
+   if(!is_numeric($item))return new WP_Error('oai_woo_coupon_ids','Invalid coupon '.$field.' id',array('status'=>422,'field'=>$field));
+   $id=absint($item);if(!$id)return new WP_Error('oai_woo_coupon_ids','Invalid coupon '.$field.' id',array('status'=>422,'field'=>$field));
+   if($kind==='product'&&!wc_get_product($id))return new WP_Error('oai_woo_coupon_product','Coupon product not found: '.$id,array('status'=>422,'field'=>$field,'product_id'=>$id));
+   if($kind==='category'&&!term_exists($id,'product_cat'))return new WP_Error('oai_woo_coupon_category','Coupon product category not found: '.$id,array('status'=>422,'field'=>$field,'category_id'=>$id));
+   $ids[]=$id;
+  }
+  return array_values(array_unique($ids));
+ }
+ private static function coupon_emails_value($raw){
+  if(!is_array($raw)||count($raw)>100)return new WP_Error('oai_woo_coupon_emails','Coupon email_restrictions must be an array of at most 100 addresses',array('status'=>422));
+  $emails=array();
+  foreach($raw as $email){
+   if(!is_scalar($email))return new WP_Error('oai_woo_coupon_email','Invalid coupon email restriction',array('status'=>422));
+   $email=sanitize_email(strtolower(trim((string)$email)));
+   if($email===''||!is_email($email))return new WP_Error('oai_woo_coupon_email','Invalid coupon email restriction',array('status'=>422));
+   $emails[]=$email;
+  }
+  return array_values(array_unique($emails));
+ }
+ private static function coupon_changes($changes,$before,$is_create){
+  if(!is_array($changes))return new WP_Error('oai_woo_coupon_changes','Coupon changes must be an object',array('status'=>422));
+  if($is_create&&!array_key_exists('code',$changes))return new WP_Error('oai_woo_coupon_code','Coupon code is required',array('status'=>422));
+  $allowed=array('code','description','discount_type','amount','date_expires','usage_limit','usage_limit_per_user','limit_usage_to_x_items','free_shipping','product_ids','excluded_product_ids','product_categories','excluded_product_categories','exclude_sale_items','minimum_amount','maximum_amount','email_restrictions','individual_use');
+  foreach($changes as $key=>$unused)if(!in_array($key,$allowed,true))return new WP_Error('oai_woo_coupon_field','Coupon field is not allowed: '.$key,array('status'=>400,'allowed'=>$allowed));
+  $after=$before;
+  if(array_key_exists('discount_type',$changes)){
+   $type=sanitize_key((string)$changes['discount_type']);
+   if(!in_array($type,self::coupon_types(),true))return new WP_Error('oai_woo_coupon_type','Invalid coupon discount_type',array('status'=>422,'allowed'=>self::coupon_types()));
+   $after['discount_type']=$type;
+  }
+  if(array_key_exists('amount',$changes)){$amount=self::coupon_amount_value($changes['amount'],$after['discount_type']);if(is_wp_error($amount))return $amount;$after['amount']=$amount;}
+  if(array_key_exists('code',$changes)){$code=self::coupon_code_value($changes['code']);if(is_wp_error($code))return $code;$after['code']=$code;}
+  if(array_key_exists('description',$changes))$after['description']=sanitize_textarea_field((string)$changes['description']);
+  if(array_key_exists('date_expires',$changes)){$expiry=self::coupon_expiry_value($changes['date_expires']);if(is_wp_error($expiry))return $expiry;$after['date_expires']=$expiry;}
+  foreach(array('usage_limit','usage_limit_per_user') as $field)if(array_key_exists($field,$changes)){$value=self::coupon_int_value($changes[$field],$field);if(is_wp_error($value))return $value;$after[$field]=$value;}
+  if(array_key_exists('limit_usage_to_x_items',$changes)){
+   if($changes['limit_usage_to_x_items']===null||$changes['limit_usage_to_x_items']==='')$after['limit_usage_to_x_items']=null;
+   else{$value=self::coupon_int_value($changes['limit_usage_to_x_items'],'limit_usage_to_x_items');if(is_wp_error($value))return $value;$after['limit_usage_to_x_items']=$value>0?$value:null;}
+  }
+  foreach(array('free_shipping','exclude_sale_items','individual_use') as $field)if(array_key_exists($field,$changes)){$value=self::coupon_bool_value($changes[$field],$field);if(is_wp_error($value))return $value;$after[$field]=$value;}
+  foreach(array('product_ids'=>'product','excluded_product_ids'=>'product','product_categories'=>'category','excluded_product_categories'=>'category') as $field=>$kind)if(array_key_exists($field,$changes)){$ids=self::coupon_ids_value($changes[$field],$kind,$field);if(is_wp_error($ids))return $ids;$after[$field]=$ids;}
+  foreach(array('minimum_amount','maximum_amount') as $field)if(array_key_exists($field,$changes)){$raw=is_scalar($changes[$field])?str_replace(',','.',trim((string)$changes[$field])):'';if($raw===''){$after[$field]='0';continue;}if(!is_numeric($raw)||!is_finite((float)$raw)||(float)$raw<0||(float)$raw>1000000000000)return new WP_Error('oai_woo_coupon_total','Invalid coupon '.$field,array('status'=>422,'field'=>$field));$after[$field]=wc_format_decimal($raw);}
+  if(array_key_exists('email_restrictions',$changes)){$emails=self::coupon_emails_value($changes['email_restrictions']);if(is_wp_error($emails))return $emails;$after['email_restrictions']=$emails;}
+  if((float)$after['minimum_amount']>0&&(float)$after['maximum_amount']>0&&(float)$after['minimum_amount']>(float)$after['maximum_amount'])return new WP_Error('oai_woo_coupon_total','Coupon minimum_amount exceeds maximum_amount',array('status'=>422));
+  return $after;
+ }
+ public static function validate_coupon_snapshot($data){
+  if(!is_array($data)||empty($data))return new WP_Error('oai_woo_coupon_snapshot','Invalid WooCommerce coupon snapshot',array('status'=>422));
+  if(!array_key_exists('code',$data))return new WP_Error('oai_woo_coupon_snapshot','Coupon snapshot requires code',array('status'=>422));
+  $code=self::coupon_code_value($data['code']);if(is_wp_error($code))return $code;
+  $types=self::coupon_types();
+  if(!in_array((string)($data['discount_type']??''),$types,true))return new WP_Error('oai_woo_coupon_type','Invalid coupon discount_type',array('status'=>422,'allowed'=>$types));
+  $amount=self::coupon_amount_value($data['amount']??'',(string)$data['discount_type']);if(is_wp_error($amount))return $amount;
+  if(array_key_exists('date_expires',$data)){$expiry=self::coupon_expiry_value($data['date_expires']);if(is_wp_error($expiry))return $expiry;}
+  foreach(array('usage_limit','usage_limit_per_user') as $field)if(array_key_exists($field,$data)){$value=self::coupon_int_value($data[$field],$field);if(is_wp_error($value))return $value;}
+  if(array_key_exists('limit_usage_to_x_items',$data)&&$data['limit_usage_to_x_items']!==null){$value=self::coupon_int_value($data['limit_usage_to_x_items'],'limit_usage_to_x_items');if(is_wp_error($value))return $value;}
+  foreach(array('free_shipping','exclude_sale_items','individual_use') as $field)if(array_key_exists($field,$data)&&!is_bool($data[$field]))return new WP_Error('oai_woo_coupon_bool','Invalid coupon boolean field: '.$field,array('status'=>422,'field'=>$field));
+  foreach(array('product_ids','excluded_product_ids','product_categories','excluded_product_categories','email_restrictions') as $field)if(array_key_exists($field,$data)&&!is_array($data[$field]))return new WP_Error('oai_woo_coupon_snapshot','Invalid coupon list field: '.$field,array('status'=>422,'field'=>$field));
+  foreach(array('minimum_amount','maximum_amount') as $field)if(array_key_exists($field,$data)&&!is_numeric($data[$field]))return new WP_Error('oai_woo_coupon_total','Invalid coupon '.$field,array('status'=>422,'field'=>$field));
+  if(isset($data['minimum_amount'],$data['maximum_amount'])&&(float)$data['minimum_amount']>0&&(float)$data['maximum_amount']>0&&(float)$data['minimum_amount']>(float)$data['maximum_amount'])return new WP_Error('oai_woo_coupon_total','Coupon minimum_amount exceeds maximum_amount',array('status'=>422));
+  return true;
+ }
+ private static function coupon_existing_id($code,$exclude=0){
+  $code=(string)$code;if($code==='')return 0;
+  $ids=get_posts(array('post_type'=>'shop_coupon','post_status'=>array('publish','draft','pending','private','future'),'title'=>$code,'numberposts'=>5,'fields'=>'ids','orderby'=>'ID','order'=>'ASC'));
+  foreach((array)$ids as $id){$id=absint($id);if($id&&$id!==(int)$exclude)return $id;}
+  return 0;
+ }
+ public static function coupon_id_by_code($code){return self::coupon_existing_id($code);}
+ public static function coupons($page=1,$limit=20,$search='',$status='any'){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  if(!self::coupon_read_allowed())return new WP_Error('oai_forbidden','Coupon read requires manage_woocommerce or edit_shop_coupons',array('status'=>403));
+  $page=max(1,min(10000,absint($page?:1)));$limit=max(1,min(100,absint($limit?:20)));
+  $search=sanitize_text_field((string)$search);$status=sanitize_key((string)$status);
+  $allowed=array('publish','draft','pending','private','future');
+  if($status!==''&&$status!=='any'&&!in_array($status,$allowed,true))return new WP_Error('oai_woo_coupon_status','Invalid coupon status',array('status'=>422,'allowed'=>$allowed));
+  $query=new WP_Query(array('post_type'=>'shop_coupon','post_status'=>($status!==''&&$status!=='any')?array($status):$allowed,'posts_per_page'=>$limit,'paged'=>$page,'s'=>$search,'orderby'=>'date','order'=>'DESC','fields'=>'ids','no_found_rows'=>false,'update_post_meta_cache'=>false,'update_post_term_cache'=>false));
+  $items=array();foreach((array)$query->posts as $id){$coupon=self::coupon_load((int)$id);if($coupon)$items[]=self::coupon_snapshot($coupon);}
+  $total=(int)$query->found_posts;$pages=max(1,(int)ceil($total/$limit));
+  return array('page'=>$page,'limit'=>$limit,'search'=>$search,'status'=>$status!==''?$status:'any','count'=>count($items),'total'=>$total,'total_pages'=>$pages,'has_more'=>$page<$pages,'items'=>$items);
+ }
+ public static function get_coupon($id){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  if(!self::coupon_read_allowed())return new WP_Error('oai_forbidden','Coupon read requires manage_woocommerce or edit_shop_coupons',array('status'=>403));
+  $coupon=self::coupon_load($id);
+  if(!$coupon)return new WP_Error('oai_not_found','Coupon not found',array('status'=>404));
+  return self::coupon_snapshot($coupon);
+ }
+ public static function coupon_create($changes){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  if(!self::coupon_create_allowed())return new WP_Error('oai_woo_permission','Coupon create requires manage_woocommerce or publish_shop_coupons',array('status'=>403));
+  if(!is_array($changes)||!$changes)return new WP_Error('oai_noop','No WooCommerce coupon changes supplied',array('status'=>400));
+  $after=self::coupon_changes($changes,self::coupon_defaults(),true);if(is_wp_error($after))return $after;
+  $existing=self::coupon_existing_id($after['code']);if($existing)return new WP_Error('oai_woo_coupon_duplicate','Coupon code already exists',array('status'=>409,'coupon_id'=>$existing));
+  return array('before'=>null,'after'=>$after,'changes'=>$changes,'code'=>$after['code']);
+ }
+ public static function coupon_patch($id,$changes){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  if(!self::coupon_update_allowed())return new WP_Error('oai_woo_permission','Coupon update requires manage_woocommerce or edit_shop_coupons',array('status'=>403));
+  $coupon=self::coupon_load($id);if(!$coupon)return new WP_Error('oai_not_found','Coupon not found',array('status'=>404));
+  if(!is_array($changes)||!$changes)return new WP_Error('oai_noop','No WooCommerce coupon changes supplied',array('status'=>400));
+  $before=self::coupon_snapshot($coupon);$after=self::coupon_changes($changes,$before,false);if(is_wp_error($after))return $after;
+  if($after['code']!==$before['code']){$existing=self::coupon_existing_id($after['code'],(int)$coupon->get_id());if($existing)return new WP_Error('oai_woo_coupon_duplicate','Coupon code already exists',array('status'=>409,'coupon_id'=>$existing));}
+  if(OAI_Verify::same($before,$after))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409));
+  return array('before'=>$before,'after'=>$after,'changes'=>$changes,'id'=>(int)$coupon->get_id());
+ }
+ private static function coupon_apply_changes($coupon,$data){
+  if(array_key_exists('code',$data))$coupon->set_code((string)$data['code']);
+  if(array_key_exists('description',$data))$coupon->set_description((string)$data['description']);
+  if(array_key_exists('discount_type',$data))$coupon->set_discount_type((string)$data['discount_type']);
+  if(array_key_exists('amount',$data))$coupon->set_amount((string)$data['amount']);
+  if(array_key_exists('date_expires',$data))$coupon->set_date_expires($data['date_expires']?strtotime((string)$data['date_expires']):null);
+  foreach(array('usage_limit','usage_limit_per_user') as $field)if(array_key_exists($field,$data)){$coupon->{'set_'.$field}((int)$data[$field]);}
+  if(array_key_exists('limit_usage_to_x_items',$data))$coupon->set_limit_usage_to_x_items($data['limit_usage_to_x_items']===null?null:(int)$data['limit_usage_to_x_items']);
+  foreach(array('free_shipping','exclude_sale_items','individual_use') as $field)if(array_key_exists($field,$data)){$coupon->{'set_'.$field}((bool)$data[$field]);}
+  if(array_key_exists('product_ids',$data))$coupon->set_product_ids(array_values(array_map('absint',(array)$data['product_ids'])));
+  if(array_key_exists('excluded_product_ids',$data))$coupon->set_excluded_product_ids(array_values(array_map('absint',(array)$data['excluded_product_ids'])));
+  if(array_key_exists('product_categories',$data))$coupon->set_product_categories(array_values(array_map('absint',(array)$data['product_categories'])));
+  if(array_key_exists('excluded_product_categories',$data))$coupon->set_excluded_product_categories(array_values(array_map('absint',(array)$data['excluded_product_categories'])));
+  if(array_key_exists('email_restrictions',$data))$coupon->set_email_restrictions(array_values((array)$data['email_restrictions']));
+  if(array_key_exists('minimum_amount',$data)||array_key_exists('maximum_amount',$data)){
+   // Clear both bounds first so the setters cannot reject a valid final pair
+   // because of the intermediate value carried by the before snapshot.
+   $coupon->set_minimum_amount('0');$coupon->set_maximum_amount('0');
+   if(array_key_exists('minimum_amount',$data))$coupon->set_minimum_amount((string)$data['minimum_amount']);
+   if(array_key_exists('maximum_amount',$data))$coupon->set_maximum_amount((string)$data['maximum_amount']);
+  }
+ }
+ public static function apply_coupon($target,$data){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  $valid=self::validate_coupon_snapshot($data);if(is_wp_error($valid))return $valid;
+  $is_create=strpos((string)$target,'new:')===0;
+  if($is_create){
+   if(!self::coupon_create_allowed())return new WP_Error('oai_woo_permission','Coupon create requires manage_woocommerce or publish_shop_coupons',array('status'=>403));
+   $code=(string)($data['code']??'');if($code==='')return new WP_Error('oai_woo_coupon_code','Coupon code is required',array('status'=>422));
+   $existing=self::coupon_existing_id($code);if($existing)return new WP_Error('oai_woo_coupon_duplicate','Coupon code already exists',array('status'=>409,'coupon_id'=>$existing));
+   try{$coupon=new WC_Coupon();self::coupon_apply_changes($coupon,$data);$coupon->save();}catch(Throwable $e){return new WP_Error('oai_woo_coupon_apply',$e->getMessage(),array('status'=>422));}
+   $id=(int)$coupon->get_id();if(!$id)return new WP_Error('oai_woo_coupon_create','Failed to create coupon',array('status'=>500));
+   clean_post_cache($id);wp_cache_delete($id,'coupons');return self::coupon_snapshot_by_id($id);
+  }
+  if(!self::coupon_update_allowed())return new WP_Error('oai_woo_permission','Coupon update requires manage_woocommerce or edit_shop_coupons',array('status'=>403));
+  $id=absint($target);$coupon=self::coupon_load($id);if(!$coupon)return new WP_Error('oai_not_found','Coupon not found',array('status'=>404));
+  if(isset($data['code'])&&(string)$data['code']!==(string)$coupon->get_code()){$existing=self::coupon_existing_id((string)$data['code'],$id);if($existing)return new WP_Error('oai_woo_coupon_duplicate','Coupon code already exists',array('status'=>409,'coupon_id'=>$existing));}
+  try{self::coupon_apply_changes($coupon,$data);$coupon->save();}catch(Throwable $e){return new WP_Error('oai_woo_coupon_apply',$e->getMessage(),array('status'=>422));}
+  clean_post_cache($id);wp_cache_delete($id,'coupons');return self::coupon_snapshot_by_id($id);
+ }
+ public static function restore_coupon($id,$snapshot){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  if(!self::coupon_update_allowed())return new WP_Error('oai_woo_permission','Coupon update requires manage_woocommerce or edit_shop_coupons',array('status'=>403));
+  $valid=self::validate_coupon_snapshot($snapshot);if(is_wp_error($valid))return $valid;
+  $coupon=self::coupon_load($id);if(!$coupon)return new WP_Error('oai_not_found','Coupon not found',array('status'=>404));
+  $code=(string)($snapshot['code']??'');if($code!==''&&$code!==(string)$coupon->get_code()){$existing=self::coupon_existing_id($code,(int)$coupon->get_id());if($existing)return new WP_Error('oai_woo_coupon_duplicate','Coupon code already exists',array('status'=>409,'coupon_id'=>$existing));}
+  try{self::coupon_apply_changes($coupon,$snapshot);$coupon->save();}catch(Throwable $e){return new WP_Error('oai_woo_coupon_restore',$e->getMessage(),array('status'=>422));}
+  return true;
+ }
+ public static function delete_coupon($id){
+  if(!self::available())return new WP_Error('oai_woo','WooCommerce unavailable',array('status'=>503));
+  if(!self::coupon_create_allowed())return new WP_Error('oai_woo_permission','Coupon delete requires manage_woocommerce or publish_shop_coupons',array('status'=>403));
+  $coupon=self::coupon_load($id);if(!$coupon)return true;
+  try{$coupon->delete(true);}catch(Throwable $e){return new WP_Error('oai_woo_coupon_delete',$e->getMessage(),array('status'=>422));}
+  return true;
+ }
+ public static function coupon_verification_matches($current,$expected){
+  if(!is_array($current)||!is_array($expected))return false;
+  $actual=$current;$wanted=$expected;
+  foreach(array('id','usage_count','date_created','date_modified') as $field)unset($actual[$field],$wanted[$field]);
+  return OAI_Verify::same($actual,$wanted);
+ }
+ public static function coupon_runtime_matches($actual,$expected){
+  if(self::coupon_verification_matches($actual,$expected))return true;
+  return new WP_Error('oai_woo_coupon_runtime','WooCommerce coupon did not persist the approved snapshot',array('status'=>409));
+ }
+
 }
 
