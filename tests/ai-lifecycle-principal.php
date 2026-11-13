@@ -130,4 +130,9 @@ OAI_DB::$row['status']='applied';
 $legacy_rollback=OAI_AI_Lifecycle_Control::perform(42,'rollback','gateway_client_legacy_rollback',7);
 check(!is_wp_error($legacy_rollback),'operation without verifiable creator can still be rolled back');
 
+// Reconciling an interrupted write is also recovery, not a new authorization.
+OAI_DB::$row['status']='applying';
+$legacy_recovery=OAI_AI_Lifecycle_Control::perform(42,'apply','gateway_client_legacy_recovery',7);
+check(!is_wp_error($legacy_recovery),'operation without verifiable creator can still reconcile an interrupted apply');
+
 echo "All lifecycle principal regression tests passed.\n";

@@ -207,11 +207,13 @@ class OAI_AI_Lifecycle_Control {
   if($row['type']==='option_update'&&($action==='approve'||($action==='apply'&&($row['status']??'')!=='applying'))){
    $policy=OAI_REST::validate_option_write_target($row['target']);if(is_wp_error($policy))return $policy;
   }
-  // Only the forward mutations require verifiable ownership: approve and apply
-  // push after_data into live state. Reject and rollback are recovery paths for
-  // rows that may predate creator audit evidence (pre-upgrade/legacy data), so
-  // they keep the administrator + site checks without the creator gate.
-  if($action==='approve'||$action==='apply'){
+  // Only forward mutations authorized from a clean state require verifiable
+  // ownership. Reject, rollback and reconciliation of an interrupted "applying"
+  // write are recovery paths for rows that may predate creator audit evidence
+  // (pre-upgrade/legacy data), so they keep the administrator + site checks.
+  // This mirrors the option-write policy gate above.
+  $owner_gate=$action==='approve' || ($action==='apply' && ($row['status']??'')!=='applying');
+  if($owner_gate){
    $creator=self::operation_creator($row);
    if(!$creator || $creator!==$user_id)return new WP_Error('oai_ai_lifecycle_operation_owner','Operation creator could not be verified for this administrator',array('status'=>403));
   }
