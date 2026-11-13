@@ -172,15 +172,21 @@ class OAI_AI_Lifecycle_Control {
   return $audit_creator;
  }
 
+ /**
+  * @return bool|null true when the latest AI approval matches, false when it
+  *                   exists but does not match, null when the operation was
+  *                   approved outside AI Lifecycle Control.
+  */
  private static function approved_snapshot_matches($row,$principal_user_id,$site_fingerprint,$snapshot_hash){
   global $wpdb;
-  if(!isset($wpdb) || !method_exists($wpdb,'get_row'))return false;
+  if(!isset($wpdb) || !method_exists($wpdb,'get_row'))return null;
   $table=OAI_DB::audit_table();
   $entry=$wpdb->get_row($wpdb->prepare(
    "SELECT actor,details FROM {$table} WHERE operation_id=%s AND event=%s ORDER BY id DESC LIMIT 1",
    (string)$row['operation_id'],'ai_lifecycle_approve'
   ),ARRAY_A);
-  if(!is_array($entry) || absint($entry['actor']??0)!==absint($principal_user_id))return false;
+  if(!is_array($entry))return null;
+  if(absint($entry['actor']??0)!==absint($principal_user_id))return false;
   $details=json_decode((string)($entry['details']??''),true);
   return is_array($details)
    && absint($details['principal_user_id']??0)===absint($principal_user_id)
@@ -205,8 +211,20 @@ class OAI_AI_Lifecycle_Control {
   if(!$creator || $creator!==$user_id)return new WP_Error('oai_ai_lifecycle_operation_owner','Operation creator could not be verified for this administrator',array('status'=>403));
   $site_fingerprint=self::site_fingerprint();
   $snapshot_hash=self::operation_snapshot_hash($row,$user_id,$site_fingerprint);
-  if(in_array($action,array('apply','rollback'),true) && !self::approved_snapshot_matches($row,$user_id,$site_fingerprint,$snapshot_hash)){
-   return new WP_Error('oai_ai_lifecycle_approval_mismatch','Approved operation snapshot or administrator context has changed; create and approve a fresh operation',array('status'=>409));
+  $status=(string)($row['status']??'');
+  // Let OAI_REST::sandbox_action keep its public state errors (oai_state) for
+  // operations that are not actionable. The snapshot gate applies only when
+  // the lifecycle call would actually write.
+  $snapshot_gate=($action==='apply' && $status==='approved')
+   || ($action==='rollback' && $status==='applied');
+  if($snapshot_gate){
+   $approval=self::approved_snapshot_matches($row,$user_id,$site_fingerprint,$snapshot_hash);
+   // Apply requires an AI-approved snapshot. Rollback stays available for
+   // operations approved by a human before AI Lifecycle Control existed, but
+   // must fail closed when an AI approval exists and no longer matches.
+   if($approval===false || ($action==='apply' && $approval===null)){
+    return new WP_Error('oai_ai_lifecycle_approval_mismatch','Approved operation snapshot or administrator context has changed; create and approve a fresh operation',array('status'=>409));
+   }
   }
   return array('row'=>$row,'snapshot_sha256'=>$snapshot_hash,'site_fingerprint'=>$site_fingerprint,'principal_user_id'=>$user_id);
  }
