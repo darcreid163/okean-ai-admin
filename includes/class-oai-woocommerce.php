@@ -736,6 +736,12 @@ class OAI_WooCommerce {
   if(!is_scalar($raw))return new WP_Error('oai_woo_coupon_code','Coupon code must be a string',array('status'=>422));
   $code=function_exists('wc_sanitize_coupon_code')?wc_sanitize_coupon_code((string)$raw):sanitize_text_field((string)$raw);
   $code=trim((string)$code);
+  // WooCommerce stores coupon codes through wc_format_coupon_code(), which its
+  // own wc_strtolower filter normalizes to lowercase. The sandbox snapshot,
+  // target and Verify must use that same stored form, otherwise a valid Apply
+  // looks like a persistence mismatch.
+  $code=function_exists('wc_format_coupon_code')?wc_format_coupon_code($code):(function_exists('wc_strtolower')?wc_strtolower($code):strtolower($code));
+  $code=trim((string)$code);
   if($code===''||strlen($code)>200)return new WP_Error('oai_woo_coupon_code','Coupon code must be 1-200 characters',array('status'=>422));
   return $code;
  }

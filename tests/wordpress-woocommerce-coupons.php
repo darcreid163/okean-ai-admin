@@ -64,9 +64,14 @@ try {
     wooCpn_ok(OAI_AI_Lifecycle_Control::enable(1),'Enable scoped test lifecycle');
 
     $suffix=strtolower(substr(str_replace('-','',wp_generate_uuid4()),0,10));
+    // Callers may send mixed case; WooCommerce stores codes lowercased through
+    // its wc_format_coupon_code()/wc_strtolower filters.
     $code_a='OAI-CPN-A-'.strtoupper($suffix);
     $code_b='OAI-CPN-B-'.strtoupper($suffix);
     $code_mcp='OAI-CPN-M-'.strtoupper($suffix);
+    $code_a_stored=strtolower($code_a);
+    $code_b_stored=strtolower($code_b);
+    $code_mcp_stored=strtolower($code_mcp);
 
     $product=new WC_Product_Simple();
     $product->set_status('publish');
@@ -106,23 +111,24 @@ try {
     $operation=(int)($planned['id']??0);
     wooCpn($operation>0 && ($planned['status']??'')==='pending','Coupon sandbox was not created as pending');
     wooCpn(($planned['type']??'')==='woocommerce_coupon','Coupon sandbox has the wrong operation type');
-    wooCpn(($planned['target']??'')==='new:'.$code_a,'Coupon sandbox target is not new:<code>');
-    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_a)===0,'Planning wrote a live coupon');
-    $after_plan=wooCpn_ok(OAI_WooCommerce::coupons(1,20,$code_a,'any'),'Read coupons after planning');
+    wooCpn(($planned['target']??'')==='new:'.$code_a_stored,'Coupon sandbox target is not new:<stored code>');
+    wooCpn(($planned['after_data']['code']??'')===$code_a_stored,'Coupon sandbox did not normalize the code to the stored form');
+    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_a_stored)===0,'Planning wrote a live coupon');
+    $after_plan=wooCpn_ok(OAI_WooCommerce::coupons(1,20,$code_a_stored,'any'),'Read coupons after planning');
     wooCpn(($after_plan['count']??-1)===0,'Planning exposed a live coupon in the list');
 
     // 2) Apply before approval is refused and still writes nothing.
     $unapproved=wooCpn_action($operation,'apply');
     wooCpn(is_wp_error($unapproved) && $unapproved->get_error_code()==='oai_state','Unapproved coupon Apply was not refused');
-    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_a)===0,'Refused Apply created a live coupon');
+    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_a_stored)===0,'Refused Apply created a live coupon');
 
     // 3) Approval and Apply create exactly one coupon that verifies.
     wooCpn_ok(wooCpn_action($operation,'approve'),'Approve coupon sandbox');
     wooCpn_ok(wooCpn_action($operation,'apply'),'Apply coupon sandbox');
-    $coupon_a=OAI_WooCommerce::coupon_id_by_code($code_a);
+    $coupon_a=OAI_WooCommerce::coupon_id_by_code($code_a_stored);
     wooCpn($coupon_a>0,'Applied coupon does not exist');
     $created=wooCpn_ok(OAI_WooCommerce::get_coupon($coupon_a),'Read applied coupon');
-    wooCpn(($created['code']??'')===$code_a,'Applied coupon code is wrong');
+    wooCpn(($created['code']??'')===$code_a_stored,'Applied coupon code is wrong');
     wooCpn(($created['description']??'')==='Synthetic coupon','Applied coupon description is wrong');
     wooCpn(($created['discount_type']??'')==='percent','Applied coupon discount type is wrong');
     wooCpn((float)$created['amount']===15.0,'Applied coupon amount is wrong');
@@ -146,7 +152,7 @@ try {
     wooCpn(is_wp_error($duplicate) && $duplicate->get_error_code()==='oai_woo_coupon_duplicate','Duplicate coupon code was not rejected');
     $duplicate_data=is_wp_error($duplicate)?$duplicate->get_error_data():array();
     wooCpn((int)($duplicate_data['coupon_id']??0)===$coupon_a,'Duplicate coupon error did not identify the existing coupon');
-    wooCpn(count(get_posts(array('post_type'=>'shop_coupon','post_status'=>'any','title'=>$code_a,'numberposts'=>-1,'fields'=>'ids')))===1,'Duplicate coupon code created a second coupon');
+    wooCpn(count(get_posts(array('post_type'=>'shop_coupon','post_status'=>'any','title'=>$code_a_stored,'numberposts'=>-1,'fields'=>'ids')))===1,'Duplicate coupon code created a second coupon');
 
     // 5) Update planning is a real sandbox and a no-op is rejected.
     $baseline=wooCpn_ok(OAI_WooCommerce::get_coupon($coupon_a),'Read coupon baseline');
@@ -214,13 +220,13 @@ try {
     wooCpn($operation_b>0,'Second coupon sandbox was not created');
     wooCpn_ok(wooCpn_action($operation_b,'approve'),'Approve second coupon sandbox');
     wooCpn_ok(wooCpn_action($operation_b,'apply'),'Apply second coupon sandbox');
-    $coupon_b=OAI_WooCommerce::coupon_id_by_code($code_b);
+    $coupon_b=OAI_WooCommerce::coupon_id_by_code($code_b_stored);
     wooCpn($coupon_b>0,'Second applied coupon does not exist');
     wooCpn(!empty(wooCpn_ok(OAI_Verify::operation($operation_b),'Verify second coupon')['verified']),'Second coupon verification failed');
     wooCpn_ok(wooCpn_action($operation_b,'rollback'),'Rollback created coupon');
-    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_b)===0,'Rollback did not delete the created coupon');
+    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_b_stored)===0,'Rollback did not delete the created coupon');
     wooCpn(get_post($coupon_b)===null,'Rollback left the created coupon post behind');
-    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_a)===$coupon_a,'Rollback deleted the wrong coupon');
+    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_a_stored)===$coupon_a,'Rollback deleted the wrong coupon');
     $delete_verify=wooCpn_ok(OAI_Verify::operation($operation_b),'Verify deleted coupon rollback');
     wooCpn(!empty($delete_verify['verified']) && !empty($delete_verify['cleanup_effective']),'Deleted coupon rollback verification failed');
     wooCpn((OAI_DB::get($operation_b)['status']??'')==='rolled_back','Created coupon rollback was not recorded');
@@ -260,7 +266,7 @@ try {
 
     // 10) REST, MCP and batch catalogs expose the same coupon surface.
     $rest_list=new WP_REST_Request('GET','/okean-ai/v1/read/coupons');
-    $rest_list->set_param('search',$code_a);
+    $rest_list->set_param('search',$code_a_stored);
     $rest_list_response=rest_do_request($rest_list);
     wooCpn($rest_list_response->get_status()===200,'Admin REST coupon list did not return 200');
     $rest_items=$rest_list_response->get_data();
@@ -286,12 +292,13 @@ try {
     update_option('oai_mcp_enabled',true,false);
     update_option('oai_mcp_token_hash',hash('sha256',$token),false);
     update_option('oai_mcp_token_user_id',1,false);
-    $mcp_read=wooCpn_mcp($token,'woocommerce.search_coupons',array('search'=>$code_a));
+    $mcp_read=wooCpn_mcp($token,'woocommerce.search_coupons',array('search'=>$code_a_stored));
     wooCpn(($mcp_read['count']??0)>=1,'MCP coupon search did not find the synthetic coupon');
     $mcp_create=wooCpn_mcp($token,'woocommerce.create_coupon_sandbox',array('coupon'=>array('code'=>$code_mcp,'discount_type'=>'fixed_cart','amount'=>'7')));
     $mcp_operation=(int)($mcp_create['id']??0);
     wooCpn($mcp_operation>0 && ($mcp_create['status']??'')==='pending','MCP coupon create did not return a pending sandbox');
-    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_mcp)===0,'MCP coupon planning wrote a live coupon');
+    wooCpn(($mcp_create['target']??'')==='new:'.$code_mcp_stored,'MCP coupon sandbox did not normalize the code');
+    wooCpn(OAI_WooCommerce::coupon_id_by_code($code_mcp_stored)===0,'MCP coupon planning wrote a live coupon');
     wooCpn_ok(wooCpn_action($mcp_operation,'reject'),'Reject MCP coupon sandbox');
     wooCpn((OAI_DB::get($mcp_operation)['status']??'')==='rejected','MCP coupon sandbox was not rejected');
 
