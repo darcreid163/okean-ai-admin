@@ -48,6 +48,10 @@ jobs:
         run: php tests/woocommerce-stock-rounding.php
       - name: Option normalization
         run: php tests/option-normalization.php
+      - name: Durable AI Lifecycle principal authorization
+        run: php tests/ai-lifecycle-principal.php
+      - name: Local quota authority cannot bypass Cloud Core
+        run: php tests/quota-authority.php
       - name: Canonical operation risk policy
         run: php tests/operation-risk.php
       - name: Read-only public evidence projection
