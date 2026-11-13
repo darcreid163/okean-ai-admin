@@ -207,8 +207,13 @@ class OAI_AI_Lifecycle_Control {
   if($row['type']==='option_update'&&($action==='approve'||($action==='apply'&&($row['status']??'')!=='applying'))){
    $policy=OAI_REST::validate_option_write_target($row['target']);if(is_wp_error($policy))return $policy;
   }
-  $creator=self::operation_creator($row);
-  if(!$creator || $creator!==$user_id)return new WP_Error('oai_ai_lifecycle_operation_owner','Operation creator could not be verified for this administrator',array('status'=>403));
+  // Reject never writes live data. It must stay available for historical rows
+  // that predate creator audit evidence, otherwise obsolete protected
+  // operations could never be closed.
+  if($action!=='reject'){
+   $creator=self::operation_creator($row);
+   if(!$creator || $creator!==$user_id)return new WP_Error('oai_ai_lifecycle_operation_owner','Operation creator could not be verified for this administrator',array('status'=>403));
+  }
   $site_fingerprint=self::site_fingerprint();
   $snapshot_hash=self::operation_snapshot_hash($row,$user_id,$site_fingerprint);
   $status=(string)($row['status']??'');

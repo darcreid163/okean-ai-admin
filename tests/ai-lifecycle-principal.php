@@ -118,4 +118,10 @@ $GLOBALS['wpdb']->creator_ids=array();
 $unknown_creator=OAI_AI_Lifecycle_Control::perform(42,'apply','gateway_client_unknown_creator',7);
 check(is_wp_error($unknown_creator) && $unknown_creator->get_error_code()==='oai_ai_lifecycle_operation_owner','operation without verifiable creator is denied');
 
+// Reject is non-mutating: historical rows without creator evidence must remain
+// closable, matching OAI_REST's preserved reject contract.
+OAI_DB::$row['status']='pending';
+$legacy_reject=OAI_AI_Lifecycle_Control::perform(42,'reject','gateway_client_legacy_reject',7);
+check(!is_wp_error($legacy_reject),'operation without verifiable creator can still be rejected');
+
 echo "All lifecycle principal regression tests passed.\n";
