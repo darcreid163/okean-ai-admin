@@ -148,9 +148,13 @@ rejects(fn()=>$core->call($recoverActor,$recoverSite['id'],'operation_get_receip
 // Ten independent processes compete for three slots using the same real DB and production transaction code.
 $core->ensureAccount('parallel'); $pSite=$core->connect('parallel','https://parallel.example.com','fixture-site-admin-token-parallel',$now);
 $pToken=$core->mint('parallel',[$pSite['id']],['mcp:read'],$now);
-$command=[PHP_BINARY,'-n','-d','extension_dir='.ini_get('extension_dir')];
+$extensionDir=(string)ini_get('extension_dir');
+// Windows distributes php.ini with a relative extension_dir. Worker processes
+// change cwd, so resolve it once against the PHP binary they are launched with.
+if($extensionDir!==''&&!preg_match('#^(?:[A-Za-z]:[\\\\/]|/)#',$extensionDir))$extensionDir=dirname(PHP_BINARY).DIRECTORY_SEPARATOR.$extensionDir;
+$command=[PHP_BINARY,'-n','-d','extension_dir='.$extensionDir];
 $modules=['pdo','pdo_sqlite','sodium']; if(getenv('TEST_MYSQL_DSN')) array_push($modules,'mysqlnd','pdo_mysql');
-foreach($modules as $module) foreach([$module.'.'.PHP_SHLIB_SUFFIX,'php_'.$module.'.'.PHP_SHLIB_SUFFIX] as $file) if(is_file(ini_get('extension_dir').'/'.$file)){array_push($command,'-d','extension='.$file);break;}
+foreach($modules as $module) foreach([$module.'.'.PHP_SHLIB_SUFFIX,'php_'.$module.'.'.PHP_SHLIB_SUFFIX] as $file) if(is_file($extensionDir.'/'.$file)){array_push($command,'-d','extension='.$file);break;}
 array_push($command,__DIR__.'/worker.php',$database,$pSite['id'],(string)$now);
 $workers=[]; putenv('CLOUD_TEST_TOKEN='.$pToken['access_token']);
 $executionLog=tempnam(sys_get_temp_dir(),'wpai-executions-'); putenv('CLOUD_TEST_EXECUTION_LOG='.$executionLog);

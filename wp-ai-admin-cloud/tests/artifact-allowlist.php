@@ -9,6 +9,8 @@ if($root===$source)throw new RuntimeException('Stage must be separate from sourc
 $collect=static function(string $base,array $paths): array {
     $entries=[];
     $record=static function(string $path,string $relative)use(&$entries):void {
+        // RecursiveDirectoryIterator returns native separators; allowlists are POSIX.
+        $relative=str_replace('\\','/',$relative);
         if(is_link($path))throw new RuntimeException('Linked runtime entry '.$relative);
         if(preg_match('/(?:^|\/)(?:\.git|\.env|tests|docs|vendor)(?:\/|$)/i',$relative))throw new RuntimeException('Forbidden production payload '.$relative);
         if(is_dir($path)){$entries[$relative.'/']='directory';return;}
