@@ -9,7 +9,7 @@ final class Core {
     // fences local settlement; it never proves a remote mutation did not occur.
     public const DISPATCH_LEASE_SECONDS = 300;
     public const MAX_SITES = 50;
-    public const READ_TOOLS = ['woodmart_status','woodmart_list_settings','woodmart_get_setting','wp_get_site','wp_inspect_html','wp_visual_qa_start','wp_visual_qa_result','system_page_qa_run','wp_get_theme_mods','wp_list_plugins','wp_list_themes','wp_list_post_types','wp_list_taxonomies','wp_list_media','wp_list_menus','wp_list_options','wp_list_users','wp_list_comments','wp_list_widgets','wp_health','wp_diagnostics','wp_list_operations','operation_get','operation_verify','operation_proof','operation_preview_link','wp_list_files','wp_search_files','wp_execution_readiness','elementor_get_structure','elementor_get_widget','elementor_get_schema','elementor_get_globals','elementor_get_container','elementor_get_page_layout','woocommerce_get_product','operation_get_receipt','gutenberg_get_blocks','gutenberg_get_outline','gutenberg_locate_block','builder_catalog','builder_detect','system_capabilities','wp_read_content','wp_read_post','wp_read_meta','wp_read_option','wp_rest_routes','wp_rest_read','file_read','wp_file_outline','woocommerce_search_products','woocommerce_get_variations','woocommerce_search_orders','woocommerce_get_product_full','operation_status','operation_diff','preview_get','verify_operation','proof_operation','elementor_inspect_page','elementor_inspect_widget','system_manifest','batch_plan','batch_preflight','batch_dry_run','batch_list','batch_status','batch_receipt','batch_proof','file_diff','system_tool_catalog','system_self_test','system_security_status','system_test_automation_status','system_regression_history','system_coverage_report'];
+    public const READ_TOOLS = ['woodmart_status','woodmart_list_settings','woodmart_get_setting','wp_get_site','wp_inspect_html','wp_visual_qa_start','wp_visual_qa_result','system_page_qa_run','wp_get_theme_mods','wp_list_plugins','wp_list_themes','wp_list_post_types','wp_list_taxonomies','wp_list_media','wp_list_menus','wp_list_options','wp_list_users','wp_list_comments','wp_list_widgets','wp_health','wp_diagnostics','wp_list_operations','operation_get','operation_verify','operation_proof','operation_preview_link','wp_list_files','wp_search_files','wp_execution_readiness','elementor_get_structure','elementor_get_widget','elementor_get_schema','elementor_get_globals','elementor_get_container','elementor_get_page_layout','woocommerce_get_product','operation_get_receipt','gutenberg_get_blocks','gutenberg_get_outline','gutenberg_locate_block','builder_catalog','builder_detect','system_capabilities','wp_read_content','wp_read_post','wp_read_meta','wp_read_option','wp_rest_routes','wp_rest_read','file_read','wp_file_outline','woocommerce_search_products','woocommerce_get_variations','woocommerce_search_orders','woocommerce_get_product_full','operation_status','operation_diff','preview_get','verify_operation','proof_operation','elementor_inspect_page','elementor_inspect_widget','system_manifest','batch_plan','batch_preflight','batch_dry_run','batch_list','batch_status','batch_receipt','batch_proof','file_diff','system_tool_catalog','system_self_test','system_security_status','system_test_automation_status','system_regression_history','system_coverage_report','woocommerce_search_customers','woocommerce_get_customer','woocommerce_get_order','system_security_fuzz'];
     public const FREE_TOOLS = ['operation_get','operation_status','operation_verify','operation_proof','operation_preview_link','operation_get_receipt','operation_diff','operation_rollback','verify_operation','proof_operation','preview_get','batch_receipt','batch_proof','batch_status','batch_list','batch_rollback'];
     public static function units(string $name): int { return in_array(str_replace('.','_',$name),self::FREE_TOOLS,true)?0:1; }
     public function __construct(private readonly Store $store, private readonly Vault $vault, private readonly Transport $transport, private readonly array $policy, private readonly ?Signer $signer=null) {
@@ -113,19 +113,33 @@ final class Core {
         foreach ($texts as $block) if (($block['type']??'')==='text') { $v=json_decode($block['text']??'',true); if (is_array($v) && isset($v['site_id'],$v['installation_id'])) { $manifest=$v; break; } }
         if (!$manifest || ($manifest['plugin_name']??'')!=='WP AI Admin' || ($manifest['release']['production_defaults']['direct_live_writes']??null)!==false) throw new Fault('site_manifest_incompatible',422);
         $pluginSite=Security::identifier($manifest['site_id']); $installation=Security::identifier($manifest['installation_id']);
-        return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now,$replace,$statusHash) {
+        return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now,$statusHash) {
             $this->account($owner,true);
             $hash=hash('sha256',$home); $existing=$this->store->row('SELECT * FROM '.$this->store->table('sites').' WHERE url_hash=?',[$hash]);
             if($existing) {
-                if(!$replace||$existing['owner']!==$owner)throw new Fault('site_already_registered',409);
+                // A URL can never be claimed by another account, even if its old row is revoked.
+                if($existing['owner']!==$owner)throw new Fault('site_already_registered',409);
                 if($existing['plugin_site_id']!==$pluginSite||$existing['installation_id']!==$installation)throw new Fault('site_identity_changed',409);
-                // A revoked registration gets a fresh ID: old grants must not regain access.
+                // Repeating the connection for this same owned installation is idempotent.
+                // Keep its registration ID (and existing usage-projection key for token-only
+                // reconnects), so valid grants are not needlessly invalidated.
+                if($existing['status']!=='active') {
+                    $activeCount=(int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=? AND status=?',[$owner,'active'])['n'];
+                    if($activeCount>=self::MAX_SITES)throw new Fault('pilot_site_count_limit',409);
+                }
                 $id=$existing['status']==='active'?$existing['id']:'reg_'.bin2hex(random_bytes(16));
-                $this->store->execute('UPDATE '.$this->store->table('sites').' SET id=?,token_sealed=?,status=?,created_at=? WHERE id=?',[$id,$this->sealSiteCredential($token,$owner,$id,$statusHash),'active',$now,$existing['id']]);
+                $effectiveStatusHash=$statusHash;
+                if($existing['status']==='active'&&$effectiveStatusHash===null) {
+                    $previous=$this->siteCredential($existing);
+                    $effectiveStatusHash=$previous['status_hash'];
+                }
+                $this->store->execute('UPDATE '.$this->store->table('sites').' SET id=?,token_sealed=?,status=?,created_at=? WHERE id=?',[$id,$this->sealSiteCredential($token,$owner,$id,$effectiveStatusHash),'active',$now,$existing['id']]);
                 $this->store->audit($owner,$id,'site_reconnected','',$now);
                 return ['id'=>$id,'home'=>$home,'plugin_site_id'=>$pluginSite,'installation_id'=>$installation,'status'=>'active'];
             }
-            if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=?',[$owner])['n']>=self::MAX_SITES) throw new Fault('pilot_site_count_limit',409);
+            // Disconnected registrations remain in the audit history but do not
+            // consume the account's active-site capacity.
+            if ((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('sites').' WHERE owner=? AND status=?',[$owner,'active'])['n']>=self::MAX_SITES) throw new Fault('pilot_site_count_limit',409);
             $id='reg_'.bin2hex(random_bytes(16));
             try {
                 $this->store->execute('INSERT INTO '.$this->store->table('sites').' (id,owner,home,url_hash,plugin_site_id,installation_id,token_sealed,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$owner,$home,$hash,$pluginSite,$installation,$this->sealSiteCredential($token,$owner,$id,$statusHash),'active',$now]);

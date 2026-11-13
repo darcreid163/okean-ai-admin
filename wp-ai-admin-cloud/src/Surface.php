@@ -47,7 +47,12 @@ final class Surface {
         if(!in_array($kind,['portal','consent','pair_callback'],true))throw new Fault('invalid_login_surface');
         if(is_user_logged_in())return null;
         $return=home_url(match($kind){'portal'=>'/wpai-cloud/connect','pair_callback'=>'/wpai-cloud/pair/callback',default=>'/wpai-cloud/oauth/authorize'});
-        if($kind==='consent'||$kind==='pair_callback') {
+        if($kind==='portal') {
+            // Preserve only a canonical HTTPS suggestion across the login round-trip.
+            // It remains editable and is not proof of ownership.
+            $home=self::suggestedHome();
+            if($home!=='')$return=add_query_arg('home',$home,$return);
+        } elseif($kind==='consent'||$kind==='pair_callback') {
             $query=[];
             $names=$kind==='pair_callback'?['state','code','error']:['client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method','resource'];
             foreach($names as $name) {
@@ -83,7 +88,7 @@ final class Surface {
                 'site_dns_unavailable'=>'Сервер не смог определить адрес сайта. Проверьте DNS домена и повторите попытку.',
                 'private_site_address_blocked'=>'Адрес сайта не является публичным. Нужен доступный в интернете HTTPS-сайт.',
                 'public_https_site_required','invalid_site_host','invalid_site_path'=>'Введите полный адрес WordPress-сайта вида https://example.ru без пути входа и параметров.',
-                'pilot_site_count_limit'=>'Достигнут тестовый лимит регистраций сайтов для этого аккаунта.',
+                'pilot_site_count_limit'=>'Достигнут лимит активных сайтов для этого аккаунта. Отключите ненужный сайт и повторите подключение.',
                 'site_already_registered'=>'Этот WordPress-сайт уже подключён к другому аккаунту WP AI Admin. Для защиты от перехвата сайта повторное подключение другим аккаунтом запрещено. Используйте другой тестовый сайт либо сначала отключите сайт в аккаунте-владельце.',
                 default=>$e->reason
             };
@@ -99,6 +104,47 @@ final class Surface {
         // Meta refresh starts a new navigation, so the strict form-action policy remains intact.
         echo '<meta http-equiv="refresh" content="'.esc_attr('0;url='.$url).'"><p>Продолжаем подключение…</p><p><a href="'.esc_url($url).'" rel="noreferrer">Продолжить подключение</a></p>';
     }
+    /** A suggested site URL is display-only input; pairing still proves ownership on the target site. */
+    private static function suggestedHome(): string {
+        $value=$_GET['home']??'';
+        if(!is_string($value)||$value===''||strlen($value)>512)return '';
+        try { return Security::home(wp_unslash($value)); }
+        catch(Fault $e) { return ''; }
+    }
+    private static function actionCount(int $count): string {
+        $lastTwo=$count%100;$lastOne=$count%10;
+        $word=($lastTwo>=11&&$lastTwo<=14)?'действий':($lastOne===1?'действие':(($lastOne>=2&&$lastOne<=4)?'действия':'действий'));
+        return $count.' '.$word;
+    }
+    /** Render only safe ledger metadata; never expose request keys, prompts, arguments or upstream receipts. */
+    private static function renderHistory(array $history,array $sites,bool $unavailable=false): void {
+        echo '<h2>История действий</h2>';
+        if($unavailable) { echo '<p>История действий временно недоступна. Попробуйте позже.</p>'; return; }
+        if(!$history) { echo '<p>Пока нет действий.</p>'; return; }
+        $siteNames=[];
+        foreach($sites as $site) {
+            if(is_array($site)&&is_string($site['id']??null)&&is_string($site['home']??null)) $siteNames[$site['id']]=$site['home'];
+        }
+        $states=['succeeded'=>'Успешно','failed'=>'Ошибка','uncertain'=>'Требует сверки','dispatching'=>'В обработке'];
+        echo '<table style="width:100%;border-collapse:collapse"><thead><tr><th>Дата (UTC)</th><th>Сайт</th><th>Действие</th><th>Статус</th><th>Списано</th></tr></thead><tbody>';
+        foreach($history as $row) {
+            if(!is_array($row)) continue;
+            $created=(int)($row['created_at']??0);
+            $date=$created>0?gmdate('Y-m-d H:i:s',$created).' UTC':'—';
+            $siteId=is_string($row['site_id']??null)?$row['site_id']:'';
+            $siteName=$siteNames[$siteId]??'Отключённый сайт';
+            $tool=is_string($row['tool']??null)?$row['tool']:'—';
+            $state=is_string($row['state']??null)?$row['state']:'';
+            $status=$states[$state]??'Неизвестно';
+            $units=$row['charged_units']??null;
+            $charge=is_int($units)&&$units>=0?self::actionCount($units):'Ожидает сверки';
+            $pending=$row['pending_units']??null;
+            if(is_int($pending)&&$pending>0)$charge.=' · в обработке: '.self::actionCount($pending);
+            echo '<tr><td>'.esc_html($date).'</td><td>'.esc_html($siteName).'</td><td><code>'.esc_html($tool).'</code></td><td>'.esc_html($status).'</td><td>'.esc_html($charge).'</td></tr>';
+        }
+        echo '</tbody></table><p>Показаны последние '.count($history).' записей. Содержимое запросов и ответов инструментов в журнале кабинета не раскрывается.</p>';
+    }
+
     private static function portal(string $owner,Core $core): void {
         if(($_GET['connected']??'')==='1')echo '<p>Сайт подключён. Теперь его можно выбрать при подключении ИИ.</p>';
         if(($_GET['cancelled']??'')==='1')echo '<p>Подключение отменено.</p>';
@@ -125,6 +171,9 @@ final class Surface {
             }
         }
         $sites=$core->sites($owner);$usage=$core->usage($owner,time());
+        $history=[];$historyUnavailable=false;
+        try { $history=$core->ledger($owner,20); }
+        catch(Fault $e) { $historyUnavailable=true; }
         echo '<h2>Обзор аккаунта</h2><p>Один аккаунт и один тариф для всех подключённых сайтов. Действия списываются из общего лимита аккаунта.</p><p>Тариф: <strong>'.esc_html(strtoupper($usage['plan'])).'</strong> · Лимит: '.(int)$usage['limit'].' · Использовано: '.(int)$usage['used'].' · В обработке: '.(int)$usage['reserved'].' · Осталось: '.(int)$usage['remaining'].'</p><p>Подключено сайтов: <strong>'.count($sites).'</strong>. В тестовом режиме доступно до '.Core::MAX_SITES.' регистраций на аккаунт; отдельная подписка для каждого сайта не требуется.</p>';
         $periodLabel=$usage['period_kind']===QuotaPolicy::DAY?'сутки':'месяц';
         echo '<p>Период учёта: '.esc_html($periodLabel).' (UTC). Следующий период: '.esc_html($usage['period_end_utc']).'. Неиспользованные действия не переносятся.</p>';
@@ -138,12 +187,13 @@ final class Surface {
             }
             echo '</tbody></table><p>После добавления нового сайта повторите авторизацию WP AI Admin в ChatGPT и отметьте все нужные сайты.</p>';
         }
-        echo '<h2>Подключение ChatGPT</h2><p>Используйте центральный MCP: <code>'.esc_html(Settings::endpoint()).'</code>. При авторизации выберите нужные сайты.</p><h2>История действий</h2><p>История операций доступна в журнале Cloud Gateway и на подключённых сайтах.</p>';
-        echo '<h2>Добавить сайт</h2><p>Укажите адрес, войдите на этом сайте как администратор и подтвердите подключение. Сайт появится в этом кабинете автоматически.</p>';
+        echo '<h2>Подключение ChatGPT</h2><p>Используйте центральный MCP: <code>'.esc_html(Settings::endpoint()).'</code>. При авторизации выберите нужные сайты.</p>';
+        self::renderHistory($history,$sites,$historyUnavailable);
+        echo '<h2>Добавить сайт</h2><p>Адрес текущего сайта подставляется автоматически. При необходимости его можно изменить вручную. Затем войдите на целевом сайте как администратор и подтвердите подключение.</p>';
         echo '<form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
-        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><button type="submit" name="connect_mode" value="automatic">Подключить автоматически</button> <button type="submit" name="connect_mode" value="check">Проверить связь</button></form>';
+        echo '<label>Адрес WordPress-сайта <input type="url" name="home" value="' . esc_attr(self::suggestedHome()) . '" placeholder="https://example.ru" required></label><button type="submit" name="connect_mode" value="automatic">Подключить автоматически</button> <button type="submit" name="connect_mode" value="check">Проверить связь</button></form>';
         echo '<details><summary>Подключить существующим MCP-токеном</summary><form method="post">';wp_nonce_field('wpai_beta_connect','wpai_nonce');
-        echo '<label>Адрес WordPress-сайта <input type="url" name="home" placeholder="https://example.ru" required></label><label>MCP-токен администратора <input type="password" name="site_token" autocomplete="new-password" required></label><button type="submit">Подключить сайт</button></form></details>';
+        echo '<label>Адрес WordPress-сайта <input type="url" name="home" value="' . esc_attr(self::suggestedHome()) . '" placeholder="https://example.ru" required></label><label>MCP-токен администратора <input type="password" name="site_token" autocomplete="new-password" required></label><button type="submit">Подключить сайт</button></form></details>';
     }
     private static function paired(string $owner): void {
         $state=$_GET['state']??'';$code=$_GET['code']??'';$error=$_GET['error']??'';
