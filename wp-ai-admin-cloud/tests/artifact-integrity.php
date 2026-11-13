@@ -34,12 +34,14 @@ try{
     unlink($core);$validate($stage,false,'allowlist mismatch');copy($source.'/src/Core.php',$core);
     file_put_contents($stage.'/src/unexpected.php','<?php');$validate($stage,false,'allowlist mismatch');unlink($stage.'/src/unexpected.php');
     mkdir($stage.'/src/empty');$validate($stage,false,'allowlist mismatch');rmdir($stage.'/src/empty');
-    symlink($source.'/src/Core.php',$stage.'/src/linked.php');$validate($stage,false,'Linked runtime entry');unlink($stage.'/src/linked.php');
-    symlink($root,$stage.'/src/linked-directory');$validate($stage,false,'Linked runtime entry');unlink($stage.'/src/linked-directory');
-    symlink($root.'/absent',$stage.'/src/broken');$validate($stage,false,'Linked runtime entry');unlink($stage.'/src/broken');
-    symlink($stage,$root.'/linked-stage');$validate($root.'/linked-stage',false,'linked staged');unlink($root.'/linked-stage');
+    $symlinkChecks=0;$symlink=static function(string $target,string $link)use(&$symlinkChecks):bool{if(!@symlink($target,$link))return false;++$symlinkChecks;return true;};
+    if($symlink($source.'/src/Core.php',$stage.'/src/linked.php')){$validate($stage,false,'Linked runtime entry');unlink($stage.'/src/linked.php');}
+    if($symlink($root,$stage.'/src/linked-directory')){$validate($stage,false,'Linked runtime entry');unlink($stage.'/src/linked-directory');}
+    if($symlink($root.'/absent',$stage.'/src/broken')){$validate($stage,false,'Linked runtime entry');unlink($stage.'/src/broken');}
+    if($symlink($stage,$root.'/linked-stage')){$validate($root.'/linked-stage',false,'linked staged');unlink($root.'/linked-stage');}
     mkdir($stage.'/docs');$validate($stage,false,'Forbidden production payload');rmdir($stage.'/docs');
     $validate($source,false,'separate from source');
     $validate($stage,true);
-    echo "PASS $checks Cloud artifact parity/tampering/symlink/directory boundaries\n";
+    $symlinkNote=$symlinkChecks===4?'symlink':'symlink checks skipped ('.$symlinkChecks.'/4 available on this host)';
+    echo "PASS $checks Cloud artifact parity/tampering/$symlinkNote/directory boundaries\n";
 }finally{$remove($root);}

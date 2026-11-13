@@ -63,9 +63,13 @@ check(!str_contains(Security::canonical($store->rows('SELECT * FROM '.$store->ta
 $parallelCode=$oauth->approve('1',$auth,[$site['id']],$now);$parallel=$exchange;$parallel['code']=$parallelCode;
 $before=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('tokens'))['n'];
 putenv('CLOUD_OAUTH_EXCHANGE='.json_encode($parallel));
-$command=[PHP_BINARY,'-n','-d','extension_dir='.ini_get('extension_dir')];
+$extensionDir=(string)ini_get('extension_dir');
+// Windows distributes php.ini with a relative extension_dir. Worker processes
+// change cwd, so resolve it once against the PHP binary they are launched with.
+if($extensionDir!==''&&!preg_match('#^(?:[A-Za-z]:[\\\\/]|/)#',$extensionDir))$extensionDir=dirname(PHP_BINARY).DIRECTORY_SEPARATOR.$extensionDir;
+$command=[PHP_BINARY,'-n','-d','extension_dir='.$extensionDir];
 $modules=['pdo','pdo_sqlite','sodium'];if(getenv('TEST_MYSQL_DSN'))array_push($modules,'mysqlnd','pdo_mysql');
-foreach($modules as $module) foreach([$module.'.'.PHP_SHLIB_SUFFIX,'php_'.$module.'.'.PHP_SHLIB_SUFFIX] as $file) if(is_file(ini_get('extension_dir').'/'.$file)){array_push($command,'-d','extension='.$file);break;}
+foreach($modules as $module) foreach([$module.'.'.PHP_SHLIB_SUFFIX,'php_'.$module.'.'.PHP_SHLIB_SUFFIX] as $file) if(is_file($extensionDir.'/'.$file)){array_push($command,'-d','extension='.$file);break;}
 array_push($command,__DIR__.'/oauth-worker.php',$database,(string)$now);$workers=[];
 for($i=0;$i<10;$i++){$pipes=[];$handle=proc_open($command,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);fclose($pipes[0]);$workers[]=[$handle,$pipes];}
 $success=0;$denied=0;
