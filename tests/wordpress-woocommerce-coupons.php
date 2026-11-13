@@ -170,7 +170,7 @@ try {
     $planned_update=wooCpn_ok(wooCpn_patch($coupon_a,$patch_changes),'Create coupon update sandbox');
     $update_operation=(int)($planned_update['id']??0);
     wooCpn($update_operation>0 && ($planned_update['status']??'')==='pending','Coupon update sandbox was not created as pending');
-    wooCpn(($planned_update['target']??'')===(string)$coupon_a,'Coupon update target is not the coupon id');
+    wooCpn(($planned_update['target']??'')===($coupon_a.':coupon'),'Coupon update target is not <coupon id>:coupon');
     $still=wooCpn_ok(OAI_WooCommerce::get_coupon($coupon_a),'Read coupon after update planning');
     wooCpn(OAI_WooCommerce::coupon_verification_matches($still,$baseline),'Update planning wrote live coupon data');
 
