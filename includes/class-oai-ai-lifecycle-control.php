@@ -207,10 +207,11 @@ class OAI_AI_Lifecycle_Control {
   if($row['type']==='option_update'&&($action==='approve'||($action==='apply'&&($row['status']??'')!=='applying'))){
    $policy=OAI_REST::validate_option_write_target($row['target']);if(is_wp_error($policy))return $policy;
   }
-  // Reject never writes live data. It must stay available for historical rows
-  // that predate creator audit evidence, otherwise obsolete protected
-  // operations could never be closed.
-  if($action!=='reject'){
+  // Only the forward mutations require verifiable ownership: approve and apply
+  // push after_data into live state. Reject and rollback are recovery paths for
+  // rows that may predate creator audit evidence (pre-upgrade/legacy data), so
+  // they keep the administrator + site checks without the creator gate.
+  if($action==='approve'||$action==='apply'){
    $creator=self::operation_creator($row);
    if(!$creator || $creator!==$user_id)return new WP_Error('oai_ai_lifecycle_operation_owner','Operation creator could not be verified for this administrator',array('status'=>403));
   }

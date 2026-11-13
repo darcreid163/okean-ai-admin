@@ -124,4 +124,10 @@ OAI_DB::$row['status']='pending';
 $legacy_reject=OAI_AI_Lifecycle_Control::perform(42,'reject','gateway_client_legacy_reject',7);
 check(!is_wp_error($legacy_reject),'operation without verifiable creator can still be rejected');
 
+// Rollback is the recovery path for pre-upgrade rows, so missing creator
+// evidence must not lock a previously applied change in place.
+OAI_DB::$row['status']='applied';
+$legacy_rollback=OAI_AI_Lifecycle_Control::perform(42,'rollback','gateway_client_legacy_rollback',7);
+check(!is_wp_error($legacy_rollback),'operation without verifiable creator can still be rolled back');
+
 echo "All lifecycle principal regression tests passed.\n";
