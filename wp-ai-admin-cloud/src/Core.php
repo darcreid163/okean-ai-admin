@@ -20,22 +20,29 @@ final class Core {
         $this->store->execute($this->store->ignore().' INTO '.$this->store->table('accounts').' (owner,plan,quota_scheme) VALUES (?,?,?)',[$owner,'free',QuotaPolicy::scheme($this->policy)]);
     }
     /**
-     * Repairs retired v2 plan slugs that are still attached to the current
-     * tariff scheme. Legacy monthly accounts are never touched. The update is
-     * guarded by the old slug, so repeated or interrupted runs are harmless.
+     * Repairs retired plan slugs that are still attached to a known tariff
+     * scheme. Legacy monthly accounts are never touched. The update is guarded
+     * by the old slug and scheme, so repeated or interrupted runs are harmless.
+     * A BusinessPro alias on tariffs_v3 now resolves to the real businesspro
+     * plan instead of silently degrading it to business.
      */
     public static function migratePlanAliases(Store $store,int $now): int {
-        $aliases=['biznes'=>'business','biznespro'=>'business'];
+        $aliases=[
+            QuotaPolicy::CURRENT=>['biznes'=>'business','biznespro'=>'business'],
+            QuotaPolicy::TARGET=>['biznes'=>'business','biznespro'=>'businesspro'],
+        ];
         return (int)$store->transaction(function() use($store,$now,$aliases): int {
-            $rows=$store->rows('SELECT owner,plan FROM '.$store->table('accounts').' WHERE quota_scheme=? AND (plan=? OR plan=?) ORDER BY owner',[QuotaPolicy::CURRENT,'biznes','biznespro']);
             $changed=0;
-            foreach($rows as $row) {
-                $target=$aliases[$row['plan']]??null;
-                if($target===null) continue;
-                $updated=$store->execute('UPDATE '.$store->table('accounts').' SET plan=?,sequence=sequence+1 WHERE owner=? AND plan=? AND quota_scheme=?',[$target,$row['owner'],$row['plan'],QuotaPolicy::CURRENT])->rowCount();
-                if($updated!==1) continue;
-                $store->audit($row['owner'],'','plan_alias_migrated',hash('sha256',$row['owner'].'|'.$row['plan'].'|'.$target),$now);
-                ++$changed;
+            foreach($aliases as $scheme=>$map) {
+                $rows=$store->rows('SELECT owner,plan FROM '.$store->table('accounts').' WHERE quota_scheme=? AND (plan=? OR plan=?) ORDER BY owner',[$scheme,'biznes','biznespro']);
+                foreach($rows as $row) {
+                    $target=$map[$row['plan']]??null;
+                    if($target===null) continue;
+                    $updated=$store->execute('UPDATE '.$store->table('accounts').' SET plan=?,sequence=sequence+1 WHERE owner=? AND plan=? AND quota_scheme=?',[$target,$row['owner'],$row['plan'],$scheme])->rowCount();
+                    if($updated!==1) continue;
+                    $store->audit($row['owner'],'','plan_alias_migrated',hash('sha256',$row['owner'].'|'.$scheme.'|'.$row['plan'].'|'.$target),$now);
+                    ++$changed;
+                }
             }
             return $changed;
         });
@@ -253,7 +260,12 @@ final class Core {
         $a=$this->account($owner); $terms=QuotaPolicy::terms($this->policy,$a); $window=QuotaPolicy::window($terms,$now); $period=$window['period'];
         $b=$this->store->row('SELECT used,reserved FROM '.$this->store->table('balances').' WHERE owner=? AND period=?',[$owner,$period]) ?? ['used'=>0,'reserved'=>0];
         $limit=$terms['limit'];
-        return $window+$terms+['plan'=>$a['plan'],'timezone'=>'UTC','limit'=>$limit,'used'=>(int)$b['used'],'reserved'=>(int)$b['reserved'],'remaining'=>max(0,$limit-(int)$b['used']-(int)$b['reserved']),'policy_version'=>$this->policy['version'],'batch_available'=>$this->batchAvailable()];
+        $out=$window+$terms+['plan'=>$a['plan'],'timezone'=>'UTC','limit'=>$limit,'used'=>(int)$b['used'],'reserved'=>(int)$b['reserved'],'remaining'=>$limit===null?null:max(0,$limit-(int)$b['used']-(int)$b['reserved']),'policy_version'=>$this->policy['version'],'batch_available'=>$this->batchAvailable()];
+        // Keep the pre-v3 response byte-identical for approved quotas. The
+        // fail-closed marker is additive and only matters when a quota is not
+        // approved; absence continues to mean "approved" for older clients.
+        if (($out['quota_status']??QuotaPolicy::QUOTA_APPROVED)===QuotaPolicy::QUOTA_APPROVED) unset($out['quota_status']);
+        return $out;
     }
     /**
      * Site-scoped, read-only usage projection for the paired Native plugin.
@@ -272,18 +284,21 @@ final class Core {
         $this->throttle($site['owner'],'site_usage',$now,120);
         if(!$this->signer) throw new Fault('signer_not_configured',503);
         $u=$this->usage($site['owner'],$now);
+        // Null means "quota not approved", never a fabricated zero balance.
+        $approved=($u['quota_status']??QuotaPolicy::QUOTA_APPROVED)===QuotaPolicy::QUOTA_APPROVED;
         $claims=[
             'site_url'=>$home,
             'site_id'=>(string)$site['id'],
             'account_id'=>(string)$site['owner'],
             'plan'=>(string)$u['plan'],
-            'limit'=>(int)$u['limit'],
+            'limit'=>$approved?(int)$u['limit']:null,
             'used'=>(int)$u['used'],
             'reserved'=>(int)$u['reserved'],
-            'remaining'=>(int)$u['remaining'],
+            'remaining'=>$approved?(int)$u['remaining']:null,
             'period'=>(string)$u['period'],
             'period_kind'=>(string)$u['period_kind'],
             'quota_scheme'=>(string)$u['quota_scheme'],
+            'quota_status'=>(string)($u['quota_status']??QuotaPolicy::QUOTA_APPROVED),
             'period_start_utc'=>(string)$u['period_start_utc'],
             'period_end_utc'=>(string)$u['period_end_utc'],
             'policy_version'=>(string)$u['policy_version'],
@@ -330,6 +345,7 @@ final class Core {
                 return ['cached'=>json_decode($this->vault->open($previous['response_sealed'],'response:'.$actor['owner'].':'.$key),true,64,JSON_THROW_ON_ERROR)];
             }
             $terms=QuotaPolicy::terms($this->policy,$a); $period=QuotaPolicy::window($terms,$now)['period'];
+            if ($units>0 && ($terms['quota_status']??QuotaPolicy::QUOTA_APPROVED)!==QuotaPolicy::QUOTA_APPROVED) throw new Fault('plan_quota_not_configured',403);
             $this->store->execute($this->store->ignore().' INTO '.$this->store->table('balances').' (owner,period) VALUES (?,?)',[$actor['owner'],$period]);
             $b=$this->store->row('SELECT * FROM '.$this->store->table('balances').' WHERE owner=? AND period=?'.$this->store->lock(),[$actor['owner'],$period]);
             if ($units>0 && (int)$b['used']+(int)$b['reserved']+$units > $terms['limit']) throw new Fault(QuotaPolicy::exhausted($terms),429);
@@ -481,12 +497,14 @@ final class Core {
         });
     }
 
-    public function setPlan(string $operator,string $owner,string $plan,int $now): void {
-        if (!isset($this->policy['plans'][$plan])) throw new Fault('unknown_plan');
-        $this->store->transaction(function() use($operator,$owner,$plan,$now) {
+    public function setPlan(string $operator,string $owner,string $plan,int $now,?string $scheme=null): void {
+        $this->store->transaction(function() use($operator,$owner,$plan,$now,$scheme) {
             $this->account($owner,true);
-            $this->store->execute('UPDATE '.$this->store->table('accounts').' SET plan=?,quota_scheme=?,sequence=sequence+1 WHERE owner=?',[$plan,QuotaPolicy::scheme($this->policy),$owner]);
-            $this->store->audit($owner,'','operator_plan_changed',hash('sha256',$operator.'|'.$plan),$now);
+            $current=$this->store->row('SELECT plan,quota_scheme FROM '.$this->store->table('accounts').' WHERE owner=?',[$owner]);
+            $target=$scheme??(string)($current['quota_scheme']??QuotaPolicy::scheme($this->policy));
+            if(!QuotaPolicy::offers($this->policy,$target,$plan)) throw new Fault('unknown_plan',403);
+            $this->store->execute('UPDATE '.$this->store->table('accounts').' SET plan=?,quota_scheme=?,sequence=sequence+1 WHERE owner=?',[$plan,$target,$owner]);
+            $this->store->audit($owner,'','operator_plan_changed',hash('sha256',$operator.'|'.$target.'|'.$plan),$now);
         });
     }
 }

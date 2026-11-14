@@ -93,6 +93,17 @@ usageAssert(OAI_Cloud_Usage::verify(usageSigned($badScheme,$secret,$now,$site,$s
 $badLimit=$claims;$badLimit['limit']=0;$badLimit['remaining']=0;
 usageAssert(OAI_Cloud_Usage::verify(usageSigned($badLimit,$secret,$now,$site,$siteId),$context,$now)['reason']==='claims','Zero-limit projection accepted');
 
+// Target monthly scheme and explicit unapproved paid quota state.
+$v3=$claims;
+$v3['plan']='free';$v3['limit']=100;$v3['used']=0;$v3['reserved']=0;$v3['remaining']=100;
+$v3['period']='2026-11';$v3['period_kind']='calendar_month_utc';$v3['quota_scheme']='tariffs_v3';$v3['quota_status']='approved';
+$v3['period_start_utc']='2026-11-01T00:00:00Z';$v3['period_end_utc']='2026-12-01T00:00:00Z';
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($v3,$secret,$now,$site,$siteId),$context,$now)['valid']===true,'Monthly tariffs_v3 projection rejected');
+$pending=$v3;$pending['limit']=null;$pending['remaining']=null;$pending['quota_status']='requires_owner_approval';
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($pending,$secret,$now,$site,$siteId),$context,$now)['reason']==='quota_pending','Unapproved paid quota was rendered as a balance');
+$unknownStatus=$v3;$unknownStatus['quota_status']='unlimited';
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($unknownStatus,$secret,$now,$site,$siteId),$context,$now)['reason']==='claims','Unknown quota status accepted');
+
 // Garbage and legacy (unsigned) responses fail closed.
 usageAssert(OAI_Cloud_Usage::verify(['contract'=>'wpai-site-usage-v1'],$context,$now)['reason']==='site','Malformed projection accepted');
 usageAssert(OAI_Cloud_Usage::verify(['contract'=>'other'],$context,$now)['reason']==='contract','Unknown contract accepted');
@@ -164,4 +175,4 @@ foreach($handler_states as $handler_state=>$handler_fresh){
 $handler_real=OAI_Admin::cloud_usage_refresh_notice(OAI_Cloud_Usage::status());
 usageAssert(strpos($handler_real,'notice-success')!==false,'Quota button handler rejected the real verified/stale status()');
 
-echo "PASS 38 cloud usage projection assertions + 9 quota button handler assertions\n";
+echo "PASS 41 cloud usage projection assertions + 9 quota button handler assertions\n";

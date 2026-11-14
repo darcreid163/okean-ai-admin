@@ -25,5 +25,45 @@
   "batch": "disabled_until_receipt_accounting_contract",
   "automatic_money_debits": false,
   "manual_refills": "deferred",
-  "timezone": "UTC"
+  "timezone": "UTC",
+  "default_scheme": "tariffs_v2",
+  "schemes": {
+    "tariffs_v3": {
+      "period": "calendar_month_utc",
+      "status": "owner_approval_required_for_paid_quotas",
+      "version_key_suffix": "V3",
+      "all_tools": true,
+      "automatic_money_debits": false,
+      "plans": {
+        "free": 100,
+        "pro": null,
+        "business": null,
+        "businesspro": null
+      },
+      "quota_status": {
+        "free": "approved",
+        "pro": "requires_owner_approval",
+        "business": "requires_owner_approval",
+        "businesspro": "requires_owner_approval"
+      },
+      "periods": {
+        "free": "calendar_month_utc",
+        "pro": "calendar_month_utc",
+        "business": "calendar_month_utc",
+        "businesspro": "calendar_month_utc"
+      },
+      "names": {
+        "free": "Free",
+        "pro": "Pro",
+        "business": "Business",
+        "businesspro": "BusinessPro"
+      },
+      "prices_rub_month": {
+        "free": 0,
+        "pro": 2000,
+        "business": 5000,
+        "businesspro": 10000
+      }
+    }
+  }
 }

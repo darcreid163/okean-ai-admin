@@ -146,7 +146,15 @@ final class Admin {
                     $name=$message['params']['name'];
                     if ($name==='cloud_sites_list' && !in_array($site,array_column($data,'id'),true)) throw new Fault('gateway_site_filter_failed',502);
                     if ($name==='cloud_site_tools_list' && !in_array('system_manifest',array_column($data,'name'),true)) throw new Fault('upstream_catalog_failed',502);
-                    if ($name==='cloud_usage' && (!isset($data['limit'],$data['used'],$data['reserved']) || ($data['timezone']??'')!=='UTC')) throw new Fault('gateway_usage_failed',502);
+                    if ($name==='cloud_usage') {
+                        $pending=($data['quota_status']??QuotaPolicy::QUOTA_APPROVED)!==QuotaPolicy::QUOTA_APPROVED;
+                        // A pending paid quota is a valid state with null limit
+                        // and remaining; it must not masquerade as a balance.
+                        $valid=$pending
+                            ? (($data['limit']??null)===null && ($data['remaining']??null)===null && isset($data['used'],$data['reserved']))
+                            : isset($data['limit'],$data['used'],$data['reserved'],$data['remaining']);
+                        if (!$valid || ($data['timezone']??'')!=='UTC') throw new Fault('gateway_usage_failed',502);
+                    }
                 }
             }
             $steps[]=['step'=>$message['params']['name']??$message['method'],'http'=>$status,'passed'=>true];

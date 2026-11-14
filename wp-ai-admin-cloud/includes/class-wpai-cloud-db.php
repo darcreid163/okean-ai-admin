@@ -40,6 +40,8 @@ class WPAI_Cloud_DB {
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             plan_id bigint(20) unsigned NOT NULL,
             version_key varchar(64) NOT NULL,
+            scheme varchar(64) NOT NULL DEFAULT 'legacy_monthly_v1',
+            quota_status varchar(32) NOT NULL DEFAULT 'approved',
             monthly_actions int unsigned NOT NULL DEFAULT 0,
             batch_objects_per_action int unsigned NOT NULL DEFAULT 5,
             failed_actions_billable tinyint(1) NOT NULL DEFAULT 0,
@@ -51,6 +53,8 @@ class WPAI_Cloud_DB {
             PRIMARY KEY (id),
             UNIQUE KEY version_key (version_key),
             KEY plan_id (plan_id),
+            KEY scheme (scheme),
+            KEY quota_status (quota_status),
             KEY active (active)
         ) $charset;";
 

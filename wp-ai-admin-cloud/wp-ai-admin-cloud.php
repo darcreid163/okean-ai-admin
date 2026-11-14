@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) exit;
 
 define('WPAI_CLOUD_VERSION', '0.3.13-dev');
-define('WPAI_CLOUD_DB_VERSION', '1');
+define('WPAI_CLOUD_DB_VERSION', '2');
 define('WPAI_CLOUD_DIR', plugin_dir_path(__FILE__));
 define('WPAI_CLOUD_REST_NS', 'wpai-cloud/v1');
 

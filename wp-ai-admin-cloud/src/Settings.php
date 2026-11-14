@@ -54,15 +54,10 @@ final class Settings {
     }
     public static function policy(): array {
         global $wpdb;
-        $rows=$wpdb->get_results('SELECT p.slug,v.version_key,v.monthly_actions,v.batch_objects_per_action,v.failed_actions_billable,v.rollback_billable,v.verify_billable FROM '.\WPAI_Cloud_DB::table('plans').' p INNER JOIN '.\WPAI_Cloud_DB::table('plan_versions').' v ON v.plan_id=p.id WHERE p.active=1 AND v.active=1 ORDER BY p.slug',ARRAY_A);
-        $plans=[];
-        foreach ($rows??[] as $r) {
-            if (isset($plans[$r['slug']]) || (int)$r['batch_objects_per_action']!==5 || (int)$r['failed_actions_billable']!==0 || (int)$r['rollback_billable']!==0 || (int)$r['verify_billable']!==0) throw new Fault('core_plan_policy_incompatible',503);
-            $plans[$r['slug']]=(int)$r['monthly_actions'];
-        }
-        $batch=in_array(get_option('wpai_gateway_batch_object_v1',false),[true,1,'1'],true);
+        $rows=$wpdb->get_results('SELECT p.slug,v.version_key,v.scheme,v.quota_status,v.monthly_actions,v.batch_objects_per_action,v.failed_actions_billable,v.rollback_billable,v.verify_billable FROM '.\WPAI_Cloud_DB::table('plans').' p INNER JOIN '.\WPAI_Cloud_DB::table('plan_versions').' v ON v.plan_id=p.id WHERE p.active=1 AND v.active=1 ORDER BY v.id',ARRAY_A);
         $policy=self::catalogPolicy();
-        $policy['legacy_plans']=$plans;
+        $policy=QuotaPolicy::mergePlanVersions($policy,$rows??[]);
+        $batch=in_array(get_option('wpai_gateway_batch_object_v1',false),[true,1,'1'],true);
         $policy['batch']=$batch?BatchAccounting::POLICY:'disabled_until_receipt_accounting_contract';
         $policy['version']='tariffs-v3-'.substr(hash('sha256',Security::canonical([$policy,$rows??[]])),0,24);
         QuotaPolicy::validate($policy);
