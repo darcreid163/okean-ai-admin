@@ -81,7 +81,7 @@ final class Signer {
     }
     public function publicKey(): string { return Security::b64(sodium_crypto_sign_publickey_from_secretkey($this->secret)); }
     public function keyId(): string { return substr(hash('sha256',sodium_crypto_sign_publickey_from_secretkey($this->secret)),0,16); }
-    /** V1 interoperability proof only. Never describe this legacy daily allowance as a commercial monthly entitlement. */
+    /** V1 interoperability proof only. Its 100/day allowance matches the owner-approved Free plan; do not present it as a monthly entitlement. */
     public function foundation(array $site, int $sequence, int $now): array {
         $claims = ['contract_version'=>1,'issuer'=>'okean-control-plane','audience'=>'wp-ai-admin',
             'site_id'=>$site['plugin_site_id'],'installation_id'=>$site['installation_id'],'registration_id'=>$site['id'],

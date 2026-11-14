@@ -71,14 +71,14 @@ try {
     v3Check(!QuotaPolicy::offers($policy,QuotaPolicy::CURRENT,'biznes'),'Retired alias is still offered on v2');
     v3Check(QuotaPolicy::offers($policy,QuotaPolicy::LEGACY,'scale'),'Legacy scale missing');
 
-    // Terms: legacy stays monthly, v2 stays daily, v3 free is monthly/approved,
-    // v3 paid is pending with a null limit (not zero, not unlimited).
+    // Terms: legacy stays monthly, v2 stays daily, v3 free is daily/approved,
+    // v3 paid is monthly and pending with a null limit (not zero, not unlimited).
     $legacy=QuotaPolicy::terms($policy,['plan'=>'pro','quota_scheme'=>QuotaPolicy::LEGACY]);
     v3Check($legacy['limit']===500&&$legacy['period_kind']===QuotaPolicy::MONTH&&$legacy['quota_scheme']===QuotaPolicy::LEGACY,'Legacy terms changed');
     $v2=QuotaPolicy::terms($policy,['plan'=>'free','quota_scheme'=>QuotaPolicy::CURRENT]);
     v3Check($v2['limit']===100&&$v2['period_kind']===QuotaPolicy::DAY&&$v2['quota_scheme']===QuotaPolicy::CURRENT,'v2 terms changed');
     $free=QuotaPolicy::terms($policy,['plan'=>'free','quota_scheme'=>QuotaPolicy::TARGET]);
-    v3Check($free['limit']===100&&$free['period_kind']===QuotaPolicy::MONTH&&$free['quota_status']===QuotaPolicy::QUOTA_APPROVED,'v3 free terms wrong');
+    v3Check($free['limit']===100&&$free['period_kind']===QuotaPolicy::DAY&&$free['quota_status']===QuotaPolicy::QUOTA_APPROVED,'v3 free terms wrong');
     $pro=QuotaPolicy::terms($policy,['plan'=>'pro','quota_scheme'=>QuotaPolicy::TARGET]);
     v3Check($pro['limit']===null&&$pro['quota_status']===QuotaPolicy::QUOTA_PENDING&&$pro['period_kind']===QuotaPolicy::MONTH,'v3 paid terms must stay pending');
     v3Rejects(fn()=>QuotaPolicy::terms($policy,['plan'=>'enterprise','quota_scheme'=>QuotaPolicy::TARGET]),'plan_unavailable');

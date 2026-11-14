@@ -27,12 +27,12 @@ The owner-approved target catalogue is:
 
 | Plan | Price | Approved quota | Quota period |
 |---|---:|---:|---|
-| Free | 0 ₽/month | 100 | UTC calendar month |
+| Free | 0 ₽/month | 100 | UTC calendar day |
 | Pro | 2,000 ₽/month | requires owner approval | UTC calendar month |
 | Business | 5,000 ₽/month | requires owner approval | UTC calendar month |
 | BusinessPro | 10,000 ₽/month | requires owner approval | UTC calendar month |
 
-Canonical server source: `wp-ai-admin-cloud/config/plans.json`. The target lives in `schemes.tariffs_v3`; `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing and newly provisioned accounts keep their persisted v2 terms until then. Free is fixed at 100 actions/UTC month under v3; paid quotas are `null` with `quota_status=requires_owner_approval`, so billable calls fail closed until the owner supplies numbers while reads, verification, receipts, rollback and usage stay available. All tools are available on every plan. Legacy accounts keep their previously approved monthly terms until a separately authorized migration.
+Canonical server source: `wp-ai-admin-cloud/config/plans.json`. The target lives in `schemes.tariffs_v3`; `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing and newly provisioned accounts keep their persisted v2 terms until then. Free is fixed at 100 actions/UTC day in both v2 and v3; paid quotas are monthly, `null` and `quota_status=requires_owner_approval`, so billable calls fail closed until the owner supplies numbers while reads, verification, receipts, rollback and usage stay available. All tools are available on every plan. Legacy accounts keep their previously approved monthly terms until a separately authorized migration.
 
 Cloud Core alone decides plan, licence, quota and balance; clients never submit their own plan, quota, account or licence identity. Licence keys use `wpai_lic_` plus 43 base64url characters, only SHA-256 is stored at rest, and the plaintext is shown once. Successful reads/Sandbox calls count; every successful Batch object is one action; failed calls/rollback/idempotent retry are not billed again. **Gateway Ledger is sole charging authority, no telemetry charging, no automatic payment debit.** These are required rules; the live v2 tariff migration and Batch activation are not assumed complete.
 
