@@ -47,14 +47,14 @@ Use the current approved tariff policy as the starting baseline; verify it again
 
 | Tariff | Slug | Price | Approved quota |
 |---|---|---:|---:|
-| Free | `free` | 0 ₽/month | 100 actions / UTC month |
+| Free | `free` | 0 ₽/month | 100 actions / UTC day |
 | Pro | `pro` | 2,000 ₽/month | requires owner approval |
 | Business | `business` | 5,000 ₽/month | requires owner approval |
 | BusinessPro | `businesspro` | 10,000 ₽/month | requires owner approval |
 
 The owner-approved target catalogue is the table above (owner decision 14.11.2026). All tools remain available on every plan. Plan and period assignment is manual; there are no automatic debits, auto-renewal or payment-method charges in beta.
 
-`wp-ai-admin-cloud/config/plans.json` is the single server-side source. The target lives in `schemes.tariffs_v3`; `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing and newly provisioned accounts keep their persisted v2 terms until then. Paid quotas are `null` with `quota_status=requires_owner_approval`: billable calls fail closed with `plan_quota_not_configured` until the owner supplies the numbers, while reads, verification, receipts, rollback and usage remain available. Never invent or carry over a paid limit.
+`wp-ai-admin-cloud/config/plans.json` is the single server-side source. The target lives in `schemes.tariffs_v3`; `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing and newly provisioned accounts keep their persisted v2 terms until then. Free is 100 actions/UTC day in both v2 and v3; paid quotas are monthly, `null` and `quota_status=requires_owner_approval`: billable calls fail closed with `plan_quota_not_configured` until the owner supplies the numbers, while reads, verification, receipts, rollback and usage remain available. Never invent or carry over a paid limit.
 
 Cloud Core is the only authority for plan, licence, quota and balance. Licence keys use `wpai_lic_` plus 43 base64url characters, only SHA-256 is stored at rest, and the plaintext is shown once. Legacy monthly accounts and plans (`legacy_monthly_v1`) keep their existing monthly terms until an explicit, audited transfer; they are never silently re-rated. Retired current-scheme slugs `biznes`/`biznespro` are migrated to `business` without lowering their limit.
 
