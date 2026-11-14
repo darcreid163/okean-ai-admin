@@ -5,6 +5,7 @@ namespace WPAICloudGateway;
 final class Store {
     private bool $mysql;
     private int $transactionDepth=0;
+    private static ?\WeakMap $licenseSchemaReady=null;
     public function __construct(private readonly \PDO $db, private readonly string $prefix='wpai_cloud_') {
         if (!preg_match('/^[A-Za-z0-9_]{1,48}$/D',$prefix)) throw new Fault('invalid_table_prefix',503);
         $db->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);
@@ -13,7 +14,7 @@ final class Store {
         if (!$this->mysql) { $db->exec('PRAGMA busy_timeout=10000'); $db->exec('PRAGMA journal_mode=WAL'); }
     }
     public function table(string $name): string {
-        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate'],true)) throw new Fault('invalid_table',503);
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
@@ -94,6 +95,44 @@ final class Store {
             if ($column && $column['DATA_TYPE']==='varchar' && (int)$column['CHARACTER_MAXIMUM_LENGTH']===7) $this->execute('ALTER TABLE '.$this->table($name).' MODIFY COLUMN period VARCHAR(10) NOT NULL');
         }
     }
+    /**
+     * Additive, lazy licence schema. It is deliberately not part of the
+     * gateway DB-version migration: historical 0.3.11 -> 0.3.13 upgrade and
+     * restore tests assert the exact table set, so licence tables may only be
+     * created when a licence operation (or account provisioning) actually
+     * runs. Existing accounts without accounts.license_id keep their previous
+     * behaviour until a licence is issued for them.
+     */
+    public function ensureLicenseSchema(): void {
+        self::$licenseSchemaReady ??= new \WeakMap();
+        if (isset(self::$licenseSchemaReady[$this])) return;
+        if ($this->transactionDepth>0) throw new Fault('license_schema_unavailable',503);
+        $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        $definitions=[
+            'licenses'=>"id VARCHAR(32) PRIMARY KEY, key_hash CHAR(64) NOT NULL UNIQUE, key_prefix VARCHAR(24) NOT NULL, owner VARCHAR(64) NULL, plan VARCHAR(20) NOT NULL, quota_scheme VARCHAR(20) NOT NULL, status VARCHAR(20) NOT NULL, activation_limit INTEGER NOT NULL DEFAULT 1, activations INTEGER NOT NULL DEFAULT 0, issued_at BIGINT NOT NULL, starts_at BIGINT NOT NULL, expires_at BIGINT NULL, activated_at BIGINT NULL, revoked_at BIGINT NULL, replaced_by VARCHAR(32) NULL, replaces VARCHAR(32) NULL, comment VARCHAR(255) NOT NULL DEFAULT '', issued_by VARCHAR(64) NOT NULL, source VARCHAR(20) NOT NULL, sequence INTEGER NOT NULL DEFAULT 1",
+            'license_activations'=>"license_id VARCHAR(32) NOT NULL, site_id VARCHAR(64) NOT NULL, owner VARCHAR(64) NOT NULL, home VARCHAR(512) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'active', activated_at BIGINT NOT NULL, deactivated_at BIGINT NULL, PRIMARY KEY(license_id,site_id)",
+            'license_events'=>"id VARCHAR(64) PRIMARY KEY, license_id VARCHAR(32) NOT NULL, owner VARCHAR(64) NOT NULL, event VARCHAR(40) NOT NULL, actor VARCHAR(64) NOT NULL, detail_hash CHAR(64) NOT NULL, created_at BIGINT NOT NULL",
+        ];
+        foreach ($definitions as $name=>$def) $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table($name).' ('.$def.')'.$tail);
+        if (!$this->hasColumn('accounts','license_id')) {
+            try { $this->execute('ALTER TABLE '.$this->table('accounts').' ADD COLUMN license_id VARCHAR(32) NULL'); }
+            catch (\PDOException $e) {
+                // A concurrent first request may have added the same column.
+                $duplicate=$this->mysql?(int)($e->errorInfo[1]??0)===1060:str_contains(strtolower($e->getMessage()),'duplicate column name');
+                if (!$duplicate) throw $e;
+            }
+        }
+        $this->assertSchema(['licenses','license_activations','license_events']);
+        if (!$this->hasColumn('accounts','license_id')) throw new Fault('license_schema_incompatible',503);
+        self::$licenseSchemaReady[$this]=true;
+    }
+    private function hasColumn(string $table,string $column): bool {
+        if ($this->mysql) {
+            return (bool)$this->row('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?',[$this->prefix.$table,$column]);
+        }
+        $rows=$this->rows('PRAGMA table_info('.$this->table($table).')');
+        return in_array($column,array_map(static fn($r)=>(string)$r['name'],$rows),true);
+    }
     public function assertSchema(?array $tableNames=null): void {
         $tableNames=$tableNames??['accounts','balances','sites','tokens','requests','batch_steps','rate','audit','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate'];
         // Validate the minimum schema even when the WordPress DB-version option
@@ -114,6 +153,9 @@ final class Store {
             'oauth_refresh'=>['hash','grant_id','used','expires'],
             'oauth_access'=>['hash','grant_id','resource'],
             'oauth_rate'=>['bucket','slot','hits'],
+            'licenses'=>['id','key_hash','key_prefix','owner','plan','quota_scheme','status','activation_limit','activations','issued_at','starts_at','expires_at','activated_at','revoked_at','replaced_by','replaces','comment','issued_by','source','sequence'],
+            'license_activations'=>['license_id','site_id','owner','home','status','activated_at','deactivated_at'],
+            'license_events'=>['id','license_id','owner','event','actor','detail_hash','created_at'],
         ];
 
         if($this->mysql){

@@ -80,7 +80,7 @@ final class BatchAccounting {
         Security::identifier($nonce);$owner=$actor['owner'];$key=hash('sha256',$owner.'|'.$nonce);$started=time();
         $fingerprint=hash('sha256',Security::canonical(['batch_v1',$site['id'],$items,$stopOnError]));
         $reserved=$this->store->transaction(function()use($owner,$key,$fingerprint,$site,$items,$now,$authorize){
-            $a=$this->lockAccount($owner);$authorize('mcp:read',$now);
+            $a=$this->lockAccount($owner);$a=Licenses::syncAccount($this->store,$this->policy,$owner,$now,$a);$authorize('mcp:read',$now);
             $previous=$this->store->row('SELECT * FROM '.$this->store->table('requests').' WHERE request_key=?',[$key]);
             if($previous){
                 if($previous['owner']!==$owner||$previous['tool']!==self::TOOL||!hash_equals($previous['fingerprint'],$fingerprint))throw new Fault('idempotency_conflict',409);

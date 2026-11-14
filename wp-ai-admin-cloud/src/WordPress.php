@@ -124,6 +124,19 @@ final class WordPress {
         $route('/tokens','POST',function($r) { $p=self::body($r); if (!is_array($p['site_ids']??null)||!is_array($p['scopes']??null)) throw new Fault('token_policy_required'); return self::core()->mint(self::owner(),$p['site_ids'],$p['scopes'],time()); });
         $route('/tokens/(?P<hash>[a-f0-9]{64})','DELETE',function($r) { self::core()->revokeToken(self::owner(),$r['hash'],time()); return ['revoked'=>true]; });
         $route('/usage','GET',fn($r)=>self::core()->usage(self::owner(),time()));
+        // Licence self-service. The owner is always the authenticated
+        // WordPress user; a client can never submit its own account or plan.
+        $route('/licenses','GET',fn($r)=>self::core()->licenses(self::owner()));
+        $route('/licenses/activate','POST',function($r) {
+            $p=self::body($r);
+            if(!is_string($p['key']??null)||!is_string($p['site_id']??null)) throw new Fault('license_key_and_site_required');
+            return self::core()->activateLicense(self::owner(),$p['key'],$p['site_id'],time());
+        });
+        $route('/licenses/(?P<id>lic_[a-f0-9]{24})/deactivate','POST',function($r) {
+            $p=self::body($r);
+            if(!is_string($p['site_id']??null)) throw new Fault('license_site_required');
+            return self::core()->deactivateLicense(self::owner(),$r['id'],$p['site_id'],time());
+        });
         // Paired-site read-only usage projection. Authenticated by the site
         // read key derived at pairing, never by a WordPress cookie or a Cloud
         // bearer token. One site can only read its own owner's projection.
@@ -162,6 +175,34 @@ final class WordPress {
             return self::core()->reactivateAccount((string)get_current_user_id(),$target,time());
         });
         $admin('/accounts/(?P<owner>[0-9]+)/plan',function($r) { $p=self::body($r); if (!is_string($p['plan']??null)) throw new Fault('plan_required'); self::owner(); self::core()->setPlan((string)get_current_user_id(),$r['owner'],$p['plan'],time()); return ['updated'=>true]; });
+        $admin('/licenses',function($r) {
+            $p=self::body($r);
+            if(!is_string($p['plan']??null)||$p['plan']==='') throw new Fault('plan_required');
+            $scheme=null;
+            if(isset($p['scheme'])) { if(!is_string($p['scheme'])||$p['scheme']==='') throw new Fault('invalid_license_scheme'); $scheme=$p['scheme']; }
+            $owner=null;
+            if(isset($p['owner'])&&$p['owner']!==''&&$p['owner']!==0) {
+                $owner=is_int($p['owner'])?(string)$p['owner']:(is_string($p['owner'])?$p['owner']:null);
+                if($owner===null||!preg_match('/^[0-9]{1,20}$/D',$owner)) throw new Fault('invalid_license_owner');
+            }
+            $options=[];
+            foreach(['activation_limit','duration_days','expires_at'] as $name) if(isset($p[$name])) { if(!is_int($p[$name])) throw new Fault('invalid_license_option'); $options[$name]=$p[$name]; }
+            if(isset($p['comment'])) { if(!is_string($p['comment'])) throw new Fault('invalid_license_comment'); $options['comment']=$p['comment']; }
+            self::owner();
+            return self::core()->issueLicense((string)get_current_user_id(),$owner,$p['plan'],time(),$scheme,$options);
+        });
+        foreach(['reissue'=>'REISSUE','revoke'=>'REVOKE','suspend'=>'SUSPEND','reactivate'=>'REACTIVATE'] as $action=>$confirmation) {
+            $admin('/licenses/(?P<id>lic_[a-f0-9]{24})/'.$action,function($r) use($action,$confirmation) {
+                $p=self::body($r);
+                if(($p['confirm']??null)!==$confirmation) throw new Fault('license_'.$action.'_confirmation_required',409);
+                self::owner();
+                $operator=(string)get_current_user_id(); $now=time();
+                if($action==='reissue') return self::core()->reissueLicense($operator,$r['id'],$now);
+                if($action==='revoke') return self::core()->revokeLicense($operator,$r['id'],$now);
+                if($action==='suspend') return self::core()->suspendLicense($operator,$r['id'],$now);
+                return self::core()->reactivateLicense($operator,$r['id'],$now);
+            });
+        }
         $admin('/accounts/(?P<owner>[0-9]+)/requests/(?P<key>[a-f0-9]{64})/reconcile',function($r) { $p=self::body($r); if(!is_string($p['outcome']??null)||!is_array($p['evidence']??null)) throw new Fault('operator_receipt_evidence_required'); self::owner(); return self::core()->reconcile((string)get_current_user_id(),$r['owner'],$r['key'],$p['outcome'],$p['evidence'],time()); });
     }
     private static function oauthRoutes(): void {
