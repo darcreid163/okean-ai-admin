@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace WPAICloudGateway;
 
 require_once __DIR__.'/AbilitiesPolicy.php';
+require_once __DIR__.'/Licenses.php';
 
 final class Core {
     // Exceeds the bounded HTTPS catalog + tool request timeouts. Expiry only
@@ -17,7 +18,22 @@ final class Core {
     }
     public function ensureAccount(string $owner): void {
         Security::identifier($owner,64);
+        $this->store->ensureLicenseSchema();
         $this->store->execute($this->store->ignore().' INTO '.$this->store->table('accounts').' (owner,plan,quota_scheme) VALUES (?,?,?)',[$owner,'free',QuotaPolicy::scheme($this->policy)]);
+        // Every account receives exactly one current bound entitlement. A
+        // pre-existing free account without a licence link is upgraded in
+        // place; an account with a linked licence is left untouched.
+        $account=$this->store->row('SELECT owner,plan,quota_scheme,license_id FROM '.$this->store->table('accounts').' WHERE owner=?',[$owner]);
+        if ($account && empty($account['license_id'])) {
+            $plan=(string)$account['plan']; $scheme=(string)$account['quota_scheme'];
+            // Historical accounts keep their previous entitlement when the
+            // persisted plan does not belong to its scheme (or is quarantined).
+            // Automatic issuance must never turn a working legacy account into
+            // a hard failure just because it has no licence yet.
+            if ($scheme!=='' && QuotaPolicy::offers($this->policy,$scheme,$plan) && empty($this->policy['incompatible_plans'][$scheme.'|'.$plan])) {
+                Licenses::ensureBound($this->store,$this->policy,$owner,$plan,$scheme,time());
+            }
+        }
     }
     /**
      * Repairs retired plan slugs that are still attached to a known tariff
@@ -47,9 +63,13 @@ final class Core {
             return $changed;
         });
     }
-    private function account(string $owner,bool $lock=false): array {
+    private function account(string $owner,bool $lock=false,?int $now=null): array {
         $a=$this->store->row('SELECT * FROM '.$this->store->table('accounts').' WHERE owner=?'.($lock?$this->store->lock():''),[$owner]);
         if (!$a || (int)$a['disabled']!==0) throw new Fault('account_unavailable',403);
+        // Historical databases predate the lazy licence schema: accounts.license_id
+        // does not exist until licence provisioning runs. Such accounts keep their
+        // previous entitlement and must not emit an undefined-key warning.
+        if (array_key_exists('license_id',$a) && !empty($a['license_id'])) $a=Licenses::syncAccount($this->store,$this->policy,$owner,$now??time(),$a);
         QuotaPolicy::terms($this->policy,$a);
         return $a;
     }
@@ -58,8 +78,8 @@ final class Core {
         if (!$s) throw new Fault('site_unavailable',404);
         return $s;
     }
-    public function assertActiveAccount(string $owner,bool $lock=false): void {
-        $this->account($owner,$lock);
+    public function assertActiveAccount(string $owner,bool $lock=false,?int $now=null): void {
+        $this->account($owner,$lock,$now);
     }
     public function sites(string $owner): array {
         $this->account($owner);
@@ -87,7 +107,7 @@ final class Core {
     public function suspendAccount(string $owner,int $now): array {
         return $this->store->transaction(function() use($owner,$now) {
             $before=$this->closureInventory($owner);
-            $this->account($owner,true);
+            $this->account($owner,true,$now);
             // Clear credentials from every historical registration for this owner,
             // including legacy rows already marked revoked.
             $this->store->execute('UPDATE '.$this->store->table('sites').' SET status=?,token_sealed=? WHERE owner=?',['revoked','',$owner]);
@@ -110,7 +130,7 @@ final class Core {
         });
     }
     public function connect(string $owner,string $home,string $token,int $now,bool $replace=false,?string $statusHash=null): array {
-        $this->account($owner); $home=Security::home($home);
+        $this->account($owner,false,$now); $home=Security::home($home);
         $this->throttle($owner,'site_proof',$now,10);
         if (!preg_match('/^[A-Za-z0-9._~-]{20,512}$/D',$token)) throw new Fault('invalid_site_token');
         if ($statusHash!==null && !preg_match('/^[a-f0-9]{64}$/D',$statusHash)) throw new Fault('invalid_site_status_hash');
@@ -121,7 +141,7 @@ final class Core {
         if (!$manifest || ($manifest['plugin_name']??'')!=='WP AI Admin' || ($manifest['release']['production_defaults']['direct_live_writes']??null)!==false) throw new Fault('site_manifest_incompatible',422);
         $pluginSite=Security::identifier($manifest['site_id']); $installation=Security::identifier($manifest['installation_id']);
         return $this->store->transaction(function() use ($owner,$home,$token,$pluginSite,$installation,$now,$statusHash) {
-            $this->account($owner,true);
+            $this->account($owner,true,$now);
             $hash=hash('sha256',$home); $existing=$this->store->row('SELECT * FROM '.$this->store->table('sites').' WHERE url_hash=?',[$hash]);
             if($existing) {
                 // A URL can never be claimed by another account, even if its old row is revoked.
@@ -173,7 +193,7 @@ final class Core {
     }
     public function disconnect(string $owner,string $id,int $now): void {
         $this->store->transaction(function() use($owner,$id,$now) {
-            $this->account($owner,true); $this->ownedSite($owner,$id);
+            $this->account($owner,true,$now); $this->ownedSite($owner,$id);
             $this->store->execute('UPDATE '.$this->store->table('sites').' SET status=?,token_sealed=? WHERE owner=? AND id=?',['revoked','',$owner,$id]);
             $this->store->execute('UPDATE '.$this->store->table('accounts').' SET sequence=sequence+1 WHERE owner=?',[$owner]);
             $this->store->audit($owner,$id,'site_disconnected','',$now);
@@ -187,7 +207,7 @@ final class Core {
         // row lock, a mint that read "active" just before suspension could
         // insert a fresh non-revoked token after the suspension's bulk revoke.
         return $this->store->transaction(function() use($owner,$siteIds,$scopes,$now,$ttl) {
-            $this->account($owner,true);
+            $this->account($owner,true,$now);
             foreach ($siteIds as $id) $this->ownedSite($owner,Security::identifier($id));
             $token='wpai_cloud_'.Security::b64(random_bytes(32));
             $hash=hash('sha256',$token);
@@ -200,7 +220,7 @@ final class Core {
         if (!preg_match('/^wpai_cloud_[A-Za-z0-9_-]{43}$/D',$token)) throw new Fault('bearer_required',401);
         $row=$this->store->row('SELECT * FROM '.$this->store->table('tokens').' WHERE hash=? AND revoked=0 AND expires_at>?',[hash('sha256',$token),$now]);
         if (!$row) throw new Fault('invalid_or_expired_token',401);
-        $this->account($row['owner']);
+        $this->account($row['owner'],false,$now);
         $this->throttle($row['owner'],'mcp_http',$now,120);
         return ['owner'=>$row['owner'],'scopes'=>json_decode($row['scopes'],true,8,JSON_THROW_ON_ERROR),'site_ids'=>json_decode($row['site_ids'],true,8,JSON_THROW_ON_ERROR),'token_hash'=>$row['hash']];
     }
@@ -214,7 +234,7 @@ final class Core {
         $row=$this->store->row('SELECT hash FROM '.$this->store->table('tokens').' WHERE hash=? AND owner=? AND revoked=0 AND expires_at>?',[$actor['token_hash'],$actor['owner'],$now]);
         if (!$row) throw new Fault('invalid_or_expired_token',401);
         if (!in_array($scope,$actor['scopes'],true) || !in_array($site,$actor['site_ids'],true)) throw new Fault('scope_or_site_denied',403);
-        $this->account($actor['owner']); return $this->ownedSite($actor['owner'],$site);
+        $this->account($actor['owner'],false,$now); return $this->ownedSite($actor['owner'],$site);
     }
     public function signingPublicKey(): ?string { return $this->signer?->publicKey(); }
     public function signingKeyId(): ?string { return $this->signer?->keyId(); }
@@ -257,7 +277,7 @@ final class Core {
         return !in_array($name,self::READ_TOOLS,true);
     }
     public function usage(string $owner,int $now): array {
-        $a=$this->account($owner); $terms=QuotaPolicy::terms($this->policy,$a); $window=QuotaPolicy::window($terms,$now); $period=$window['period'];
+        $a=$this->account($owner,false,$now); $terms=QuotaPolicy::terms($this->policy,$a); $window=QuotaPolicy::window($terms,$now); $period=$window['period'];
         $b=$this->store->row('SELECT used,reserved FROM '.$this->store->table('balances').' WHERE owner=? AND period=?',[$owner,$period]) ?? ['used'=>0,'reserved'=>0];
         $limit=$terms['limit'];
         $out=$window+$terms+['plan'=>$a['plan'],'timezone'=>'UTC','limit'=>$limit,'used'=>(int)$b['used'],'reserved'=>(int)$b['reserved'],'remaining'=>$limit===null?null:max(0,$limit-(int)$b['used']-(int)$b['reserved']),'policy_version'=>$this->policy['version'],'batch_available'=>$this->batchAvailable()];
@@ -329,7 +349,7 @@ final class Core {
         $fingerprint=hash('sha256',Security::canonical([$siteId,$name,$args])); $key=hash('sha256',$actor['owner'].'|'.$nonce);
         $units=self::units($name);
         $reservation=$this->store->transaction(function() use ($actor,$siteId,$name,$fingerprint,$key,$now,$units) {
-            $a=$this->account($actor['owner'],true); $this->ownedSite($actor['owner'],$siteId);
+            $a=$this->account($actor['owner'],true,$now); $this->ownedSite($actor['owner'],$siteId);
             $previous=$this->store->row('SELECT * FROM '.$this->store->table('requests').' WHERE request_key=?',[$key]);
             if ($previous) {
                 if (!hash_equals($previous['fingerprint'],$fingerprint)) throw new Fault('idempotency_conflict',409);
@@ -402,14 +422,14 @@ final class Core {
         });
     }
     public function foundation(string $owner,string $siteId,int $now): array {
-        $a=$this->account($owner); $site=$this->ownedSite($owner,$siteId);
+        $a=$this->account($owner,false,$now); $site=$this->ownedSite($owner,$siteId);
         if (!$this->signer) throw new Fault('signer_not_configured',503);
         return ['purpose'=>'v1_compatibility_proof_only','commercial_entitlement_enforced'=>false,'envelope'=>$this->signer->foundation($site,(int)$a['sequence'],$now),'public_key'=>$this->signer->publicKey()];
     }
     public function throttle(string $owner,string $bucket,int $now,int $limit): void {
         Security::identifier($bucket,20);
         $this->store->transaction(function() use($owner,$bucket,$now,$limit) {
-            $this->account($owner,true); $slot=intdiv($now,60);
+            $this->account($owner,true,$now); $slot=intdiv($now,60);
             $this->store->execute($this->store->ignore().' INTO '.$this->store->table('rate').' (owner,bucket,slot) VALUES (?,?,?)',[$owner,$bucket,$slot]);
             $row=$this->store->row('SELECT hits FROM '.$this->store->table('rate').' WHERE owner=? AND bucket=? AND slot=?',[$owner,$bucket,$slot]);
             if ((int)$row['hits']>=$limit) throw new Fault('rate_limit_exceeded',429);
@@ -498,13 +518,30 @@ final class Core {
     }
 
     public function setPlan(string $operator,string $owner,string $plan,int $now,?string $scheme=null): void {
+        // DDL must happen before the transaction: MySQL implicitly commits on
+        // CREATE/ALTER and would otherwise break plan + licence atomicity.
+        $this->store->ensureLicenseSchema();
         $this->store->transaction(function() use($operator,$owner,$plan,$now,$scheme) {
-            $this->account($owner,true);
+            $this->account($owner,true,$now);
             $current=$this->store->row('SELECT plan,quota_scheme FROM '.$this->store->table('accounts').' WHERE owner=?',[$owner]);
             $target=$scheme??(string)($current['quota_scheme']??QuotaPolicy::scheme($this->policy));
             if(!QuotaPolicy::offers($this->policy,$target,$plan)) throw new Fault('unknown_plan',403);
             $this->store->execute('UPDATE '.$this->store->table('accounts').' SET plan=?,quota_scheme=?,sequence=sequence+1 WHERE owner=?',[$plan,$target,$owner]);
+            Licenses::ensureBound($this->store,$this->policy,$owner,$plan,$target,$now,$operator);
             $this->store->audit($owner,'','operator_plan_changed',hash('sha256',$operator.'|'.$target.'|'.$plan),$now);
         });
     }
+
+    /** Admin/manual licence issuance. The plaintext key is returned exactly once. */
+    public function issueLicense(string $operator,?string $owner,string $plan,int $now,?string $scheme=null,array $options=[]): array {
+        return Licenses::issue($this->store,$this->policy,$operator,$owner,$plan,$scheme,$now,$options);
+    }
+    public function licenses(string $owner,int $limit=50): array { return Licenses::listForOwner($this->store,$owner,$limit); }
+    public function allLicenses(int $limit=100): array { return Licenses::listAll($this->store,$limit); }
+    public function activateLicense(string $owner,string $key,string $siteId,int $now): array { return Licenses::activate($this->store,$this->policy,$owner,$key,$siteId,$now); }
+    public function deactivateLicense(string $owner,string $licenseId,string $siteId,int $now): array { return Licenses::deactivate($this->store,$owner,$licenseId,$siteId,$now); }
+    public function reissueLicense(string $operator,string $licenseId,int $now): array { return Licenses::reissue($this->store,$operator,$licenseId,$now); }
+    public function revokeLicense(string $operator,string $licenseId,int $now): array { return Licenses::revoke($this->store,$this->policy,$operator,$licenseId,$now); }
+    public function suspendLicense(string $operator,string $licenseId,int $now): array { return Licenses::suspend($this->store,$this->policy,$operator,$licenseId,$now); }
+    public function reactivateLicense(string $operator,string $licenseId,int $now): array { return Licenses::reactivate($this->store,$operator,$licenseId,$now); }
 }

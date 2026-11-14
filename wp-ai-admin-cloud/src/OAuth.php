@@ -45,7 +45,7 @@ final class OAuth {
             // Serialize consent issuance with account suspension. Once the
             // account row is locked as active, suspension cannot revoke access
             // and then have a stale authorization code inserted afterward.
-            $this->core->assertActiveAccount($owner,true);
+            $this->core->assertActiveAccount($owner,true,$now);
             $owned=array_column($this->core->sites($owner),'id');
             if(!$sites||!array_is_list($sites)||count($sites)>Core::MAX_SITES||array_filter($sites,fn($s)=>!is_string($s))||array_diff($sites,$owned)||count(array_unique($sites))!==count($sites))throw new Fault('invalid_site_consent',403);
             $code=Security::b64(random_bytes(32));
@@ -79,7 +79,7 @@ final class OAuth {
                 // account-first lock order shared with suspension/connect/mint.
                 $probe=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_codes').' WHERE hash=?',[$hash]);
                 if(!$probe)throw new Fault('invalid_grant');
-                try { $this->core->assertActiveAccount((string)$probe['owner'],true); }
+                try { $this->core->assertActiveAccount((string)$probe['owner'],true,$now); }
                 catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
                 $c=$this->store->row('SELECT * FROM '.$this->store->table('oauth_codes').' WHERE hash=?'.$this->store->lock(),[$hash]);
                 if(!$c||$c['owner']!==$probe['owner']||(int)$c['used']!==0||(int)$c['expires']<=$now||$c['client']!==$p['client_id']||$c['redirect']!==$p['redirect_uri']||$c['resource']!==$p['resource']||$c['resource']!==$this->resource||!hash_equals($c['challenge'],Security::b64(hash('sha256',$p['code_verifier'],true))))throw new Fault('invalid_grant');
@@ -99,7 +99,7 @@ final class OAuth {
             if(!$probeRefresh)throw new Fault('invalid_grant');
             $probeGrant=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_grants').' WHERE id=?',[$probeRefresh['grant_id']]);
             if(!$probeGrant)throw new Fault('invalid_grant');
-            try { $this->core->assertActiveAccount((string)$probeGrant['owner'],true); }
+            try { $this->core->assertActiveAccount((string)$probeGrant['owner'],true,$now); }
             catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
 
             $r=$this->store->row('SELECT * FROM '.$this->store->table('oauth_refresh').' WHERE hash=?'.$this->store->lock(),[$hash]);

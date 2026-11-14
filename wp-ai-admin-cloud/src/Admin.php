@@ -25,7 +25,7 @@ final class Admin {
     public static function page(): void {
         if (!current_user_can('manage_options')) return;
         nocache_headers();
-        $output=null; $secret=null;
+        $output=null; $secret=null; $secretKind='token';
         if (($_SERVER['REQUEST_METHOD']??'GET')==='POST' && isset($_POST['wpai_gateway_action'])) {
             try {
                 if (!is_ssl()) throw new Fault('https_required',403);
@@ -65,6 +65,30 @@ final class Admin {
                         $secret=$value['access_token']; unset($value['access_token']); $output=$value;
                     } elseif ($action==='revoke') {
                         $core->revokeToken($owner,self::submitted('token_hash'),time()); $output=['revoked'=>true];
+                    } elseif ($action==='license_issue') {
+                        $licenseOwner=self::submitted('license_owner');
+                        if($licenseOwner!==''&&!preg_match('/^[0-9]{1,20}$/D',$licenseOwner)) throw new Fault('invalid_license_owner');
+                        $scheme=self::submitted('license_scheme');
+                        $options=['activation_limit'=>max(1,min(50,(int)self::submitted('activation_limit'))),'comment'=>self::submitted('license_comment')];
+                        $days=(int)self::submitted('license_days');
+                        if($days>0) $options['duration_days']=$days;
+                        $value=$core->issueLicense((string)get_current_user_id(),$licenseOwner===''?null:$licenseOwner,self::submitted('license_plan'),time(),$scheme===''?null:$scheme,$options);
+                        $secret=$value['license_key']; unset($value['license_key']); $secretKind='license'; $output=$value;
+                    } elseif ($action==='license_activate') {
+                        $output=$core->activateLicense($owner,self::submitted('license_key'),self::submitted('license_site'),time());
+                    } elseif ($action==='license_reissue') {
+                        if(self::submitted('license_confirm')!=='REISSUE') throw new Fault('license_reissue_confirmation_required',409);
+                        $value=$core->reissueLicense((string)get_current_user_id(),self::submitted('license_id'),time());
+                        $secret=$value['license_key']; unset($value['license_key']); $secretKind='license'; $output=$value;
+                    } elseif ($action==='license_revoke') {
+                        if(self::submitted('license_confirm')!=='REVOKE') throw new Fault('license_revoke_confirmation_required',409);
+                        $output=$core->revokeLicense((string)get_current_user_id(),self::submitted('license_id'),time());
+                    } elseif ($action==='license_suspend') {
+                        if(self::submitted('license_confirm')!=='SUSPEND') throw new Fault('license_suspend_confirmation_required',409);
+                        $output=$core->suspendLicense((string)get_current_user_id(),self::submitted('license_id'),time());
+                    } elseif ($action==='license_reactivate') {
+                        if(self::submitted('license_confirm')!=='REACTIVATE') throw new Fault('license_reactivate_confirmation_required',409);
+                        $output=$core->reactivateLicense((string)get_current_user_id(),self::submitted('license_id'),time());
                     } elseif ($action==='test') $output=self::smoke(self::submitted('gateway_token'),self::submitted('site_id'));
                     else throw new Fault('unknown_form_action');
                 }
@@ -72,11 +96,16 @@ final class Admin {
             catch (\Throwable $e) { $output=['error'=>'gateway_service_unavailable']; }
         }
         echo '<hr><h2>Gateway — тестовый режим</h2><p>Сервер '.(WordPress::configured()?'настроен':'выключен или требует настройки').'. MCP: <code>'.esc_html(Settings::endpoint()).'</code></p>';
-        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и коммерческие разрешения клиента ещё не включены. Новые тарифы: Free 100, Daily 500, Pro 2000, Business 5000 действий в сутки (UTC). Старые назначения сохраняют месячные условия до явного перевода. Платежи и ручной сброс не реализованы; журнал gateway хранится отдельно.</p>';
+        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и автоматические списания не включены. Free — 100 действий в месяц (UTC); месячные квоты Pro, Business и BusinessPro ожидают утверждения владельца и до утверждения блокируют только платные вызовы. Старые назначения сохраняют прежние условия до явного перевода. Cloud Core — единственный источник плана, лицензии и квоты; ручной сброс квоты не реализован, журнал gateway хранится отдельно.</p>';
         if ($output!==null) echo '<pre style="white-space:pre-wrap">'.esc_html(wp_json_encode($output,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)).'</pre>';
         if ($secret!==null) {
-            echo '<p><strong>Токен gateway показывается один раз. Срок — 1 час.</strong></p><textarea readonly autocomplete="off" rows="2" cols="90">'.esc_textarea($secret).'</textarea>';
-            echo '<p>Для отзыва сохраните SHA-256 токена: <code>'.esc_html(hash('sha256',$secret)).'</code></p>';
+            if ($secretKind==='license') {
+                echo '<p><strong>Ключ лицензии показывается один раз. Сохраните его в защищённом месте.</strong></p><textarea readonly autocomplete="off" rows="2" cols="90">'.esc_textarea($secret).'</textarea>';
+                echo '<p>В базе хранится только SHA-256 ключа. Повторный показ невозможен; при утере выпустите новую лицензию (reissue), и прежняя будет отозвана.</p>';
+            } else {
+                echo '<p><strong>Токен gateway показывается один раз. Срок — 1 час.</strong></p><textarea readonly autocomplete="off" rows="2" cols="90">'.esc_textarea($secret).'</textarea>';
+                echo '<p>Для отзыва сохраните SHA-256 токена: <code>'.esc_html(hash('sha256',$secret)).'</code></p>';
+            }
         }
         self::form('beta_users','Сохранить пользователей беты','<p><label>ID пользователей WordPress через запятую<br><input name="beta_users" value="'.esc_attr(implode(',',get_option('wpai_gateway_beta_users',[]))).'" size="70"></label></p>');
         echo '<p>Кабинет подключения сайтов: <a href="'.esc_url(home_url('/wpai-cloud/connect')).'">Открыть</a></p>';
@@ -108,6 +137,34 @@ final class Admin {
                 self::form('issue','Получить токен gateway на 1 час',$id);
                 self::form('test','Проверить gateway через HTTPS',$id.'<p><label>Токен gateway<br><input type="password" name="gateway_token" autocomplete="new-password" size="70" required></label></p>');
             }
+            echo '<h3>Лицензии</h3>';
+            echo '<p>Cloud Core — единственный источник плана и лицензии. Ключ хранится только в виде SHA-256, показывается один раз и не может быть восстановлен. Автоматическая привязанная лицензия создаётся при регистрации аккаунта и при назначении плана; её ключ намеренно не сохраняется. Выпуск, reissue и отзыв выполняются только администратором.</p>';
+            $licenseRows=$core->allLicenses(50);
+            if($licenseRows){
+                echo '<table class="widefat striped" style="max-width:1100px"><thead><tr><th>ID</th><th>Аккаунт</th><th>Префикс</th><th>План</th><th>Схема</th><th>Статус</th><th>Активации</th><th>Действует до</th></tr></thead><tbody>';
+                foreach($licenseRows as $row){
+                    echo '<tr><td><code>'.esc_html($row['id']).'</code></td><td>'.esc_html($row['owner']===null?'— (не привязана)':$row['owner']).'</td><td><code>'.esc_html($row['key_prefix']).'…</code></td><td>'.esc_html($row['plan']).'</td><td>'.esc_html($row['quota_scheme']).'</td><td>'.esc_html($row['status']).'</td><td>'.(int)$row['activations'].'/'.(int)$row['activation_limit'].'</td><td>'.esc_html($row['expires_at']===null?'—':gmdate('Y-m-d H:i',$row['expires_at']).' UTC').'</td></tr>';
+                }
+                echo '</tbody></table><p>Показаны последние 50 лицензий, включая несвязанные. ID нужен для reissue, приостановки, возобновления и отзыва.</p>';
+            } else echo '<p>Лицензий пока нет.</p>';
+            $planOptions='';
+            foreach(['free','daily','pro','business','businesspro'] as $slug) $planOptions.='<option value="'.esc_attr($slug).'">'.esc_html($slug).'</option>';
+            $schemeOptions='';
+            foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $slug) $schemeOptions.='<option value="'.esc_attr($slug).'"'.($slug===QuotaPolicy::CURRENT?' selected':'').'>'.esc_html($slug).'</option>';
+            $fields='<p><label>Аккаунт WordPress (пусто = несвязанная лицензия)<br><input name="license_owner" inputmode="numeric" pattern="[0-9]*" size="12"></label></p>';
+            $fields.='<p><label>План<br><select name="license_plan">'.$planOptions.'</select></label> <label>Схема<br><select name="license_scheme">'.$schemeOptions.'</select></label></p>';
+            $fields.='<p><label>Лимит активаций<br><input type="number" name="activation_limit" min="1" max="50" value="1"></label> <label>Срок, дней (0 = без срока)<br><input type="number" name="license_days" min="0" max="3650" value="0"></label></p>';
+            $fields.='<p><label>Комментарий<br><input name="license_comment" maxlength="255" size="60"></label></p>';
+            self::form('license_issue','Выпустить лицензию вручную',$fields);
+            if($sites){
+                $siteOptions='';
+                foreach($sites as $site)$siteOptions.='<option value="'.esc_attr($site['id']).'">'.esc_html($site['home']).'</option>';
+                self::form('license_activate','Активировать ключ на сайте','<p><label>Ключ лицензии<br><input type="password" name="license_key" autocomplete="new-password" size="70" required></label></p><p><label>Сайт<br><select name="license_site">'.$siteOptions.'</select></label></p>');
+            }
+            self::form('license_reissue','Перевыпустить ключ (старый отзывается)','<p><label>ID лицензии<br><input name="license_id" pattern="lic_[a-f0-9]{24}" size="40" required></label> <label>Подтверждение<br><input name="license_confirm" value="REISSUE" size="10" required></label></p>');
+            self::form('license_revoke','Отозвать лицензию','<p><label>ID лицензии<br><input name="license_id" pattern="lic_[a-f0-9]{24}" size="40" required></label> <label>Подтверждение<br><input name="license_confirm" value="REVOKE" size="10" required></label></p>');
+            self::form('license_suspend','Приостановить лицензию','<p><label>ID лицензии<br><input name="license_id" pattern="lic_[a-f0-9]{24}" size="40" required></label> <label>Подтверждение<br><input name="license_confirm" value="SUSPEND" size="10" required></label></p>');
+            self::form('license_reactivate','Возобновить лицензию','<p><label>ID лицензии<br><input name="license_id" pattern="lic_[a-f0-9]{24}" size="40" required></label> <label>Подтверждение<br><input name="license_confirm" value="REACTIVATE" size="10" required></label></p>');
             self::form('revoke','Отозвать токен','<p><label>SHA-256 токена<br><input name="token_hash" size="70" pattern="[a-f0-9]{64}" required></label></p>');
             self::form('disable','Выключить тестовый gateway');
         } catch (Fault $e) { echo '<p>'.esc_html($e->reason).'</p>'; }
