@@ -45,16 +45,18 @@ At handoff, report changed files, commit/PR, test commands and results, known ga
 
 Use the current approved tariff policy as the starting baseline; verify it against the actual Cloud configuration and tests before changing it:
 
-| Tariff | Slug | Included quota |
-|---|---|---:|
-| Free | `free` | 100 actions / UTC day |
-| Daily | `daily` | 500 actions / UTC day |
-| Pro | `pro` | 2,000 actions / UTC day |
-| Business | `business` | 5,000 actions / UTC day |
+| Tariff | Slug | Price | Approved quota |
+|---|---|---:|---:|
+| Free | `free` | 0 ₽/month | 100 actions / UTC month |
+| Pro | `pro` | 2,000 ₽/month | requires owner approval |
+| Business | `business` | 5,000 ₽/month | requires owner approval |
+| BusinessPro | `businesspro` | 10,000 ₽/month | requires owner approval |
 
-The canonical tariff table is the Native table above (owner decision 06.11.2026). There is no `BusinessPro` tier. Every current tariff uses the UTC calendar day as its quota period. Legacy monthly accounts and plans (`legacy_monthly_v1`) keep their existing monthly terms until an explicit, audited transfer; they are never silently re-rated. Retired current-scheme slugs `biznes`/`biznespro` are migrated to `business` without lowering their limit.
+The owner-approved target catalogue is the table above (owner decision 14.11.2026). All tools remain available on every plan. Plan and period assignment is manual; there are no automatic debits, auto-renewal or payment-method charges in beta.
 
-`wp-ai-admin-cloud/config/plans.json` and `QuotaPolicy` are the server-side source for these tariffs; the plugin dashboard displays server-returned values only.
+`wp-ai-admin-cloud/config/plans.json` is the single server-side source. The target lives in `schemes.tariffs_v3`; `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing and newly provisioned accounts keep their persisted v2 terms until then. Paid quotas are `null` with `quota_status=requires_owner_approval`: billable calls fail closed with `plan_quota_not_configured` until the owner supplies the numbers, while reads, verification, receipts, rollback and usage remain available. Never invent or carry over a paid limit.
+
+Cloud Core is the only authority for plan, licence, quota and balance. Licence keys use `wpai_lic_` plus 43 base64url characters, only SHA-256 is stored at rest, and the plaintext is shown once. Legacy monthly accounts and plans (`legacy_monthly_v1`) keep their existing monthly terms until an explicit, audited transfer; they are never silently re-rated. Retired current-scheme slugs `biznes`/`biznespro` are migrated to `business` without lowering their limit.
 
 All tools remain available on Free unless the owner explicitly changes this product decision. Tariffs primarily differentiate included quota. Do not introduce automatic billing or charge a payment method. Paid plan changes and payments require the user's explicit confirmation through the account cabinet. YooKassa is the planned payment provider; do not activate live payments as part of beta without separate approval.
 
