@@ -53,6 +53,11 @@ class OAI_Cloud_Usage {
   foreach(array('issued_at','expires_at') as $key){
    if(!is_int($claims[$key]??null)||$claims[$key]<0)return $bad('claims');
   }
+  $quota_status=$claims['quota_status']??'approved';
+  if(!in_array($quota_status,array('approved','requires_owner_approval'),true))return $bad('claims');
+  // A paid plan whose quota the owner has not approved must be an explicit
+  // state, never a fabricated zero balance.
+  if($quota_status!=='approved')return $bad('quota_pending');
   foreach(array('limit','used','reserved','remaining') as $key){
    if(!is_int($claims[$key]??null)||$claims[$key]<0||$claims[$key]>10000000)return $bad('claims');
   }
@@ -61,7 +66,7 @@ class OAI_Cloud_Usage {
   if(!is_string($claims['plan']??null)||!preg_match('/^[a-z0-9_]{1,32}$/D',$claims['plan']))return $bad('claims');
   if(!is_string($claims['period']??null)||!preg_match('/^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$/D',$claims['period']))return $bad('claims');
   if(!in_array($claims['period_kind']??null,array('calendar_day_utc','calendar_month_utc'),true))return $bad('claims');
-  if(!in_array($claims['quota_scheme']??null,array('tariffs_v2','legacy_monthly_v1'),true))return $bad('claims');
+  if(!in_array($claims['quota_scheme']??null,array('tariffs_v2','tariffs_v3','legacy_monthly_v1'),true))return $bad('claims');
   if(!is_string($claims['period_start_utc']??null)||!preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/D',$claims['period_start_utc']))return $bad('claims');
   if(!is_string($claims['period_end_utc']??null)||!preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/D',$claims['period_end_utc']))return $bad('claims');
   if(!is_string($claims['policy_version']??null)||$claims['policy_version']===''||strlen($claims['policy_version'])>80)return $bad('claims');
@@ -83,6 +88,7 @@ class OAI_Cloud_Usage {
    'period'=>(string)$claims['period'],
    'period_kind'=>(string)$claims['period_kind'],
    'quota_scheme'=>(string)$claims['quota_scheme'],
+   'quota_status'=>(string)($claims['quota_status']??'approved'),
    'period_start_utc'=>(string)$claims['period_start_utc'],
    'period_end_utc'=>(string)$claims['period_end_utc'],
    'policy_version'=>(string)$claims['policy_version'],

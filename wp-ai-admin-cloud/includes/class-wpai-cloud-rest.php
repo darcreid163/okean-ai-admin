@@ -56,7 +56,26 @@ class WPAI_Cloud_REST {
                 'batch_policy'=>$batch?'successful_object_v1':'disabled_until_receipt_accounting_contract',
                 'failed_actions_billable'=>0,'rollback_billable'=>0,'verify_billable'=>0);
         }
+        $target=null;
+        $scheme=$policy['schemes']['tariffs_v3']??null;
+        if (is_array($scheme)) {
+            $items=array();
+            foreach ($scheme['plans'] as $slug=>$limit) {
+                $items[]=array('slug'=>$slug,'name'=>(string)($scheme['names'][$slug]??$slug),
+                    'actions_limit'=>$limit,
+                    'quota_status'=>(string)($scheme['quota_status'][$slug]??''),
+                    'quota_period'=>(string)($scheme['periods'][$slug]??''),
+                    'timezone'=>'UTC',
+                    'monthly_actions'=>$limit,
+                    'daily_actions'=>null,
+                    'price_rub_month'=>(int)($scheme['prices_rub_month'][$slug]??0),
+                    'all_tools'=>true,
+                    'failed_actions_billable'=>0,'rollback_billable'=>0,'verify_billable'=>0);
+            }
+            $target=array('items'=>$items,'quota_scheme'=>'tariffs_v3','all_tools'=>true,
+                'paid_quotas_approved'=>false,'automatic_money_debits'=>false);
+        }
         return self::response(array('items'=>$plans,'quota_scheme'=>'tariffs_v2','payments_enabled'=>false,
-            'automatic_money_debits'=>false,'manual_refills'=>'deferred','prices_approved'=>false));
+            'automatic_money_debits'=>false,'manual_refills'=>'deferred','prices_approved'=>false,'target'=>$target));
     }
 }

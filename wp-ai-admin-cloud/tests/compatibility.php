@@ -2,7 +2,7 @@
 declare(strict_types=1);
 // Executes the recovered Core v1 schema installer and integrated gateway migration.
 // SQLite uses a DDL translation; CI runs the original MySQL DDL against MySQL 8.
-use WPAICloudGateway\{Settings,Store,WordPress,Fault,Admin,Security};
+use WPAICloudGateway\{Settings,Store,WordPress,Fault,Admin,Security,QuotaPolicy};
 define('ABSPATH',__DIR__.'/fixtures/wordpress/'); define('ARRAY_A','ARRAY_A');
 define('AUTH_KEY',str_repeat('a',64)); define('AUTH_SALT',str_repeat('b',64));
 $options=[]; $autoload=[]; $routes=[]; $actions=[]; $loggedIn=true; $admin=true; $ssl=true; $coldOptions=false;
@@ -85,7 +85,7 @@ $wpdb->insert(WPAI_Cloud_DB::table('accounts'),['wp_user_id'=>42,'status'=>'acti
 $wpdb->insert(WPAI_Cloud_DB::table('usage_balances'),['account_id'=>1,'license_id'=>123,'period_start'=>'2026-10-01 00:00:00','period_end'=>'2026-11-01 00:00:00','base_limit'=>100,'addon_actions'=>50,'used_actions'=>19,'reserved_actions'=>2,'updated_at'=>'2026-10-02 00:00:00']);
 $snapshot=function()use($tables,$wpdb){$values=[];foreach($tables as $name)$values[$name]=$wpdb->get_results('SELECT * FROM '.WPAI_Cloud_DB::table($name).' ORDER BY id');return Security::canonical($values);};
 $before=$snapshot();
-check(get_option('wpai_cloud_db_version')==='1','Core schema version changed');
+check(get_option('wpai_cloud_db_version')==='2','Core schema version changed');
 check(!Settings::enabled() && !WordPress::configured(),'Pilot implicitly enabled');
 Settings::prepareKeys(); $keys=Settings::keys();
 check(strlen($keys['vault'])===32 && strlen($keys['signing'])===64,'Incorrect key sizes');
@@ -121,7 +121,10 @@ $wpdb->query("UPDATE ".WPAI_Cloud_DB::table('accounts')." SET status='suspended'
 rejects(fn()=>Settings::account('42'),'core_account_unavailable');
 $wpdb->query("UPDATE ".WPAI_Cloud_DB::table('accounts')." SET status='active' WHERE wp_user_id=42");
 $wpdb->query('UPDATE '.WPAI_Cloud_DB::table('plan_versions')." SET verify_billable=1 WHERE version_key='FREE_V1'");
-rejects(fn()=>Settings::policy(),'core_plan_policy_incompatible');
+$degraded=Settings::policy();
+check(isset($degraded['incompatible_plans']['legacy_monthly_v1|free']),'Incompatible plan row was not quarantined');
+rejects(fn()=>QuotaPolicy::terms($degraded,['plan'=>'free','quota_scheme'=>QuotaPolicy::LEGACY]),'plan_unavailable');
+check(QuotaPolicy::terms($degraded,['plan'=>'pro','quota_scheme'=>QuotaPolicy::LEGACY])['limit']===500,'Quarantine leaked to an unaffected plan');
 $wpdb->query('UPDATE '.WPAI_Cloud_DB::table('plan_versions')." SET verify_billable=0 WHERE version_key='FREE_V1'");
 foreach($actions['rest_api_init'] as $callback)$callback();
 foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
@@ -190,7 +193,7 @@ function wp_remote_post($url,$args) {
         'tools/call'=>['content'=>[['type'=>'text','text'=>json_encode(match($message['params']['name']) {
             'cloud_sites_list'=>[['id'=>'reg_'.str_repeat('c',32)]],
             'cloud_site_tools_list'=>[['name'=>'system_manifest']],
-            'cloud_usage'=>['limit'=>100,'used'=>0,'reserved'=>0,'timezone'=>'UTC']
+            'cloud_usage'=>['limit'=>100,'used'=>0,'reserved'=>0,'remaining'=>100,'quota_status'=>'approved','timezone'=>'UTC']
         })]],'isError'=>false]
     };
     return ['code'=>200,'body'=>json_encode(['jsonrpc'=>'2.0','id'=>$message['id'],'result'=>$result])];
