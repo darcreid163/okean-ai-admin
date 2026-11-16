@@ -24,9 +24,9 @@ final class QuotaPolicy {
             return;
         }
         if (($policy['period']??'')!=='per_plan_utc') throw new Fault('invalid_quota_policy',503);
-        self::limits($policy['plans']??[],['free','daily','pro','business']);
+        self::limits($policy['plans']??[],['free','daily','pro','business','businesspro']);
         if (!is_array($policy['periods']??null)) throw new Fault('invalid_quota_policy',503);
-        foreach (['free'=>self::DAY,'daily'=>self::DAY,'pro'=>self::DAY,'business'=>self::DAY] as $plan=>$period) if (($policy['periods'][$plan]??null)!==$period) throw new Fault('invalid_quota_policy',503);
+        foreach (['free'=>self::DAY,'daily'=>self::DAY,'pro'=>self::DAY,'business'=>self::DAY,'businesspro'=>self::DAY] as $plan=>$period) if (($policy['periods'][$plan]??null)!==$period) throw new Fault('invalid_quota_policy',503);
         foreach ($policy['periods'] as $plan=>$period) if (!in_array($period,[self::DAY,self::MONTH],true)) throw new Fault('invalid_quota_policy',503);
         self::limits($policy['legacy_plans']??[],['free','pro','power','agency','scale']);
     }
