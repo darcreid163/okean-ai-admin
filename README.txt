@@ -4,7 +4,7 @@ Tags: ai, admin, mcp, gutenberg, woocommerce, elementor, sandbox, approval, roll
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 2.1.17
+Stable tag: 2.1.18
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -87,6 +87,11 @@ or the Cloud service.
 3. Rollback confirmation screen.
 
 == Changelog ==
+
+= 2.1.18 =
+* Add HPOS compatibility declaration and disposable WooCommerce 11.3 order lifecycle acceptance matrix.
+* Preserve order sandbox, approval, verification and rollback behavior on HPOS.
+
 
 = 2.1.17 =
 * Security: pin usage signing key at pairing; response-body key no longer trusted (issue #135).
