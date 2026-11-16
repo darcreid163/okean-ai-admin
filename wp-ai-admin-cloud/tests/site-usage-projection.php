@@ -135,6 +135,36 @@ usageReject(fn()=>$core->siteUsage($homeD,$newKey,$now+4),'site_usage_denied');
 usageCheck(is_array($core->siteUsage($homeA,$keyA,$now)),'Revoking one site broke another site');
 usageCheck(is_array($core->siteUsage($homeB,$keyB,$now)),'Revoking one site broke another account');
 
+// #193 site-bound licence activation: the paired site is the only caller
+// identity, and plan/account/site are always derived from Cloud rows.
+$issued=$core->issueLicense('synthetic-operator',null,'pro',$now+5,null,['activation_limit'=>1,'comment'=>'synthetic site activation']);
+usageCheck(preg_match('/^wpai_lic_[A-Za-z0-9_-]{43}$/D',(string)$issued['license_key'])===1,'Issued key has an unexpected format');
+usageCheck($issued['owner']===null&&$issued['status']==='unused','Unbound licence was not issued unused');
+$activated=$core->siteActivateLicense($homeA,$keyA,(string)$issued['license_key'],$now+6);
+usageCheck($activated['contract']==='wpai-site-license-v1'&&$activated['activated']===true&&$activated['idempotent']===false,'Site activation failed');
+usageCheck($activated['site_id']===$siteA['id']&&$activated['license']['plan']==='pro','Site activation changed site or plan');
+usageCheck($activated['license']['plan_label']==='Pro','Site activation plan label mismatch');
+usageCheck($activated['license']['status']==='active'&&$activated['license']['activations']===1,'Site activation status/count wrong');
+usageCheck($activated['license']['expires_at']===null,'Synthetic licence unexpectedly expires');
+usageCheck(!str_contains((string)json_encode($activated),(string)$issued['license_key']),'Activation response leaked the plaintext key');
+$repeatActivation=$core->siteActivateLicense($homeA,$keyA,(string)$issued['license_key'],$now+7);
+usageCheck($repeatActivation['idempotent']===true&&$repeatActivation['license']['activations']===1,'Repeated activation was not idempotent');
+usageReject(fn()=>$core->siteActivateLicense($homeB,$keyB,(string)$issued['license_key'],$now+8),'license_bound_to_other_account');
+usageReject(fn()=>$core->siteActivateLicense($homeA,hash('sha256','wrong-activation-key'),(string)$issued['license_key'],$now+8),'site_license_denied');
+usageReject(fn()=>$core->siteActivateLicense($homeA,$keyA,'not-a-licence-key',$now+8),'license_invalid');
+usageReject(fn()=>$core->siteActivateLicense('https://unregistered.example.com',$keyA,(string)$issued['license_key'],$now+8),'site_license_denied');
+
+$homeE='https://usage-e.example.com';
+$keyE=hash('sha256','site-e-status-seed');
+$core->connect('1',$homeE,'fixture-usage-credential-owner-e',$now+9,false,hash('sha256',$keyE));
+$limited=$core->issueLicense('synthetic-operator',null,'pro',$now+10,null,['activation_limit'=>1]);
+$core->siteActivateLicense($homeA,$keyA,(string)$limited['license_key'],$now+11);
+usageReject(fn()=>$core->siteActivateLicense($homeE,$keyE,(string)$limited['license_key'],$now+12),'license_activation_limit_reached');
+
+$revoked=$core->issueLicense('synthetic-operator',null,'pro',$now+13,null,['activation_limit'=>1]);
+$core->revokeLicense('synthetic-operator',$revoked['id'],$now+14);
+usageReject(fn()=>$core->siteActivateLicense($homeA,$keyA,(string)$revoked['license_key'],$now+15),'license_revoked');
+
 /** @var Core $core */
 echo 'PASS '.$checks.' site usage projection assertions'.PHP_EOL;
 } finally {
