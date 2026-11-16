@@ -43,18 +43,18 @@ At handoff, report changed files, commit/PR, test commands and results, known ga
 
 ## 4. Tariffs and quota accounting
 
-Use the current approved tariff policy as the starting baseline; verify it against the actual Cloud configuration and tests before changing it:
+Use the owner-approved tariff policy below; verify it against the actual Cloud configuration and tests:
 
 | Tariff | Slug | Price | Approved quota |
 |---|---|---:|---:|
 | Free | `free` | 0 ₽/month | 100 actions / UTC day |
-| Pro | `pro` | 2,000 ₽/month | requires owner approval |
-| PRO+ | `business` | 5,000 ₽/month | requires owner approval |
-| PRO++ | `businesspro` | 10,000 ₽/month | requires owner approval |
+| Pro | `pro` | 2,000 ₽/month | 2,000 actions / UTC day |
+| PRO+ | `business` | 5,000 ₽/month | 5,000 actions / UTC day |
+| PRO++ | `businesspro` | 10,000 ₽/month | 5,000 actions / UTC day |
 
-The owner-approved target catalogue is the table above (owner decision 14.11.2026). PRO+/PRO++ are display names; the slugs `business`/`businesspro` stay stable for persisted accounts, licences and API compatibility. All tools remain available on every plan. Plan and period assignment is manual; there are no automatic debits, auto-renewal or payment-method charges in beta.
+The owner-approved target catalogue is the table above (owner decision 16.11.2026). PRO+/PRO++ are display names; the slugs `business`/`businesspro` stay stable for persisted accounts, licences and API compatibility. All tools remain available on every plan. Plan and period assignment is manual; there are no automatic debits, auto-renewal or payment-method charges in beta.
 
-`wp-ai-admin-cloud/config/plans.json` is the single server-side source. The target lives in `schemes.tariffs_v3`; `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing and newly provisioned accounts keep their persisted v2 terms until then. Free is 100 actions/UTC day in both v2 and v3; paid quotas are monthly, `null` and `quota_status=requires_owner_approval`: billable calls fail closed with `plan_quota_not_configured` until the owner supplies the numbers, while reads, verification, receipts, rollback and usage remain available. Never invent or carry over a paid limit.
+`wp-ai-admin-cloud/config/plans.json` is the single server-side source. The target lives in `schemes.tariffs_v3`; all four target quotas are approved and reset at 00:00 UTC each day. `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing accounts keep their persisted terms. The v2 catalogue is not silently re-rated. Stale persisted v3 rows marked pending must not downgrade a newer owner-approved value in the shipped catalogue. A new licence explicitly issued under `tariffs_v3` receives the daily quota shown above.
 
 Cloud Core is the only authority for plan, licence, quota and balance. Licence keys use `wpai_lic_` plus 43 base64url characters, only SHA-256 is stored at rest, and the plaintext is shown once. Legacy monthly accounts and plans (`legacy_monthly_v1`) keep their existing monthly terms until an explicit, audited transfer; they are never silently re-rated. Retired current-scheme slugs `biznes`/`biznespro` are migrated to `business` without lowering their limit.
 
@@ -199,7 +199,7 @@ A candidate can be marked **Open Beta Ready** only when all are true:
 - [ ] ZIP contents, versions, checksums, changelog and install instructions are verified.
 - [ ] Owner receives the installable artifacts and a concise test checklist.
 
-Current gate-by-gate status and evidence: [Beta readiness, 14 November 2026](BETA-READINESS-2026-11-14.md). A documentation status does not convert a failed or skipped gate into a pass.
+Current gate-by-gate status and evidence: [Beta readiness, 16 November 2026](BETA-READINESS-2026-11-16.md). A documentation status does not convert a failed or skipped gate into a pass.
 
 If a gate fails, report **NOT READY**, identify the blocker and continue remediation. Never convert a failed or skipped test into a pass by assumption.
 

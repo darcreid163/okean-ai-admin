@@ -50,6 +50,10 @@ $txPrefix=null;
 $legacyStore=null;
 try {
     $policy=json_decode(file_get_contents(dirname(__DIR__).'/config/plans.json'),true,32,JSON_THROW_ON_ERROR);
+    // Exercise fail-closed activation behavior with an explicitly pending test
+    // policy; the shipped target catalogue now approves every paid tariff.
+    $policy['schemes'][QuotaPolicy::TARGET]['plans']['pro']=null;
+    $policy['schemes'][QuotaPolicy::TARGET]['quota_status']['pro']=QuotaPolicy::QUOTA_PENDING;
     QuotaPolicy::validate($policy);
     $transport=new FakeTransport();
     $pair=sodium_crypto_sign_keypair();
