@@ -96,3 +96,144 @@ Validation performed so far:
 - GitHub read-back confirms bootstrap include, both REST route registrations/callbacks, command registry entry, CLI dispatch handler, fail-closed public metadata filter, plan-required execution guard and attribution entry.
 - Full PHP lint, WordPress integration tests and Actions CI have not yet been run. Do not treat this as release-ready.
 - WordPress Abilities API exists only on newer WordPress versions; the implementation checks function availability and returns a controlled unavailable response on older installations.
+
+## Upstream source inventory and WP-CLI coverage delta (reviewed 2026-11-16)
+
+Pinned upstream commit: `f6824a089c20bd8e52b2c2bad32f931333e17739` (2026-11-11), tree `f44a7dee5a042d93adc985e277957a8150ae8d75`. The upstream `class-wpvibe-cli.php` declares 139 allowlist entries, not 34. The local Native Command Registry has 43 entries at the baseline reviewed in this increment; 41 names overlap exactly, and the raw upstream-minus-local delta contains 98 distinct command keys. This is a textual inventory only: alias normalization, command semantics and safe implementation are not yet reconciled, so it is not a claim that 98 independent product features are missing.
+
+### Command delta — candidates, not approved to enable
+
+The exact name-only upstream delta:
+```text
+plugin status
+plugin search
+theme status
+option pluck
+option list
+post term list
+term meta get
+term meta list
+comment create
+comment approve
+comment unapprove
+comment spam
+comment unspam
+comment trash
+comment untrash
+comment delete
+rewrite list
+cache type
+plugin auto-updates enable
+plugin auto-updates disable
+plugin auto-updates status
+core update
+core update-db
+core verify-checksums
+plugin verify-checksums
+post type list
+menu location list
+help
+cli version
+cli info
+config get
+maintenance-mode status
+media image-size
+transient get
+theme get
+cron test
+plugin install
+plugin uninstall
+option add
+option delete
+transient delete
+transient list
+user delete
+post delete
+post meta update
+post meta add
+post meta delete
+post term set
+post term add
+post term remove
+cache flush
+litespeed-purge
+elementor flush-css
+elementor flush_css
+rocket clean
+sg purge
+super-cache flush
+w3-total-cache flush
+breeze purge
+option patch
+rewrite flush
+search-replace
+menu create
+menu item add-custom
+menu item add-post
+menu item add-term
+menu location assign
+term create
+term update
+term delete
+term meta update
+term meta set
+term meta add
+term meta delete
+menu item update
+menu item delete
+theme mod set
+rewrite structure
+cron event run
+cron event delete
+theme install
+theme update
+theme delete
+cap add
+cap remove
+role create
+role delete
+role reset
+user add-cap
+user remove-cap
+user create
+user update
+user set-role
+user add-role
+user remove-role
+user meta add
+user meta update
+user meta delete
+```
+
+### Security classification before any port
+
+- **Read-first candidates:** plugin/theme status/search, option pluck/list (with strict option denylist), post-term list, term-meta key inspection/redaction, rewrite list, cache-type inventory, checksums, help/catalog metadata, CLI identity, config get with secret redaction, maintenance status, media image sizes, transient get/list with credential redaction, cron test as diagnostic only, menu-location list.
+- **Writes that must become typed sandbox operations:** comment moderation/create, post and term lifecycle, post/user/term metadata, menu create/update/delete/location assignment, theme mods, rewrite configuration, cache purge/flush, transient delete, role/capability/user changes, plugin/theme install/update/activate/deactivate/uninstall, core update and DB update, search-replace. No upstream handler may be called directly from the read dispatcher.
+- **Not ported:** shell/eval, arbitrary SQL mutation, arbitrary PHP, arbitrary REST passthrough, hidden credentials/options, automatic updater/self-update and any bypass of Cloud Ledger or approval.
+
+### Actual builder source files found in the upstream tree
+
+The recursive source tree confirms these builder-specific files:
+- `includes/class-wpvibe-beaver.php` — Beaver Builder
+- `includes/class-wpvibe-breakdance.php` — Breakdance
+- `includes/class-wpvibe-bricks.php` — Bricks
+- `includes/class-wpvibe-elementor.php` — Elementor
+- `includes/class-wpvibe-elementor-validator.php` — Elementor validation
+- No Divi or SeedProd implementation file was present in the reviewed tree by the builder-specific path search; do not market native write-adapter support for those based on this upstream snapshot.
+- A generic `includes/class-wpvibe-file-ops.php` is present; the earlier assumed `class-wpvibe-content-files.php` path exists in the source but represents a different operation family and must be compared separately.
+
+The Bricks, Breakdance and Beaver Builder sources reveal distinct native data shapes, security hooks and cache lifecycles. They must be adapted individually to `OAI_Builder_Adapter` and operation lifecycle; copying their REST write handlers is not an acceptable integration.
+
+## Media concurrency blocker discovered during CI
+
+Native Actions run `43835535719` failed its disposable latest WordPress smoke in the existing concurrent media creation test. The error reported one winner, five denied requests, but unexpected extra files/attachments and an extra operation; losing paths raised `Media artifact outcome requires reconciliation` / `Media creation outcome requires reconciliation`. Pinned WordPress 7.0.6 smoke and PHP 8.2/8.3/8.4 lint/contract jobs passed. This is being tracked separately as issue #209; no production changes were performed. The failure is not attributed to the WPVibe adapter without evidence.
+
+## Updated scope status
+
+- Branch and draft PR are established.
+- Public Abilities discovery/schema increment is present, but arbitrary Ability execution remains deliberately disabled.
+- WP-CLI exact delta is inventoried; the delta has not yet been implemented.
+- Theme/file/media operations and builder adapters are not yet fully integrated.
+- Skills are not implemented in this branch.
+- Latest-compat media concurrency blocker remains unresolved.
+- No production package was built or deployed from this branch.
