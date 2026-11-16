@@ -22,11 +22,11 @@ implied by these results.
 
 ## Current plans and licences
 
-- Target catalogue (`schemes.tariffs_v3`): Free **100 actions/UTC day**; Pro 2,000 ₽/month, Business 5,000 ₽/month and BusinessPro 10,000 ₽/month, each `requires_owner_approval` with a `null` limit.
+- Target catalogue (`schemes.tariffs_v3`): Free **100 actions/UTC day**; Pro 2,000 ₽/month, PRO+ 5,000 ₽/month and PRO++ 10,000 ₽/month, each `requires_owner_approval` with a `null` limit. PRO+/PRO++ are display names for the stable slugs `business`/`businesspro`.
 - The active default remains the frozen `tariffs_v2` until a separately authorized account/tariff migration. Free is 100 actions/UTC day in both schemes.
 - Billable calls on a pending paid plan fail closed with `plan_quota_not_configured`; reads, verification, receipts, rollback and usage remain available. No paid limit is invented or carried over.
 - Cloud Core alone decides plan, licence, quota and balance. Licence keys are hash-only at rest, shown once, revocable and never trusted from Native input.
-- No automatic payments, auto-renewal or money debits. Batch remains disabled by the current policy until separately activated.
+- No automatic payments, auto-renewal or money debits. Batch is enabled in the shipped catalogue as `successful_object_v1` (per successful object) for `cloud_site_batch_call`; an explicitly stored `wpai_gateway_batch_object_v1` option remains an operator kill switch. Scheduled `batch_create`/`batch_resume` stay gated until their receipt accounting is ready.
 
 See [the beta-readiness report](docs/BETA-READINESS-2026-11-14.md),
 [the licence registry](docs/LICENSE-REGISTRY.md) and

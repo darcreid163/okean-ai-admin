@@ -70,6 +70,23 @@ final class QuotaPolicy {
         return $policy['period']==='per_plan_utc'?self::CURRENT:self::LEGACY;
     }
     /**
+     * Human-readable plan name. Slugs stay stable for billing/API compatibility;
+     * only the presentation changes (business => PRO+, businesspro => PRO++).
+     */
+    public static function planLabel(array $policy,string $plan,?string $scheme=null): string {
+        $scheme=$scheme??self::scheme($policy);
+        $label=null;
+        if (isset($policy['schemes'][$scheme]['names'][$plan]) && is_string($policy['schemes'][$scheme]['names'][$plan])) {
+            $label=$policy['schemes'][$scheme]['names'][$plan];
+        } elseif (isset($policy['names'][$plan]) && is_string($policy['names'][$plan])) {
+            $label=$policy['names'][$plan];
+        }
+        if (!is_string($label) || $label==='' || strlen($label)>40 || preg_match('/^[\p{L}\p{N}+ ._-]+$/u',$label)!==1) {
+            $label=ucfirst($plan);
+        }
+        return $label;
+    }
+    /**
      * Applies persisted plan versions on top of the shipped catalogue. Rows with
      * an incompatible billing contract are skipped locally instead of failing
      * the whole gateway; the affected plan then fails closed per account.

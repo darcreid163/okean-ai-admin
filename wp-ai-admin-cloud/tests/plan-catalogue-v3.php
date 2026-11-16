@@ -39,7 +39,7 @@ try {
     v3Check(($policy['default_scheme']??null)===QuotaPolicy::CURRENT,'Default scheme is not the frozen v2');
     v3Check(QuotaPolicy::scheme($policy)===QuotaPolicy::CURRENT,'Scheme resolver ignored the default');
     v3Check(($policy['automatic_money_debits']??null)===false,'Automatic money debits enabled');
-    v3Check(($policy['batch']??null)==='disabled_until_receipt_accounting_contract','Production batch enabled');
+    v3Check(($policy['batch']??null)===\WPAICloudGateway\BatchAccounting::POLICY,'Production batch must be enabled');
     foreach(['free'=>100,'daily'=>500,'pro'=>2000,'business'=>5000] as $slug=>$limit)
         v3Check(($policy['plans'][$slug]??null)===$limit,'Frozen v2 limit changed: '.$slug);
     foreach(['free','daily','pro','business'] as $slug)
@@ -62,6 +62,11 @@ try {
         v3Check(($v3['periods'][$slug]??null)===QuotaPolicy::MONTH,'Paid plan must be monthly: '.$slug);
         v3Check(($v3['prices_rub_month'][$slug]??null)===$price,'Price mismatch: '.$slug);
     }
+
+    // Slugs stay stable; only the client-facing tariff names change.
+    v3Check(QuotaPolicy::planLabel($policy,'business')==='PRO+','PRO+ label missing');
+    v3Check(QuotaPolicy::planLabel($policy,'businesspro')==='PRO++','PRO++ label missing');
+    v3Check(QuotaPolicy::planLabel($policy,'free')==='Free','Free label changed');
 
     // Offer domain is scheme-specific.
     v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'free'),'v3 free not offered');

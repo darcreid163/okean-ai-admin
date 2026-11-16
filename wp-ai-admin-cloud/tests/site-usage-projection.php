@@ -47,6 +47,9 @@ $pair=sodium_crypto_sign_keypair();
 $signer=new Signer(sodium_crypto_sign_secretkey($pair));
 $core=new Core($store,new Vault(str_repeat('k',32)),new FakeTransport(),$policy,$signer);
 $core->ensureAccount('1');$core->ensureAccount('2');
+// The fixture clock predates automatic issuance (which uses real time). Move
+// the synthetic licence into the fixture window without changing its terms.
+$store->execute('UPDATE '.$store->table('licenses').' SET issued_at=?,starts_at=? WHERE owner=?',[$now-100,$now-100,'1']);
 
 $homeA='https://usage-a.example.com';
 $keyA=hash('sha256','site-a-status-seed');
@@ -76,6 +79,12 @@ usageCheck($claims['plan']==='free'&&$claims['quota_scheme']==='tariffs_v2'&&$cl
 usageCheck($claims['timezone']==='UTC'&&$claims['period']===gmdate('Y-m-d',$now),'Projection period is not the UTC calendar day');
 usageCheck($claims['issued_at']===$now&&$claims['expires_at']===$now+300,'Projection freshness window changed');
 usageCheck($claims['policy_version']===$policy['version'],'Projection policy version mismatch');
+usageCheck($claims['plan_label']==='Free','Projection plan label mismatch');
+usageCheck(preg_match('/^lic_[a-f0-9]{24}$/D',(string)$claims['license_id'])===1,'Projection licence id missing');
+usageCheck(preg_match('/^wpai_lic_[A-Za-z0-9_-]{7}$/D',(string)$claims['license_key_prefix'])===1,'Projection licence prefix invalid');
+usageCheck($claims['license_status']==='active','Projection licence status mismatch');
+usageCheck($claims['license_activation_limit']===1&&$claims['license_activations']===0,'Projection licence activation summary wrong');
+usageCheck($claims['license_expires_at']===null&&$claims['license_issued_at']===$now-100,'Projection licence lifetime wrong');
 
 // The projection reconciles with the authoritative ledger after real usage.
 usageCheck($claims['limit']===(int)$core->usage('1',$now)['limit'],'Projection limit differs from ledger');

@@ -71,7 +71,8 @@ if($phase==='seed') {
     cloudUpgradeAssert(WPAI_CLOUD_VERSION===($phase==='restored'?'0.3.11':'0.3.13-dev'),'Unexpected Cloud source version');
 }
 cloudUpgradeAssert(WordPress::configured() && (string)get_option('wpai_gateway_db_version')==='4','Gateway normal boot failed');
-cloudUpgradeAssert(!WordPress::operatorCore()->batchAvailable(),'Batch became enabled');
+$expectBatch=in_array($phase,['upgraded','upgraded-again'],true);
+cloudUpgradeAssert(WordPress::operatorCore()->batchAvailable()===$expectBatch,'Batch state does not match the installed source');
 $keys=Settings::keys(); $vault=new Vault($keys['vault']); $signer=new Signer($keys['signing']);
 $transport=new CloudUpgradeTransport();
 $core=new Core($store,$vault,$transport,Settings::policy(),$signer);

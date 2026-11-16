@@ -16,7 +16,7 @@ class OAI_Quota {
   'free'=>array('label'=>'Free','limit'=>100,'period'=>'day'),
   'daily'=>array('label'=>'Daily','limit'=>500,'period'=>'day'),
   'pro'=>array('label'=>'Pro','limit'=>2000,'period'=>'day'),
-  'business'=>array('label'=>'Business','limit'=>5000,'period'=>'day'),
+  'business'=>array('label'=>'PRO+','limit'=>5000,'period'=>'day'),
  );
 
  public static function plans(){return self::PLANS;}

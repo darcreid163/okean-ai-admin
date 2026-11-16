@@ -55,15 +55,41 @@ class OAI_Cloud_Usage {
   }
   $quota_status=$claims['quota_status']??'approved';
   if(!in_array($quota_status,array('approved','requires_owner_approval'),true))return $bad('claims');
-  // A paid plan whose quota the owner has not approved must be an explicit
-  // state, never a fabricated zero balance.
-  if($quota_status!=='approved')return $bad('quota_pending');
-  foreach(array('limit','used','reserved','remaining') as $key){
-   if(!is_int($claims[$key]??null)||$claims[$key]<0||$claims[$key]>10000000)return $bad('claims');
+  // A paid plan whose quota the owner has not approved is an explicit pending
+  // state with no fabricated balance. It must never be shown as zero/unlimited.
+  $pending=$quota_status!=='approved';
+  if($pending){
+   if(array_key_exists('limit',$claims)&&$claims['limit']!==null)return $bad('quota_pending');
+   if(array_key_exists('remaining',$claims)&&$claims['remaining']!==null)return $bad('quota_pending');
+   foreach(array('used','reserved') as $key){
+    if(!is_int($claims[$key]??null)||$claims[$key]<0||$claims[$key]>10000000)return $bad('claims');
+   }
+  }else{
+   foreach(array('limit','used','reserved','remaining') as $key){
+    if(!is_int($claims[$key]??null)||$claims[$key]<0||$claims[$key]>10000000)return $bad('claims');
+   }
+   if($claims['limit']<=0||$claims['expires_at']<=$claims['issued_at'])return $bad('claims');
+   if($claims['remaining']!==max(0,$claims['limit']-$claims['used']-$claims['reserved']))return $bad('remaining');
   }
-  if($claims['limit']<=0||$claims['expires_at']<=$claims['issued_at'])return $bad('claims');
-  if($claims['remaining']!==max(0,$claims['limit']-$claims['used']-$claims['reserved']))return $bad('remaining');
+  if($pending&&$claims['expires_at']<=$claims['issued_at'])return $bad('claims');
   if(!is_string($claims['plan']??null)||!preg_match('/^[a-z0-9_]{1,32}$/D',$claims['plan']))return $bad('claims');
+  if(array_key_exists('plan_label',$claims)
+   &&(!is_string($claims['plan_label'])||$claims['plan_label']===''||strlen($claims['plan_label'])>40||preg_match('/^[\p{L}\p{N}+ ._-]+$/u',$claims['plan_label'])!==1))return $bad('claims');
+  // Licence claims are optional for backward compatibility with an older
+  // Gateway, but all-or-nothing and strictly typed when present. They are
+  // display evidence only; plan/quota authority stays with the signed terms.
+  $license_keys=array('license_id','license_key_prefix','license_status','license_activation_limit','license_activations','license_issued_at','license_expires_at');
+  $license_present=0;foreach($license_keys as $key)if(array_key_exists($key,$claims)&&$claims[$key]!==null)$license_present++;
+  if($license_present>0){
+   if($license_present!==count($license_keys))return $bad('license');
+   if(!is_string($claims['license_id'])||!preg_match('/^lic_[a-f0-9]{24}$/D',$claims['license_id']))return $bad('license');
+   if(!is_string($claims['license_key_prefix'])||!preg_match('/^wpai_lic_[A-Za-z0-9_-]{7}$/D',$claims['license_key_prefix']))return $bad('license');
+   if(!in_array($claims['license_status'],array('unused','active','expired','suspended','revoked','exhausted','replaced'),true))return $bad('license');
+   if(!is_int($claims['license_activation_limit'])||$claims['license_activation_limit']<1||$claims['license_activation_limit']>50)return $bad('license');
+   if(!is_int($claims['license_activations'])||$claims['license_activations']<0||$claims['license_activations']>$claims['license_activation_limit'])return $bad('license');
+   if(!is_int($claims['license_issued_at'])||$claims['license_issued_at']<=0)return $bad('license');
+   if($claims['license_expires_at']!==null&&(!is_int($claims['license_expires_at'])||$claims['license_expires_at']<=$claims['license_issued_at']))return $bad('license');
+  }
   if(!is_string($claims['period']??null)||!preg_match('/^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$/D',$claims['period']))return $bad('claims');
   if(!in_array($claims['period_kind']??null,array('calendar_day_utc','calendar_month_utc'),true))return $bad('claims');
   if(!in_array($claims['quota_scheme']??null,array('tariffs_v2','tariffs_v3','legacy_monthly_v1'),true))return $bad('claims');
@@ -79,12 +105,14 @@ class OAI_Cloud_Usage {
  }
 
  private static function public_projection($claims){
+  $pending=(($claims['quota_status']??'approved')!=='approved');
   return array(
    'plan'=>(string)$claims['plan'],
-   'limit'=>(int)$claims['limit'],
+   'plan_label'=>isset($claims['plan_label'])&&is_string($claims['plan_label'])?(string)$claims['plan_label']:ucfirst((string)$claims['plan']),
+   'limit'=>$pending?null:(int)$claims['limit'],
    'used'=>(int)$claims['used'],
    'reserved'=>(int)$claims['reserved'],
-   'remaining'=>(int)$claims['remaining'],
+   'remaining'=>$pending?null:(int)$claims['remaining'],
    'period'=>(string)$claims['period'],
    'period_kind'=>(string)$claims['period_kind'],
    'quota_scheme'=>(string)$claims['quota_scheme'],
@@ -98,6 +126,13 @@ class OAI_Cloud_Usage {
    'site_url'=>(string)$claims['site_url'],
    'site_id'=>(string)$claims['site_id'],
    'account_id'=>(string)$claims['account_id'],
+   'license_id'=>isset($claims['license_id'])?(string)$claims['license_id']:null,
+   'license_key_prefix'=>isset($claims['license_key_prefix'])?(string)$claims['license_key_prefix']:null,
+   'license_status'=>isset($claims['license_status'])?(string)$claims['license_status']:null,
+   'license_activation_limit'=>isset($claims['license_activation_limit'])?(int)$claims['license_activation_limit']:null,
+   'license_activations'=>isset($claims['license_activations'])?(int)$claims['license_activations']:null,
+   'license_issued_at'=>isset($claims['license_issued_at'])?(int)$claims['license_issued_at']:null,
+   'license_expires_at'=>isset($claims['license_expires_at'])?(int)$claims['license_expires_at']:null,
   );
  }
 

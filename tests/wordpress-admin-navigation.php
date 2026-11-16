@@ -33,7 +33,9 @@ oai_nav_expect($link[1]==='admin.php?page=okean-ai-admin','Main menu generated a
 oai_nav_expect(strpos($html,"href='admin.php?page=oai-gateway-connections'")!==false,'Connections link must use admin.php?page');
 oai_nav_expect(strpos($html,"href='oai-gateway-connections'")===false,'Broken connections path generated');
 ob_start();do_action($dashboard);$desk=ob_get_clean();
-foreach(array('WP AI Admin','Подключение MCP','AI Lifecycle Control','Test Automation Mode','Все операции','Управление подключениями') as $label)oai_nav_expect(strpos($desk,$label)!==false,'Dashboard control missing: '.$label);
+foreach(array('WP AI Admin','Подключить сайт','Подключение','Ожидают решения','Вызовы','Тариф и лицензия','Автоматическое подтверждение ИИ','Все операции','Управление подключениями') as $label)oai_nav_expect(strpos($desk,$label)!==false,'Dashboard control missing: '.$label);
+foreach(array('Commercial Beta Candidate','AI Lifecycle Control','Test Automation Mode','Управляемые тестовые объекты','name="oai_content_navigation_state"','oai_test_automation_enable','Выборочное чтение больших данных</h2><p>Обзор') as $hidden)oai_nav_expect(strpos($desk,$hidden)===false,'Internal or removed control leaked into the client dashboard: '.$hidden);
+oai_nav_expect(strpos($desk,'Режим включён по умолчанию')!==false&&strpos($desk,'<select')===false,'Selective reading must be explained without a client control');
 oai_nav_expect(strpos($desk,esc_url(admin_url('admin.php?page=oai-gateway-connections')))!==false,'Dashboard connections link invalid');
 oai_nav_expect(strpos($desk,'https://wpaiadmin.ru/wpai-cloud/connect')!==false,'Automatic site connection missing');
 oai_nav_expect(strpos($desk,'Единый адрес для ChatGPT:')!==false&&strpos($desk,'<code>https://wpaiadmin.ru/mcp</code>')!==false,'Primary connection must use central gateway');

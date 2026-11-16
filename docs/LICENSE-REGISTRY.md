@@ -79,10 +79,22 @@ used by the Gateway licence registry.
 
 A linked licence must be `active` and started for its plan to be used. Any
 unusable linked licence falls the account back to Free; accounts without a
-linked licence keep their historical plan. Paid quotas for Pro, Business and
-BusinessPro remain `requires_owner_approval` and fail closed for billable calls
-until the owner supplies numbers. Reads, verification, receipts, rollback and
-usage projection remain available.
+linked licence keep their historical plan. Paid quotas for Pro, PRO+ and PRO++
+(the stable slugs are `pro`, `business`, `businesspro`) remain
+`requires_owner_approval` and fail closed for billable calls until the owner
+supplies numbers. Reads, verification, receipts, rollback and usage projection
+remain available.
+
+## Dashboard display
+
+The Native dashboard never derives a balance. It displays the server-signed
+site-usage projection, which carries `plan_label`, the licence `id`,
+`key_prefix`, `status`, `activation_limit`, `activations`, `issued_at` and
+`expires_at`. The verifier treats the licence claims as optional for backward
+compatibility, but validates them all-or-nothing when present. The full key is
+never sent to the site; only the display prefix is included. A pending paid
+quota is shown as an explicit “awaiting owner approval” state with `limit` and
+`remaining` set to `null`, never as zero or unlimited.
 
 ## HTTP surface
 
