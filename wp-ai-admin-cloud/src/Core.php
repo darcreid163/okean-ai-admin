@@ -276,8 +276,8 @@ final class Core {
         if ($name==='wordpress_execute') return ($args['mode']??'read')!=='read';
         return !in_array($name,self::READ_TOOLS,true);
     }
-    public function usage(string $owner,int $now): array {
-        $a=$this->account($owner,false,$now); $terms=QuotaPolicy::terms($this->policy,$a); $window=QuotaPolicy::window($terms,$now); $period=$window['period'];
+    public function usage(string $owner,int $now,?array $account=null): array {
+        $a=$account??$this->account($owner,false,$now); $terms=QuotaPolicy::terms($this->policy,$a); $window=QuotaPolicy::window($terms,$now); $period=$window['period'];
         $b=$this->store->row('SELECT used,reserved FROM '.$this->store->table('balances').' WHERE owner=? AND period=?',[$owner,$period]) ?? ['used'=>0,'reserved'=>0];
         $limit=$terms['limit'];
         $out=$window+$terms+['plan'=>$a['plan'],'timezone'=>'UTC','limit'=>$limit,'used'=>(int)$b['used'],'reserved'=>(int)$b['reserved'],'remaining'=>$limit===null?null:max(0,$limit-(int)$b['used']-(int)$b['reserved']),'policy_version'=>$this->policy['version'],'batch_available'=>$this->batchAvailable()];
@@ -303,7 +303,9 @@ final class Core {
         if(!is_string($credential['status_hash']) || !hash_equals($credential['status_hash'],hash('sha256',$statusKey))) throw new Fault('site_usage_denied',401);
         $this->throttle($site['owner'],'site_usage',$now,120);
         if(!$this->signer) throw new Fault('signer_not_configured',503);
-        $u=$this->usage($site['owner'],$now);
+        $account=$this->account($site['owner'],false,$now);
+        $u=$this->usage($site['owner'],$now,$account);
+        $license=Licenses::current($this->store,$account);
         // Null means "quota not approved", never a fabricated zero balance.
         $approved=($u['quota_status']??QuotaPolicy::QUOTA_APPROVED)===QuotaPolicy::QUOTA_APPROVED;
         $claims=[
@@ -311,6 +313,7 @@ final class Core {
             'site_id'=>(string)$site['id'],
             'account_id'=>(string)$site['owner'],
             'plan'=>(string)$u['plan'],
+            'plan_label'=>QuotaPolicy::planLabel($this->policy,(string)$u['plan'],(string)($u['quota_scheme']??'')),
             'limit'=>$approved?(int)$u['limit']:null,
             'used'=>(int)$u['used'],
             'reserved'=>(int)$u['reserved'],
@@ -323,6 +326,13 @@ final class Core {
             'period_end_utc'=>(string)$u['period_end_utc'],
             'policy_version'=>(string)$u['policy_version'],
             'timezone'=>'UTC',
+            'license_id'=>$license['id']??null,
+            'license_key_prefix'=>$license['key_prefix']??null,
+            'license_status'=>$license['status']??null,
+            'license_activation_limit'=>$license['activation_limit']??null,
+            'license_activations'=>$license['activations']??null,
+            'license_issued_at'=>$license['issued_at']??null,
+            'license_expires_at'=>$license['expires_at']??null,
         ];
         return ['contract'=>'wpai-site-usage-v1','site_url'=>$home,'site_id'=>(string)$site['id'],'envelope'=>$this->signer->siteUsage($claims,$now)];
     }

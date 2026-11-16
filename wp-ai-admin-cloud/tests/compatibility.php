@@ -132,7 +132,7 @@ check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1
 check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.13-dev','Candidate status version');
 $publishedPlans=WPAI_Cloud_REST::plans()->data['data']['items'];
 check(array_column($publishedPlans,'slug')===['free','daily','pro','business'],'Published plan catalog differs from the approved v3 policy');
-check(array_column($publishedPlans,'name')===['Free','Daily','Pro','Business'],'Published plan names differ from the approved catalog');
+check(array_column($publishedPlans,'name')===['Free','Daily','Pro','PRO+'],'Published plan names differ from the approved catalog');
 check(WPAI_Cloud_REST::plans()->data['data']['automatic_money_debits']===false,'Automatic debits unexpectedly active');
 $loggedIn=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Anonymous provisioning');
 $loggedIn=true;$admin=false;check(WordPress::provisioningPermission() instanceof WP_Error,'Subscriber provisioning');

@@ -96,7 +96,7 @@ final class Admin {
             catch (\Throwable $e) { $output=['error'=>'gateway_service_unavailable']; }
         }
         echo '<hr><h2>Gateway — тестовый режим</h2><p>Сервер '.(WordPress::configured()?'настроен':'выключен или требует настройки').'. MCP: <code>'.esc_html(Settings::endpoint()).'</code></p>';
-        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и автоматические списания не включены. Free — 100 действий в сутки (UTC) и в действующей схеме tariffs_v2, и в утверждённой цели tariffs_v3. Платные месячные квоты Pro, Business и BusinessPro в tariffs_v3 ожидают утверждения владельца и до утверждения блокируют только платные вызовы. Перевод аккаунтов на платные условия tariffs_v3 выполняется только отдельно авторизованной миграцией; старые назначения сохраняют прежние условия до явного перевода. Cloud Core — единственный источник плана, лицензии и квоты; ручной сброс квоты не реализован, журнал gateway хранится отдельно.</p>';
+        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и автоматические списания не включены. Free — 100 действий в сутки (UTC) и в действующей схеме tariffs_v2, и в утверждённой цели tariffs_v3. Платные месячные квоты Pro, PRO+ и PRO++ в tariffs_v3 ожидают утверждения владельца и до утверждения блокируют только платные вызовы. PRO+/PRO++ — отображаемые названия стабильных slug business/businesspro. Перевод аккаунтов на платные условия tariffs_v3 выполняется только отдельно авторизованной миграцией; старые назначения сохраняют прежние условия до явного перевода. Cloud Core — единственный источник плана, лицензии и квоты; ручной сброс квоты не реализован, журнал gateway хранится отдельно.</p>';
         if ($output!==null) echo '<pre style="white-space:pre-wrap">'.esc_html(wp_json_encode($output,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)).'</pre>';
         if ($secret!==null) {
             if ($secretKind==='license') {
@@ -148,7 +148,8 @@ final class Admin {
                 echo '</tbody></table><p>Показаны последние 50 лицензий, включая несвязанные. ID нужен для reissue, приостановки, возобновления и отзыва.</p>';
             } else echo '<p>Лицензий пока нет.</p>';
             $planOptions='';
-            foreach(['free','daily','pro','business','businesspro'] as $slug) $planOptions.='<option value="'.esc_attr($slug).'">'.esc_html($slug).'</option>';
+            $planPolicy=Settings::catalogPolicy();
+            foreach(['free','daily','pro','business','businesspro'] as $slug) $planOptions.='<option value="'.esc_attr($slug).'">'.esc_html(QuotaPolicy::planLabel($planPolicy,$slug)).'</option>';
             $schemeOptions='';
             foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $slug) $schemeOptions.='<option value="'.esc_attr($slug).'"'.($slug===QuotaPolicy::CURRENT?' selected':'').'>'.esc_html($slug).'</option>';
             $fields='<p><label>Аккаунт WordPress (пусто = несвязанная лицензия)<br><input name="license_owner" inputmode="numeric" pattern="[0-9]*" size="12"></label></p>';

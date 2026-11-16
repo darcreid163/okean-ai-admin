@@ -270,6 +270,20 @@ final class Licenses {
         });
     }
 
+    /**
+     * Current licence linked to one account, or null when the account has no
+     * linked licence (historical/legacy entitlement). Never accepts a licence
+     * id from the client; the caller passes the server-loaded account row.
+     */
+    public static function current(Store $store,array $account): ?array {
+        $id=(string)($account['license_id']??'');
+        $owner=(string)($account['owner']??'');
+        if ($id==='' || $owner==='' || !preg_match(self::ID_PATTERN,$id)) return null;
+        $store->ensureLicenseSchema();
+        $row=$store->row('SELECT * FROM '.$store->table('licenses').' WHERE id=? AND owner=?',[$id,$owner]);
+        return $row?self::summary($row):null;
+    }
+
     public static function listForOwner(Store $store,string $owner,int $limit=50): array {
         $store->ensureLicenseSchema();
         $owner=Security::identifier($owner,64);

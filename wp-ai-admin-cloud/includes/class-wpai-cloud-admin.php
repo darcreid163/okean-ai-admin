@@ -41,7 +41,7 @@ class WPAI_Cloud_Admin {
                     . ($row[3] === null ? '<strong>не утверждён</strong>' : (int) $row[3]) . '</td><td>' . esc_html($row[4]) . '</td></tr>';
             }
             echo '</tbody></table>';
-            echo '<p>Платные квоты Business/Pro/BusinessPro утверждает владелец. До утверждения billable-вызовы отклоняются, а операции чтения, проверки, квитанции и откат остаются доступны.</p>';
+            echo '<p>Платные квоты PRO+/Pro/PRO++ утверждает владелец. До утверждения billable-вызовы отклоняются, а операции чтения, проверки, квитанции и откат остаются доступны.</p>';
         } catch (Throwable $e) {
             echo '<p><strong>Каталог недоступен:</strong> <code>' . esc_html($e->getMessage()) . '</code></p>';
         }

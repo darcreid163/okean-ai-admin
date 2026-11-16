@@ -100,9 +100,46 @@ $v3['period']='2026-11';$v3['period_kind']='calendar_month_utc';$v3['quota_schem
 $v3['period_start_utc']='2026-11-01T00:00:00Z';$v3['period_end_utc']='2026-12-01T00:00:00Z';
 usageAssert(OAI_Cloud_Usage::verify(usageSigned($v3,$secret,$now,$site,$siteId),$context,$now)['valid']===true,'Monthly tariffs_v3 projection rejected');
 $pending=$v3;$pending['limit']=null;$pending['remaining']=null;$pending['quota_status']='requires_owner_approval';
-usageAssert(OAI_Cloud_Usage::verify(usageSigned($pending,$secret,$now,$site,$siteId),$context,$now)['reason']==='quota_pending','Unapproved paid quota was rendered as a balance');
+$pendingResult=OAI_Cloud_Usage::verify(usageSigned($pending,$secret,$now,$site,$siteId),$context,$now);
+usageAssert($pendingResult['valid']===true,'Unapproved paid quota was rejected instead of shown as pending');
+usageAssert($pendingResult['claims']['limit']===null&&$pendingResult['claims']['remaining']===null,'Pending quota fabricated a balance');
+$pendingZero=$pending;$pendingZero['limit']=0;$pendingZero['remaining']=0;
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($pendingZero,$secret,$now,$site,$siteId),$context,$now)['reason']==='quota_pending','Pending quota with a numeric balance accepted');
 $unknownStatus=$v3;$unknownStatus['quota_status']='unlimited';
 usageAssert(OAI_Cloud_Usage::verify(usageSigned($unknownStatus,$secret,$now,$site,$siteId),$context,$now)['reason']==='claims','Unknown quota status accepted');
+
+// Licence display claims are signed evidence, strict and all-or-nothing.
+$licensed=$v3;
+$licensed['plan']='business';
+$licensed['plan_label']='PRO+';
+$licensed['license_id']='lic_'.str_repeat('a',24);
+$licensed['license_key_prefix']='wpai_lic_abcdefg';
+$licensed['license_status']='active';
+$licensed['license_activation_limit']=3;
+$licensed['license_activations']=1;
+$licensed['license_issued_at']=$now-100;
+$licensed['license_expires_at']=$now+100000;
+$licensedResult=OAI_Cloud_Usage::verify(usageSigned($licensed,$secret,$now,$site,$siteId),$context,$now);
+usageAssert($licensedResult['valid']===true,'Valid licence claims rejected: '.$licensedResult['reason']);
+usageAssert($licensedResult['claims']['plan_label']==='PRO+','Plan label not preserved');
+$projectionMapper=new ReflectionMethod('OAI_Cloud_Usage','public_projection');
+$projectionMapper->setAccessible(true);
+$licensedProjection=$projectionMapper->invoke(null,$licensedResult['claims']);
+usageAssert($licensedProjection['plan_label']==='PRO+','Projection lost the server plan label');
+usageAssert($licensedProjection['license_key_prefix']==='wpai_lic_abcdefg'&&$licensedProjection['license_status']==='active','Projection lost licence display claims');
+usageAssert($licensedProjection['license_activations']===1&&$licensedProjection['license_activation_limit']===3,'Projection lost licence activation counts');
+$plainProjection=$projectionMapper->invoke(null,$valid['claims']);
+usageAssert($plainProjection['license_id']===null&&$plainProjection['license_status']===null,'Projection invented licence claims');
+$badPrefix=$licensed;$badPrefix['license_key_prefix']='not-a-licence-key';
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($badPrefix,$secret,$now,$site,$siteId),$context,$now)['reason']==='license','Invalid licence prefix accepted');
+$partialLicence=$licensed;unset($partialLicence['license_status']);
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($partialLicence,$secret,$now,$site,$siteId),$context,$now)['reason']==='license','Partial licence claims accepted');
+$overActivated=$licensed;$overActivated['license_activations']=4;
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($overActivated,$secret,$now,$site,$siteId),$context,$now)['reason']==='license','Activation count above limit accepted');
+$badExpiry=$licensed;$badExpiry['license_expires_at']=$now-200;
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($badExpiry,$secret,$now,$site,$siteId),$context,$now)['reason']==='license','Licence expiry before issue accepted');
+$badLabel=$licensed;$badLabel['plan_label']='<script>';
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($badLabel,$secret,$now,$site,$siteId),$context,$now)['reason']==='claims','Unsafe plan label accepted');
 
 // Garbage and legacy (unsigned) responses fail closed.
 usageAssert(OAI_Cloud_Usage::verify(['contract'=>'wpai-site-usage-v1'],$context,$now)['reason']==='site','Malformed projection accepted');
@@ -141,6 +178,18 @@ $verified=OAI_Cloud_Usage::status();
 usageAssert($verified['state']==='verified'&&$verified['available']===true,'Verified server projection not displayed');
 usageAssert($verified['projection']['remaining']===1990&&$verified['projection']['plan']==='pro','Dashboard used a non-server balance');
 
+// Pending paid quota is displayable as an explicit state, never as a number.
+$GLOBALS['wpai_test_options']['oai_cloud_usage_'.substr($hash,0,32)]['projection']=$pendingResult['claims'];
+$pendingState=OAI_Cloud_Usage::status();
+usageAssert($pendingState['state']==='verified'&&$pendingState['projection']['quota_status']==='requires_owner_approval','Pending quota state not exposed');
+usageAssert($pendingState['projection']['limit']===null&&$pendingState['projection']['remaining']===null,'Pending quota fabricated a dashboard balance');
+$GLOBALS['wpai_test_options']['oai_cloud_usage_'.substr($hash,0,32)]['projection']=$licensedProjection;
+$licenseState=OAI_Cloud_Usage::status();
+usageAssert($licenseState['projection']['plan_label']==='PRO+','Dashboard lost the server plan label');
+usageAssert($licenseState['projection']['license_key_prefix']==='wpai_lic_abcdefg','Dashboard lost the licence prefix');
+usageAssert($licenseState['projection']['license_status']==='active','Dashboard lost the licence status');
+$GLOBALS['wpai_test_options']['oai_cloud_usage_'.substr($hash,0,32)]['projection']=$projection;
+
 $GLOBALS['wpai_test_options']['oai_cloud_usage_'.substr($hash,0,32)]['valid']=false;
 $GLOBALS['wpai_test_options']['oai_cloud_usage_'.substr($hash,0,32)]['reason']='signature';
 $GLOBALS['wpai_test_options']['oai_cloud_usage_'.substr($hash,0,32)]['retry_at']=time()+60;
@@ -175,4 +224,4 @@ foreach($handler_states as $handler_state=>$handler_fresh){
 $handler_real=OAI_Admin::cloud_usage_refresh_notice(OAI_Cloud_Usage::status());
 usageAssert(strpos($handler_real,'notice-success')!==false,'Quota button handler rejected the real verified/stale status()');
 
-echo "PASS 41 cloud usage projection assertions + 9 quota button handler assertions\n";
+echo "PASS cloud usage projection assertions + 9 quota button handler assertions\n";

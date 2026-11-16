@@ -8,15 +8,19 @@
 
 Completed in this slice:
 
-- the approved Free/Pro/Business/BusinessPro catalogue in `wp-ai-admin-cloud/config/plans.json`;
+- the approved Free/Pro/PRO+/PRO++ catalogue in `wp-ai-admin-cloud/config/plans.json` (display names; internal slugs `business`/`businesspro` unchanged);
 - Free at **100 actions per UTC day** in the active `tariffs_v2` terms and in the target `schemes.tariffs_v3`;
 - paid quotas left `null` with `quota_status=requires_owner_approval` and billable calls failing closed;
 - the Cloud-owned licence registry with hash-only keys, lifecycle, activation limits, reissue and account fallback;
 - Cloud authority over plan, licence, quota and balance, with no client-supplied identity trusted;
 - admin/owner UI and HTTP routes for issue, activate, deactivate, reissue, revoke, suspend and reactivate;
+- Batch enabled in the catalogue as `successful_object_v1` (charged per successful object) for `cloud_site_batch_call`;
+- licence, plan-label and quota values in the Native client dashboard, taken only from the server-signed projection;
 - documentation, contracts and CI coverage for the above.
 
-Explicitly outside this slice: payments, automatic money debits, auto-renewal, paid quota values, the v2→v3 account/tariff migration, Batch activation, production deployment, release tags, real key issuance and repository visibility changes.
+Explicitly outside this slice: payments, automatic money debits, auto-renewal, paid quota values, the v2→v3 account/tariff migration, scheduled `batch_create`/`batch_resume`, production deployment, release tags, real key issuance and repository visibility changes.
+
+The Batch enablement, licence-claim projection and dashboard rebuild were verified locally on PHP 8.3.36 with the SQLite contract suites. They still require their own exact-HEAD hosted CI run before merge and are not a production-readiness claim.
 
 ## 2. Commercial state
 
@@ -24,8 +28,8 @@ Explicitly outside this slice: payments, automatic money debits, auto-renewal, p
 |---|---:|---:|---|---|
 | Free | 0 ₽/month | 100 | UTC calendar day | approved |
 | Pro | 2,000 ₽/month | `null` | UTC calendar month | `requires_owner_approval` |
-| Business | 5,000 ₽/month | `null` | UTC calendar month | `requires_owner_approval` |
-| BusinessPro | 10,000 ₽/month | `null` | UTC calendar month | `requires_owner_approval` |
+| PRO+ | 5,000 ₽/month | `null` | UTC calendar month | `requires_owner_approval` |
+| PRO++ | 10,000 ₽/month | `null` | UTC calendar month | `requires_owner_approval` |
 
 - All tools remain available on every plan; plans differ by included quota.
 - Plan and period assignment is manual. There are no automatic debits, auto-renewal or payment-method charges.
@@ -98,7 +102,7 @@ This proves the automated fail-closed and single-charge paths. It is not a live 
 - No paid quota number was invented, inferred or carried over.
 - No production deployment, release tag, repository visibility change or real licence key issuance was performed.
 - No existing account, licence, OAuth connection or site binding was deleted.
-- Batch remains disabled by the current policy (`disabled_until_receipt_accounting_contract`); enabling it is a separate release decision.
+- Batch is enabled by the shipped catalogue (`successful_object_v1`, charged per successful object) for `cloud_site_batch_call`; an explicitly stored `wpai_gateway_batch_object_v1` option can disable it. Scheduled `batch_create`/`batch_resume` remain gated until their receipt accounting is ready.
 - No telemetry path can change a balance; the Gateway Ledger remains the sole charging authority.
 
 ## 6. Compatibility and data safety
@@ -113,12 +117,12 @@ This proves the automated fail-closed and single-charge paths. It is not a live 
 
 | Severity | Item | Status |
 |---|---|---|
-| P0 | Paid quota numbers for Pro/Business/BusinessPro are not approved | blocked on owner; fail-closed |
+| P0 | Paid quota numbers for Pro/PRO+/PRO++ are not approved | blocked on owner; fail-closed |
 | P0 | v2→v3 account/tariff migration is not authorized or rehearsed | not started |
 | P1 | Real staging upgrade/rollback, installed-file parity and external-client acceptance are not complete | gate open |
 | P1 | Full Elementor/Gutenberg/WooCommerce/Woodmart end-to-end matrix is not covered by this slice | gate open for beta |
 | P2 | Admin activation of an unbound licence binds it to the acting admin account | UX follow-up needed |
-| P2 | BusinessPro is selectable while the default scheme is v2 and then yields `unknown_plan` | UI/validation follow-up needed |
+| P2 | PRO++ (`businesspro`) is selectable while the default scheme is v2 and then yields `unknown_plan` | UI/validation follow-up needed |
 | P2 | Licence events are individually hashed but not hash-chained | hardening follow-up |
 | P2 | MySQL coverage exists only in CI; no local MySQL is available | documented environment gap |
 | P3 | Historical dated release documents still contain superseded tariff examples | preserved as history; this report and `MIGRATION-STATUS.md` are current |

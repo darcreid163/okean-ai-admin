@@ -43,12 +43,11 @@ class WPAI_Cloud_REST {
         } catch (Throwable $e) {
             return new WP_REST_Response(array('success'=>false,'data'=>null,'error'=>'plan_catalog_unavailable'),503);
         }
-        $batch=in_array(get_option('wpai_gateway_batch_object_v1',false),array(true,1,'1'),true);
-        $names=array('free'=>'Free','daily'=>'Daily','pro'=>'Pro','business'=>'Business');
+        $batch=(($policy['batch']??'')===\WPAICloudGateway\BatchAccounting::POLICY);
         $plans=array();
         foreach ($policy['plans'] as $slug=>$limit) {
             $period=$policy['periods'][$slug];
-            $plans[]=array('slug'=>$slug,'name'=>$names[$slug],'active'=>1,'version_key'=>$policy['version'],
+            $plans[]=array('slug'=>$slug,'name'=>\WPAICloudGateway\QuotaPolicy::planLabel($policy,$slug,\WPAICloudGateway\QuotaPolicy::CURRENT),'active'=>1,'version_key'=>$policy['version'],
                 'actions_limit'=>$limit,'quota_period'=>$period,'timezone'=>'UTC',
                 'monthly_actions'=>$period==='calendar_month_utc'?$limit:null,
                 'daily_actions'=>$period==='calendar_day_utc'?$limit:null,

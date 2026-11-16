@@ -13,7 +13,7 @@ $refuse=static function(callable $f,string $reason) use ($ok):void {
 $p=json_decode(file_get_contents($root.'/config/plans.json'),true,32,JSON_THROW_ON_ERROR);
 Policy::validate($p);
 $ok(($p['automatic_money_debits']??null)===false,'Automatic money debit unexpectedly enabled');
-$ok(($p['batch']??'')==='disabled_until_receipt_accounting_contract','Production batch activated');
+$ok(($p['batch']??'')===Batch::POLICY,'Production batch must be enabled');
 foreach(['free'=>[100,Policy::DAY],'daily'=>[500,Policy::DAY],'pro'=>[2000,Policy::DAY],'business'=>[5000,Policy::DAY]] as $plan=>$expected){
     $t=Policy::terms($p,['quota_scheme'=>Policy::CURRENT,'plan'=>$plan]);
     $ok($t['limit']===$expected[0]&&$t['period_kind']===$expected[1],'Bad tariff '.$plan);

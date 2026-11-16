@@ -18,6 +18,7 @@ $store->migrate();
 try {
 $transport=new FakeTransport();
 $policy=json_decode((string)file_get_contents(dirname(__DIR__).'/config/plans.json'),true,32,JSON_THROW_ON_ERROR);
+batchCheck(($policy['batch']??null)===BatchAccounting::POLICY,'Shipped catalogue does not enable Batch');
 $policy['plans']['free']=4;
 $policy['batch']=BatchAccounting::POLICY;QuotaPolicy::validate($policy);
 $pair=sodium_crypto_sign_keypair();

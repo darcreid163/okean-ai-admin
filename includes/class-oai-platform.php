@@ -3,8 +3,10 @@
 if (!defined('ABSPATH')) exit;
 class OAI_Platform {
  public static function content_navigation_state(){
-  $state=(string)get_option('oai_feature_content_navigation','experimental');
-  return in_array($state,array('experimental','enabled','disabled'),true)?$state:'disabled';
+  // Read-only navigation for large content (file outline, line ranges, compact
+  // Elementor/HTML views) is always available. It never grants a write. A
+  // site-wide emergency kill switch remains available to code-level operators.
+  return defined('OAI_DISABLE_CONTENT_NAVIGATION')&&OAI_DISABLE_CONTENT_NAVIGATION?'disabled':'enabled';
  }
  public static function content_navigation_allowed(){return self::content_navigation_state()!=='disabled';}
  public static function site_id(){

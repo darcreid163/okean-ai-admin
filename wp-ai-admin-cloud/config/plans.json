@@ -1,5 +1,5 @@
 {
-  "version": "tariffs-v3-20261114",
+  "version": "tariffs-v3-20261115",
   "period": "per_plan_utc",
   "status": "quota_policy_only_payments_not_implemented",
   "plans": {
@@ -7,6 +7,13 @@
     "daily": 500,
     "pro": 2000,
     "business": 5000
+  },
+  "names": {
+    "free": "Free",
+    "daily": "Daily",
+    "pro": "Pro",
+    "business": "PRO+",
+    "businesspro": "PRO++"
   },
   "periods": {
     "free": "calendar_day_utc",
@@ -22,7 +29,7 @@
     "scale": 10000
   },
   "billing": "successful_single_tool_call",
-  "batch": "disabled_until_receipt_accounting_contract",
+  "batch": "successful_object_v1",
   "automatic_money_debits": false,
   "manual_refills": "deferred",
   "timezone": "UTC",
@@ -55,8 +62,8 @@
       "names": {
         "free": "Free",
         "pro": "Pro",
-        "business": "Business",
-        "businesspro": "BusinessPro"
+        "business": "PRO+",
+        "businesspro": "PRO++"
       },
       "prices_rub_month": {
         "free": 0,
