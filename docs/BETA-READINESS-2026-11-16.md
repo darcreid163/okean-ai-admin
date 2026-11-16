@@ -1,6 +1,6 @@
 # Beta readiness — final five-tier daily tariff policy (16 November 2026)
 
-**Status: tariff implementation in review; production activation is pending.** The owner has approved the final five daily quotas. Implementation is on focused branch `fix/final-five-daily-tariffs-205`, tracked by issue #205. Do not claim that the new catalogue is live until the Cloud Core package is rebuilt, deployed and its runtime API is rechecked.
+**Status: merged and packaged; production activation is pending.** The owner has approved the final five daily quotas. Implementation merged to `main` via PR #206, squash commit `0874c1c51a8fe367cc7f0ad27fc37bc9cd432cb7`; issue #205 is closed. Exact-head Cloud Core CI run #334 and Native validation run #344 passed. Candidate package built from tested head `d33436f6df3d7b91deb8d4d3f07d01684757f9e9`; do not claim the new catalogue is live until deployed and its runtime API is rechecked.
 
 ## 1. Final owner-approved tariff catalogue
 
@@ -40,14 +40,14 @@ On 16 November, the user installed Cloud Core `0.3.13-dev` on `wpaiadmin.ru`. Th
 | Check | Status |
 |---|---|
 | Owner approval of five final daily quotas | confirmed |
-| Focused issue and branch | created — #205 |
-| Cloud Core source/config changes | committed to branch |
-| Policy validation and API projection changes | committed to branch |
-| Five-tier contract tests | committed to branch; CI pending |
-| README and release mission | updated on branch |
-| Exact-HEAD Cloud Core CI | pending |
-| Exact-HEAD Native CI | pending / run if shared workflow requires it |
-| Package build and ZIP inspection | pending |
+| Focused issue and branch | merged PR #206; issue #205 closed |
+| Cloud Core source/config changes | merged to main — `0874c1c51a8fe367cc7f0ad27fc37bc9cd432cb7` |
+| Policy validation and API projection changes | merged to main |
+| Five-tier contract tests | passed exact-head Cloud Core CI #334 (PHP 8.2/8.3/8.4, SQLite and MySQL) |
+| README and release mission | updated and merged |
+| Exact-HEAD Cloud Core CI | passed — run #334 |
+| Exact-HEAD Native CI | passed — run #344 (PHP matrix, WordPress smoke and package install) |
+| Package build and ZIP inspection | passed — artifact #14209607425; ZIP SHA-256 `01d2f986db0a334b8c1e55b2f0fc99759ff822527e800bc4e6ac12b721dccf32` |
 | Live Cloud Core deployment | not performed |
 | Live /status and /plans verification of final five tiers | pending |
 | Account/license re-read | pending |
@@ -57,12 +57,9 @@ On 16 November, the user installed Cloud Core `0.3.13-dev` on `wpaiadmin.ru`. Th
 
 ## 6. Next steps
 
-1. Complete exact-HEAD Cloud Core CI and inspect failures.
-2. Review the final diff for policy/API/test consistency.
-3. Build a new installable Cloud Core package from the reviewed branch/merge commit; verify ZIP contents and SHA-256.
-4. Deploy only after backup/preflight and explicit production apply confirmation.
-5. Recheck `/status` and `/plans`; expected active limits are 50 / 500 / 2,000 / 5,000 / 10,000 daily.
-6. Re-read the current account, licence scheme and connected-site bindings. Do not replace the current Free licence or migrate legacy accounts without a separate, explicit decision.
-7. Test usage and reset boundaries with a controlled test account; no real payment collection.
+1. Deploy the prepared installable Cloud Core package only after Beget backup/preflight and explicit production apply confirmation.
+2. Recheck `/status` and `/plans`; expected active limits are 50 / 500 / 2,000 / 5,000 / 10,000 daily.
+3. Re-read the current account, licence scheme and connected-site bindings. Do not replace the current Free licence or migrate legacy accounts without a separate, explicit decision.
+4. Test usage and reset boundaries with a controlled test account; no real payment collection.
 
 **No production changes, account migration, licence replacement or live payment changes have been performed by issue #205.**
