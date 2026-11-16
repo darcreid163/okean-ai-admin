@@ -38,16 +38,16 @@ class WPAI_Cloud_REST {
 
     public static function plans() {
         try {
-            if (!class_exists('WPAICloudGateway\\Settings')) throw new RuntimeException('Gateway PHP requirements unavailable');
-            $policy=\WPAICloudGateway\Settings::catalogPolicy();
+            if (!class_exists('WPAICloudGateway\\\\Settings')) throw new RuntimeException('Gateway PHP requirements unavailable');
+            $policy=\\WPAICloudGateway\\Settings::catalogPolicy();
         } catch (Throwable $e) {
             return new WP_REST_Response(array('success'=>false,'data'=>null,'error'=>'plan_catalog_unavailable'),503);
         }
-        $batch=(($policy['batch']??'')===\WPAICloudGateway\BatchAccounting::POLICY);
+        $batch=(($policy['batch']??'')===\\WPAICloudGateway\\BatchAccounting::POLICY);
         $plans=array();
         foreach ($policy['plans'] as $slug=>$limit) {
             $period=$policy['periods'][$slug];
-            $plans[]=array('slug'=>$slug,'name'=>\WPAICloudGateway\QuotaPolicy::planLabel($policy,$slug,\WPAICloudGateway\QuotaPolicy::CURRENT),'active'=>1,'version_key'=>$policy['version'],
+            $plans[]=array('slug'=>$slug,'name'=>\\WPAICloudGateway\\QuotaPolicy::planLabel($policy,$slug,\\WPAICloudGateway\\QuotaPolicy::CURRENT),'active'=>1,'version_key'=>$policy['version'],
                 'actions_limit'=>$limit,'quota_period'=>$period,'timezone'=>'UTC',
                 'monthly_actions'=>$period==='calendar_month_utc'?$limit:null,
                 'daily_actions'=>$period==='calendar_day_utc'?$limit:null,
@@ -60,21 +60,30 @@ class WPAI_Cloud_REST {
         if (is_array($scheme)) {
             $items=array();
             foreach ($scheme['plans'] as $slug=>$limit) {
+                $period=(string)($scheme['periods'][$slug]??'');
                 $items[]=array('slug'=>$slug,'name'=>(string)($scheme['names'][$slug]??$slug),
                     'actions_limit'=>$limit,
                     'quota_status'=>(string)($scheme['quota_status'][$slug]??''),
-                    'quota_period'=>(string)($scheme['periods'][$slug]??''),
+                    'quota_period'=>$period,
                     'timezone'=>'UTC',
-                    'monthly_actions'=>$limit,
-                    'daily_actions'=>null,
-                    'price_rub_month'=>(int)($scheme['prices_rub_month'][$slug]??0),
+                    'monthly_actions'=>$period==='calendar_month_utc'?$limit:null,
+                    'daily_actions'=>$period==='calendar_day_utc'?$limit:null,
+                    'price_rub_month'=>$scheme['prices_rub_month'][$slug]??null,
                     'all_tools'=>true,
                     'failed_actions_billable'=>0,'rollback_billable'=>0,'verify_billable'=>0);
             }
+            $paidStatuses=array();
+            foreach ($scheme['plans'] as $slug=>$unused) {
+                if ($slug==='free') continue;
+                $paidStatuses[]=(string)($scheme['quota_status'][$slug]??'');
+            }
             $target=array('items'=>$items,'quota_scheme'=>'tariffs_v3','all_tools'=>true,
-                'paid_quotas_approved'=>false,'automatic_money_debits'=>false);
+                'paid_quotas_approved'=>$paidStatuses!==[] && !in_array('requires_owner_approval',$paidStatuses,true),
+                'prices_approved'=>(bool)($scheme['prices_approved']??false),
+                'automatic_money_debits'=>false);
         }
-        return self::response(array('items'=>$plans,'quota_scheme'=>'tariffs_v2','payments_enabled'=>false,
-            'automatic_money_debits'=>false,'manual_refills'=>'deferred','prices_approved'=>false,'target'=>$target));
+        return self::response(array('items'=>$plans,'quota_scheme'=>(string)($policy['default_scheme']??'tariffs_v2'),'payments_enabled'=>false,
+            'automatic_money_debits'=>false,'manual_refills'=>'deferred',
+            'prices_approved'=>(bool)($policy['prices_approved']??false),'target'=>$target));
     }
 }
