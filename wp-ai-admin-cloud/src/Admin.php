@@ -110,6 +110,10 @@ final class Admin {
                         if($days>0) $options['duration_days']=$days;
                         $value=$core->issueLicense((string)get_current_user_id(),$licenseOwner===''?null:$licenseOwner,$plan,time(),$scheme===''?null:$scheme,$options);
                         $secret=$value['license_key']; unset($value['license_key']); $secretKind='license'; $output=$value;
+                    } elseif ($action==='quota_reset') {
+                        if(self::submitted('quota_confirm')!=='RESET DAILY') throw new Fault('quota_reset_confirmation_required',409);
+                        $target=self::submitted('quota_owner');
+                        $output=$core->resetDailyQuota((string)get_current_user_id(),$target,time());
                     } elseif ($action==='license_activate') {
                         $output=$core->activateLicense($owner,self::submitted('license_key'),self::submitted('license_site'),time());
                     } elseif ($action==='license_reissue') {
@@ -132,7 +136,7 @@ final class Admin {
             catch (\Throwable $e) { $output=['error'=>'gateway_service_unavailable']; }
         }
         echo '<hr><h2>Gateway — тестовый режим</h2><p>Сервер '.(WordPress::configured()?'настроен':'выключен или требует настройки').'. MCP: <code>'.esc_html(Settings::endpoint()).'</code></p>';
-        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и автоматические списания не включены. Free — 100 действий в сутки (UTC) и в действующей схеме tariffs_v2, и в утверждённой цели tariffs_v3. Платные месячные квоты Pro, PRO+ и PRO++ в tariffs_v3 ожидают утверждения владельца и до утверждения блокируют только платные вызовы. PRO+/PRO++ — отображаемые названия стабильных slug business/businesspro. Перевод аккаунтов на платные условия tariffs_v3 выполняется только отдельно авторизованной миграцией; старые назначения сохраняют прежние условия до явного перевода. Cloud Core — единственный источник плана, лицензии и квоты; ручной сброс квоты не реализован, журнал gateway хранится отдельно.</p>';
+        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и автоматические списания не включены. Дневные квоты утверждённого каталога: Free — 50, Daily — 500, Pro — 2 000, PRO+ — 5 000, PRO++ — 10 000 действий в сутки UTC. Исторические аккаунты legacy_monthly_v1 сохраняют прежние месячные условия до отдельно авторизованного перевода. Cloud Core — единственный источник плана, лицензии и квоты. Ручной сброс дневной квоты доступен только администратору на стороне сервера; публичного REST/MCP-инструмента для сброса нет.</p>';
         if ($output!==null) echo '<pre style="white-space:pre-wrap">'.esc_html(wp_json_encode($output,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)).'</pre>';
         if ($secret!==null) {
             if ($secretKind==='license') {
@@ -153,6 +157,8 @@ final class Admin {
         try {
             $core=WordPress::operatorCore(); $owner=WordPress::operatorOwner(); $sites=$core->sites($owner);
             echo '<p>Лимит: <code>'.esc_html(wp_json_encode($core->usage($owner,time()))).'</code></p>';
+            echo '<h3>Ручной сброс дневной квоты</h3><p>Только администратор Cloud Core. Сбрасывает использованные действия выбранного аккаунта за текущие сутки UTC. Незавершённые резервы сохраняются; тариф, лицензия и месячные исторические балансы не меняются.</p>';
+            self::form('quota_reset','Сбросить дневную квоту пользователя','<p><label>ID аккаунта пользователя<br><input name="quota_owner" maxlength="64" required autocomplete="off" size="32"></label></p><p><label>Подтверждение (введите RESET DAILY)<br><input name="quota_confirm" required autocomplete="off" pattern="RESET DAILY" size="24"></label></p>');
             $providerSites=get_user_meta((int)$owner,'wpai_cloud_provider_sites',true);if(!is_array($providerSites))$providerSites=[];
             if($sites){
                 echo '<h3>Подключения AI → сайт</h3><p>Выбор здесь — удобный профиль подключения. Безопасность всё равно ограничивается site_id внутри токена и каждого вызова.</p>';
