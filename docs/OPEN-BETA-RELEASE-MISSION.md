@@ -199,7 +199,7 @@ A candidate can be marked **Open Beta Ready** only when all are true:
 - [ ] ZIP contents, versions, checksums, changelog and install instructions are verified.
 - [ ] Owner receives the installable artifacts and a concise test checklist.
 
-Current gate-by-gate status and evidence: [Beta readiness, 14 November 2026](BETA-READINESS-2026-11-14.md). A documentation status does not convert a failed or skipped gate into a pass.
+Current gate-by-gate status and evidence: [Beta readiness, 16 November 2026](BETA-READINESS-2026-11-16.md). A documentation status does not convert a failed or skipped gate into a pass.
 
 If a gate fails, report **NOT READY**, identify the blocker and continue remediation. Never convert a failed or skipped test into a pass by assumption.
 
