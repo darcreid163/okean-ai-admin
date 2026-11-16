@@ -47,8 +47,7 @@ try {
     foreach(['free'=>100,'pro'=>500,'power'=>2000,'agency'=>5000,'scale'=>10000] as $slug=>$limit)
         v3Check(($policy['legacy_plans'][$slug]??null)===$limit,'Legacy monthly limit changed: '.$slug);
 
-    // Target scheme: Free is fixed and approved, paid quotas are explicitly
-    // pending until the owner supplies a number.
+    // Target scheme: all five final quotas are owner-approved and daily UTC.
     $v3=$policy['schemes'][QuotaPolicy::TARGET]??null;
     v3Check(is_array($v3),'Missing target scheme');
     v3Check(($v3['period']??null)===QuotaPolicy::DAY,'Target scheme is not daily');
@@ -69,7 +68,8 @@ try {
     v3Check(QuotaPolicy::planLabel($policy,'free')==='Free','Free label changed');
 
     // Offer domain is scheme-specific.
-    v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'free'),'v3 free not offered');\n    v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'daily'),'v3 Daily not offered');
+    v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'free'),'v3 free not offered');
+    v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'daily'),'v3 Daily not offered');
     v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'businesspro'),'v3 businesspro not offered');
     v3Check(!QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'power'),'v3 leaked a legacy plan');
     v3Check(QuotaPolicy::offers($policy,QuotaPolicy::CURRENT,'businesspro'),'v2 must offer businesspro');
@@ -80,9 +80,15 @@ try {
     $legacy=QuotaPolicy::terms($policy,['plan'=>'pro','quota_scheme'=>QuotaPolicy::LEGACY]);
     v3Check($legacy['limit']===500&&$legacy['period_kind']===QuotaPolicy::MONTH&&$legacy['quota_scheme']===QuotaPolicy::LEGACY,'Legacy terms changed');
     $v2=QuotaPolicy::terms($policy,['plan'=>'free','quota_scheme'=>QuotaPolicy::CURRENT]);
-    v3Check($v2['limit']===100&&$v2['period_kind']===QuotaPolicy::DAY&&$v2['quota_scheme']===QuotaPolicy::CURRENT,'v2 terms changed');
+    v3Check($v2['limit']===50&&$v2['period_kind']===QuotaPolicy::DAY&&$v2['quota_scheme']===QuotaPolicy::CURRENT,'v2 Free terms wrong');
+    $v2Daily=QuotaPolicy::terms($policy,['plan'=>'daily','quota_scheme'=>QuotaPolicy::CURRENT]);
+    v3Check($v2Daily['limit']===500&&$v2Daily['period_kind']===QuotaPolicy::DAY,'v2 Daily terms wrong');
+    $v2BusinessPro=QuotaPolicy::terms($policy,['plan'=>'businesspro','quota_scheme'=>QuotaPolicy::CURRENT]);
+    v3Check($v2BusinessPro['limit']===10000&&$v2BusinessPro['period_kind']===QuotaPolicy::DAY,'v2 PRO++ terms wrong');
     $free=QuotaPolicy::terms($policy,['plan'=>'free','quota_scheme'=>QuotaPolicy::TARGET]);
-    v3Check($free['limit']===50&&$free['period_kind']===QuotaPolicy::DAY&&$free['quota_status']===QuotaPolicy::QUOTA_APPROVED,'v3 Free terms wrong');\n    $daily=QuotaPolicy::terms($policy,['plan'=>'daily','quota_scheme'=>QuotaPolicy::TARGET]);\n    v3Check($daily['limit']===500&&$daily['period_kind']===QuotaPolicy::DAY&&$daily['quota_status']===QuotaPolicy::QUOTA_APPROVED,'v3 Daily terms wrong');
+    v3Check($free['limit']===50&&$free['period_kind']===QuotaPolicy::DAY&&$free['quota_status']===QuotaPolicy::QUOTA_APPROVED,'v3 Free terms wrong');
+    $daily=QuotaPolicy::terms($policy,['plan'=>'daily','quota_scheme'=>QuotaPolicy::TARGET]);
+    v3Check($daily['limit']===500&&$daily['period_kind']===QuotaPolicy::DAY&&$daily['quota_status']===QuotaPolicy::QUOTA_APPROVED,'v3 Daily terms wrong');
     $pro=QuotaPolicy::terms($policy,['plan'=>'pro','quota_scheme'=>QuotaPolicy::TARGET]);
     v3Check($pro['limit']===2000&&$pro['quota_status']===QuotaPolicy::QUOTA_APPROVED&&$pro['period_kind']===QuotaPolicy::DAY,'v3 Pro terms wrong');
     $business=QuotaPolicy::terms($policy,['plan'=>'business','quota_scheme'=>QuotaPolicy::TARGET]);
@@ -234,7 +240,8 @@ try {
     v3Rejects(fn()=>$core->call($actor,$site['id'],'wp_get_site',[],'pending-again',$now),'plan_quota_not_configured');
     v3Check($transport->executions===3,'Re-pending plan executed a tool');
 
-    echo 'PASS '.$checks.' plan catalogue v3 assertions; driver='.($mysql?'mysql':'sqlite')."\n";
+    echo 'PASS '.$checks.' plan catalogue v3 assertions; driver='.($mysql?'mysql':'sqlite')."
+";
 } finally {
     foreach($tables as $name) $store->execute('DROP TABLE IF EXISTS '.$store->table($name));
     unset($core,$actor,$transport,$store,$pdo);
