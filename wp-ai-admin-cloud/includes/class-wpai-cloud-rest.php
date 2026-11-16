@@ -39,15 +39,15 @@ class WPAI_Cloud_REST {
     public static function plans() {
         try {
             if (!class_exists('WPAICloudGateway\\Settings')) throw new RuntimeException('Gateway PHP requirements unavailable');
-            $policy=\\WPAICloudGateway\\Settings::catalogPolicy();
+            $policy=\WPAICloudGateway\Settings::catalogPolicy();
         } catch (Throwable $e) {
             return new WP_REST_Response(array('success'=>false,'data'=>null,'error'=>'plan_catalog_unavailable'),503);
         }
-        $batch=(($policy['batch']??'')===\\WPAICloudGateway\\BatchAccounting::POLICY);
+        $batch=(($policy['batch']??'')===\WPAICloudGateway\BatchAccounting::POLICY);
         $plans=array();
         foreach ($policy['plans'] as $slug=>$limit) {
             $period=$policy['periods'][$slug];
-            $plans[]=array('slug'=>$slug,'name'=>\\WPAICloudGateway\\QuotaPolicy::planLabel($policy,$slug,\\WPAICloudGateway\\QuotaPolicy::CURRENT),'active'=>1,'version_key'=>$policy['version'],
+            $plans[]=array('slug'=>$slug,'name'=>\WPAICloudGateway\QuotaPolicy::planLabel($policy,$slug,\WPAICloudGateway\QuotaPolicy::CURRENT),'active'=>1,'version_key'=>$policy['version'],
                 'actions_limit'=>$limit,'quota_period'=>$period,'timezone'=>'UTC',
                 'monthly_actions'=>$period==='calendar_month_utc'?$limit:null,
                 'daily_actions'=>$period==='calendar_day_utc'?$limit:null,
