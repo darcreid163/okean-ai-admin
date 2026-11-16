@@ -168,7 +168,7 @@ try {
     $pendingPolicy['schemes'][QuotaPolicy::TARGET]['plans']['businesspro']=null;
     $pendingPolicy['schemes'][QuotaPolicy::TARGET]['quota_status']['businesspro']=QuotaPolicy::QUOTA_PENDING;
     $pair=sodium_crypto_sign_keypair();
-    $core=new Core($store,new \\WPAICloudGateway\\Vault(str_repeat('k',32)),$transport,$pendingPolicy,new \\WPAICloudGateway\\Signer(sodium_crypto_sign_secretkey($pair)));
+    $core=new Core($store,new \WPAICloudGateway\Vault(str_repeat('k',32)),$transport,$pendingPolicy,new \WPAICloudGateway\Signer(sodium_crypto_sign_secretkey($pair)));
     $core->ensureAccount('assign');
     $core->setPlan('operator','assign','business',$now,QuotaPolicy::CURRENT);
     $assigned=$store->row('SELECT plan,quota_scheme FROM '.$store->table('accounts').' WHERE owner=?',['assign']);
