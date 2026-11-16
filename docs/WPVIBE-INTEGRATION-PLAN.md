@@ -237,3 +237,17 @@ Native Actions run `43835535719` failed its disposable latest WordPress smoke in
 - Skills are not implemented in this branch.
 - Latest-compat media concurrency blocker remains unresolved.
 - No production package was built or deployed from this branch.
+
+## Abilities regression test coverage added
+
+A disposable WordPress integration script `tests/wordpress-abilities-compat.php` is now added and called by `tests/wordpress-native-smoke.sh`. It covers:
+- discovery of a registered REST-visible Ability;
+- schema and detail callback;
+- private Ability exclusion;
+- malformed MCP metadata failing closed;
+- projection does not leak arbitrary Ability metadata;
+- generic direct execution returns the plan-required error;
+- `ability schema` registry and read dispatcher path;
+- anonymous discovery and detail denial.
+
+This test has been added to the exact branch, but has **not yet run in Actions**. Existing main-branch Abilities smoke remains in place and is still run before it.
