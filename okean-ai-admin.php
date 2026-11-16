@@ -42,6 +42,7 @@ require_once OAI_DIR.'includes/class-oai-test-automation.php';
 require_once OAI_DIR.'includes/class-oai-ai-lifecycle-control.php';
 require_once OAI_DIR.'includes/class-oai-files.php';
 require_once OAI_DIR.'includes/class-oai-abilities.php';
+require_once OAI_DIR.'includes/class-oai-abilities-compat.php';
 require_once OAI_DIR.'includes/class-oai-read.php';
 require_once OAI_DIR.'includes/class-oai-diagnostics.php';
 require_once OAI_DIR.'includes/class-oai-capabilities.php';
