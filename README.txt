@@ -26,8 +26,8 @@ Key capabilities:
   (2025-06-18). Connect from ChatGPT or any MCP client.
 * **Sandbox & diff** — every write first produces a plan with a before/after diff; no side effect
   without human approval.
-* **Approval engine** — every apply, rollback and reject requires a signed approval record; cannot
-  be bypassed.
+* **Approval engine** — every apply, rollback and reject requires a signed approval record; cannot be
+  bypassed.
 * **Verify & rollback** — post-apply verification compares runtime state to the approved snapshot;
   automatic or manual rollback restores `before_data`.
 * **Receipt/proof** — each settled request produces a sealed, non-repudiable receipt in the ledger.
@@ -53,7 +53,7 @@ Key capabilities:
    a direct MCP OAuth client.
 
 **Requirements:**
-- PHP 8.2 or higher (8.3 recommended)
+- PHP 8.2 or higher (CI tested with PHP 8.2, 8.3 and 8.4; PHP 8.3 recommended)
 - WordPress 6.4 or higher
 - WooCommerce 8.0 or higher (only required if using WooCommerce tools)
 - Sodium extension (bundled with PHP 7.2+)
