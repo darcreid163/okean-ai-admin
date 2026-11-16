@@ -203,7 +203,7 @@ function wp_remote_post($url,$args) {
         'tools/call'=>['content'=>[['type'=>'text','text'=>json_encode(match($message['params']['name']) {
             'cloud_sites_list'=>[['id'=>'reg_'.str_repeat('c',32)]],
             'cloud_site_tools_list'=>[['name'=>'system_manifest']],
-            'cloud_usage'=>['limit'=>100,'used'=>0,'reserved'=>0,'remaining'=>100,'quota_status'=>'approved','timezone'=>'UTC']
+            'cloud_usage'=>['limit'=>50,'used'=>0,'reserved'=>0,'remaining'=>50,'quota_status'=>'approved','timezone'=>'UTC']
         })]],'isError'=>false]
     };
     return ['code'=>200,'body'=>json_encode(['jsonrpc'=>'2.0','id'=>$message['id'],'result'=>$result])];
