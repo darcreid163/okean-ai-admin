@@ -3,6 +3,8 @@
  * Plugin Name: WP AI Admin Cloud Core
  * Description: Central cloud control plane for WP AI Admin: plans, licenses, sites, usage and API foundation.
  * Version: 0.3.13-dev
+ * Requires at least: 6.4
+ * Tested up to: 7.1
  * Requires PHP: 8.2
  * Author: Андриянов Н.Г.
  */
@@ -31,4 +33,4 @@ if (PHP_VERSION_ID < 80200) {
 
 // Gateway storage is separate from the preserved Cloud Core v1 schema.
 foreach (['Security','Transport','Store','Licenses','QuotaPolicy','BatchAccounting','AbilitiesPolicy','Core','Skills','Unsplash','MediaPolicy','Gateway','Settings','OAuth','Pairing','Sse','Surface','Admin','WordPress'] as $component) require_once WPAI_CLOUD_DIR . 'src/' . $component . '.php';
-\WPAICloudGateway\WordPress::boot(__FILE__);
+\\WPAICloudGateway\\WordPress::boot(__FILE__);
