@@ -33,7 +33,7 @@
   "billing": "successful_single_tool_call",
   "batch": "successful_object_v1",
   "automatic_money_debits": false,
-  "manual_refills": "deferred",
+  "manual_refills": "owner_only_daily_quota_reset",
   "timezone": "UTC",
   "default_scheme": "tariffs_v2",
   "prices_approved": false,
