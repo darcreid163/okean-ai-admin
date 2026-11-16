@@ -110,6 +110,10 @@ final class Admin {
                         if($days>0) $options['duration_days']=$days;
                         $value=$core->issueLicense((string)get_current_user_id(),$licenseOwner===''?null:$licenseOwner,$plan,time(),$scheme===''?null:$scheme,$options);
                         $secret=$value['license_key']; unset($value['license_key']); $secretKind='license'; $output=$value;
+                    } elseif ($action==='quota_reset') {
+                        if(self::submitted('quota_confirm')!=='RESET DAILY') throw new Fault('quota_reset_confirmation_required',409);
+                        $target=self::submitted('quota_owner');
+                        $output=$core->resetDailyQuota((string)get_current_user_id(),$target,time());
                     } elseif ($action==='license_activate') {
                         $output=$core->activateLicense($owner,self::submitted('license_key'),self::submitted('license_site'),time());
                     } elseif ($action==='license_reissue') {
