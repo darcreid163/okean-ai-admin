@@ -109,6 +109,11 @@ final class QuotaPolicy {
                 continue;
             }
             if ($scheme!==self::TARGET || isset($targets[$slug])) continue;
+            // An explicitly approved value in the shipped catalogue is the
+            // owner's current policy and must not be downgraded by stale
+            // persisted rows from an earlier pending catalogue version.
+            $catalogStatus=(string)($policy['schemes'][self::TARGET]['quota_status'][$slug]??'');
+            if ($catalogStatus===self::QUOTA_APPROVED) continue;
             $state=(string)($row['quota_status']??'');
             if ($state===self::QUOTA_APPROVED) $targets[$slug]=['limit'=>(int)($row['monthly_actions']??0),'status'=>$state];
             elseif ($state===self::QUOTA_PENDING) $targets[$slug]=['limit'=>null,'status'=>$state];
