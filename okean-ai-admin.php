@@ -16,7 +16,7 @@
 if (!defined('ABSPATH')) exit;
 add_action('before_woocommerce_init', function(){
  if(class_exists('\\Automattic\\WooCommerce\\Utilities\\FeaturesUtil')){
-  \\Automattic\\WooCommerce\\Utilities\\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+  \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
  }
 });
 define('OAI_VERSION','2.1.18');
