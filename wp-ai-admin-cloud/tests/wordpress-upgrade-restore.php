@@ -140,10 +140,14 @@ cloudUpgradeAssert(cloudUpgradeSame($cached,$state['receipt']) && $transport->ex
 cloudUpgradeReject(fn()=>$core->call($actor,$state['site']['id'],'operation_apply',[],'synthetic-upgrade-uncertain',$state['now']),'request_outcome_pending_reconciliation');
 $currentUsage=$core->usage('1',$state['now']);
 $expectedUsage=$state['usage'];
-// The policy version is a release identifier, not a quota term: it must move
-// to the candidate version while every quota figure stays byte-equivalent.
-unset($currentUsage['policy_version'],$expectedUsage['policy_version']);
+// The policy version and Batch availability are release/capability flags, not
+// quota terms: the version moves to the candidate and Batch follows the
+// installed catalogue (asserted above), while every quota figure stays
+// byte-equivalent.
+$batchAvailable=$currentUsage['batch_available']??null;
+unset($currentUsage['policy_version'],$currentUsage['batch_available'],$expectedUsage['policy_version'],$expectedUsage['batch_available']);
 cloudUpgradeAssert($transport->executions===0 && cloudUpgradeSame($currentUsage,$expectedUsage),'Uncertain replay executed or altered quota/terms');
+cloudUpgradeAssert($batchAvailable===$expectBatch,'Usage Batch availability does not match the installed source');
 $policyPrefix=WPAI_CLOUD_VERSION==='0.3.11'?'tariffs-v2-':'tariffs-v3-';
 cloudUpgradeAssert(str_starts_with($core->usage('1',$state['now'])['policy_version'],$policyPrefix),'Quota policy version does not match the installed source');
 $health=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'))->get_data();
