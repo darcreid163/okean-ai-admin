@@ -192,7 +192,7 @@ try {
     v3Check($core->usage('assign',$now)['limit']===null&&$core->usage('assign',$now)['remaining']===null,'Pending usage fabricated a balance');
     v3Rejects(fn()=>$core->setPlan('operator','assign','power',$now,QuotaPolicy::TARGET),'unknown_plan');
     v3Rejects(fn()=>$core->setPlan('operator','assign','biznes',$now,QuotaPolicy::TARGET),'unknown_plan');
-    v3Rejects(fn()=>$core->setPlan('operator','assign','businesspro',$now,QuotaPolicy::CURRENT),'unknown_plan');
+    v3Rejects(fn()=>$core->setPlan('operator','assign','power',$now,QuotaPolicy::CURRENT),'unknown_plan');
     $core->ensureAccount('legacy-assign');
     $store->execute('UPDATE '.$store->table('accounts').' SET plan=?,quota_scheme=? WHERE owner=?',['free',QuotaPolicy::LEGACY,'legacy-assign']);
     $core->setPlan('operator','legacy-assign','pro',$now,QuotaPolicy::LEGACY);
