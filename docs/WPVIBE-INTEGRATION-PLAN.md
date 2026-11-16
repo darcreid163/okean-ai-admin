@@ -80,3 +80,19 @@ For each candidate upstream file record:
 ## Initial implementation note
 
 This branch begins as a planning/inventory baseline. It does not claim that the complete WPVibe feature set has already been implemented. The next implementation commits must be small, testable, and mapped to the phases above.
+
+## First implementation increment — public Abilities discovery
+
+Implemented on this branch:
+- Added `OAI_Abilities_Compat` as an original Native compatibility layer.
+- Added read-only public Ability inventory with category filter, paging, schema exposure and stable ordering.
+- Exposure is restricted to WordPress REST-visible abilities or explicit MCP-public metadata. A malformed MCP metadata structure fails closed.
+- Added REST endpoints `GET /okean-ai/v1/abilities/public` and `GET /okean-ai/v1/abilities/public/{name}`.
+- Added a read-only `ability schema` entry to the existing command registry/dispatcher.
+- Ability execution intentionally returns a plan-required conflict; it does not call arbitrary `execute()`. A later phase must map an ability to a typed WP AI Admin operation before any mutating ability can execute.
+- Added the compatibility file to the Native bootstrap and added its provenance note to `THIRD-PARTY.md`. This implementation is original code informed by the upstream behavior; it is not a source copy.
+
+Validation performed so far:
+- GitHub read-back confirms bootstrap include, both REST route registrations/callbacks, command registry entry, CLI dispatch handler, fail-closed public metadata filter, plan-required execution guard and attribution entry.
+- Full PHP lint, WordPress integration tests and Actions CI have not yet been run. Do not treat this as release-ready.
+- WordPress Abilities API exists only on newer WordPress versions; the implementation checks function availability and returns a controlled unavailable response on older installations.
