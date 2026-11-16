@@ -288,6 +288,50 @@ final class Core {
         return $out;
     }
     /**
+     * Owner-only administrative reset of one account's current UTC daily usage.
+     * Pending reservations remain charged against the limit and settle normally.
+     * Monthly legacy accounts and unapproved quotas are deliberately rejected.
+     */
+    public function resetDailyQuota(string $operator,string $owner,int $now): array {
+        $operator=Security::identifier($operator,20);
+        $owner=Security::identifier($owner,64);
+        if(!preg_match('/^[0-9]{1,20}$/D',$operator)) throw new Fault('invalid_operator',403);
+        return $this->store->transaction(function() use($operator,$owner,$now): array {
+            $account=$this->account($owner,true,$now);
+            $terms=QuotaPolicy::terms($this->policy,$account);
+            if(($terms['quota_status']??QuotaPolicy::QUOTA_APPROVED)!==QuotaPolicy::QUOTA_APPROVED) throw new Fault('plan_quota_not_configured',403);
+            if(($terms['period_kind']??'')!==QuotaPolicy::DAY) throw new Fault('daily_quota_reset_not_supported',409);
+            $window=QuotaPolicy::window($terms,$now);
+            $period=(string)$window['period'];
+            $this->store->execute($this->store->ignore().' INTO '.$this->store->table('balances').' (owner,period) VALUES (?,?)',[$owner,$period]);
+            $balance=$this->store->row('SELECT used,reserved FROM '.$this->store->table('balances').' WHERE owner=? AND period=?'.$this->store->lock(),[$owner,$period]);
+            if(!$balance) throw new Fault('quota_balance_unavailable',503);
+            $previousUsed=(int)$balance['used'];
+            $reserved=(int)$balance['reserved'];
+            $this->store->execute('UPDATE '.$this->store->table('balances').' SET used=0 WHERE owner=? AND period=?',[$owner,$period]);
+            // The existing audit schema stores the acting server administrator
+            // in site_id and the affected UTC day in request_key.
+            $this->store->audit($owner,'admin:'.$operator,'manual_daily_quota_reset',$period,$now);
+            $remaining=max(0,(int)$terms['limit']-$reserved);
+            return [
+                'reset'=>true,
+                'owner'=>$owner,
+                'plan'=>(string)$account['plan'],
+                'quota_scheme'=>(string)$terms['quota_scheme'],
+                'period'=>$period,
+                'timezone'=>'UTC',
+                'limit'=>(int)$terms['limit'],
+                'previous_used'=>$previousUsed,
+                'used'=>0,
+                'reserved'=>$reserved,
+                'remaining'=>$remaining,
+                'next_reset_at'=>(int)$window['next_period_at'],
+                'operator'=>$operator,
+            ];
+        });
+    }
+
+    /**
      * Resolve the paired site that proves possession of the read key derived
      * during pairing. The caller never supplies an owner or site id.
      */
