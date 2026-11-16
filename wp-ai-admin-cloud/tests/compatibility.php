@@ -112,8 +112,8 @@ check(Settings::keys()===$keys && $snapshot()===$before,'Reload check changed ex
 check(get_option('wpai_gateway_db_version')==='4','Gateway migration not recorded');
 check($snapshot()===$before,'Gateway migration modified legacy data');
 WordPress::enable(); check($snapshot()===$before && Settings::keys()===$keys,'Repeated update changed core data or keys');
-check(Settings::policy()['plans']===['free'=>100,'daily'=>500,'pro'=>2000,'business'=>5000],'Approved v3 tariff policy differs from the Native table');
-check(Settings::policy()['periods']===['free'=>'calendar_day_utc','daily'=>'calendar_day_utc','pro'=>'calendar_day_utc','business'=>'calendar_day_utc'],'Approved v3 policy must use UTC calendar days');
+check(Settings::policy()['plans']===['free'=>50,'daily'=>500,'pro'=>2000,'business'=>5000,'businesspro'=>10000],'Final five-tier tariff policy differs from the Native table');
+check(Settings::policy()['periods']===['free'=>'calendar_day_utc','daily'=>'calendar_day_utc','pro'=>'calendar_day_utc','business'=>'calendar_day_utc','businesspro'=>'calendar_day_utc'],'All five tariffs must use UTC calendar days');
 check(str_starts_with(Settings::policy()['version'],'tariffs-v3-'),'Quota policy version was not bumped to v3');
 check(Settings::policy()['legacy_plans']===['agency'=>5000,'free'=>100,'power'=>2000,'pro'=>500,'scale'=>10000],'Legacy Core plan limits changed');
 Settings::account('42');check($snapshot()===$before,'Existing account changed by bridge');
@@ -130,16 +130,25 @@ foreach($actions['rest_api_init'] as $callback)$callback();
 foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger','/site/usage','/site/license/activate'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
 check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1/plans'])===1,'Legacy public routes overwritten');
 check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.13-dev','Candidate status version');
-$publishedPlans=WPAI_Cloud_REST::plans()->data['data']['items'];
-check(array_column($publishedPlans,'slug')===['free','daily','pro','business'],'Published plan catalog differs from the approved v3 policy');
-check(array_column($publishedPlans,'name')===['Free','Daily','Pro','PRO+'],'Published plan names differ from the approved catalog');
-check(WPAI_Cloud_REST::plans()->data['data']['automatic_money_debits']===false,'Automatic debits unexpectedly active');
+$plansResponse=WPAI_Cloud_REST::plans()->data['data'];
+$publishedPlans=$plansResponse['items'];
+check(array_column($publishedPlans,'slug')===['free','daily','pro','business','businesspro'],'Published plan catalog differs from the final five-tier policy');
+check(array_column($publishedPlans,'name')===['Free','Daily','Pro','PRO+','PRO++'],'Published plan names differ from the final catalog');
+check(array_column($publishedPlans,'actions_limit')===[50,500,2000,5000,10000],'Published active daily limits are wrong');
+check(array_column($publishedPlans,'daily_actions')===[50,500,2000,5000,10000],'Published active daily_actions projection is wrong');
+$targetPlans=$plansResponse['target']['items'];
+check(array_column($targetPlans,'actions_limit')===[50,500,2000,5000,10000],'Published target daily limits are wrong');
+check(array_column($targetPlans,'daily_actions')===[50,500,2000,5000,10000],'Target daily_actions projection is wrong');
+check($plansResponse['target']['paid_quotas_approved']===true,'All five owner-approved target quotas must be reported approved');
+check($plansResponse['target']['prices_approved']===false && $plansResponse['target']['items'][1]['price_rub_month']===null,'Daily price must remain unset');
+check($plansResponse['quota_scheme']===QuotaPolicy::CURRENT,'Active default scheme changed unexpectedly');
+check($plansResponse['automatic_money_debits']===false,'Automatic debits unexpectedly active');
 $offerPolicy=Settings::catalogPolicy();
 $offers=Admin::licenseOffers($offerPolicy);
 $offerValues=array_column($offers,'value');
 check(in_array(QuotaPolicy::TARGET.'|businesspro',$offerValues,true),'PRO++ missing from licence offers');
-check(!in_array(QuotaPolicy::CURRENT.'|businesspro',$offerValues,true),'PRO++ offered under the frozen v2 scheme');
-check(in_array(QuotaPolicy::CURRENT.'|daily',$offerValues,true)&&!in_array(QuotaPolicy::TARGET.'|daily',$offerValues,true),'Daily offer changed');
+check(in_array(QuotaPolicy::CURRENT.'|businesspro',$offerValues,true),'PRO++ missing from active v2 offers');
+check(in_array(QuotaPolicy::CURRENT.'|daily',$offerValues,true)&&in_array(QuotaPolicy::TARGET.'|daily',$offerValues,true),'Daily must be offered under both current and target schemes');
 check(in_array(QuotaPolicy::LEGACY.'|agency',$offerValues,true),'Legacy plan missing from licence offers');
 foreach(array_keys($offerPolicy['schemes'][QuotaPolicy::TARGET]['plans']) as $plan)check(in_array(QuotaPolicy::TARGET.'|'.$plan,$offerValues,true),'Target plan missing from licence offers: '.$plan);
 foreach($offers as $offer)check(QuotaPolicy::offers($offerPolicy,$offer['scheme'],$offer['plan']),'Licence form rendered an unoffered plan/scheme pair');
@@ -203,7 +212,7 @@ function wp_remote_post($url,$args) {
         'tools/call'=>['content'=>[['type'=>'text','text'=>json_encode(match($message['params']['name']) {
             'cloud_sites_list'=>[['id'=>'reg_'.str_repeat('c',32)]],
             'cloud_site_tools_list'=>[['name'=>'system_manifest']],
-            'cloud_usage'=>['limit'=>100,'used'=>0,'reserved'=>0,'remaining'=>100,'quota_status'=>'approved','timezone'=>'UTC']
+            'cloud_usage'=>['limit'=>50,'used'=>0,'reserved'=>0,'remaining'=>50,'quota_status'=>'approved','timezone'=>'UTC']
         })]],'isError'=>false]
     };
     return ['code'=>200,'body'=>json_encode(['jsonrpc'=>'2.0','id'=>$message['id'],'result'=>$result])];

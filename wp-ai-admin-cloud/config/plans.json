@@ -1,12 +1,13 @@
 {
-  "version": "tariffs-v3-20261116",
+  "version": "tariffs-v4-20261116",
   "period": "per_plan_utc",
-  "status": "quota_policy_only_payments_not_implemented",
+  "status": "owner_approved_daily_quotas_prices_partially_approved_payments_not_implemented",
   "plans": {
-    "free": 100,
+    "free": 50,
     "daily": 500,
     "pro": 2000,
-    "business": 5000
+    "business": 5000,
+    "businesspro": 10000
   },
   "names": {
     "free": "Free",
@@ -19,7 +20,8 @@
     "free": "calendar_day_utc",
     "daily": "calendar_day_utc",
     "pro": "calendar_day_utc",
-    "business": "calendar_day_utc"
+    "business": "calendar_day_utc",
+    "businesspro": "calendar_day_utc"
   },
   "legacy_plans": {
     "free": 100,
@@ -34,39 +36,46 @@
   "manual_refills": "deferred",
   "timezone": "UTC",
   "default_scheme": "tariffs_v2",
+  "prices_approved": false,
   "schemes": {
     "tariffs_v3": {
       "period": "calendar_day_utc",
-      "status": "owner_approved_daily_quotas_payments_not_implemented",
-      "version_key_suffix": "V3",
+      "status": "owner_approved_daily_quotas_prices_partially_approved_payments_not_implemented",
+      "version_key_suffix": "V4",
       "all_tools": true,
       "automatic_money_debits": false,
+      "prices_approved": false,
       "plans": {
-        "free": 100,
+        "free": 50,
+        "daily": 500,
         "pro": 2000,
         "business": 5000,
-        "businesspro": 5000
+        "businesspro": 10000
       },
       "quota_status": {
         "free": "approved",
+        "daily": "approved",
         "pro": "approved",
         "business": "approved",
         "businesspro": "approved"
       },
       "periods": {
         "free": "calendar_day_utc",
+        "daily": "calendar_day_utc",
         "pro": "calendar_day_utc",
         "business": "calendar_day_utc",
         "businesspro": "calendar_day_utc"
       },
       "names": {
         "free": "Free",
+        "daily": "Daily",
         "pro": "Pro",
         "business": "PRO+",
         "businesspro": "PRO++"
       },
       "prices_rub_month": {
         "free": 0,
+        "daily": null,
         "pro": 2000,
         "business": 5000,
         "businesspro": 10000

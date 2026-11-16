@@ -18,8 +18,8 @@ class WPAI_Cloud_Plans {
     }
 
     /**
-     * Target catalogue from the single shipped source. Paid quotas stay null
-     * until the owner approves a number; they are never invented here.
+     * Approved target catalogue from the single shipped source. Numeric quotas
+     * and approval states are read verbatim; missing prices remain unset.
      */
     public static function catalogue() {
         $file = dirname(__DIR__) . '/config/plans.json';

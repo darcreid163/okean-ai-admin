@@ -1,59 +1,68 @@
-# Beta readiness — owner-approved daily quotas (16 November 2026)
+# Beta readiness — final five-tier daily tariff policy (16 November 2026)
 
-**Status: NOT READY for production deployment or licence issuance.** The daily quota policy is merged into `main` and exact-HEAD Cloud Core and Native CI passed. The policy has **not** yet been deployed to the live Cloud Core service, and no account or licence has been changed.
+**Status: tariff implementation in review; production activation is pending.** The owner has approved the final five daily quotas. Implementation is on focused branch `fix/final-five-daily-tariffs-205`, tracked by issue #205. Do not claim that the new catalogue is live until the Cloud Core package is rebuilt, deployed and its runtime API is rechecked.
 
-**Merged baseline:** `main` merge commit `ba018858d3d13aa9d087dfdbdf217b10917880b8` (PR #204; source HEAD `56f24df159b12f9f65f68e7a63446c3c6014b3ca`). Cloud Core runtime remains `0.3.13-dev` until a separately verified deployment. Native code and production WordPress data were not changed by PR #204.
-
-## 1. Owner-approved catalogue
+## 1. Final owner-approved tariff catalogue
 
 | Tariff | Slug | Price | Quota | Reset |
 |---|---|---:|---:|---|
-| Free | `free` | 0 ₽/month | 100 actions | 00:00 UTC daily |
+| Free | `free` | 0 ₽/month | 50 actions | 00:00 UTC daily |
+| Daily | `daily` | not set | 500 actions | 00:00 UTC daily |
 | Pro | `pro` | 2,000 ₽/month | 2,000 actions | 00:00 UTC daily |
 | PRO+ | `business` | 5,000 ₽/month | 5,000 actions | 00:00 UTC daily |
-| PRO++ | `businesspro` | 10,000 ₽/month | 5,000 actions | 00:00 UTC daily |
+| PRO++ | `businesspro` | 10,000 ₽/month | 10,000 actions | 00:00 UTC daily |
 
-All tools remain available on every tariff. Successful single-tool operations count as one action; Batch is charged per successfully processed object. Failed operations, verification, receipts and rollback retain their existing non-billable treatment. There are no automatic money debits or automatic renewals.
+Daily pricing is intentionally unset; no price is to be invented. Existing monthly prices for Pro, PRO+ and PRO++ remain unchanged. All tools remain available on every plan. Successful single-tool operations count as one action; Batch is charged per successfully processed object. Failed operations, verification, receipts and rollback retain their existing non-billable treatment. Automatic money debits and automatic renewals remain disabled.
 
-## 2. Merged implementation
+## 2. Implementation scope in issue #205
 
-- `wp-ai-admin-cloud/config/plans.json`: target `tariffs_v3` contains all four approved numeric limits and daily UTC periods; catalogue version is `tariffs-v3-20261116`.
-- `wp-ai-admin-cloud/src/QuotaPolicy.php`: stale persisted pending rows cannot downgrade a quota explicitly approved in the shipped catalogue. Persisted approved overrides remain effective only when the shipped catalogue still marks that plan pending.
-- `wp-ai-admin-cloud/tests/plan-catalogue-v3.php`: tariff values, approval states, daily periods, UTC reset window, stale-pending-row protection and fail-closed behavior are covered.
-- `docs/OPEN-BETA-RELEASE-MISSION.md`: reflects the owner's confirmed 16 November quota decision.
+- `wp-ai-admin-cloud/config/plans.json`: versioned five-plan policy (`tariffs-v4-20261116`), all quotas approved and daily UTC in both active `tariffs_v2` catalogue and target `tariffs_v3`.
+- Stable slugs remain `free`, `daily`, `pro`, `business`, `businesspro`; display names remain Free, Daily, Pro, PRO+, PRO++.
+- `QuotaPolicy::validate()` requires all five active plan slugs and daily periods.
+- `/wp-json/wpai-cloud/v1/plans` reports daily fields correctly, returns actual quota approval state, and leaves Daily price null until approved.
+- Tests cover five quotas, UTC windows, scheme offers, balances, and signed projections.
+- README and release mission record the final decision.
 
-## 3. Compatibility and migration boundaries
+## 3. Account and migration boundaries
 
-- `default_scheme` remains `tariffs_v2`. This change does not silently move existing accounts or alter historical `legacy_monthly_v1` entitlements.
-- A new PRO++ test licence must explicitly use `tariffs_v3`; it must be issued only after deployment and live runtime verification.
-- The existing Free licence and site bindings have not been modified by PR #204.
-- Existing v3 database rows that still say `requires_owner_approval` are ignored when the shipped catalogue explicitly approves that plan. No destructive database migration is included.
-- Payments, YooKassa, auto-renewal and automatic money debits remain out of scope.
+- `default_scheme` remains `tariffs_v2` for compatibility; its active catalogue is updated to the final five daily quotas.
+- Existing `legacy_monthly_v1` accounts and licences retain their historical monthly terms. No legacy account is silently migrated or repriced.
+- Existing current-scheme accounts resolve the newly shipped active catalogue when the new Cloud Core build is deployed. Confirm any production account/license effect before deployment.
+- No account migration, licence issuance/replacement, site binding change, OAuth change or payment configuration change is included in issue #205.
+- Payment collection, YooKassa, auto-renewal and automatic money debits remain out of scope.
 
-## 4. Verification status
+## 4. Live installation state before this change
+
+On 16 November, the user installed Cloud Core `0.3.13-dev` on `wpaiadmin.ru`. The live `/status` endpoint returned success, version `0.3.13-dev`, DB version 2, environment production. The live `/plans` endpoint confirmed the previous catalogue (Free 100, Daily 500, Pro 2,000, PRO+ 5,000; no active PRO++) and the prior target policy (Free 100, Pro 2,000, PRO+ 5,000, PRO++ 5,000). This proves the previous build is active, not the new issue #205 changes.
+
+## 5. Verification gates
 
 | Check | Status |
 |---|---|
-| Read root `AGENTS.md` and release mission | done |
-| Inspect main, PR and exact HEAD | done |
-| PR #204 merged to main | done — `ba018858d3d13aa9d087dfdbdf217b10917880b8` |
-| Exact-HEAD Cloud Core CI | passed — run #322 |
-| Exact-HEAD Native CI | passed — run #332 |
-| Cloud PHP 8.2/8.3/8.4, SQLite/MySQL, OAuth, tenant isolation, Batch, browser contracts | passed in run #322 |
-| Native PHP 8.2/8.3/8.4, WordPress pinned/latest, Elementor/WooCommerce/Gutenberg, package build/install | passed in run #332 |
-| Runtime policy endpoint / signed usage projection | pending live deployment |
-| Live Cloud Core deployment and rollback evidence | not performed |
-| Account re-read and PRO++ licence issuance | not performed |
-| Live quota consumption/reset test | not performed |
+| Owner approval of five final daily quotas | confirmed |
+| Focused issue and branch | created — #205 |
+| Cloud Core source/config changes | committed to branch |
+| Policy validation and API projection changes | committed to branch |
+| Five-tier contract tests | committed to branch; CI pending |
+| README and release mission | updated on branch |
+| Exact-HEAD Cloud Core CI | pending |
+| Exact-HEAD Native CI | pending / run if shared workflow requires it |
+| Package build and ZIP inspection | pending |
+| Live Cloud Core deployment | not performed |
+| Live /status and /plans verification of final five tiers | pending |
+| Account/license re-read | pending |
+| Legacy account migration | not authorized/performed |
+| PRO++ test licence issuance | not performed |
+| Live quota consumption/reset test | pending |
 
-CI artifacts are test artifacts only; they are not proof of production deployment.
+## 6. Next steps
 
-## 5. Next steps
+1. Complete exact-HEAD Cloud Core CI and inspect failures.
+2. Review the final diff for policy/API/test consistency.
+3. Build a new installable Cloud Core package from the reviewed branch/merge commit; verify ZIP contents and SHA-256.
+4. Deploy only after backup/preflight and explicit production apply confirmation.
+5. Recheck `/status` and `/plans`; expected active limits are 50 / 500 / 2,000 / 5,000 / 10,000 daily.
+6. Re-read the current account, licence scheme and connected-site bindings. Do not replace the current Free licence or migrate legacy accounts without a separate, explicit decision.
+7. Test usage and reset boundaries with a controlled test account; no real payment collection.
 
-1. Identify and verify the approved Cloud Core deployment target and rollback method; do not deploy the public monorepo source as a substitute for the private Cloud Core distribution.
-2. Build/export the Cloud Core package from the merged reviewed source, verify its contents and checksum, and deploy separately with explicit production safeguards.
-3. Verify live health/version, effective `tariffs_v3` policy, UTC period boundaries, signed usage projection, tenant isolation and rollback readiness.
-4. Re-read the current account/licence and connected-site bindings. Do not replace the Free entitlement until its effect is understood and the new licence can be bound safely.
-5. Issue the 30-day PRO++ test entitlement under `tariffs_v3` for 5,000 successful actions per UTC day, then verify usage and reset behavior with controlled tests.
-
-**No production changes, account migration, licence replacement or live payment changes have been performed.**
+**No production changes, account migration, licence replacement or live payment changes have been performed by issue #205.**

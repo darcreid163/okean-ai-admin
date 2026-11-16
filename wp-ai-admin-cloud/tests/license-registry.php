@@ -125,7 +125,7 @@ try {
 
     // Input validation: no invented plans, no ambiguous dates, no unbounded limits.
     licRejects(fn()=>$core->issueLicense($operator,null,'unlimited',$now,QuotaPolicy::TARGET),'unknown_plan');
-    licRejects(fn()=>$core->issueLicense($operator,null,'daily',$now,QuotaPolicy::TARGET),'unknown_plan');
+    licRejects(fn()=>$core->issueLicense($operator,null,'power',$now,QuotaPolicy::TARGET),'unknown_plan');
     licRejects(fn()=>$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['activation_limit'=>0]),'invalid_activation_limit');
     licRejects(fn()=>$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['activation_limit'=>51]),'invalid_activation_limit');
     licRejects(fn()=>$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['starts_at'=>-1]),'invalid_license_dates');
@@ -223,7 +223,7 @@ try {
     licCheck($suspended['suspended']===true&&$suspended['status']===Licenses::SUSPENDED,'Suspend state is wrong');
     $account=$store->row('SELECT plan,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$ownerA]);
     licCheck($account['plan']==='free'&&$account['license_id']===null,'Suspended licence did not fall back to Free');
-    licCheck($core->usage($ownerA,$now+30)['limit']===100,'Suspended account kept a paid quota');
+    licCheck($core->usage($ownerA,$now+30)['limit']===50,'Suspended account did not fall back to the final Free quota');
     $suspendedAgain=$core->suspendLicense($operator,$businessId,$now+31);
     licCheck($suspendedAgain['idempotent']===true&&$suspendedAgain['status']===Licenses::SUSPENDED,'Repeated suspend is not idempotent');
 
@@ -237,7 +237,7 @@ try {
     licCheck($revoked['revoked']===true,'Revoke was not reported');
     $account=$store->row('SELECT plan,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$ownerA]);
     licCheck($account['plan']==='free'&&$account['license_id']===null,'Revoked licence did not fall back to Free');
-    licCheck($core->usage($ownerA,$now+50)['limit']===100,'Revoked account kept a paid quota');
+    licCheck($core->usage($ownerA,$now+50)['limit']===50,'Revoked account did not fall back to the final Free quota');
     $revokedAgain=$core->revokeLicense($operator,$businessId,$now+51);
     licCheck($revokedAgain['idempotent']===true&&$revokedAgain['status']===Licenses::REVOKED,'Repeated revoke is not idempotent');
     licRejects(fn()=>$core->reissueLicense($operator,$businessId,$now+51),'license_not_reissuable');
@@ -266,7 +266,7 @@ try {
     licCheck($core->usage($ownerB,$now+60)['limit']===5000,'Bound manual licence quota is wrong');
     licRejects(fn()=>$core->activateLicense($ownerB,(string)$expiring['license_key'],$siteOther['id'],$now+121),'license_expired');
     $expiredUsage=$core->usage($ownerB,$now+121);
-    licCheck($expiredUsage['plan']==='free'&&$expiredUsage['limit']===100,'Expired licence did not fall back to Free');
+    licCheck($expiredUsage['plan']==='free'&&$expiredUsage['limit']===50,'Expired licence did not fall back to final Free quota');
     $expiredRow=licFind($core->allLicenses(),$expiringId);
     licCheck($expiredRow['status']===Licenses::EXPIRED,'Expired licence state is wrong');
     licCheck($store->row('SELECT plan,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$ownerB])['license_id']===null,'Expired licence stayed linked to the account');
