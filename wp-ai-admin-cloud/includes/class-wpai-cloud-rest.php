@@ -38,7 +38,7 @@ class WPAI_Cloud_REST {
 
     public static function plans() {
         try {
-            if (!class_exists('WPAICloudGateway\\\\Settings')) throw new RuntimeException('Gateway PHP requirements unavailable');
+            if (!class_exists('WPAICloudGateway\\Settings')) throw new RuntimeException('Gateway PHP requirements unavailable');
             $policy=\\WPAICloudGateway\\Settings::catalogPolicy();
         } catch (Throwable $e) {
             return new WP_REST_Response(array('success'=>false,'data'=>null,'error'=>'plan_catalog_unavailable'),503);
