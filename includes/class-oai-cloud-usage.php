@@ -9,7 +9,9 @@
 if(!defined('ABSPATH'))exit;
 class OAI_Cloud_Usage {
  const ENDPOINT='https://wpaiadmin.ru/wp-json/wpai-cloud/v1/site/usage';
+ const LICENSE_ENDPOINT='https://wpaiadmin.ru/wp-json/wpai-cloud/v1/site/license/activate';
  const CONTRACT='wpai-site-usage-v1';
+ const LICENSE_CONTRACT='wpai-site-license-v1';
  const DOMAIN="OAI-SITE-USAGE-V1\n";
  const TTL=300;
  const SKEW=60;
@@ -78,10 +80,13 @@ class OAI_Cloud_Usage {
   // Licence claims are optional for backward compatibility with an older
   // Gateway, but all-or-nothing and strictly typed when present. They are
   // display evidence only; plan/quota authority stays with the signed terms.
-  $license_keys=array('license_id','license_key_prefix','license_status','license_activation_limit','license_activations','license_issued_at','license_expires_at');
+  $license_keys=array('license_id','license_key_prefix','license_status','license_activation_limit','license_activations','license_issued_at');
+  $license_expiry=array_key_exists('license_expires_at',$claims);
   $license_present=0;foreach($license_keys as $key)if(array_key_exists($key,$claims)&&$claims[$key]!==null)$license_present++;
-  if($license_present>0){
-   if($license_present!==count($license_keys))return $bad('license');
+  if($license_present>0||$license_expiry){
+   // A perpetual licence has a null expiry; the other claims must all be
+   // present, and the expiry key itself must still be part of the set.
+   if($license_present!==count($license_keys)||!$license_expiry)return $bad('license');
    if(!is_string($claims['license_id'])||!preg_match('/^lic_[a-f0-9]{24}$/D',$claims['license_id']))return $bad('license');
    if(!is_string($claims['license_key_prefix'])||!preg_match('/^wpai_lic_[A-Za-z0-9_-]{7}$/D',$claims['license_key_prefix']))return $bad('license');
    if(!in_array($claims['license_status'],array('unused','active','expired','suspended','revoked','exhausted','replaced'),true))return $bad('license');
@@ -187,6 +192,68 @@ class OAI_Cloud_Usage {
    'account_id'=>(string)($record['account_id']??''),
   ),time());
   return array('valid'=>(bool)$result['valid'],'reason'=>$result['reason'],'claims'=>$result['claims']);
+ }
+
+ /** Administrator-facing text for a Cloud activation fault; never echoes the key. */
+ private static function license_error_message($reason){
+  $messages=array(
+   'license_invalid'=>'Ключ не найден. Проверьте ключ и повторите ввод.',
+   'license_bound_to_other_account'=>'Ключ уже привязан к другому аккаунту WP AI Admin.',
+   'license_revoked'=>'Ключ отозван.',
+   'license_suspended'=>'Ключ приостановлен.',
+   'license_expired'=>'Срок действия ключа истёк.',
+   'license_exhausted'=>'Лимит активаций ключа исчерпан.',
+   'license_unavailable'=>'Ключ сейчас недоступен.',
+   'license_not_started'=>'Срок действия ключа ещё не начался.',
+   'license_activation_limit_reached'=>'Достигнут лимит активаций ключа. Освободите слот в кабинете WP AI Admin.',
+   'site_license_denied'=>'Сайт не подтверждён для активации. Переподключите сайт в кабинете WP AI Admin.',
+   'site_license_credentials_required'=>'Сервер отклонил запрос активации.',
+   'rate_limit_exceeded'=>'Слишком много попыток активации. Повторите через минуту.',
+   'account_unavailable'=>'Аккаунт WP AI Admin недоступен.',
+  );
+  return isset($messages[$reason])?$messages[$reason]:'Не удалось активировать ключ. Код: '.$reason;
+ }
+
+ /**
+  * Activate a purchased key for this paired site. Cloud derives the account,
+  * site and plan; this method never stores the key and never grants an
+  * entitlement locally. The signed usage projection is refreshed afterwards
+  * and remains the only display authority for plan and quota.
+  */
+ public static function activate_license($key){
+  if(!is_user_logged_in()||!current_user_can('manage_options'))return new WP_Error('oai_license_admin_required','Активировать ключ может только администратор сайта.',array('status'=>403));
+  $record=self::credential();
+  if(!is_array($record)||empty($record['status_key']))return new WP_Error('oai_license_unpaired','Сначала подключите сайт в кабинете WP AI Admin.',array('status'=>409));
+  $key=is_string($key)?trim($key):'';
+  if(!preg_match('/^wpai_lic_[A-Za-z0-9_-]{43}$/D',$key))return new WP_Error('oai_license_format','Ключ должен иметь вид wpai_lic_… (52 символа).',array('status'=>400));
+  $site=untrailingslashit(home_url('/'));
+  $body=wp_json_encode(array('site_url'=>$site,'status_key'=>(string)$record['status_key'],'license_key'=>$key));
+  if(!is_string($body))return new WP_Error('oai_license_request','Не удалось подготовить запрос активации.',array('status'=>500));
+  $response=wp_remote_post(self::LICENSE_ENDPOINT,array(
+   'timeout'=>10,'redirection'=>0,'sslverify'=>true,'limit_response_size'=>16384,
+   'headers'=>array('Accept'=>'application/json','Content-Type'=>'application/json'),
+   'body'=>$body,
+  ));
+  if(is_wp_error($response))return new WP_Error('oai_license_unavailable','Сервер WP AI Admin недоступен. Повторите позже.',array('status'=>502));
+  $status=(int)wp_remote_retrieve_response_code($response);
+  $decoded=json_decode(wp_remote_retrieve_body($response),true);
+  if($status!==200){
+   $reason=is_array($decoded)&&is_string($decoded['error']??null)&&preg_match('/^[a-z0-9_]{1,64}$/D',$decoded['error'])?$decoded['error']:'rejected';
+   return new WP_Error('oai_license_'.$reason,self::license_error_message($reason),array('status'=>$status));
+  }
+  if(!is_array($decoded)||($decoded['contract']??'')!==self::LICENSE_CONTRACT||($decoded['activated']??false)!==true||!is_array($decoded['license']??null)||!is_string($decoded['site_id']??null)||!preg_match('/^reg_[a-f0-9]{32}$/D',$decoded['site_id'])){
+   return new WP_Error('oai_license_response','Сервер вернул неожиданный ответ активации. Обновите данные с сервера.',array('status'=>502));
+  }
+  $cache=self::refresh($record);
+  $projection=is_array($cache)&&!empty($cache['valid'])&&is_array($cache['projection']??null)?$cache['projection']:null;
+  return array(
+   'activation'=>$decoded,
+   'usage_valid'=>$projection!==null,
+   'plan'=>$projection['plan']??null,
+   'plan_label'=>$projection['plan_label']??null,
+   'quota_status'=>$projection['quota_status']??null,
+   'quota_pending'=>$projection!==null&&(($projection['quota_status']??'approved')!=='approved'),
+  );
  }
 
  /** Fetch and persist, preserving the last verified projection on failure. */

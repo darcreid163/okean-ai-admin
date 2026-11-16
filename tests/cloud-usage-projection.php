@@ -122,6 +122,15 @@ $licensed['license_expires_at']=$now+100000;
 $licensedResult=OAI_Cloud_Usage::verify(usageSigned($licensed,$secret,$now,$site,$siteId),$context,$now);
 usageAssert($licensedResult['valid']===true,'Valid licence claims rejected: '.$licensedResult['reason']);
 usageAssert($licensedResult['claims']['plan_label']==='PRO+','Plan label not preserved');
+// A perpetual licence has a null expiry; the other claims remain mandatory and
+// the expiry key must still be part of the all-or-nothing set.
+$perpetual=$licensed;$perpetual['license_expires_at']=null;
+$perpetualResult=OAI_Cloud_Usage::verify(usageSigned($perpetual,$secret,$now,$site,$siteId),$context,$now);
+usageAssert($perpetualResult['valid']===true,'Perpetual licence claims rejected: '.$perpetualResult['reason']);
+$missingExpiryKey=$licensed;unset($missingExpiryKey['license_expires_at']);
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($missingExpiryKey,$secret,$now,$site,$siteId),$context,$now)['reason']==='license','Licence without expiry key accepted');
+$expiryOnly=$v3;$expiryOnly['license_expires_at']=null;
+usageAssert(OAI_Cloud_Usage::verify(usageSigned($expiryOnly,$secret,$now,$site,$siteId),$context,$now)['reason']==='license','Expiry-only licence claims accepted');
 $projectionMapper=new ReflectionMethod('OAI_Cloud_Usage','public_projection');
 $projectionMapper->setAccessible(true);
 $licensedProjection=$projectionMapper->invoke(null,$licensedResult['claims']);

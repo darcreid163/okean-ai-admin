@@ -288,19 +288,27 @@ final class Core {
         return $out;
     }
     /**
+     * Resolve the paired site that proves possession of the read key derived
+     * during pairing. The caller never supplies an owner or site id.
+     */
+    private function siteByStatusKey(string $home,string $statusKey,string $reason): array {
+        if(!preg_match('/^[a-f0-9]{64}$/D',$statusKey)) throw new Fault($reason,401);
+        $home=Security::home($home);
+        $site=$this->store->row('SELECT * FROM '.$this->store->table('sites').' WHERE url_hash=?',[hash('sha256',$home)]);
+        if(!$site || ($site['home']??'')!==$home || ($site['status']??'')!=='active') throw new Fault($reason,401);
+        try { $credential=$this->siteCredential($site); }
+        catch(\Throwable $e) { throw new Fault($reason,401); }
+        if(!is_string($credential['status_hash']) || !hash_equals($credential['status_hash'],hash('sha256',$statusKey))) throw new Fault($reason,401);
+        return $site;
+    }
+    /**
      * Site-scoped, read-only usage projection for the paired Native plugin.
      * The caller proves possession of the read key derived during pairing; the
      * lookup is fenced to the site's own owner and a revoked site loses access.
      * No other account's or site's data can be reached through this method.
      */
     public function siteUsage(string $home,string $statusKey,int $now): array {
-        if(!preg_match('/^[a-f0-9]{64}$/D',$statusKey)) throw new Fault('site_usage_denied',401);
-        $home=Security::home($home);
-        $site=$this->store->row('SELECT * FROM '.$this->store->table('sites').' WHERE url_hash=?',[hash('sha256',$home)]);
-        if(!$site || ($site['home']??'')!==$home || ($site['status']??'')!=='active') throw new Fault('site_usage_denied',401);
-        try { $credential=$this->siteCredential($site); }
-        catch(\Throwable $e) { throw new Fault('site_usage_denied',401); }
-        if(!is_string($credential['status_hash']) || !hash_equals($credential['status_hash'],hash('sha256',$statusKey))) throw new Fault('site_usage_denied',401);
+        $site=$this->siteByStatusKey($home,$statusKey,'site_usage_denied');
         $this->throttle($site['owner'],'site_usage',$now,120);
         if(!$this->signer) throw new Fault('signer_not_configured',503);
         $account=$this->account($site['owner'],false,$now);
@@ -335,6 +343,35 @@ final class Core {
             'license_expires_at'=>$license['expires_at']??null,
         ];
         return ['contract'=>'wpai-site-usage-v1','site_url'=>$home,'site_id'=>(string)$site['id'],'envelope'=>$this->signer->siteUsage($claims,$now)];
+    }
+    /**
+     * Activate a purchased licence key from the paired site. The account and
+     * site are derived from the site credential; the caller cannot submit a
+     * plan, account id or site id. The plaintext key is never returned.
+     */
+    public function siteActivateLicense(string $home,string $statusKey,string $key,int $now): array {
+        if(!preg_match(Licenses::KEY_PATTERN,$key)) throw new Fault('license_invalid',403);
+        $site=$this->siteByStatusKey($home,$statusKey,'site_license_denied');
+        $this->throttle($site['owner'],'license_activate',$now,10);
+        $result=Licenses::activate($this->store,$this->policy,(string)$site['owner'],$key,(string)$site['id'],$now);
+        return [
+            'contract'=>'wpai-site-license-v1',
+            'activated'=>(bool)$result['activated'],
+            'idempotent'=>(bool)$result['idempotent'],
+            'site_id'=>(string)$site['id'],
+            'license'=>[
+                'id'=>(string)$result['id'],
+                'key_prefix'=>(string)$result['key_prefix'],
+                'plan'=>(string)$result['plan'],
+                'plan_label'=>QuotaPolicy::planLabel($this->policy,(string)$result['plan'],(string)$result['quota_scheme']),
+                'quota_scheme'=>(string)$result['quota_scheme'],
+                'status'=>(string)$result['status'],
+                'activation_limit'=>(int)$result['activation_limit'],
+                'activations'=>(int)$result['activations'],
+                'issued_at'=>(int)$result['issued_at'],
+                'expires_at'=>$result['expires_at']===null?null:(int)$result['expires_at'],
+            ],
+        ];
     }
     public function batchAvailable(): bool {return ($this->policy['batch']??'')===BatchAccounting::POLICY;}
     private function batchAccounting(): BatchAccounting {return new BatchAccounting($this->store,$this->vault,$this->transport,$this->policy);}
