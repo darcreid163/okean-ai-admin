@@ -127,7 +127,7 @@ rejects(fn()=>QuotaPolicy::terms($degraded,['plan'=>'free','quota_scheme'=>Quota
 check(QuotaPolicy::terms($degraded,['plan'=>'pro','quota_scheme'=>QuotaPolicy::LEGACY])['limit']===500,'Quarantine leaked to an unaffected plan');
 $wpdb->query('UPDATE '.WPAI_Cloud_DB::table('plan_versions')." SET verify_billable=0 WHERE version_key='FREE_V1'");
 foreach($actions['rest_api_init'] as $callback)$callback();
-foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
+foreach(['/status','/plans','/mcp','/health','/sites','/tokens','/usage','/ledger','/site/usage','/site/license/activate'] as $route)check(isset($routes['wpai-cloud/v1'.$route]),'Missing route '.$route);
 check(count($routes['wpai-cloud/v1/status'])===1 && count($routes['wpai-cloud/v1/plans'])===1,'Legacy public routes overwritten');
 check(WPAI_Cloud_REST::status()->data['data']['version']==='0.3.13-dev','Candidate status version');
 $publishedPlans=WPAI_Cloud_REST::plans()->data['data']['items'];

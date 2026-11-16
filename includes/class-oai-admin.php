@@ -181,6 +181,19 @@ class OAI_Admin {
   if(isset($_POST['oai_cloud_usage_refresh']) && check_admin_referer('oai_cloud_usage_refresh')){
    echo self::cloud_usage_refresh_notice(OAI_Cloud_Usage::status(true));
   }
+  if(isset($_POST['oai_cloud_license_activate']) && check_admin_referer('oai_cloud_license_activate')){
+   $license_key=isset($_POST['oai_license_key'])&&is_string($_POST['oai_license_key'])?trim(wp_unslash($_POST['oai_license_key'])):'';
+   $activated=OAI_Cloud_Usage::activate_license($license_key);
+   if(is_wp_error($activated)){
+    echo '<div class="notice notice-error"><p>'.esc_html($activated->get_error_message()).'</p></div>';
+   }else{
+    $message='Ключ активирован на сервере WP AI Admin.';
+    if(!empty($activated['plan_label']))$message.=' Тариф: '.$activated['plan_label'].'.';
+    if(!empty($activated['quota_pending']))$message.=' Квота тарифа ожидает утверждения владельцем; платные вызовы пока не выполняются.';
+    elseif(empty($activated['usage_valid']))$message.=' Подтверждённые данные квоты пока не получены; нажмите «Обновить данные с сервера».';
+    echo '<div class="notice notice-success"><p>'.esc_html($message).'</p></div>';
+   }
+  }
   if(isset($_POST['oai_ai_lifecycle_enable']) && check_admin_referer('oai_ai_lifecycle_toggle')){
    if(defined('OAI_BUILD_CHANGED_THIS_REQUEST')&&OAI_BUILD_CHANGED_THIS_REQUEST){
     echo '<div class="notice notice-warning"><p>WP AI Admin только что обновлён. Автономные режимы сброшены; обновите эту страницу и включите автоматическое подтверждение ИИ отдельным действием.</p></div>';
@@ -250,7 +263,7 @@ class OAI_Admin {
   .oai-card h2{margin:0 0 8px;font-size:17px;color:#16253c}.oai-card p{font-size:13px;line-height:1.6}.oai-kpi{font-size:30px;font-weight:700;color:#07366f;line-height:1.15;margin:6px 0}.oai-kpi small{font-size:14px;font-weight:600;color:#64748b}.oai-kpi-note{font-size:13px!important;color:#64748b;line-height:1.6}
   .oai-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;background:#e8f7ed;color:#126436;font-weight:600;font-size:12px}.oai-badge.oai-warn{background:#fff4e5;color:#8a4b00}.oai-badge.oai-bad{background:#fdecec;color:#a01b1b}.oai-badge.oai-info{background:#e8f1fd;color:#0b4f97}
   .oai-section{margin-top:20px}.oai-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}.oai-section-head h2{margin:0;font-size:19px}
-  .oai-licence{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px}.oai-licence-block{background:#f8fafd;border:1px solid #e4ebf4;border-radius:12px;padding:16px}.oai-licence-block h3{margin:0 0 10px;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:.06em}
+  .oai-licence{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px}.oai-licence-block{background:#f8fafd;border:1px solid #e4ebf4;border-radius:12px;padding:16px}.oai-licence-block h3{margin:0 0 10px;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:.06em}.oai-licence-activate{margin-top:18px}
   .oai-licence dl{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin:0;font-size:13px}.oai-licence dt{color:#64748b}.oai-licence dd{margin:0;color:#16253c;overflow-wrap:anywhere}
   .oai-quota-line{display:flex;align-items:baseline;gap:8px;margin:4px 0 10px}.oai-quota-line strong{font-size:28px;color:#07366f}.oai-progress{height:8px;background:#e3ebf5;border-radius:999px;overflow:hidden;margin:10px 0}.oai-progress span{display:block;height:100%;background:#0b6bcb;border-radius:999px}
   .oai-note{border-left:3px solid #0b6bcb;background:#f4f8ff;padding:12px 14px;border-radius:8px;font-size:13px;color:#334155;line-height:1.6}.oai-note.oai-note-warn{border-color:#e77a18;background:#fff7ec}
@@ -352,6 +365,17 @@ class OAI_Admin {
    <?php else:?>
     <p>Тариф и лицензия появятся после подключения сайта.<?php if($cloud_usage['state']==='unknown'):?> Серверные данные сейчас недоступны; локальный счётчик не заменяет серверную квоту.<?php endif;?></p>
     <p class="oai-kpi-note">До подключения действует локальный режим этого сайта: <?php echo esc_html((string)$local_quota['label']);?>, <?php echo (int)$local_quota['limit'];?> вызовов, использовано <?php echo (int)$local_quota['used'];?>.</p>
+   <?php endif;?>
+   <?php if(!empty($cloud_usage['hash'])):?>
+    <div class="oai-licence-block oai-licence-activate">
+     <h3>Активировать ключ тарифа</h3>
+     <p class="oai-kpi-note">Введите ключ, полученный после покупки тарифа. Проверка и привязка выполняются на сервере WP AI Admin; ключ не сохраняется на этом сайте.</p>
+     <form method="post">
+      <?php wp_nonce_field('oai_cloud_license_activate');?>
+      <p><input type="password" name="oai_license_key" class="regular-text" autocomplete="new-password" spellcheck="false" required placeholder="wpai_lic_…" aria-label="Ключ лицензии"></p>
+      <p><button class="button button-primary" type="submit" name="oai_cloud_license_activate" value="1">Активировать ключ</button></p>
+     </form>
+    </div>
    <?php endif;?>
   </section>
 

@@ -2,7 +2,7 @@
 
 **Status: NOT READY for production publication.** The approved plan catalogue and the hash-only licence registry are implemented, tested locally and green in hosted CI. Open Beta publication remains blocked by the release gates in section 8; this document does not convert any gate into a pass.
 
-**Baseline:** `main` `436aa3be2865f6f92aa9c7b550a6e2f8c62562cb` (squash of PR #189), Native **2.1.17** (`OAI_DB_VERSION=24`), unreleased Cloud **0.3.13-dev** on the recovered 0.3.11 baseline (Gateway schema **4**).
+**Baseline:** `main` `4607a330b3ff2cc5f6983c16fd41082d287faa91` (squash of PR #192), Native **2.1.17** (`OAI_DB_VERSION=24`), unreleased Cloud **0.3.13-dev** on the recovered 0.3.11 baseline (Gateway schema **4**).
 
 ## 1. Scope of this milestone
 
@@ -14,13 +14,14 @@ Completed in this slice:
 - the Cloud-owned licence registry with hash-only keys, lifecycle, activation limits, reissue and account fallback;
 - Cloud authority over plan, licence, quota and balance, with no client-supplied identity trusted;
 - admin/owner UI and HTTP routes for issue, activate, deactivate, reissue, revoke, suspend and reactivate;
+- paired-site activation from the Native dashboard, authenticated by the existing `site_url` + `status_key` pairing credential, with Cloud-derived owner/site/plan and a signed-usage refresh after activation;
 - Batch enabled in the catalogue as `successful_object_v1` (charged per successful object) for `cloud_site_batch_call`;
 - licence, plan-label and quota values in the Native client dashboard, taken only from the server-signed projection;
 - documentation, contracts and CI coverage for the above.
 
 Explicitly outside this slice: payments, automatic money debits, auto-renewal, paid quota values, the v2→v3 account/tariff migration, scheduled `batch_create`/`batch_resume`, production deployment, release tags, real key issuance and repository visibility changes.
 
-The Batch enablement, licence-claim projection and dashboard rebuild were verified locally on PHP 8.3.36 with the SQLite contract suites. They still require their own exact-HEAD hosted CI run before merge and are not a production-readiness claim.
+The Batch enablement, licence-claim projection and dashboard rebuild passed exact-HEAD hosted CI and were merged in PR #192. The paired-site activation change in PR #193 requires its own exact-HEAD hosted CI before merge and is not a production-readiness claim.
 
 ## 2. Commercial state
 
@@ -43,6 +44,7 @@ The Batch enablement, licence-claim projection and dashboard rebuild were verifi
 - Licence keys are `wpai_lic_` plus 43 base64url characters (256 bits of entropy). Only `SHA-256(key)` and a 16-character display prefix are stored. The plaintext is returned once on manual issue or reissue; automatic bound keys are discarded.
 - States: `unused` (input alias `generated`), `active`, `suspended`, `expired`, `revoked`, `exhausted`, `replaced`.
 - An unbound manual licence stays `unused` until activation binds the authenticated owner and one of their sites. A licence bound to another account is rejected. Activation beyond the configured limit fails closed.
+- A paired Native site activates a purchased key through `POST /site/license/activate` using its existing read credential. Cloud derives the owner and site from its own row, throttles attempts, returns `wpai-site-license-v1` without the plaintext key or hash, and never accepts a client-supplied plan/account/site/licence id. The Native dashboard shows only the refreshed signed projection.
 - An active linked licence is authoritative and reconciles a stale or tampered `accounts.plan` to the licensed terms. An unusable linked licence falls the account back to Free with `license_id=NULL`; accounts without a linked licence keep their historical plan.
 - Reissue preserves the remaining expiry, activation limit, plan, scheme and comment, marks the previous row `replaced`, revokes its activations and returns the new key once.
 - Licence events are append-only and hashed; they are not yet hash-chained (section 7).
@@ -59,7 +61,8 @@ Before the Free/UTC-day merge, the following ran from the affected worktrees:
 | `tests/license-registry.php` | **260 assertions passed** |
 | `tests/plan-catalogue-v3.php` | **98 assertions passed** (Free daily/approved, paid monthly/pending, fail-closed gate) |
 | `tests/billing-proof.php` | **58 assertions passed** on SQLite; the deterministic parallel-limit race is MySQL/CI-only |
-| Native suites | **18/18 passed** |
+| `tests/cloud-license-activation.php` (new in #193) | **27 assertions passed** locally: request shape, server-derived identity, signed-usage refresh, pending quota, local refusals, Cloud error mapping, no local key storage and invalid-signature rejection |
+| Native suites | **18/18 passed** before this activation test was added |
 | Cloud standalone static contracts | **6/6 passed** |
 | PHP syntax checks and `git diff --check` | clean |
 
@@ -69,15 +72,12 @@ The 260-assertion licence contract covers key format/hash/one-time display, bind
 
 ### Hosted CI
 
-Current `main` `436aa3b` passed both full workflows:
+PR #192 exact head `ee4d370` passed both full workflows and was squash-merged as `main` `4607a33`:
 
-- [Native validation run 43596399424](https://github.com/darcreid163/okean-ai-admin/actions/runs/43596399424)
-- [Cloud Core validation run 43596399421](https://github.com/darcreid163/okean-ai-admin/actions/runs/43596399421)
+- [Native validation run 43805159573](https://github.com/darcreid163/okean-ai-admin/actions/runs/43805159573)
+- [Cloud Core validation run 43805159528](https://github.com/darcreid163/okean-ai-admin/actions/runs/43805159528)
 
-The immediately preceding feature HEAD `518e35557144a50dfaa47541d94246433187b93d` (PR #189) also passed:
-
-- [Native validation run 43596115991](https://github.com/darcreid163/okean-ai-admin/actions/runs/43596115991)
-- [Cloud Core validation run 43596116004](https://github.com/darcreid163/okean-ai-admin/actions/runs/43596116004)
+The preceding `main` `436aa3b` and PR #189 evidence remain archived in the workflow history.
 
 The green workflows cover Cloud contracts on PHP 8.2/8.3/8.4 with SQLite and MySQL, including OAuth/site isolation, atomic ledger and batch accounting; WordPress smoke and upgrade; browser contracts; artifact checks; Native PHP and package-install jobs. These results apply to the cited SHAs only. This documentation branch requires its own exact-HEAD CI before merge.
 

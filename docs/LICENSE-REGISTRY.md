@@ -65,6 +65,13 @@ used by the Gateway licence registry.
   bound to another account is rejected with
   `license_bound_to_other_account`. Activation beyond
   `activation_limit` fails with `license_activation_limit_reached`.
+- Paired-site activation: `POST /site/license/activate` lets a customer paste a
+  purchased key in the Native dashboard. The caller proves possession of the
+  pairing read key (`site_url` + `status_key`); Cloud derives the account and
+  site from its own site row, throttles attempts and calls the same authoritative
+  activation path. The request cannot submit a plan, account, site or licence id.
+  The response is `wpai-site-license-v1` and never contains the plaintext key or
+  its hash.
 - Deactivation frees one activation slot.
 - Suspend/revoke: the linked account falls back to Free (`plan=free`,
   `license_id=NULL`) before the next quota computation. Reactivate restores
@@ -91,10 +98,19 @@ The Native dashboard never derives a balance. It displays the server-signed
 site-usage projection, which carries `plan_label`, the licence `id`,
 `key_prefix`, `status`, `activation_limit`, `activations`, `issued_at` and
 `expires_at`. The verifier treats the licence claims as optional for backward
-compatibility, but validates them all-or-nothing when present. The full key is
-never sent to the site; only the display prefix is included. A pending paid
-quota is shown as an explicit “awaiting owner approval” state with `limit` and
-`remaining` set to `null`, never as zero or unlimited.
+compatibility, but validates them all-or-nothing when present; a perpetual
+licence has a `null` expiry while every other claim must be present. The full
+key is never sent to the site; only the display prefix is included. A pending
+paid quota is shown as an explicit “awaiting owner approval” state with `limit`
+and `remaining` set to `null`, never as zero or unlimited.
+
+After a successful activation the Native dashboard refreshes the signed usage
+projection and shows the Cloud-returned plan, status, activation count and
+expiry. The entered key is sent once over HTTPS and is never stored locally or
+logged; local state cannot grant an entitlement or change quota. Cloud refusal
+reasons are mapped to safe administrator messages (invalid, bound to another
+account, revoked, suspended, expired, activation limit, denied site, rate
+limit).
 
 ## HTTP surface
 
@@ -103,6 +119,11 @@ Owner (authenticated WordPress user, WordPress REST/HTTPS only):
 - `GET /licenses` — licences owned by the caller;
 - `POST /licenses/activate` — `key`, `site_id`;
 - `POST /licenses/{id}/deactivate` — `site_id`.
+
+Paired Native site (no WordPress cookie or bearer token):
+
+- `POST /site/license/activate` — `site_url`, `status_key`, `license_key`;
+  account, site and plan are derived by Cloud.
 
 Operator (`manage_options`, confirmation token required for destructive
 actions):
@@ -115,7 +136,8 @@ reactivate forms, a one-time key display and the latest 50 licences (including
 unbound ones). The issue form renders only plan/scheme pairs accepted by the
 catalogue, so PRO++ (`businesspro`) is offered under `tariffs_v3` and legacy
 plans under `legacy_monthly_v1` instead of producing `unknown_plan` after
-submission.
+submission. The Native dashboard exposes the paired-site activation form and
+the signed usage refresh.
 
 ## Tests
 
@@ -124,3 +146,11 @@ and covers key format/hash/one-time display, binding, activation limits,
 idempotency, cross-account isolation, automatic issuance, legacy compatibility,
 plan lineage, reissue, suspend/reactivate/revoke, expiry fallback, event
 append-only evidence and schema/transaction guards.
+
+`wp-ai-admin-cloud/tests/site-usage-projection.php` covers paired-site
+activation, idempotent replay, foreign site/key rejection, cross-account bound
+keys, activation limits, revoked keys and absence of the plaintext key in the
+response. `tests/cloud-license-activation.php` covers the Native side: request
+shape, server-derived identity, signed-usage refresh, pending quota, local
+refusals, Cloud error mapping, no local key storage and rejection of an invalid
+usage signature after activation.
