@@ -44,6 +44,18 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-wo
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-rollback-parity.php"
 # Order lifecycle (#142): approval, addresses/quantities, WooCommerce totals, 409 and rollback.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-order-lifecycle.php"
+# HPOS acceptance: enable the authoritative custom order datastore on this disposable site,
+# assert the active datastore, then rerun the complete order lifecycle and verify table parity.
+if [[ "${OAI_HPOS_TEST:-0}" == "1" ]]; then
+  echo "=== HPOS status before acceptance ==="
+  wp_test wc hpos status
+  if [[ "$(wp_test option get woocommerce_custom_orders_table_enabled 2>/dev/null || true)" != "yes" ]]; then
+    wp_test wc hpos enable --with-sync
+  fi
+  OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-hpos.php"
+  OAI_DISPOSABLE_WP_TEST=1 OAI_EXPECT_HPOS=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-order-lifecycle.php"
+  wp_test wc hpos verify_data
+fi
 # Customers read surface (#166): capability-gated PII, pagination, REST/MCP/batch parity.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-customers.php"
 # Coupons (#167): sandbox-only create/update, duplicate codes, 409 conflicts and rollback.
