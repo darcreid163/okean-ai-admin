@@ -132,9 +132,9 @@ try {
     v3Check($approvedPro['limit']===1234&&$approvedPro['quota_status']===QuotaPolicy::QUOTA_APPROVED,'Merged paid terms are not effective');
 
     // Invalid shipped combinations must still fail closed.
-    $badApproved=$policy; $badApproved['schemes'][QuotaPolicy::TARGET]['plans']['pro']=null; $badApproved['schemes'][QuotaPolicy::TARGET]['quota_status']['pro']=QuotaPolicy::QUOTA_APPROVED;
+    $badApproved=$policy; $badApproved['schemes'][QuotaPolicy::TARGET]['plans']['pro']='2000';
     v3Rejects(fn()=>QuotaPolicy::validate($badApproved),'invalid_plan_limit');
-    $badPending=$policy; $badPending['schemes'][QuotaPolicy::TARGET]['plans']['pro']=500;
+    $badPending=$policy; $badPending['schemes'][QuotaPolicy::TARGET]['plans']['pro']=500; $badPending['schemes'][QuotaPolicy::TARGET]['quota_status']['pro']=QuotaPolicy::QUOTA_PENDING;
     v3Rejects(fn()=>QuotaPolicy::validate($badPending),'invalid_plan_limit');
     $badV2=$policy; unset($badV2['plans']['daily']);
     v3Rejects(fn()=>QuotaPolicy::validate($badV2),'invalid_plan_limit');
