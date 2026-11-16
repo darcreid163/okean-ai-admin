@@ -185,6 +185,18 @@ class OAI_REST {
  public static function read_discover($req){ $intent=$req->get_param('intent'); $normalized=is_array($intent)?$intent:OAI_Intent::normalize($intent,$req->get_param('context')); if(is_wp_error($normalized))return $normalized; $params=$req->get_json_params(); if(!is_array($params))$params=array(); return OAI_Read_Engine::discover($normalized,$params); }
  public static function error_contract(){ return array('contract'=>'ai-admin/v1','shape'=>array('ok'=>'boolean','code'=>'string','message'=>'string','status'=>'integer','details'=>'object')); }
  public static function agent_plan($req){ $raw=$req->get_param('intent'); $normalized=is_array($raw)?$raw:OAI_Intent::normalize($raw,$req->get_param('context')); if(is_wp_error($normalized))return $normalized; $plan=OAI_Planner::plan_normalized($normalized); return $plan; }
+ public static function abilities_public($req){
+  return OAI_Abilities_Compat::list_public(
+   (string)$req->get_param('category'),
+   max(1,absint($req->get_param('page')?:1)),
+   max(1,min(100,absint($req->get_param('per_page')?:50)))
+  );
+ }
+ public static function ability_public_detail($req){
+  $url=$req->get_url_params();
+  $name=is_array($url)&&isset($url['name'])?(string)$url['name']:'';
+  return OAI_Abilities_Compat::get_public($name);
+ }
  public static function capabilities(){return OAI_Capabilities::available();}
  public static function adapter_catalog(){return OAI_Adapter_Catalog::catalog();}
  public static function adapter_detect($req){return OAI_Adapter_Catalog::detect(absint($req['id']));}
