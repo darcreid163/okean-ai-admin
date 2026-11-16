@@ -54,7 +54,7 @@ Key capabilities:
 
 **Requirements:**
 - PHP 8.2 or higher (CI tested with PHP 8.2, 8.3 and 8.4; PHP 8.3 recommended)
-- WordPress 6.4 or higher (CI tested with WordPress 7.0.6 and latest stable; plugin header currently declares Tested up to 7.1)
+- WordPress 6.4 or higher
 - WooCommerce 8.0 or higher (only required if using WooCommerce tools)
 - Sodium extension (bundled with PHP 7.2+)
 
@@ -97,3 +97,14 @@ or the Cloud service.
 * Feature: fail-closed Cloud billing — missing `isError`, non-boolean value or empty content held as uncertain, never auto-charged (issue #136).
 * Feature: batch receipts and single-call receipts now carry the authoritative usage envelope (issue #136).
 * Fix: Gutenberg `attrs_remove` / `inner_content_index` API; byte-exact rollback baseline (issue #137).
+* Fix: align server tariff policy with approved Native table: free 100/day, daily 500/day, pro 2000/day, business 5000/day (issue #134).
+
+= 2.1.14 - 2.1.16 =
+* Earlier release hardening, consent callback fix, creation-intent identity, abilities API, Gutenberg preservation, Cloud Core 0.3.11 recovery, and Open Beta audit preparation. See docs/ directory for details.
+
+== Upgrade Notice ==
+
+= 2.1.17 =
+Security update: re-pairing now purges old credentials. If you have multiple paired sites, each site
+must be re-paired once after upgrade to benefit from key pinning. Existing operations, receipts and
+rollback data are preserved.
