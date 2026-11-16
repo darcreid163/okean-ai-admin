@@ -132,7 +132,7 @@ try {
     v3Check($approvedPro['limit']===1234&&$approvedPro['quota_status']===QuotaPolicy::QUOTA_APPROVED,'Merged paid terms are not effective');
 
     // Invalid shipped combinations must still fail closed.
-    $badApproved=$policy; $badApproved['schemes'][QuotaPolicy::TARGET]['quota_status']['pro']=QuotaPolicy::QUOTA_APPROVED;
+    $badApproved=$policy; $badApproved['schemes'][QuotaPolicy::TARGET]['plans']['pro']=null; $badApproved['schemes'][QuotaPolicy::TARGET]['quota_status']['pro']=QuotaPolicy::QUOTA_APPROVED;
     v3Rejects(fn()=>QuotaPolicy::validate($badApproved),'invalid_plan_limit');
     $badPending=$policy; $badPending['schemes'][QuotaPolicy::TARGET]['plans']['pro']=500;
     v3Rejects(fn()=>QuotaPolicy::validate($badPending),'invalid_plan_limit');
@@ -170,6 +170,8 @@ try {
     $pendingPolicy=$policy;
     $pendingPolicy['schemes'][QuotaPolicy::TARGET]['plans']['businesspro']=null;
     $pendingPolicy['schemes'][QuotaPolicy::TARGET]['quota_status']['businesspro']=QuotaPolicy::QUOTA_PENDING;
+    $pendingPolicy['schemes'][QuotaPolicy::TARGET]['plans']['pro']=null;
+    $pendingPolicy['schemes'][QuotaPolicy::TARGET]['quota_status']['pro']=QuotaPolicy::QUOTA_PENDING;
     $pair=sodium_crypto_sign_keypair();
     $core=new Core($store,new \WPAICloudGateway\Vault(str_repeat('k',32)),$transport,$pendingPolicy,new \WPAICloudGateway\Signer(sodium_crypto_sign_secretkey($pair)));
     $core->ensureAccount('assign');
