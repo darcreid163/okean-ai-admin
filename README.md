@@ -1,8 +1,8 @@
 # WP AI Admin — единый основной репозиторий разработки
 
-**Current integrated candidate:** Native **2.1.17** (DB schema 24; build `2.1.17-usage-batch-v1-20261019`) + recovered Cloud Core **0.3.11** (Gateway schema 4); current **unreleased Cloud 0.3.13-dev** adds scoped Skills/Media, read-only Abilities metadata discovery, the hash-only licence registry and the approved plan catalogue. This branch is **not** an approved production release.
+**Current integrated candidate:** Native **2.1.17** (DB schema 24; build `2.1.17-usage-batch-v1-20261019`) + recovered Cloud Core **0.3.11** (Gateway schema 4); current **unreleased Cloud 0.3.13-dev** adds scoped Skills/Media, read-only Abilities metadata discovery, the hash-only licence registry and the merged approved daily plan catalogue (PR #204). This branch is **not** an approved production release; Cloud deployment and account activation remain separate gates.
 
-[Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). [Готовность планов, квот и лицензий на 14 ноября](docs/BETA-READINESS-2026-11-14.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
+[Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). [Актуальная готовность планов, квот и лицензий на 16 ноября](docs/BETA-READINESS-2026-11-16.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
 
 ## Один основной репозиторий до завершения проекта
 
@@ -23,18 +23,18 @@ The old `wp-ai-cloud` pilot 0.1.0 and former bundled Cloud Core 0.3.6 are **not*
 
 ## Commercial contract
 
-The owner-approved target catalogue is:
+The owner-approved target catalogue is merged in PR #204 (16 November 2026):
 
 | Plan | Price | Approved quota | Quota period |
 |---|---:|---:|---|
-| Free | 0 ₽/month | 100 | UTC calendar day |
-| Pro | 2,000 ₽/month | requires owner approval | UTC calendar month |
-| PRO+ | 5,000 ₽/month | requires owner approval | UTC calendar month |
-| PRO++ | 10,000 ₽/month | requires owner approval | UTC calendar month |
+| Free | 0 ₽/month | 100 actions | UTC calendar day |
+| Pro | 2,000 ₽/month | 2,000 actions | UTC calendar day |
+| PRO+ | 5,000 ₽/month | 5,000 actions | UTC calendar day |
+| PRO++ | 10,000 ₽/month | 5,000 actions | UTC calendar day |
 
 Display names **PRO+** and **PRO++** map to the stable internal slugs `business` and `businesspro`. Slugs are unchanged so persisted accounts, licences and API payloads remain compatible.
 
-Canonical server source: `wp-ai-admin-cloud/config/plans.json`. The target lives in `schemes.tariffs_v3`; `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing and newly provisioned accounts keep their persisted v2 terms until then. Free is fixed at 100 actions/UTC day in both v2 and v3; paid quotas are monthly, `null` and `quota_status=requires_owner_approval`, so billable calls fail closed until the owner supplies numbers while reads, verification, receipts, rollback and usage stay available. All tools are available on every plan. Legacy accounts keep their previously approved monthly terms until a separately authorized migration.
+Canonical server source: `wp-ai-admin-cloud/config/plans.json`. The approved target lives in `schemes.tariffs_v3`; all four quotas reset at 00:00 UTC daily. `default_scheme` intentionally remains the frozen `tariffs_v2` until a separately authorized account/tariff migration, so existing accounts keep their persisted terms. Legacy accounts retain their historical monthly terms. No account is silently moved or repriced. A new licence explicitly issued under `tariffs_v3` receives the approved daily quota. The merged source policy is not effective on the production Cloud service until separately deployed and verified; see the 16 November readiness report.
 
 Cloud Core alone decides plan, licence, quota and balance; clients never submit their own plan, quota, account or licence identity. Licence keys use `wpai_lic_` plus 43 base64url characters, only SHA-256 is stored at rest, and the plaintext is shown once. The Native dashboard shows the server-signed plan label, licence prefix/status/activations and quota values, and never derives a different balance. Successful reads/Sandbox calls count; every successful Batch object is one action; failed calls/rollback/idempotent retry are not billed again. Batch is enabled in the shipped catalogue as `successful_object_v1`; an explicitly stored `wpai_gateway_batch_object_v1` option remains an operator kill switch. **Gateway Ledger is sole charging authority, no telemetry charging, no automatic payment debit.** The live v2→v3 account/tariff migration is not assumed complete.
 
