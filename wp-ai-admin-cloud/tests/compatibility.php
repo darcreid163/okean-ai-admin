@@ -114,7 +114,7 @@ check($snapshot()===$before,'Gateway migration modified legacy data');
 WordPress::enable(); check($snapshot()===$before && Settings::keys()===$keys,'Repeated update changed core data or keys');
 check(Settings::policy()['plans']===['free'=>50,'daily'=>500,'pro'=>2000,'business'=>5000,'businesspro'=>10000],'Final five-tier tariff policy differs from the Native table');
 check(Settings::policy()['periods']===['free'=>'calendar_day_utc','daily'=>'calendar_day_utc','pro'=>'calendar_day_utc','business'=>'calendar_day_utc','businesspro'=>'calendar_day_utc'],'All five tariffs must use UTC calendar days');
-check(str_starts_with(Settings::policy()['version'],'tariffs-v4-'),'Quota policy version was not bumped to v3');
+check(str_starts_with(Settings::policy()['version'],'tariffs-v3-'),'Quota policy version was not bumped to v3');
 check(Settings::policy()['legacy_plans']===['agency'=>5000,'free'=>100,'power'=>2000,'pro'=>500,'scale'=>10000],'Legacy Core plan limits changed');
 Settings::account('42');check($snapshot()===$before,'Existing account changed by bridge');
 $wpdb->query("UPDATE ".WPAI_Cloud_DB::table('accounts')." SET status='suspended' WHERE wp_user_id=42");
