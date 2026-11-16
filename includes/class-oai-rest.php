@@ -102,6 +102,8 @@ class OAI_REST {
   register_rest_route($n,'/read/gutenberg/(?P<id>\d+)',array('methods'=>'GET','callback'=>array(__CLASS__,'gutenberg_resolved'))+$args);
   register_rest_route($n,'/read/gutenberg/(?P<id>\d+)/locate',array('methods'=>'GET','callback'=>array(__CLASS__,'gutenberg_locate'))+$args);
   register_rest_route($n,'/gutenberg/patch',array('methods'=>'POST','callback'=>array(__CLASS__,'gutenberg_patch'))+$args);
+  register_rest_route($n,'/abilities/public',array('methods'=>'GET','callback'=>array(__CLASS__,'abilities_public'))+$args);
+  register_rest_route($n,'/abilities/public/(?P<name>[a-zA-Z0-9\\-\\/]+)',array('methods'=>'GET','callback'=>array(__CLASS__,'ability_public_detail'))+$args);
   register_rest_route($n,'/read/site',array('methods'=>'GET','callback'=>array(__CLASS__,'site'))+$args);
   register_rest_route($n,'/read/plugins',array('methods'=>'GET','callback'=>array(__CLASS__,'plugins'))+$args);
   register_rest_route($n,'/read/capabilities',array('methods'=>'GET','callback'=>array(__CLASS__,'capabilities'))+$args);
