@@ -157,6 +157,8 @@ final class Admin {
         try {
             $core=WordPress::operatorCore(); $owner=WordPress::operatorOwner(); $sites=$core->sites($owner);
             echo '<p>Лимит: <code>'.esc_html(wp_json_encode($core->usage($owner,time()))).'</code></p>';
+            echo '<h3>Ручной сброс дневной квоты</h3><p>Только администратор Cloud Core. Сбрасывает использованные действия выбранного аккаунта за текущие сутки UTC. Незавершённые резервы сохраняются; тариф, лицензия и месячные исторические балансы не меняются.</p>';
+            self::form('quota_reset','Сбросить дневную квоту пользователя','<p><label>ID аккаунта пользователя<br><input name="quota_owner" maxlength="64" required autocomplete="off" size="32"></label></p><p><label>Подтверждение (введите RESET DAILY)<br><input name="quota_confirm" required autocomplete="off" pattern="RESET DAILY" size="24"></label></p>');
             $providerSites=get_user_meta((int)$owner,'wpai_cloud_provider_sites',true);if(!is_array($providerSites))$providerSites=[];
             if($sites){
                 echo '<h3>Подключения AI → сайт</h3><p>Выбор здесь — удобный профиль подключения. Безопасность всё равно ограничивается site_id внутри токена и каждого вызова.</p>';
