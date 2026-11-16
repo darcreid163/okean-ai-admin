@@ -22,6 +22,33 @@ final class Admin {
         echo '<input type="hidden" name="wpai_gateway_action" value="'.esc_attr($action).'">'.$fields;
         echo '<p><button class="button button-primary" type="submit">'.esc_html($label).'</button></p></form>';
     }
+    /**
+     * Only render plan/scheme pairs the catalogue actually offers. This keeps
+     * the form from submitting a combination that would fail with
+     * unknown_plan after the operator has filled it in.
+     */
+    public static function licenseOffers(array $policy): array {
+        $plans=[];
+        foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $scheme){
+            $candidates=isset($policy['schemes'][$scheme]['plans'])&&is_array($policy['schemes'][$scheme]['plans'])
+                ? array_keys($policy['schemes'][$scheme]['plans'])
+                : ($scheme===QuotaPolicy::LEGACY?array_keys((array)($policy['legacy_plans']??[])):array_keys((array)($policy['plans']??[])));
+            foreach($candidates as $plan)if(QuotaPolicy::offers($policy,$scheme,(string)$plan))$plans[(string)$plan]=true;
+        }
+        $offers=[];
+        foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $scheme){
+            foreach(array_keys($plans) as $plan){
+                if(!QuotaPolicy::offers($policy,$scheme,$plan))continue;
+                $offers[]=[
+                    'value'=>$scheme.'|'.$plan,
+                    'scheme'=>$scheme,
+                    'plan'=>$plan,
+                    'label'=>QuotaPolicy::planLabel($policy,$plan,$scheme).' — '.$scheme,
+                ];
+            }
+        }
+        return $offers;
+    }
     public static function page(): void {
         if (!current_user_can('manage_options')) return;
         nocache_headers();
@@ -68,11 +95,20 @@ final class Admin {
                     } elseif ($action==='license_issue') {
                         $licenseOwner=self::submitted('license_owner');
                         if($licenseOwner!==''&&!preg_match('/^[0-9]{1,20}$/D',$licenseOwner)) throw new Fault('invalid_license_owner');
-                        $scheme=self::submitted('license_scheme');
+                        $offer=self::submitted('license_offer');
+                        if($offer!==''){
+                            $parts=explode('|',$offer,2);
+                            if(count($parts)!==2||$parts[0]===''||$parts[1]==='') throw new Fault('invalid_license_offer');
+                            $scheme=$parts[0]; $plan=$parts[1];
+                        } else {
+                            // Backward compatibility for direct POSTs that still
+                            // submit the former separate plan and scheme fields.
+                            $scheme=self::submitted('license_scheme'); $plan=self::submitted('license_plan');
+                        }
                         $options=['activation_limit'=>max(1,min(50,(int)self::submitted('activation_limit'))),'comment'=>self::submitted('license_comment')];
                         $days=(int)self::submitted('license_days');
                         if($days>0) $options['duration_days']=$days;
-                        $value=$core->issueLicense((string)get_current_user_id(),$licenseOwner===''?null:$licenseOwner,self::submitted('license_plan'),time(),$scheme===''?null:$scheme,$options);
+                        $value=$core->issueLicense((string)get_current_user_id(),$licenseOwner===''?null:$licenseOwner,$plan,time(),$scheme===''?null:$scheme,$options);
                         $secret=$value['license_key']; unset($value['license_key']); $secretKind='license'; $output=$value;
                     } elseif ($action==='license_activate') {
                         $output=$core->activateLicense($owner,self::submitted('license_key'),self::submitted('license_site'),time());
@@ -149,11 +185,9 @@ final class Admin {
             } else echo '<p>Лицензий пока нет.</p>';
             $planOptions='';
             $planPolicy=Settings::catalogPolicy();
-            foreach(['free','daily','pro','business','businesspro'] as $slug) $planOptions.='<option value="'.esc_attr($slug).'">'.esc_html(QuotaPolicy::planLabel($planPolicy,$slug)).'</option>';
-            $schemeOptions='';
-            foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $slug) $schemeOptions.='<option value="'.esc_attr($slug).'"'.($slug===QuotaPolicy::CURRENT?' selected':'').'>'.esc_html($slug).'</option>';
+            foreach(self::licenseOffers($planPolicy) as $offer) $planOptions.='<option value="'.esc_attr($offer['value']).'">'.esc_html($offer['label']).'</option>';
             $fields='<p><label>Аккаунт WordPress (пусто = несвязанная лицензия)<br><input name="license_owner" inputmode="numeric" pattern="[0-9]*" size="12"></label></p>';
-            $fields.='<p><label>План<br><select name="license_plan">'.$planOptions.'</select></label> <label>Схема<br><select name="license_scheme">'.$schemeOptions.'</select></label></p>';
+            $fields.='<p><label>Тариф и схема<br><select name="license_offer">'.$planOptions.'</select></label></p>';
             $fields.='<p><label>Лимит активаций<br><input type="number" name="activation_limit" min="1" max="50" value="1"></label> <label>Срок, дней (0 = без срока)<br><input type="number" name="license_days" min="0" max="3650" value="0"></label></p>';
             $fields.='<p><label>Комментарий<br><input name="license_comment" maxlength="255" size="60"></label></p>';
             self::form('license_issue','Выпустить лицензию вручную',$fields);

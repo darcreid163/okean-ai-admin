@@ -112,7 +112,10 @@ actions):
 
 The admin page also exposes issuance, activation, reissue, revoke, suspend and
 reactivate forms, a one-time key display and the latest 50 licences (including
-unbound ones).
+unbound ones). The issue form renders only plan/scheme pairs accepted by the
+catalogue, so PRO++ (`businesspro`) is offered under `tariffs_v3` and legacy
+plans under `legacy_monthly_v1` instead of producing `unknown_plan` after
+submission.
 
 ## Tests
 

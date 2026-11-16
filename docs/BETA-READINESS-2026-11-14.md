@@ -122,7 +122,7 @@ This proves the automated fail-closed and single-charge paths. It is not a live 
 | P1 | Real staging upgrade/rollback, installed-file parity and external-client acceptance are not complete | gate open |
 | P1 | Full Elementor/Gutenberg/WooCommerce/Woodmart end-to-end matrix is not covered by this slice | gate open for beta |
 | P2 | Admin activation of an unbound licence binds it to the acting admin account | UX follow-up needed |
-| P2 | PRO++ (`businesspro`) is selectable while the default scheme is v2 and then yields `unknown_plan` | UI/validation follow-up needed |
+| P2 | PRO++ (`businesspro`) was selectable while the default scheme is v2 and then yielded `unknown_plan` | fixed in #195: the issue form now renders only catalogue-valid plan/scheme pairs; exact-HEAD CI pending |
 | P2 | Licence events are individually hashed but not hash-chained | hardening follow-up |
 | P2 | MySQL coverage exists only in CI; no local MySQL is available | documented environment gap |
 | P3 | Historical dated release documents still contain superseded tariff examples | preserved as history; this report and `MIGRATION-STATUS.md` are current |
