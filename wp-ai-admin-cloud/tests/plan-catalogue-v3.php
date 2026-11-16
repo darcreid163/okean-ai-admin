@@ -41,9 +41,9 @@ try {
     v3Check(($policy['automatic_money_debits']??null)===false,'Automatic money debits enabled');
     v3Check(($policy['batch']??null)===\WPAICloudGateway\BatchAccounting::POLICY,'Production batch must be enabled');
     foreach(['free'=>50,'daily'=>500,'pro'=>2000,'business'=>5000,'businesspro'=>10000] as $slug=>$limit)
-        v3Check(($policy['plans'][$slug]??null)===$limit,'Frozen v2 limit changed: '.$slug);
+        v3Check(($policy['plans'][$slug]??null)===$limit,'Final v2 limit mismatch: '.$slug);
     foreach(['free','daily','pro','business','businesspro'] as $slug)
-        v3Check(($policy['periods'][$slug]??null)===QuotaPolicy::DAY,'Frozen v2 period changed: '.$slug);
+        v3Check(($policy['periods'][$slug]??null)===QuotaPolicy::DAY,'Final v2 period mismatch: '.$slug);
     foreach(['free'=>100,'pro'=>500,'power'=>2000,'agency'=>5000,'scale'=>10000] as $slug=>$limit)
         v3Check(($policy['legacy_plans'][$slug]??null)===$limit,'Legacy monthly limit changed: '.$slug);
 
@@ -61,6 +61,8 @@ try {
     }
     foreach(['pro'=>2000,'business'=>5000,'businesspro'=>10000] as $slug=>$price)
         v3Check(($v3['prices_rub_month'][$slug]??null)===$price,'Price mismatch: '.$slug);
+    v3Check(array_key_exists('daily',$v3['prices_rub_month'])&&$v3['prices_rub_month']['daily']===null,'Daily price must remain unset');
+    v3Check(($v3['prices_approved']??null)===false,'Prices must remain unapproved until Daily price is set');
 
     // Slugs stay stable; only the client-facing tariff names change.
     v3Check(QuotaPolicy::planLabel($policy,'business')==='PRO+','PRO+ label missing');
@@ -240,8 +242,7 @@ try {
     v3Rejects(fn()=>$core->call($actor,$site['id'],'wp_get_site',[],'pending-again',$now),'plan_quota_not_configured');
     v3Check($transport->executions===3,'Re-pending plan executed a tool');
 
-    echo 'PASS '.$checks.' plan catalogue v3 assertions; driver='.($mysql?'mysql':'sqlite')."
-";
+    echo 'PASS '.$checks.' plan catalogue v3 assertions; driver='.($mysql?'mysql':'sqlite')."\n";
 } finally {
     foreach($tables as $name) $store->execute('DROP TABLE IF EXISTS '.$store->table($name));
     unset($core,$actor,$transport,$store,$pdo);
