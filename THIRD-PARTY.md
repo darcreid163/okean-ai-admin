@@ -3,69 +3,48 @@
 Owner and copyright holder of this plugin: **Андриянов Н.Г.**
 This repository is distributed under **GPL-2.0-or-later** (see `LICENSE`).
 
-This file is the authoritative list of third-party code included in, or derived into, this
-repository. It must be updated in the same pull request that adds or changes such code.
-
-## Current status
-
-As of **2026-10-20** this repository ships **no third-party source code**. Every file in
-`includes/`, `tests/`, `public-client/` and `starter-themes/` is original work of the owner,
-except WordPress APIs, which are called but not copied.
+This file is the authoritative list of third-party code included in, or derived into, this repository. Update it in the same pull request that adds or changes such code.
 
 ## Reviewed upstream projects
 
-| Project | License | Upstream | Reviewed | Status |
+| Project | License | Upstream | Reviewed ref | Status |
 |---|---|---|---|---|
-| WPVibe (WordPress MCP plugin, wordpress.org slug `vibe-ai`) | GPL-2.0-or-later | https://github.com/awesomemotive/wpvibe-ai-mcp | `1.20.5`, commit `62bc77c` | **reference only, nothing copied** |
+| WPVibe (Awesome Motive) | GPL-2.0 | https://github.com/awesomemotive/wpvibe-ai-mcp | `main`, tree `f6824a089c20bd8e52b2c2bad32f931333e17739` (2026-11-16) | reference reviewed; implementation ports must be recorded per file |
 
-WPVibe is published by Awesome Motive under GPL-2.0-or-later, the same license as this
-plugin, so code may be ported. No WPVibe file has been copied into this repository yet.
-The `includes/class-oai-elementor-schema-save.php` adapter is original work and copies no
-WPVibe source.
+WPVibe is GPL-2.0 and this Native plugin is GPL-2.0-or-later. Code ports are possible subject to GPL-2.0 obligations and preservation of upstream notices. The integration plan is `docs/WPVIBE-INTEGRATION-PLAN.md`.
 
-## Obligations when code is ported
+## Per-file port register
 
-1. Keep the upstream copyright notice and the GPL-2.0-or-later header in every ported file.
-2. Add a row to the table above with: upstream file path, upstream commit, and the local
-   path that contains the port.
-3. State clearly what was modified. A port that changes behaviour is a derivative work and
-   must say so in the file header.
-4. Do not relicense, sublicense or move ported code into a non-GPL component. The private
-   gateway repository must not contain WPVibe-derived code.
-5. Ship the complete corresponding source of this plugin to anyone who receives a build.
-   A compiled or obfuscated distribution of GPL code is not permitted.
-6. Keep `LICENSE` unchanged and never remove the plugin header license fields.
-7. Record the licence review in the pull request that introduces the port, and have the
-   owner approve that PR before merge.
+No WPVibe source files have been copied or adapted by this initial planning commit. For every later port, add a row containing the exact upstream file, upstream blob SHA, local destination, change summary and tests. Keep upstream copyright and licence notices in each derived file and disclose the complete corresponding source with distributed builds.
 
-## Planned ports, if and when approved
+| Upstream file | Upstream blob SHA | Local file | Modification | Status |
+|---|---|---|---|---|
+| — | — | — | No source copied in planning baseline | pending implementation |
 
-Candidates are tracked in the public issue list; at the time of writing only read-only
-components are considered:
+## Mandatory obligations
 
-- `load_skill` progressive instructions (server-side, not in this repository);
-- media search proxying (server-side, not in this repository);
-- WP-CLI command coverage and builder adapters — **not started**, requires an explicit
-  licensing review per file.
+1. Preserve upstream copyright and GPL-2.0 notices in every copied or adapted file.
+2. Record exact upstream commit/tree and file blob SHA, local path and modifications in this table and in the source header.
+3. Do not relicense or place WPVibe-derived code in the private Cloud Core repository.
+4. Distribute the complete corresponding source for recipients of a build containing GPL-derived material.
+5. Do not imply endorsement or affiliation with Awesome Motive.
+6. Review this file in every PR carrying third-party code; obtain owner approval before merge.
 
-## Deliberately excluded
+## Integration constraints
 
-The following WPVibe capabilities are not planned for porting, because they conflict with
-the lifecycle of this plugin (`Read → Sandbox → Human approval → Apply → Verify → Receipt →
-Rollback`, `direct_live_writes = false`):
+All code must follow WP AI Admin's lifecycle:
+`Read → Sandbox/Plan → Human approval → Apply → Verify → Receipt/Proof → Rollback`.
 
-- a generic REST passthrough that performs arbitrary `POST`/`PUT`/`DELETE`;
-- a code-snippet executor that runs arbitrary PHP;
-- a third-party self-update mechanism that bypasses the release process.
+Do not port or expose functionality that bypasses this lifecycle, including:
+- arbitrary REST write passthrough;
+- arbitrary PHP/code execution;
+- shell or WP-CLI binary execution;
+- self-update paths that bypass this repository's release process;
+- a parallel authentication, approval, audit or quota implementation.
 
-## Non-code attributions
+WPVibe-derived classes must be integrated into Native only. Cloud Core remains independently maintained and must not receive WPVibe-derived code.
 
-- Unsplash images are provided by photographers on Unsplash. When a photo is offered by the
-  hosted gateway, the photographer credit returned with the result must be shown wherever
-  the image is published.
+## External assets and attribution
 
-## Change procedure
-
-Any pull request that adds third-party code must tick the attribution checkbox in the pull
-request template and update this file. A pull request that carries unlisted third-party
-code is rejected by review, independently of whether tests pass.
+- Unsplash content must retain photographer/source credit wherever published; validate licensing and source attribution for every provider.
+- Do not assume that an integration adapter exists merely because a builder is mentioned in marketing text. Record upstream source and prove compatibility with fixtures before declaring support.
