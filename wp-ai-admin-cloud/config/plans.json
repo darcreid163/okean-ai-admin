@@ -1,5 +1,5 @@
 {
-  "version": "tariffs-v3-20261115",
+  "version": "tariffs-v3-20261116",
   "period": "per_plan_utc",
   "status": "quota_policy_only_payments_not_implemented",
   "plans": {
@@ -36,28 +36,28 @@
   "default_scheme": "tariffs_v2",
   "schemes": {
     "tariffs_v3": {
-      "period": "calendar_month_utc",
-      "status": "owner_approval_required_for_paid_quotas",
+      "period": "calendar_day_utc",
+      "status": "owner_approved_daily_quotas_payments_not_implemented",
       "version_key_suffix": "V3",
       "all_tools": true,
       "automatic_money_debits": false,
       "plans": {
         "free": 100,
-        "pro": null,
-        "business": null,
-        "businesspro": null
+        "pro": 2000,
+        "business": 5000,
+        "businesspro": 5000
       },
       "quota_status": {
         "free": "approved",
-        "pro": "requires_owner_approval",
-        "business": "requires_owner_approval",
-        "businesspro": "requires_owner_approval"
+        "pro": "approved",
+        "business": "approved",
+        "businesspro": "approved"
       },
       "periods": {
         "free": "calendar_day_utc",
-        "pro": "calendar_month_utc",
-        "business": "calendar_month_utc",
-        "businesspro": "calendar_month_utc"
+        "pro": "calendar_day_utc",
+        "business": "calendar_day_utc",
+        "businesspro": "calendar_day_utc"
       },
       "names": {
         "free": "Free",
