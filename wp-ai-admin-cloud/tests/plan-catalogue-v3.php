@@ -89,6 +89,9 @@ try {
     v3Check($business['limit']===5000&&$business['period_kind']===QuotaPolicy::DAY,'v3 PRO+ terms wrong');
     $businesspro=QuotaPolicy::terms($policy,['plan'=>'businesspro','quota_scheme'=>QuotaPolicy::TARGET]);
     v3Check($businesspro['limit']===5000&&$businesspro['period_kind']===QuotaPolicy::DAY,'v3 PRO++ terms wrong');
+    $dailyWindow=QuotaPolicy::window($businesspro,$now);
+    v3Check(strtotime($dailyWindow['period_start_utc'])===$dailyWindow['next_period_at']-86400,'Daily quota window is not exactly 24 hours');
+    v3Check($dailyWindow['period_end_utc']===gmdate('Y-m-d\\TH:i:s\\Z',$dailyWindow['next_period_at']),'Daily quota reset metadata is not UTC');
     v3Rejects(fn()=>QuotaPolicy::terms($policy,['plan'=>'enterprise','quota_scheme'=>QuotaPolicy::TARGET]),'plan_unavailable');
     v3Rejects(fn()=>QuotaPolicy::terms($policy,['plan'=>'free','quota_scheme'=>'tariffs_v9']),'plan_unavailable');
     v3Rejects(fn()=>QuotaPolicy::terms($policy,['plan'=>'business','quota_scheme'=>QuotaPolicy::LEGACY]),'plan_unavailable');
