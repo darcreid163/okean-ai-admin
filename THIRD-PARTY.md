@@ -20,6 +20,7 @@ No WPVibe source files have been copied or adapted by this initial planning comm
 | Upstream file | Upstream blob SHA | Local file | Modification | Status |
 |---|---|---|---|---|
 | — | — | — | No source copied in planning baseline | pending implementation |
+| `includes/class-wpvibe-abilities.php` (behavioral reference only; not copied) | `cd0c25fc6758a919cfae643a0307953f1c6667ab` | `includes/class-oai-abilities-compat.php` | Original compatibility implementation; public Ability discovery/schema, execution deliberately disabled pending planner mapping | implemented, no upstream source copied |
 
 ## Mandatory obligations
 
