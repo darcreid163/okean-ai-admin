@@ -55,20 +55,20 @@ rateLimitAssert($blocked===14,'Expected 14 rejected requests, got '.$blocked);
 $client=hash('sha256',wp_salt('auth').'|198.51.100.77');
 $bucketHash=hash('sha256',$bucket);
 $window=(int)(floor(time()/3600)*3600);
-rateLimitAssert(OAI_DB::rate_limit_admit(hash('sha256',$bucket.'-other-bucket'),$client,$window,10)===true,'Different bucket shared a counter');
-rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,hash('sha256','different-client'),$window,10)===true,'Different client shared a counter');
-rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,$client,$window+3600,10)===true,'Different fixed window shared a counter');
-rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,$client,$window,10)===false,'Counter admitted more requests after reaching its threshold');
+rateLimitAssert(OAI_DB::rate_limit_admit(hash('sha256',$bucket.'-other-bucket'),$client,$window,3600,10)===true,'Different bucket shared a counter');
+rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,hash('sha256','different-client'),$window,3600,10)===true,'Different client shared a counter');
+rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,$client,$window+3600,3600,10)===true,'Different fixed window shared a counter');
+rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,$client,$window,3600,10)===false,'Counter admitted more requests after reaching its threshold');
 
 // Expired records are pruned; recent/current-window records remain.
 $staleBucket=hash('sha256','stale-rate-limit-fixture');
 $wpdb->insert($table,[
     'bucket_hash'=>$staleBucket,'client_hash'=>$client,'window_start'=>$window-172800,
-    'hits'=>1,'updated_at'=>gmdate('Y-m-d H:i:s',time()-259200)
+    'window_seconds'=>3600,'expires_at'=>$window-168200,'hits'=>1,'updated_at'=>gmdate('Y-m-d H:i:s',time()-259200)
 ]);
 update_option('oai_rate_limits_pruned_at',0,false);
 OAI_DB::prune_rate_limits();
-$stale=$wpdb->get_var($wpdb->prepare("SELECT hits FROM $table WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d",$staleBucket,$client,$window-172800));
+$stale=$wpdb->get_var($wpdb->prepare("SELECT hits FROM $table WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d AND window_seconds=%d",$staleBucket,$client,$window-172800,3600));
 rateLimitAssert($stale===null,'Expired rate counter was not pruned');
 
 echo "PASS: v24->v25 migration is additive and idempotent; 24 concurrent workers admitted exactly 10 and rejected 14; bucket/client/window isolation and cleanup verified\n";
