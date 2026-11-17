@@ -154,6 +154,9 @@ final class Store {
     }
     private function ensureIndex(string $table, string $name, array $columns): void {
         $physical = $this->prefix.$table;
+        // SQLite index names are database-global; include the Store prefix hash
+        // so multiple isolated table namespaces can share one SQLite database.
+        $name = 'wpai_'.substr(hash('sha256',$this->prefix),0,16).'_'.$name;
         $found = null;
         if ($this->mysql) {
             $rows = $this->rows(
