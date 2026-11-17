@@ -47,6 +47,14 @@ foreach($licenses as [$table,$name,$columns]) indexDefinition($store,$table,$nam
 $store->ensureLicenseSchema();
 foreach($licenses as [$table,$name,$columns]) indexDefinition($store,$table,$name,$columns);
 if (!getenv('TEST_MYSQL_DSN')) {
+    // Two Store prefixes may share one SQLite database without index-name collisions.
+    $secondPrefix='legacy_'.bin2hex(random_bytes(4)).'_';
+    $secondStore=new Store(new PDO('sqlite:'.$database),$secondPrefix);
+    $secondStore->migrate();
+    $secondIndex='wpai_'.substr(hash('sha256',$secondPrefix),0,16).'_idx_tokens_owner';
+    $secondRows=$secondStore->rows("PRAGMA index_info('".$secondIndex."')");
+    indexCheck(array_map(static fn($row)=>(string)$row['name'],$secondRows)===['owner'],'Second Store prefix did not get its own owner index');
+    unset($secondStore);
     // SQLite index names are global: a name already owned by another table must fail closed, not recurse.
     $collisionDb=sys_get_temp_dir().'/wpai-cloud-index-collision-'.bin2hex(random_bytes(8)).'.sqlite';
     $collisionPdo=new PDO('sqlite:'.$collisionDb);
