@@ -82,7 +82,7 @@ uninstallPolicyAssert(!is_wp_error($post_id)&&$post_id>0,'Unable to create page 
 $assert_preserved=static function($label)use($tables,$static_options,$dynamic_options,$sentinelTable,$post_id){
     foreach($tables as $table)uninstallPolicyAssert(uninstallPolicyTableExists($table),$label.': plugin table was removed '.$table);
     foreach($static_options as $key=>$unused)uninstallPolicyAssert(uninstallPolicyOptionExists($key),$label.': static option was removed '.$key);
-    foreach($dynamic_options as $key=>$unused)uninstallPolicyAssert(get_option($key,null)!==null,$label.': dynamic option was removed '.$key);
+    foreach($dynamic_options as $key=>$unused)uninstallPolicyAssert(uninstallPolicyOptionExists($key),$label.': dynamic option was removed '.$key);
     uninstallPolicyAssert(uninstallPolicyOptionValue('oai_third_party_sentinel')==='must-survive',$label.': unrelated oai-prefixed option was removed');
     uninstallPolicyAssert(uninstallPolicyTableExists($sentinelTable),$label.': unrelated table was removed');
     uninstallPolicyAssert(get_post($post_id)!==null,$label.': WordPress page was removed');
@@ -100,7 +100,7 @@ update_option('oai_delete_data_on_uninstall','1',false);
 uninstallPolicyRun(true);
 foreach($tables as $table)uninstallPolicyAssert(!uninstallPolicyTableExists($table),'Opt-in did not remove plugin table '.$table);
 foreach(array_keys($static_options) as $key)uninstallPolicyAssert(!uninstallPolicyOptionExists($key),'Opt-in did not remove option '.$key);
-foreach(array_keys($dynamic_options) as $key)uninstallPolicyAssert(get_option($key,null)===null,'Opt-in did not remove dynamic option '.$key);
+foreach(array_keys($dynamic_options) as $key)uninstallPolicyAssert(!uninstallPolicyOptionExists($key),'Opt-in did not remove dynamic option '.$key);
 uninstallPolicyAssert(!uninstallPolicyOptionExists('oai_delete_data_on_uninstall'),'Opt-in preference was not removed');
 uninstallPolicyAssert(uninstallPolicyOptionValue('oai_third_party_sentinel')==='must-survive','Opt-in removed unrelated oai-prefixed option');
 uninstallPolicyAssert(uninstallPolicyTableExists($sentinelTable),'Opt-in removed unrelated table');
