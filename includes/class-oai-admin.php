@@ -435,7 +435,7 @@ class OAI_Admin {
    <form method="post"><?php wp_nonce_field('oai_uninstall_data_save');?>
     <input type="hidden" name="oai_delete_data_on_uninstall" value="0">
     <p><label><input type="checkbox" name="oai_delete_data_on_uninstall" value="1" <?php checked($uninstall_data);?>> Разрешить удаление локальных данных WP AI Admin при удалении плагина</label></p>
-    <p><button class="button" name="oai_save_uninstall_policy" value="1" onclick="return this.form.oai_delete_data_on_uninstall.checked ? confirm('При удалении плагина локальные операции, аудит, OAuth и настройки WP AI Admin будут удалены без возможности восстановления. Продолжить?') : true;">Сохранить настройку</button></p>
+    <p><button class="button" name="oai_save_uninstall_policy" value="1" onclick="return confirm('Сохранить настройку удаления данных при деинсталляции? Если она включена, локальные операции, аудит, OAuth и настройки WP AI Admin будут удалены без возможности восстановления.');">Сохранить настройку</button></p>
    </form>
    <p class="oai-kpi-note">В Multisite согласие проверяется отдельно для каждого сайта. При сетевом удалении очищаются только сайты, где администратор явно включил эту настройку.</p>
   </section>
