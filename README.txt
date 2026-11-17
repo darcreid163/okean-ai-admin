@@ -4,7 +4,7 @@ Tags: ai, admin, mcp, gutenberg, woocommerce, elementor, sandbox, approval, roll
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 2.1.17
+Stable tag: 2.1.18
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -88,6 +88,11 @@ or the Cloud service.
 
 == Changelog ==
 
+= 2.1.18 =
+* Security: replace transient rate-limit read/modify/write with atomic database admission; concurrent requests cannot exceed the configured fixed-window limit.
+* Security: fail closed when rate-counter storage is unavailable; retain the existing HTTP 429 contract for rejected requests.
+* Database: add the Native v25 rate-counter table with bounded expiry cleanup; existing operations, OAuth records and quota data are preserved during upgrade.
+
 = 2.1.17 =
 * Security: pin usage signing key at pairing; response-body key no longer trusted (issue #135).
 * Security: bind every usage projection to stored account owner (issue #135).
@@ -103,6 +108,10 @@ or the Cloud service.
 * Earlier release hardening, consent callback fix, creation-intent identity, abilities API, Gutenberg preservation, Cloud Core 0.3.11 recovery, and Open Beta audit preparation. See docs/ directory for details.
 
 == Upgrade Notice ==
+
+= 2.1.18 =
+Security update: rate-limit admission is now atomic across concurrent requests. The schema upgrade
+adds a dedicated counter table and preserves existing operations, credentials and quota records.
 
 = 2.1.17 =
 Security update: re-pairing now purges old credentials. If you have multiple paired sites, each site
