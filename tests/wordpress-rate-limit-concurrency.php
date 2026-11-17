@@ -14,6 +14,9 @@ $inserted=$wpdb->insert(OAI_DB::table(),[
 ]);
 rateLimitAssert($inserted===1,'Cannot create operation migration fixture');
 $table=OAI_DB::rate_limits_table();
+$primary=$wpdb->get_results("SHOW INDEX FROM `$table` WHERE Key_name='PRIMARY' ORDER BY Seq_in_index",ARRAY_A);
+$primaryColumns=array_map(static fn($row)=>(string)$row['Column_name'],$primary);
+rateLimitAssert($primaryColumns===['bucket_hash','client_hash','window_start','window_seconds'],'Rate counter composite primary key mismatch: '.json_encode($primaryColumns));
 $wpdb->query('DROP TABLE IF EXISTS `'.$table.'`');
 rateLimitAssert($wpdb->last_error==='','Cannot reset disposable rate counter table');
 update_option('oai_db_version',24,false);
@@ -52,8 +55,9 @@ foreach($processes as [$proc,$pipes]){
 rateLimitAssert(!$errors,'Rate-limit worker failures: '.implode('; ',$errors));
 rateLimitAssert($allowed===10,'Expected exactly 10 admitted requests, got '.$allowed);
 rateLimitAssert($blocked===14,'Expected 14 rejected requests, got '.$blocked);
+$storedRows=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d AND window_seconds=%d",hash('sha256',$bucket),hash('sha256',wp_salt('auth').'|198.51.100.77'),(int)(floor(time()/3600)*3600),3600));
 $storedHits=$wpdb->get_var($wpdb->prepare("SELECT hits FROM $table WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d AND window_seconds=%d",hash('sha256',$bucket),hash('sha256',wp_salt('auth').'|198.51.100.77'),(int)(floor(time()/3600)*3600),3600));
-rateLimitAssert((int)$storedHits===10,'Atomic counter stored '.var_export($storedHits,true).' hits instead of exactly 10');
+rateLimitAssert($storedRows===1 && (int)$storedHits===10,'Atomic counter invariant failed: rows='.$storedRows.' hits='.var_export($storedHits,true));
 
 // A different bucket, client, or fixed window must have an independent counter.
 $client=hash('sha256',wp_salt('auth').'|198.51.100.77');
