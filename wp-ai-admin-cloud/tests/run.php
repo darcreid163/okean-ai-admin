@@ -7,6 +7,9 @@ $checks=0;
 function check(bool $ok,string $message): void { global $checks; $checks++; if (!$ok) throw new RuntimeException($message); }
 function rejects(callable $fn,string $reason): void { try {$fn();} catch(Fault $e) { check($e->reason===$reason,'Expected '.$reason.', got '.$e->reason); return; } throw new RuntimeException('Expected rejection: '.$reason); }
 $now=1790942400; // fixed UTC fixture, independent of WordPress/site timezone
+$longPrefixStore=new WPAICloudGateway\\Store(new PDO('sqlite::memory:'),str_repeat('p',45));
+check(strlen(trim($longPrefixStore->table('license_activations'),chr(96)))===64,'Maximum valid table prefix must keep MySQL table identifiers within 64 characters');
+rejects(fn()=>new WPAICloudGateway\\Store(new PDO('sqlite::memory:'),str_repeat('p',46)),'invalid_table_prefix');
 $database=sys_get_temp_dir().'/wpai-cloud-'.bin2hex(random_bytes(8)).'.sqlite';
 $store=fixtureStore($database); $store->migrate();
 if (getenv('TEST_MYSQL_DSN')) foreach(['audit','requests','tokens','sites','balances','accounts','rate'] as $name) $store->execute('DELETE FROM '.$store->table($name));
