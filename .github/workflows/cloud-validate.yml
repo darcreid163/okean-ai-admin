@@ -52,8 +52,6 @@ jobs:
       - name: Deterministic candidate ZIP and provenance regression
         run: python3 tests/artifact-reproducibility.py
       - name: Cloud Store index migration contract (SQLite)
-        env:
-          WPAI_CLOUD_SCHEMA_TRACE: '1'
         run: timeout 20s php tests/store-index-migration.php
       - name: SQLite migration OAuth, tenant isolation, billing Batch
         shell: bash
