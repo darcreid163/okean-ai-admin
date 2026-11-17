@@ -15,11 +15,13 @@ class OAI_Admin {
    update_option('oai_runtime_build_id',$current_build,false);
    if(!defined('OAI_BUILD_CHANGED_THIS_REQUEST'))define('OAI_BUILD_CHANGED_THIS_REQUEST',true);
   }
-  if(!get_option('oai_bearer_token','')){
-   $old=get_option('oai_api_token','');
-   update_option('oai_bearer_token',$old?:wp_generate_password(48,false,false),false);
-  }
-  if(!get_option('oai_bearer_user_id',0)){
+  OAI_DB::migrate_token();
+   $bearer_hash=get_option('oai_bearer_token_hash','');
+   if($bearer_hash==='' || $bearer_hash===null){
+    $token=wp_generate_password(48,false,false);
+    update_option('oai_bearer_token_hash',hash('sha256',$token),false);
+   }
+   if(!get_option('oai_bearer_user_id',0)){
    $license=OAI_License::status();
    $uid=absint($license['owner_user_id']??0);
    if($uid && user_can($uid,'manage_options')) update_option('oai_bearer_user_id',$uid,false);
