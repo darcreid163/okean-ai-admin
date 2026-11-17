@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
-require __DIR__.'/bootstrap.php';
 use WPAICloudGateway\{Fault,Store};
+require __DIR__.'/bootstrap.php';
 
 function indexCheck(bool $ok,string $message): void { if(!$ok) throw new RuntimeException($message); }
 function indexDefinition(Store $store,string $table,string $name,array $expected): void {
@@ -62,5 +62,5 @@ if (!getenv('TEST_MYSQL_DSN')) {
     try { $store->migrate(); throw new RuntimeException('Mismatched index definition was accepted'); }
     catch (Fault $e) { indexCheck($e->reason==='gateway_schema_incompatible','Unexpected mismatched-index fault: '.$e->reason); }
 }
-echo 'PASS Cloud Store index migration, idempotency and prefix contracts; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
+echo 'PASS Cloud Store index migration and idempotency contracts; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
 if (!getenv('TEST_MYSQL_DSN')) foreach([$database,$database.'-shm',$database.'-wal'] as $file) if(file_exists($file)) unlink($file);
