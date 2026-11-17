@@ -1,6 +1,6 @@
 <?php
 // WP-CLI eval-file uses eval() internally; strict_types cannot be declared there.
-/** Only run on disposable WordPress CI: simulate 2.1.17 DB 24 -> 2.1.18 DB 25. */
+/** Only run on disposable WordPress CI: simulate DB 23 -> DB 25 (including the v24 quota migration). */
 if (!defined('WP_CLI') || !WP_CLI || !defined('OAI_DB_VERSION') || OAI_DB_VERSION!==25) {
     throw new RuntimeException('Disposable WP-CLI and Native DB schema 25 required');
 }
@@ -20,7 +20,7 @@ quotaUpgradeAssert($insertClient===1,'Cannot create OAuth fixture');
 $insertOperation=$wpdb->insert(OAI_DB::table(),['operation_id'=>$operationId,'status'=>'pending','type'=>'content_patch','target'=>'{"post_id":0}','created_at'=>$now]);
 quotaUpgradeAssert($insertOperation===1,'Cannot create operation fixture');
 $operationsBefore=(int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::table().' WHERE operation_id=%s',$operationId));
-// DB 23 had no v24 quota event tables. Drop only in disposable CI.
+// DB 23 had no v24 quota event tables or v25 rate counter table. Drop only in disposable CI.
 foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table){
     $wpdb->query('DROP TABLE IF EXISTS `'.$table.'`');
     quotaUpgradeAssert($wpdb->last_error==='','Unable to reset disposable quota fixture');
@@ -30,7 +30,7 @@ OAI_DB::maybe_upgrade();
 quotaUpgradeAssert((int)get_option('oai_db_version')===25,'DB schema 25 not recorded');
 foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table(),OAI_DB::rate_limits_table()] as $table) {
     $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
-    quotaUpgradeAssert($found===$table,'Missing quota v24 table '.$table);
+    quotaUpgradeAssert($found===$table,'Missing upgraded table '.$table);
 }
 quotaUpgradeAssert(OAI_Platform::site_id()===$siteId&&OAI_Platform::installation_id()===$installId,'Site/installation identity changed');
 // A retained enabled option is read as "1" on a new WordPress process; an
