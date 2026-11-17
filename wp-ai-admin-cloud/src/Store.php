@@ -78,13 +78,14 @@ final class Store {
     public function ensureSseQueueSchema(): void {
         if ($this->transactionDepth>0) throw new Fault('sse_queue_schema_unavailable',503);
         $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        $indexName='wpai_'.substr(hash('sha256',$this->prefix),0,16).'_idx_sse_queue_session_id';
         if ($this->mysql) {
             $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_sessions').' (session_id VARCHAR(32) PRIMARY KEY, expires_at BIGINT NOT NULL)'.$tail);
-            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, session_id VARCHAR(32) NOT NULL, payload MEDIUMTEXT NOT NULL, created_at BIGINT NOT NULL, KEY idx_sse_queue_session_id (session_id,id))'.$tail);
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, session_id VARCHAR(32) NOT NULL, payload MEDIUMTEXT NOT NULL, created_at BIGINT NOT NULL, KEY `'.$indexName.'` (session_id,id))'.$tail);
         } else {
             $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_sessions').' (session_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)');
             $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)');
-            $this->execute('CREATE INDEX IF NOT EXISTS idx_sse_queue_session_id ON '.$this->table('sse_queue').'(session_id,id)');
+            $this->execute('CREATE INDEX IF NOT EXISTS `'.$indexName.'` ON '.$this->table('sse_queue').'(session_id,id)');
         }
     }
     public function createSseSession(string $id,int $expiresAt): void {
