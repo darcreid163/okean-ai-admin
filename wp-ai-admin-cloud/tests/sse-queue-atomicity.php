@@ -16,7 +16,8 @@ for($i=0;$i<4;$i++) {
     $process=proc_open($command,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
     if(!is_resource($process)) throw new RuntimeException('Could not start SSE queue worker');
     fclose($pipes[0]);
-    $workers[]=[$process,$pipes];
+    $pid=(int)proc_get_status($process)['pid'];
+    $workers[]=[$process,$pipes,$pid];
 }
 $received=[];
 $running=true;
@@ -27,18 +28,18 @@ while($running) {
         $received[]=(int)$item['message_id'];
     }
     $running=false;
-    foreach($workers as [$process,$pipes]) {
+    foreach($workers as [$process,$pipes,$pid]) {
         $status=proc_get_status($process);
         if($status['running']) $running=true;
-        elseif(!array_key_exists((int)$status['pid'],$exitCodes)) $exitCodes[(int)$status['pid']]=$status['exitcode'];
+        elseif(!array_key_exists($pid,$exitCodes)) $exitCodes[$pid]=$status['exitcode'];
     }
     if($running) usleep(1000);
 }
-foreach($workers as [$process,$pipes]) {
+foreach($workers as [$process,$pipes,$pid]) {
     $stdout=stream_get_contents($pipes[1]); fclose($pipes[1]);
     $stderr=stream_get_contents($pipes[2]); fclose($pipes[2]);
     proc_close($process);
-    $exit=$exitCodes[(int)$status['pid']]??-1;
+    $exit=$exitCodes[$pid]??-1;
     sseCheck($exit===0&&$stdout==='ok','SSE queue worker failed: '.$stderr);
 }
 foreach($store->drainSseQueue($session,time()) as $payload) {
