@@ -183,7 +183,7 @@ final class Store {
      * Index column order is verified on both supported database engines; a
      * same-name index with a different definition is treated as schema damage.
      */
-    private function ensureOperationalIndexes(array $tableNames): void {
+    public function ensureOperationalIndexes(?array $tableNames=null): void {
         $definitions = [
             'sites' => [
                 'idx_sites_owner_status_created' => ['owner','status','created_at'],
@@ -211,7 +211,7 @@ final class Store {
                 'idx_oauth_access_grant_id' => ['grant_id'],
             ],
         ];
-        foreach ($tableNames as $table) {
+        foreach (($tableNames??array_keys($definitions)) as $table) {
             foreach ($definitions[$table] ?? [] as $name => $columns) {
                 $this->ensureIndex($table, $name, $columns);
             }
