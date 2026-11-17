@@ -72,8 +72,10 @@ class OAI_DB {
   dbDelta($rlsql);
   $rate_table_found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($rl)));
   if((string)$rate_table_found!==$rl) return new WP_Error('oai_rate_limit_schema','Rate counter table is unavailable',array('status'=>503));
-  $rate_primary=$wpdb->get_results("SHOW INDEX FROM `$rl` WHERE Key_name='PRIMARY' ORDER BY Seq_in_index",ARRAY_A);
-  $rate_primary_columns=array_map(static fn($row)=>(string)$row['Column_name'],is_array($rate_primary)?$rate_primary:array());
+  $rate_indexes=$wpdb->get_results("SHOW INDEX FROM `$rl`",ARRAY_A);
+  $rate_primary=array_values(array_filter(is_array($rate_indexes)?$rate_indexes:array(),static fn($row)=>(string)($row['Key_name']??'')==='PRIMARY'));
+  usort($rate_primary,static fn($a,$b)=>(int)$a['Seq_in_index']<=>(int)$b['Seq_in_index']);
+  $rate_primary_columns=array_map(static fn($row)=>(string)$row['Column_name'],$rate_primary);
   if($rate_primary_columns!==array('bucket_hash','client_hash','window_start','window_seconds')) return new WP_Error('oai_rate_limit_schema','Rate counter composite key is invalid',array('status'=>503));
  $qsql="CREATE TABLE $q (
  plan varchar(32) NOT NULL,
