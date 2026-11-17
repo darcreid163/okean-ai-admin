@@ -58,7 +58,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=0
-          for t in store-index-migration run compatibility quota-migration-v4 plan-catalogue-v3 batch-accounting-v2 billing-proof creation-transport-accounting site-usage-projection abilities-cloud-acceptance catalog-failure-settlement predispatch-authorization cached-evidence-projection multisite-account oauth cross-account-isolation tier-a license-registry; do
+          for t in store-index-migration run compatibility quota-migration-v4 plan-catalogue-v3 batch-accounting-v2 billing-proof creation-transport-accounting site-usage-projection abilities-cloud-acceptance catalog-failure-settlement predispatch-authorization cached-evidence-projection multisite-account oauth cross-account-isolation tier-a license-registry store-index-migration sse-queue-atomicity; do
             echo "=== SQLite $t ==="
             if php "tests/$t.php"; then
               echo "PASS SQLite $t"
@@ -77,7 +77,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=0
-          for t in run compatibility quota-migration-v4 plan-catalogue-v3 batch-accounting-v2 billing-proof creation-transport-accounting site-usage-projection abilities-cloud-acceptance catalog-failure-settlement predispatch-authorization cached-evidence-projection multisite-account oauth cross-account-isolation tier-a license-registry; do
+          for t in run compatibility quota-migration-v4 plan-catalogue-v3 batch-accounting-v2 billing-proof creation-transport-accounting site-usage-projection abilities-cloud-acceptance catalog-failure-settlement predispatch-authorization cached-evidence-projection multisite-account oauth cross-account-isolation tier-a license-registry store-index-migration sse-queue-atomicity; do
             echo "=== MySQL $t ==="
             if php "tests/$t.php"; then
               echo "PASS MySQL $t"
