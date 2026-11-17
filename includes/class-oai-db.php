@@ -102,8 +102,8 @@ class OAI_DB {
   if($plain!==''){
    $candidate=hash('sha256',$plain);
    update_option('oai_bearer_token_hash',$candidate,false);
-   $persisted=(string)get_option('oai_bearer_token_hash','');
-   if(!hash_equals($candidate,$persisted))return false;
+   $persisted=get_option('oai_bearer_token_hash','');
+   if(!is_string($persisted) || !hash_equals($candidate,$persisted))return false;
    delete_option('oai_bearer_token');
    delete_option('oai_api_token');
    return true;
