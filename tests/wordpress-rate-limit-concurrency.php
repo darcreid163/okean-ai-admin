@@ -44,7 +44,7 @@ $retry=(int)($data['retry_after']??0);
 rateLimitAssert($retry>=1&&$retry<=$window,'retry_after is outside the current window remainder');
 
 $_SERVER['REMOTE_ADDR']='198.51.100.78';
-rateLimitAssert(OAI_Rate_Limit::check($bucket,$limit,60)===true,'Different client IP shared the first client counter');
+rateLimitAssert(OAI_Rate_Limit::check($bucket,$limit,$window)===true,'Different client IP shared the first client counter');
 $_SERVER['REMOTE_ADDR']=$ip;
 rateLimitAssert(OAI_Rate_Limit::check($bucket.'-other',$limit,$window)===true,'Different rate bucket shared the existing counter');
 
