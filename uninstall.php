@@ -15,11 +15,10 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
     function wpai_admin_uninstall_delete_option_prefix($prefix) {
         global $wpdb;
         // LEFT() avoids LIKE wildcard/escape-mode differences for underscores in prefixes.
-        $prefix_length = strlen($prefix);
+        $pattern = $wpdb->esc_like($prefix) . '%';
         $keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE BINARY LEFT(option_name,%d)=BINARY %s",
-            $prefix_length,
-            $prefix
+            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $pattern
         ));
         if ($wpdb->last_error !== '') {
             return;
@@ -36,17 +35,15 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
         $base = '_transient_' . $prefix;
         $timeout = '_transient_timeout_' . $prefix;
         $base_keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE BINARY LEFT(option_name,%d)=BINARY %s",
-            strlen($base),
-            $base
+            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like($base) . '%'
         ));
         if ($wpdb->last_error !== '') {
             return;
         }
         $timeout_keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE BINARY LEFT(option_name,%d)=BINARY %s",
-            strlen($timeout),
-            $timeout
+            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like($timeout) . '%'
         ));
         if ($wpdb->last_error !== '') {
             return;
