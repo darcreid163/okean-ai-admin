@@ -49,11 +49,11 @@ try {
  OAI_DB::maybe_upgrade();
  assert_schema((int)get_option('oai_oauth_schema_version',0)===2,'OAuth schema version not updated');
  assert_schema((string)$wpdb->get_var($wpdb->prepare('SELECT registry_key FROM '.OAI_MCP_OAuth::registry_table().' WHERE registry_key=%s','client_registration'))==='client_registration','OAuth registry lock row was not created');
- assert_schema($oai_schema_dbdelta_calls===7,'Unexpected number of migration calls');
+ assert_schema($oai_schema_dbdelta_calls===8,'Unexpected number of migration calls');
  $wpdb->query("INSERT INTO ".OAI_MCP_OAuth::clients_table()." (client_id,client_name,redirect_uris,created_at) VALUES ('retained-client','Retained','[]',UTC_TIMESTAMP())");
  assert_schema(!$wpdb->last_error,'Could not insert OAuth client');
  OAI_DB::maybe_upgrade();
- assert_schema($oai_schema_dbdelta_calls===7,'dbDelta ran on a normal request');
+ assert_schema($oai_schema_dbdelta_calls===8,'dbDelta ran on a normal request');
  assert_schema((int)$wpdb->get_var("SELECT COUNT(*) FROM ".OAI_MCP_OAuth::clients_table()." WHERE client_id='retained-client'")===1,'Registered OAuth client was lost');
  echo "PASS: incomplete migration retries; successful upgrade runs once and retains OAuth client\n";
 } finally {
