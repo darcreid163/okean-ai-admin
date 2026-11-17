@@ -51,6 +51,7 @@ final class Store {
         }
     }
     public function migrate(): void {
+        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE Store::migrate begin\n");
         $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
         $large=$this->mysql?'MEDIUMTEXT':'TEXT';
         $definitions=[
@@ -70,8 +71,11 @@ final class Store {
             'oauth_rate'=>'bucket VARCHAR(64) NOT NULL, slot BIGINT NOT NULL, hits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(bucket,slot)'
         ];
         foreach ($definitions as $name=>$def) $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table($name).' ('.$def.')'.$tail);
+        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE Store tables ready\n");
         $this->upgradeQuotaSchema();
+        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE before operational indexes\n");
         $this->ensureOperationalIndexes(array_keys($definitions));
+        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE operational indexes ready\n");
         $this->assertSchema(array_keys($definitions));
     }
     private function upgradeQuotaSchema(): void {
@@ -133,6 +137,7 @@ final class Store {
             ],
         ];
         foreach ($tableNames as $table) {
+            if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE index table ".$table."\n");
             foreach ($definitions[$table] ?? [] as $name => $columns) {
                 $this->ensureIndex($table, $name, $columns);
             }
@@ -156,6 +161,7 @@ final class Store {
         }
     }
     private function ensureIndex(string $table, string $name, array $columns): void {
+        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE index start ".$table."/".$name."\n");
         $physical = $this->prefix.$table;
         $found = null;
         if ($this->mysql) {
@@ -171,6 +177,7 @@ final class Store {
             }
         } else {
             $rows = $this->rows('PRAGMA index_list('.$this->table($table).')');
+            if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE index list ".$table." count=".count($rows)."\n");
             foreach ($rows as $row) {
                 $indexName = (string)$row['name'];
                 $quoted = str_replace("'", "''", $indexName);
@@ -186,6 +193,7 @@ final class Store {
         $q = chr(96);
         $columnSql = implode(',',array_map(static fn($column) => $q.$column.$q,$columns));
         try {
+            if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE create index ".$table."/".$name."\n");
             $this->execute('CREATE INDEX '.$q.$name.$q.' ON '.$this->table($table).' ('.$columnSql.')');
         } catch (\PDOException $e) {
             // Concurrent first requests may both observe a missing index. Only
