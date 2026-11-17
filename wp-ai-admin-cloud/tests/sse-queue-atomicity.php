@@ -16,6 +16,19 @@ if (!getenv('TEST_MYSQL_DSN')) {
     $secondRows=$secondStore->rows("PRAGMA index_info('".$secondIndex."')");
     sseCheck(array_map(static fn($row)=>(string)$row['name'],$secondRows)===['session_id','id'],'Second SSE Store prefix did not get its own queue index');
     unset($secondStore);
+
+    // A pre-existing same-name index on another table must fail closed.
+    $collisionDb=sys_get_temp_dir().'/wpai-sse-index-collision-'.bin2hex(random_bytes(8)).'.sqlite';
+    $collisionPrefix='sse_collision_'.bin2hex(random_bytes(4)).'_';
+    $collisionIndex='wpai_'.substr(hash('sha256',$collisionPrefix),0,16).'_idx_sse_queue_session_id';
+    $collisionPdo=new PDO('sqlite:'.$collisionDb);
+    $collisionPdo->exec('CREATE TABLE collision (session_id TEXT, id INTEGER)');
+    $collisionPdo->exec('CREATE INDEX '.$collisionIndex.' ON collision (session_id,id)');
+    $collisionStore=new Store($collisionPdo,$collisionPrefix);
+    try { $collisionStore->migrate(); throw new RuntimeException('Foreign SQLite SSE index collision was accepted'); }
+    catch(Fault $e) { sseCheck($e->reason==='gateway_schema_incompatible','Unexpected SSE index collision fault: '.$e->reason); }
+    unset($collisionStore,$collisionPdo);
+    foreach([$collisionDb,$collisionDb.'-shm',$collisionDb.'-wal'] as $file) if(file_exists($file)) unlink($file);
 }
 $session=bin2hex(random_bytes(16));
 $store->createSseSession($session,time()+3600);
