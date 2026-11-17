@@ -176,7 +176,7 @@ def verify(repo: Path, archive: Path, provenance_path: Path, checksum_path: Path
             entry = expected_files[name]
             if hashlib.sha256(data).hexdigest() != entry.get("sha256"):
                 raise ValueError("File digest mismatch: " + name)
-    files, _ = committed_files(repo, commit)
+    files, modes = committed_files(repo, commit)
     version, build_id, channel, profile = source_metadata(files)
     for key, value in (
         ("version", version), ("build_id", build_id),
@@ -186,6 +186,12 @@ def verify(repo: Path, archive: Path, provenance_path: Path, checksum_path: Path
             raise ValueError("Provenance " + key + " does not match source")
     if set(expected_files) != {PREFIX + path for path in files}:
         raise ValueError("Provenance file set does not match committed Native source")
+    for path, data in files.items():
+        entry = expected_files[PREFIX + path]
+        if entry.get("sha256") != hashlib.sha256(data).hexdigest():
+            raise ValueError("Provenance source digest mismatch: " + path)
+        if entry.get("mode") != f"{modes[path]:04o}":
+            raise ValueError("Provenance source mode mismatch: " + path)
     return provenance
 
 
