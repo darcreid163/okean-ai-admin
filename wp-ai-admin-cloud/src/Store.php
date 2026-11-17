@@ -72,6 +72,37 @@ final class Store {
         foreach ($definitions as $name=>$def) $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table($name).' ('.$def.')'.$tail);
         $this->upgradeQuotaSchema();
         $this->assertSchema(array_keys($definitions));
+        $this->ensureOwnerIndexes();
+    }
+    /** Ensure query-backed secondary indexes without relying on SQLite-only DDL. */
+    public function ensureOwnerIndexes(): void {
+        if ($this->transactionDepth>0) throw new Fault('owner_index_schema_unavailable',503);
+        $indexes=[
+            'sites'=>['idx_sites_owner_status_created',['owner','status','created_at']],
+            'tokens'=>['idx_tokens_owner_revoked',['owner','revoked']],
+            'requests'=>['idx_requests_owner_created_key',['owner','created_at','request_key']],
+            'audit'=>['idx_audit_owner',['owner']],
+            'oauth_access'=>['idx_oauth_access_grant_id',['grant_id']],
+        ];
+        foreach ($indexes as $table=>$definition) {
+            [$name,$columns]=$definition;
+            if ($this->hasIndex($table,$name)) continue;
+            $columnSql=implode(',',array_map(static fn($column)=>'`'.$column.'`',$columns));
+            try {
+                $this->execute('CREATE INDEX `'.$name+'` ON '.$this->table($table).' ('.$columnSql.')');
+            } catch (\PDOException $e) {
+                // Concurrent first requests can race after both metadata checks.
+                if (!$this->hasIndex($table,$name)) throw $e;
+            }
+        }
+    }
+    private function hasIndex(string $table,string $name): bool {
+        if ($this->mysql) {
+            return $this->row('SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=? LIMIT 1',[$this->prefix.$table,$name])!==null;
+        }
+        $rows=$this->rows('PRAGMA index_list(`'.$this->prefix.$table+'`)');
+        foreach ($rows as $row) if ((string)($row['name']??'')===$name) return true;
+        return false;
     }
     private function upgradeQuotaSchema(): void {
         // Additive, restartable migration. Existing customers keep their original
