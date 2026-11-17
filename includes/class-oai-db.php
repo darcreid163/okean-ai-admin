@@ -111,7 +111,9 @@ class OAI_DB {
   $last=(int)get_option('oai_rate_limits_pruned_at',0);
   if($last && (time()-$last)<DAY_IN_SECONDS) return;
   global $wpdb;
-  $result=$wpdb->query($wpdb->prepare('DELETE FROM '.self::rate_limits_table().' WHERE expires_at < %d',time()));
+  $suppressed=$wpdb->suppress_errors(true);
+  try{$result=$wpdb->query($wpdb->prepare('DELETE FROM '.self::rate_limits_table().' WHERE expires_at < %d',time()));}
+  finally{$wpdb->suppress_errors($suppressed);}
   if($result!==false)update_option('oai_rate_limits_pruned_at',time(),false);
  }
  public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
