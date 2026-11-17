@@ -1,9 +1,9 @@
 WP AI Admin Build Metadata (not a cryptographic signature)
-Version: 2.1.17
-Build ID: 2.1.17-usage-batch-v1-20261019
+Version: 2.1.18
+Build ID: 2.1.18-native-rate-limit-hpos-v1-20261117
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
-Purpose: public-release hardening; atomic lifecycle claims, crash-safe Apply/Rollback reconciliation, control-plane option protection, OAuth demotion checks, deactivation safety, and expanded release qualification
+Purpose: atomic Native rate-limit admission, additive DB v25 migration, WooCommerce HPOS compatibility and WooCommerce 11.3.0 order lifecycle acceptance
 Expected catalog: 120 tools
 Inherited self-test checks: 79 (runtime retest required after installation)
 Security fuzz at 10 iterations: 220 (runtime retest required after installation)
