@@ -27,7 +27,9 @@ rateLimitAssert((int)get_option('oai_db_version')===25,'Repeated v25 migration c
 
 // Run many independent PHP/WordPress processes against the same key/window.
 $bucket='rate-limit-concurrency-'.bin2hex(random_bytes(12));
-$worker=__DIR__.'/wordpress-rate-limit-worker.php';
+$workspace=(string)getenv('GITHUB_WORKSPACE');
+$worker=rtrim($workspace,'/\\\\').'/tests/wordpress-rate-limit-worker.php';
+rateLimitAssert($workspace!=='' && is_file($worker),'Cannot locate rate-limit worker from GITHUB_WORKSPACE');
 $processes=[];
 for($i=0;$i<24;$i++){
     $command=escapeshellarg(PHP_BINARY).' '.escapeshellarg($worker).' '.escapeshellarg(ABSPATH).' '.escapeshellarg($bucket);
