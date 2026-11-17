@@ -86,6 +86,15 @@ final class Store {
         } else {
             $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_sessions').' (session_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)');
             $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)');
+            // SQLite index names are database-global. Fail closed if a same-name
+            // index already belongs to another table or has a different definition.
+            $named=$this->row("SELECT tbl_name FROM sqlite_master WHERE type='index' AND name=?",[$indexName]);
+            $physical=$this->prefix.'sse_queue';
+            if ($named && (string)$named['tbl_name']!==$physical) throw new Fault('gateway_schema_incompatible',503);
+            if ($named) {
+                $columns=array_map(static fn($row)=>(string)$row['name'],$this->rows("PRAGMA index_info('".$indexName."')"));
+                if ($columns!==['session_id','id']) throw new Fault('gateway_schema_incompatible',503);
+            }
             $this->execute('CREATE INDEX IF NOT EXISTS `'.$indexName.'` ON '.$this->table('sse_queue').'(session_id,id)');
         }
     }
