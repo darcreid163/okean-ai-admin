@@ -7,15 +7,20 @@
  * Requires PHP: 8.2
  * Tested up to: 7.1
  * WC requires at least: 8.0
- * WC tested up to: 11.2
+ * WC tested up to: 11.3.0
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Author: Андриянов Н.Г.
  * Copyright: Андриянов Н.Г.
  */
 if (!defined('ABSPATH')) exit;
+add_action('before_woocommerce_init', function(){
+ if(class_exists('\\Automattic\\WooCommerce\\Utilities\\FeaturesUtil')){
+  \\Automattic\\WooCommerce\\Utilities\\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+ }
+});
 define('OAI_VERSION','2.1.18');
-define('OAI_BUILD_ID','2.1.18-native-rate-limit-v1-20261117');
+define('OAI_BUILD_ID','2.1.18-native-rate-limit-hpos-v1-20261117');
 define('OAI_DB_VERSION',25);
 define('OAI_MCP_VERSION','2025-06-18');
 define('OAI_COPYRIGHT','Авторские права Андриянов Н.Г.');
