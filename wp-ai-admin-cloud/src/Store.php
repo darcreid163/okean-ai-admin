@@ -7,7 +7,7 @@ final class Store {
     private int $transactionDepth=0;
     private static ?\WeakMap $licenseSchemaReady=null;
     public function __construct(private readonly \PDO $db, private readonly string $prefix='wpai_cloud_') {
-        if (!preg_match('/^[A-Za-z0-9_]{1,48}$/D',$prefix)) throw new Fault('invalid_table_prefix',503);
+        if (!preg_match('/^[A-Za-z0-9_]{1,45}$/D',$prefix)) throw new Fault('invalid_table_prefix',503);
         $db->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);
         $db->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE,\PDO::FETCH_ASSOC);
         $this->mysql=$db->getAttribute(\PDO::ATTR_DRIVER_NAME)==='mysql';
