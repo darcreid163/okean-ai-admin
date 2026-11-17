@@ -11,6 +11,12 @@ if (getenv('OAI_DISPOSABLE_WP_TEST') !== '1' ||
     (strpos(home_url(),'localhost')===false && strpos(home_url(),'.test')===false)) {
     throw new RuntimeException('Cannot run WooCommerce order lifecycle test on real WordPress');
 }
+if (getenv('OAI_EXPECT_HPOS') === '1') {
+    $orderUtil = 'Automattic\\WooCommerce\\Utilities\\OrderUtil';
+    if (!class_exists($orderUtil) || !$orderUtil::custom_orders_table_usage_is_enabled()) {
+        throw new RuntimeException('HPOS expected for this order lifecycle run, but the HPOS datastore is not authoritative');
+    }
+}
 function wooOrd(bool $ok,string $msg): void { if (!$ok) throw new RuntimeException($msg); }
 function wooOrd_ok($v,string $msg) {
     if (is_wp_error($v)) throw new RuntimeException($msg.': '.$v->get_error_code().' '.wp_json_encode($v->get_error_data()));
