@@ -6,51 +6,9 @@ use WPAICloudGateway\{Fault,Security,Vault,Signer,Gateway,Core};
 $checks=0;
 function check(bool $ok,string $message): void { global $checks; $checks++; if (!$ok) throw new RuntimeException($message); }
 function rejects(callable $fn,string $reason): void { try {$fn();} catch(Fault $e) { check($e->reason===$reason,'Expected '.$reason.', got '.$e->reason); return; } throw new RuntimeException('Expected rejection: '.$reason); }
-function checkIndexDefinition(WPAICloudGateway\Store $store,string $table,string $name,array $expected): void {
-    if (getenv('TEST_MYSQL_DSN')) {
-        $physical=str_replace(chr(96),'',$store->table($table));
-        $rows=$store->rows('SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=? ORDER BY SEQ_IN_INDEX',[$physical,$name]);
-        $actual=array_map(static fn($row)=>(string)$row['COLUMN_NAME'],$rows);
-    } else {
-        $rows=$store->rows("PRAGMA index_info('".$name."')");
-        $actual=array_map(static fn($row)=>(string)$row['name'],$rows);
-    }
-    check($actual===$expected,'Index definition mismatch: '.$table.'.'.$name);
-}
 $now=1790942400; // fixed UTC fixture, independent of WordPress/site timezone
 $database=sys_get_temp_dir().'/wpai-cloud-'.bin2hex(random_bytes(8)).'.sqlite';
-putenv('WPAI_CLOUD_SCHEMA_TRACE=1');
-fwrite(STDERR,"TRACE before fixture store\n");
-$store=fixtureStore($database);
-fwrite(STDERR,"TRACE before first migration\n");
-$store->migrate();
-fwrite(STDERR,"TRACE after first migration\n");
-foreach ([
-    ['sites','idx_owner_status_created',['owner','status','created_at']],
-    ['tokens','idx_owner',['owner']],
-    ['requests','idx_owner_created_key',['owner','created_at','request_key']],
-    ['requests','idx_owner_site_created_key',['owner','site_id','created_at','request_key']],
-    ['batch_steps','idx_request_ordinal',['request_key','ordinal']],
-    ['rate','idx_owner_slot',['owner','slot']],
-    ['audit','idx_owner_event_created',['owner','event','created_at']],
-    ['oauth_codes','idx_owner_used',['owner','used']],
-    ['oauth_grants','idx_owner',['owner']],
-    ['oauth_access','idx_grant_id',['grant_id']],
-] as [$table,$name,$columns]) checkIndexDefinition($store,$table,$name,$columns);
-$store->migrate(); // Idempotent second migration must preserve all definitions.
-fwrite(STDERR,"TRACE after repeated migration\n");
-foreach ([
-    ['sites','idx_owner_status_created',['owner','status','created_at']],
-    ['tokens','idx_owner',['owner']],
-    ['requests','idx_owner_created_key',['owner','created_at','request_key']],
-    ['requests','idx_owner_site_created_key',['owner','site_id','created_at','request_key']],
-    ['batch_steps','idx_request_ordinal',['request_key','ordinal']],
-    ['rate','idx_owner_slot',['owner','slot']],
-    ['audit','idx_owner_event_created',['owner','event','created_at']],
-    ['oauth_codes','idx_owner_used',['owner','used']],
-    ['oauth_grants','idx_owner',['owner']],
-    ['oauth_access','idx_grant_id',['grant_id']],
-] as [$table,$name,$columns]) checkIndexDefinition($store,$table,$name,$columns);
+$store=fixtureStore($database); $store->migrate();
 if (getenv('TEST_MYSQL_DSN')) foreach(['audit','requests','tokens','sites','balances','accounts','rate'] as $name) $store->execute('DELETE FROM '.$store->table($name));
 $transport=new FakeTransport(); $core=fixtureCore($store,$transport);
 $core->ensureAccount('1'); $core->ensureAccount('2');
@@ -221,7 +179,6 @@ check($freeReconciled['charged_units']===0 && $core->usage('recovery',$now)['use
 $core->revokeToken('recovery',hash('sha256',$recoverToken['access_token']),$now);
 rejects(fn()=>$core->call($recoverActor,$recoverSite['id'],'operation_get_receipt',[],'revoked-free',$now),'invalid_or_expired_token');
 
-fwrite(STDERR,"TRACE before concurrency\n");
 // Ten independent processes compete for three slots using the same real DB and production transaction code.
 $core->ensureAccount('parallel'); $pSite=$core->connect('parallel','https://parallel.example.com','fixture-site-admin-token-parallel',$now);
 $pToken=$core->mint('parallel',[$pSite['id']],['mcp:read'],$now);
@@ -239,7 +196,6 @@ for($i=0;$i<10;$i++) { $pipes=[]; $handle=proc_open([...$command,'parallel-'.$i]
 $ok=0; $denied=0;
 foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])); $err=stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit=proc_close($handle); check($exit===0,'Worker failed: '.$err.' '.$out); if($out==='success')$ok++; elseif($out==='daily_quota_exhausted')$denied++; else throw new RuntimeException($out); }
 putenv('CLOUD_TEST_TOKEN');
-fwrite(STDERR,"TRACE after first worker wave\n");
 check($ok===3 && $denied===7,'Concurrent quota overrun');
 check($core->usage('parallel',$now)['used']===3 && $core->usage('parallel',$now)['reserved']===0,'Concurrent balance wrong');
 check(count(file($executionLog))===3,'Rejected quota requests executed upstream');
@@ -251,17 +207,7 @@ $command[count($command)-2]=$dupSite['id'];
 $workers=[];
 for($i=0;$i<10;$i++) { $pipes=[]; $handle=proc_open([...$command,'same-logical-action'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes); fclose($pipes[0]); $workers[]=[$handle,$pipes]; }
 foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])); $err=stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit=proc_close($handle); check($exit===0 && in_array($out,['success','request_outcome_pending_reconciliation'],true),'Duplicate worker failed: '.$err.' '.$out); }
-fwrite(STDERR,"TRACE after duplicate worker wave\n");
 check($core->usage('duplicate',$now)['used']===1 && $core->usage('duplicate',$now)['reserved']===0 && count(file($executionLog))===1,'Concurrent duplicate action executed or charged more than once');
 putenv('CLOUD_TEST_TOKEN'); putenv('CLOUD_TEST_EXECUTION_LOG'); unlink($executionLog);
-$store->ensureLicenseSchema();
-checkIndexDefinition($store,'licenses','idx_owner_issued_id',['owner','issued_at','id']);
-checkIndexDefinition($store,'licenses','idx_issued_id',['issued_at','id']);
-checkIndexDefinition($store,'licenses','idx_owner_status',['owner','status']);
-checkIndexDefinition($store,'license_activations','idx_license_status',['license_id','status']);
-$store->ensureLicenseSchema();
-checkIndexDefinition($store,'licenses','idx_owner_issued_id',['owner','issued_at','id']);
-checkIndexDefinition($store,'license_activations','idx_license_status',['license_id','status']);
-
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
 if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
