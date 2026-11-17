@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Regression tests for deterministic Native ZIP and source-bound provenance."""
+import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -96,6 +98,29 @@ class NativeArtifactTests(unittest.TestCase):
         result = self.verify(self.out1)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SHA-256 mismatch", result.stderr)
+
+    def test_rejects_symlink_zip_entry_even_with_recomputed_checksum(self):
+        self.build_to(self.out1)
+        archive = self.out1 / "wp-ai-admin-2.1.17.zip"
+        rewritten = self.out1 / "rewritten.zip"
+        with zipfile.ZipFile(archive, "r") as source, zipfile.ZipFile(rewritten, "w", compression=zipfile.ZIP_STORED) as target:
+            for name in source.namelist():
+                info = source.getinfo(name)
+                if name == "okean-ai-admin/includes/runtime.php":
+                    info.external_attr = (stat.S_IFLNK | 0o777) << 16
+                target.writestr(info, source.read(name))
+        archive.write_bytes(rewritten.read_bytes())
+        rewritten.unlink()
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        checksum = archive.with_name(archive.name + ".sha256")
+        checksum.write_text(f"{digest}  {archive.name}\n")
+        provenance_path = self.out1 / "PROVENANCE.json"
+        provenance = json.loads(provenance_path.read_text())
+        provenance["archive_sha256"] = digest
+        provenance_path.write_text(json.dumps(provenance, sort_keys=True, indent=2) + "\n")
+        result = self.verify(self.out1)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Non-regular ZIP entry", result.stderr)
 
     def test_rejects_metadata_that_does_not_match_source(self):
         path = self.repo / "BUILD-SIGNATURE.txt"
