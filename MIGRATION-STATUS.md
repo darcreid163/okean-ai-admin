@@ -2,7 +2,7 @@
 
 ## Version authority
 
-- Combined integration working candidate: **Native 2.1.17** (`OAI_DB_VERSION=24`), **Cloud Core 0.3.11** as the restored baseline (Gateway schema **4**); **unreleased Cloud 0.3.13-dev** as the explicitly changed candidate, including the hash-only licence registry and the approved plan catalogue.
+- Combined integration working candidate: **Native 2.1.18** (`OAI_DB_VERSION=25`, build `2.1.18-native-rate-limit-hpos-v1-20261117`; atomic rate limiting and WooCommerce HPOS 11.3.0 acceptance), **Cloud Core 0.3.11** as the restored baseline (Gateway schema **4**); **unreleased Cloud 0.3.13-dev** as the explicitly changed candidate, including the hash-only licence registry and the approved plan catalogue.
 - Previously recorded ZIP hashes, retained for provenance only (they do not identify the current working tree): Native `4bf534f3a30344fa94cf599d526477887ed89175e494d32b6b35e5a05f1cc1ac`; Cloud `b83ebc098b5ef3e22b7f083df8d26849c233839b226d516725c027984de82793`.
 - Site-installed Native versions must be rechecked before deployment; historical checks differed between sites. Installed file hashes remain unverified.
 - Canonical endpoints and identity preservation are unchanged. Do not use GitHub Actions credentials to access production.
