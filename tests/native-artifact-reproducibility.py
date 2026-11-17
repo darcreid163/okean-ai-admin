@@ -124,7 +124,8 @@ class NativeArtifactTests(unittest.TestCase):
 
     def test_rejects_private_key_material_in_artifact_source(self):
         secret = self.repo / "includes/credentials.php"
-        secret.write_text("-----BEGIN PRIVATE KEY-----\nfixture-secret\n")
+        marker = "-----BEGIN " + "PRIVATE KEY" + "-----"
+        secret.write_text(marker + "\nfixture-secret\n")
         subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "private key fixture"], check=True)
         result = self.run_builder("build", "--repo", str(self.repo),
