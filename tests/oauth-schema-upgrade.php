@@ -22,7 +22,7 @@ class OAI_Schema_Test_DB {
  }
  public function get_charset_collate() { return 'DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'; }
  public function esc_like($value) { return addcslashes($value, '_%\\'); }
- public function prepare($sql,$value) { return str_replace('%s', "'".$this->conn->real_escape_string($value)."'", $sql); }
+ public function prepare($sql,...$values) { foreach($values as $value) $sql=preg_replace('/%s/', "'".$this->conn->real_escape_string($value)."'", $sql, 1); return $sql; }
  public function query($sql) {
   $result=$this->conn->query($sql);
   $this->last_error=$this->conn->error;
@@ -39,7 +39,7 @@ $wpdb=new OAI_Schema_Test_DB();
 require dirname(__DIR__).'/includes/class-oai-db.php';
 require dirname(__DIR__).'/includes/class-oai-mcp-oauth.php';
 function assert_schema($condition,$message) { if (!$condition) throw new RuntimeException($message); }
-foreach(array(OAI_MCP_OAuth::clients_table(),OAI_MCP_OAuth::codes_table(),OAI_MCP_OAuth::tokens_table()) as $table) $wpdb->query('DROP TABLE IF EXISTS '.$table);
+foreach(array(OAI_MCP_OAuth::clients_table(),OAI_MCP_OAuth::codes_table(),OAI_MCP_OAuth::tokens_table(),OAI_MCP_OAuth::registry_table()) as $table) $wpdb->query('DROP TABLE IF EXISTS '.$table);
 try {
  // An incomplete migration must not mark the schema current.
  $oai_schema_skip_table=OAI_MCP_OAuth::tokens_table();
@@ -47,15 +47,16 @@ try {
  assert_schema((int)get_option('oai_oauth_schema_version',0)===0,'Incomplete schema was marked current');
  $oai_schema_skip_table='';
  OAI_DB::maybe_upgrade();
- assert_schema((int)get_option('oai_oauth_schema_version',0)===1,'OAuth schema version not updated');
- assert_schema($oai_schema_dbdelta_calls===6,'Unexpected number of migration calls');
+ assert_schema((int)get_option('oai_oauth_schema_version',0)===2,'OAuth schema version not updated');
+ assert_schema((string)$wpdb->get_var($wpdb->prepare('SELECT registry_key FROM '.OAI_MCP_OAuth::registry_table().' WHERE registry_key=%s','client_registration'))==='client_registration','OAuth registry lock row was not created');
+ assert_schema($oai_schema_dbdelta_calls===7,'Unexpected number of migration calls');
  $wpdb->query("INSERT INTO ".OAI_MCP_OAuth::clients_table()." (client_id,client_name,redirect_uris,created_at) VALUES ('retained-client','Retained','[]',UTC_TIMESTAMP())");
  assert_schema(!$wpdb->last_error,'Could not insert OAuth client');
  OAI_DB::maybe_upgrade();
- assert_schema($oai_schema_dbdelta_calls===6,'dbDelta ran on a normal request');
+ assert_schema($oai_schema_dbdelta_calls===7,'dbDelta ran on a normal request');
  assert_schema((int)$wpdb->get_var("SELECT COUNT(*) FROM ".OAI_MCP_OAuth::clients_table()." WHERE client_id='retained-client'")===1,'Registered OAuth client was lost');
  echo "PASS: incomplete migration retries; successful upgrade runs once and retains OAuth client\n";
 } finally {
- foreach(array(OAI_MCP_OAuth::clients_table(),OAI_MCP_OAuth::codes_table(),OAI_MCP_OAuth::tokens_table()) as $table) $wpdb->query('DROP TABLE IF EXISTS '.$table);
+ foreach(array(OAI_MCP_OAuth::clients_table(),OAI_MCP_OAuth::codes_table(),OAI_MCP_OAuth::tokens_table(),OAI_MCP_OAuth::registry_table()) as $table) $wpdb->query('DROP TABLE IF EXISTS '.$table);
 }
 
