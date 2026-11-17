@@ -15,7 +15,7 @@ for($i=0;$i<$count;$i++) {
             $now=time();
             $store->enqueueSseMessage($session,$payload,$now,$now+3600,32);
             break;
-        } catch(\\WPAICloudGateway\\Fault $e) {
+        } catch(\WPAICloudGateway\Fault $e) {
             if($e->reason!=='sse_queue_full'||microtime(true)>$deadline) throw $e;
             usleep(1000);
         }
