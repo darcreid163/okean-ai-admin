@@ -14,7 +14,7 @@ final class Store {
         if (!$this->mysql) { $db->exec('PRAGMA busy_timeout=10000'); $db->exec('PRAGMA journal_mode=WAL'); }
     }
     public function table(string $name): string {
-        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events'],true)) throw new Fault('invalid_table',503);
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','sse_sessions','sse_queue'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
@@ -72,6 +72,64 @@ final class Store {
         foreach ($definitions as $name=>$def) $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table($name).' ('.$def.')'.$tail);
         $this->upgradeQuotaSchema();
         $this->assertSchema(array_keys($definitions));
+        $this->ensureSseQueueSchema();
+    }
+    /** Additive durable queue schema for the legacy SSE transport. */
+    public function ensureSseQueueSchema(): void {
+        if ($this->transactionDepth>0) throw new Fault('sse_queue_schema_unavailable',503);
+        $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        if ($this->mysql) {
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_sessions').' (session_id VARCHAR(32) PRIMARY KEY, expires_at BIGINT NOT NULL)'.$tail);
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, session_id VARCHAR(32) NOT NULL, payload MEDIUMTEXT NOT NULL, created_at BIGINT NOT NULL, KEY idx_sse_queue_session_id (session_id,id))'.$tail);
+        } else {
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_sessions').' (session_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)');
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)');
+            $this->execute('CREATE INDEX IF NOT EXISTS idx_sse_queue_session_id ON '.$this->table('sse_queue').'(session_id,id)');
+        }
+        if ($this->mysql) {
+            try { $this->execute('CREATE INDEX idx_sse_queue_session_id ON '.$this->table('sse_queue').'(session_id,id)'); }
+            catch (\\PDOException $e) {
+                if ((int)($e->errorInfo[1]??0)!==1061) throw $e;
+            }
+        }
+    }
+    public function createSseSession(string $id,int $expiresAt): void {
+        $this->execute('INSERT INTO '.$this->table('sse_sessions').' (session_id,expires_at) VALUES (?,?)',[$id,$expiresAt]);
+    }
+    /** Lock the session row before checking the cap and appending. */
+    public function enqueueSseMessage(string $id,string $payload,int $now,int $expiresAt,int $limit=32): void {
+        $this->transaction(function()use($id,$payload,$now,$expiresAt,$limit) {
+            $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
+            if (!$session || (int)$session['expires_at']<$now) throw new Fault('sse_session_expired',410);
+            $count=(int)$this->row('SELECT COUNT(*) AS n FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id])['n'];
+            if ($count >= $limit) throw new Fault('sse_queue_full',429);
+            $this->execute('INSERT INTO '.$this->table('sse_queue').' (session_id,payload,created_at) VALUES (?,?,?)',[$id,$payload,$now]);
+            $this->execute('UPDATE '.$this->table('sse_sessions').' SET expires_at=? WHERE session_id=?',[$expiresAt,$id]);
+        });
+    }
+    /** Atomically read and remove only the messages returned to this drain. */
+    public function drainSseQueue(string $id,int $now): array {
+        return $this->transaction(function()use($id,$now) {
+            $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
+            if (!$session || (int)$session['expires_at']<$now) {
+                $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id]);
+                $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE session_id=?',[$id]);
+                return [];
+            }
+            $rows=$this->rows('SELECT id,payload FROM '.$this->table('sse_queue').' WHERE session_id=? ORDER BY id',[$id]);
+            if ($rows) {
+                $ids=array_map(static fn($row)=>(int)$row['id'],$rows);
+                $marks=implode(',',array_fill(0,count($ids),'?'));
+                $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE id IN ('.$marks.')',$ids);
+            }
+            return array_map(static fn($row)=>(string)$row['payload'],$rows);
+        });
+    }
+    public function deleteSseSession(string $id): void {
+        $this->transaction(function()use($id) {
+            $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id]);
+            $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE session_id=?',[$id]);
+        });
     }
     private function upgradeQuotaSchema(): void {
         // Additive, restartable migration. Existing customers keep their original
