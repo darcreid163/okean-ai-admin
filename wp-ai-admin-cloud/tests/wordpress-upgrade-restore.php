@@ -74,7 +74,10 @@ cloudUpgradeAssert(WordPress::configured() && (string)get_option('wpai_gateway_d
 // Force the already-installed schema-v4 path: indexes must be applied once without changing the schema version.
 update_option('wpai_gateway_operational_indexes_v1','0',false);
 WordPress::enable();
-cloudUpgradeAssert((string)get_option('wpai_gateway_operational_indexes_v1')==='1','Existing schema-v4 installation did not record the operational-index migration');
+$indexFlagValue=get_option('wpai_gateway_operational_indexes_v1','missing');
+$indexFlagRaw=$wpdb->get_var($wpdb->prepare('SELECT option_value FROM '.$wpdb->options.' WHERE option_name=%s','wpai_gateway_operational_indexes_v1'));
+echo 'INDEX_MIGRATION_DEBUG option='.var_export($indexFlagValue,true).' raw='.var_export($indexFlagRaw,true).' db='.var_export(get_option('wpai_gateway_db_version'),true)."\\n";
+cloudUpgradeAssert((string)$indexFlagValue==='1','Existing schema-v4 installation did not record the operational-index migration');
 $siteIndexName='wpai_'.substr(hash('sha256',$wpdb->prefix.'wpai_gateway_'),0,16).'_idx_sites_owner_status_created';
 $siteIndexes=$store->rows('SHOW INDEX FROM '.$store->table('sites'));
 cloudUpgradeAssert((bool)array_filter($siteIndexes,static fn($row)=>(string)($row['Key_name']??'')===$siteIndexName),'Existing schema-v4 installation did not receive the owner/status index');
