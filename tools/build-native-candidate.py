@@ -168,12 +168,25 @@ def verify(repo: Path, archive: Path, provenance_path: Path, checksum_path: Path
         names = package.namelist()
         if len(names) != len(set(names)) or set(names) != set(expected_files):
             raise ValueError("ZIP entries do not match provenance manifest")
+        if provenance.get("schema_version") != 1 or provenance.get("artifact_kind") != "native-wordpress-plugin":
+            raise ValueError("Unsupported Native provenance schema")
+        epoch = int(provenance.get("source_date_epoch", 0))
+        timestamp = datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc)
+        expected_date = timestamp.timetuple()[:5] + (timestamp.second // 2 * 2,)
         for name in names:
             path = PurePosixPath(name)
             if path.is_absolute() or ".." in path.parts or not name.startswith(PREFIX):
                 raise ValueError("Unsafe ZIP path: " + name)
-            data = package.read(name)
+            info = package.getinfo(name)
+            zip_mode = info.external_attr >> 16
             entry = expected_files[name]
+            if stat.S_IFMT(zip_mode) != stat.S_IFREG:
+                raise ValueError("Non-regular ZIP entry: " + name)
+            if stat.S_IMODE(zip_mode) != int(entry.get("mode", "0"), 8):
+                raise ValueError("ZIP mode mismatch: " + name)
+            if info.compress_type != zipfile.ZIP_STORED or info.date_time != expected_date:
+                raise ValueError("Non-deterministic ZIP metadata: " + name)
+            data = package.read(name)
             if hashlib.sha256(data).hexdigest() != entry.get("sha256"):
                 raise ValueError("File digest mismatch: " + name)
     files, modes = committed_files(repo, commit)
