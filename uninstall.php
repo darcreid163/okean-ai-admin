@@ -161,8 +161,9 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
             wpai_admin_uninstall_delete_transient_prefix($prefix);
         }
 
-        if (function_exists('wp_clear_scheduled_hook')) {
-            wp_clear_scheduled_hook('oai_gateway_pair_cleanup');
+        // Remove every scheduled instance, including events carrying arguments.
+        if (function_exists('wp_unschedule_hook')) {
+            wp_unschedule_hook('oai_gateway_pair_cleanup');
         }
     }
 }
