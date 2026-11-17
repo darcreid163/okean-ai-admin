@@ -40,6 +40,7 @@ class OAI_DB {
  $a=self::audit_table();
  $q=self::quota_table();
  $qe=self::quota_events_table();
+  $rl=self::rate_limits_table();
  $qesql="CREATE TABLE $qe (
  request_key char(64) NOT NULL,
  channel varchar(32) NOT NULL,
@@ -57,6 +58,16 @@ class OAI_DB {
  KEY channel (channel)
  ) ENGINE=InnoDB $charset;";
  dbDelta($qesql);
+  $rlsql="CREATE TABLE $rl (
+  bucket_hash char(64) NOT NULL,
+  client_hash char(64) NOT NULL,
+  window_start bigint(20) unsigned NOT NULL,
+  hits bigint(20) unsigned NOT NULL DEFAULT 0,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (bucket_hash,client_hash,window_start),
+  KEY updated_at (updated_at)
+  ) ENGINE=InnoDB $charset;";
+  dbDelta($rlsql);
  $qsql="CREATE TABLE $q (
  plan varchar(32) NOT NULL,
  period_key varchar(32) NOT NULL,
@@ -86,6 +97,29 @@ class OAI_DB {
   if((int)get_option('oai_db_version',0)<OAI_DB_VERSION)self::install();
   elseif(class_exists('OAI_MCP_OAuth')&&(int)get_option('oai_oauth_schema_version',0)<OAI_MCP_OAuth::SCHEMA_VERSION)OAI_MCP_OAuth::install();
   self::migrate_token();self::prune_quota_events();
+ }
+ /** Atomically increment one fixed-window counter; returns its committed count. */
+ public static function rate_limit_hit($bucket_hash,$client_hash,$window_start){
+  global $wpdb;
+  $table=self::rate_limits_table();
+  $sql=$wpdb->prepare(
+   "INSERT INTO $table (bucket_hash,client_hash,window_start,hits,updated_at) VALUES (%s,%s,%d,1,UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE hits=hits+1,updated_at=UTC_TIMESTAMP()",
+   (string)$bucket_hash,(string)$client_hash,(int)$window_start
+  );
+  if($wpdb->query($sql)===false) return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
+  $count=$wpdb->get_var($wpdb->prepare(
+   "SELECT hits FROM $table WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d",
+   (string)$bucket_hash,(string)$client_hash,(int)$window_start
+  ));
+  if($count===null || $wpdb->last_error!=='') return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
+  return (int)$count;
+ }
+ public static function prune_rate_limits(){
+  global $wpdb;
+  $lock=(int)get_option('oai_rate_limits_pruned_at',0);
+  if($lock && (time()-$lock)<DAY_IN_SECONDS) return;
+  update_option('oai_rate_limits_pruned_at',time(),false);
+  $wpdb->query('DELETE FROM '.self::rate_limits_table().' WHERE updated_at < UTC_TIMESTAMP() - INTERVAL 2 DAY');
  }
  public static function prune_quota_events(){
   // Cleanup is throttled to at most once per day; do not run a DELETE on every request.
