@@ -57,6 +57,10 @@ Cloud Gateway applies the same presentation contract to known Native metadata/ev
 
 Historical dated release notes are preserved as references, not active installation instructions.
 
+## Uninstall и сохранность данных
+
+По умолчанию удаление плагина сохраняет локальную историю операций, аудит, OAuth-подключения, pairing и настройки лицензии. На панели WP AI Admin можно отдельно включить **«Разрешить удаление локальных данных при удалении плагина»**. Только при этом явном согласии `uninstall.php` удаляет allowlist таблиц и настроек WP AI Admin. Деактивация и обновление данные не удаляют; страницы, товары, медиафайлы, пользователи и данные других плагинов не затрагиваются. В Multisite согласие проверяется отдельно для каждого сайта.
+
 ## Историческая точка проверки (22.10.2026)
 
 Основная ветка — `main` этого репозитория. Проверенный при аудите SHA:
