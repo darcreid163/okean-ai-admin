@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
-use WPAICloudGateway\\Fault;
+use WPAICloudGateway\Fault;
 function sseCheck(bool $ok,string $message): void { if(!$ok) throw new RuntimeException($message); }
 $database=sys_get_temp_dir().'/wpai-sse-'.bin2hex(random_bytes(8)).'.sqlite';
 $store=fixtureStore($database);
@@ -20,6 +20,7 @@ for($i=0;$i<4;$i++) {
 }
 $received=[];
 $running=true;
+$exitCodes=[];
 while($running) {
     foreach($store->drainSseQueue($session,time()) as $payload) {
         $item=json_decode($payload,true,16,JSON_THROW_ON_ERROR);
@@ -29,13 +30,15 @@ while($running) {
     foreach($workers as [$process,$pipes]) {
         $status=proc_get_status($process);
         if($status['running']) $running=true;
+        elseif(!array_key_exists((int)$status['pid'],$exitCodes)) $exitCodes[(int)$status['pid']]=$status['exitcode'];
     }
     if($running) usleep(1000);
 }
 foreach($workers as [$process,$pipes]) {
     $stdout=stream_get_contents($pipes[1]); fclose($pipes[1]);
     $stderr=stream_get_contents($pipes[2]); fclose($pipes[2]);
-    $exit=proc_close($process);
+    proc_close($process);
+    $exit=$exitCodes[(int)$status['pid']]??-1;
     sseCheck($exit===0&&$stdout==='ok','SSE queue worker failed: '.$stderr);
 }
 foreach($store->drainSseQueue($session,time()) as $payload) {
