@@ -19,7 +19,9 @@ function checkIndexDefinition(WPAICloudGateway\Store $store,string $table,string
 }
 $now=1790942400; // fixed UTC fixture, independent of WordPress/site timezone
 $database=sys_get_temp_dir().'/wpai-cloud-'.bin2hex(random_bytes(8)).'.sqlite';
+fwrite(STDERR,"TRACE before first migration\n");
 $store=fixtureStore($database); $store->migrate();
+fwrite(STDERR,"TRACE after first migration\n");
 foreach ([
     ['sites','idx_owner_status_created',['owner','status','created_at']],
     ['tokens','idx_owner',['owner']],
@@ -33,6 +35,7 @@ foreach ([
     ['oauth_access','idx_grant_id',['grant_id']],
 ] as [$table,$name,$columns]) checkIndexDefinition($store,$table,$name,$columns);
 $store->migrate(); // Idempotent second migration must preserve all definitions.
+fwrite(STDERR,"TRACE after repeated migration\n");
 foreach ([
     ['sites','idx_owner_status_created',['owner','status','created_at']],
     ['tokens','idx_owner',['owner']],
@@ -215,6 +218,7 @@ check($freeReconciled['charged_units']===0 && $core->usage('recovery',$now)['use
 $core->revokeToken('recovery',hash('sha256',$recoverToken['access_token']),$now);
 rejects(fn()=>$core->call($recoverActor,$recoverSite['id'],'operation_get_receipt',[],'revoked-free',$now),'invalid_or_expired_token');
 
+fwrite(STDERR,"TRACE before concurrency\n");
 // Ten independent processes compete for three slots using the same real DB and production transaction code.
 $core->ensureAccount('parallel'); $pSite=$core->connect('parallel','https://parallel.example.com','fixture-site-admin-token-parallel',$now);
 $pToken=$core->mint('parallel',[$pSite['id']],['mcp:read'],$now);
@@ -232,6 +236,7 @@ for($i=0;$i<10;$i++) { $pipes=[]; $handle=proc_open([...$command,'parallel-'.$i]
 $ok=0; $denied=0;
 foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])); $err=stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit=proc_close($handle); check($exit===0,'Worker failed: '.$err.' '.$out); if($out==='success')$ok++; elseif($out==='daily_quota_exhausted')$denied++; else throw new RuntimeException($out); }
 putenv('CLOUD_TEST_TOKEN');
+fwrite(STDERR,"TRACE after first worker wave\n");
 check($ok===3 && $denied===7,'Concurrent quota overrun');
 check($core->usage('parallel',$now)['used']===3 && $core->usage('parallel',$now)['reserved']===0,'Concurrent balance wrong');
 check(count(file($executionLog))===3,'Rejected quota requests executed upstream');
@@ -243,6 +248,7 @@ $command[count($command)-2]=$dupSite['id'];
 $workers=[];
 for($i=0;$i<10;$i++) { $pipes=[]; $handle=proc_open([...$command,'same-logical-action'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes); fclose($pipes[0]); $workers[]=[$handle,$pipes]; }
 foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])); $err=stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit=proc_close($handle); check($exit===0 && in_array($out,['success','request_outcome_pending_reconciliation'],true),'Duplicate worker failed: '.$err.' '.$out); }
+fwrite(STDERR,"TRACE after duplicate worker wave\n");
 check($core->usage('duplicate',$now)['used']===1 && $core->usage('duplicate',$now)['reserved']===0 && count(file($executionLog))===1,'Concurrent duplicate action executed or charged more than once');
 putenv('CLOUD_TEST_TOKEN'); putenv('CLOUD_TEST_EXECUTION_LOG'); unlink($executionLog);
 $store->ensureLicenseSchema();
