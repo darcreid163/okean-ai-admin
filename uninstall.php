@@ -81,6 +81,7 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
             'oai_oauth_clients',
             'oai_oauth_codes',
             'oai_oauth_tokens',
+            'oai_oauth_registry',
             'oai_rate_limits', // Present on Native DB schema 25+.
         );
         $quote = chr(96);
@@ -109,6 +110,7 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
             'oai_quota_events_pruned_at',
             'oai_rate_limits_pruned_at',
             'oai_oauth_schema_version',
+            'oai_oauth_pruned_at',
             'oai_gateway_paired',
             'oai_license',
             'oai_site_id',
