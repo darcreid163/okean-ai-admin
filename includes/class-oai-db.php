@@ -62,10 +62,12 @@ class OAI_DB {
   bucket_hash char(64) NOT NULL,
   client_hash char(64) NOT NULL,
   window_start bigint(20) unsigned NOT NULL,
+  window_seconds int(10) unsigned NOT NULL,
+  expires_at bigint(20) unsigned NOT NULL,
   hits bigint(20) unsigned NOT NULL DEFAULT 0,
   updated_at datetime NOT NULL,
-  PRIMARY KEY  (bucket_hash,client_hash,window_start),
-  KEY updated_at (updated_at)
+  PRIMARY KEY  (bucket_hash,client_hash,window_start,window_seconds),
+  KEY expires_at (expires_at)
   ) ENGINE=InnoDB $charset;";
   dbDelta($rlsql);
  $qsql="CREATE TABLE $q (
@@ -99,7 +101,7 @@ class OAI_DB {
   self::migrate_token();self::prune_quota_events();
  }
  /** Atomically admit a request up to the configured fixed-window limit. */
- public static function rate_limit_admit($bucket_hash,$client_hash,$window_start,$limit){
+ public static function rate_limit_admit($bucket_hash,$client_hash,$window_start,$window_seconds,$limit){
   global $wpdb;
   $limit=(int)$limit;
   if($limit<1) return false;
@@ -107,8 +109,8 @@ class OAI_DB {
   // LAST_INSERT_ID(expr) carries this connection's admission result through the
   // same atomic upsert. Zero means the existing counter was already at limit.
   $sql=$wpdb->prepare(
-   "INSERT INTO $table (bucket_hash,client_hash,window_start,hits,updated_at) VALUES (%s,%s,%d,LAST_INSERT_ID(1),UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE hits=IF(hits<%d,LAST_INSERT_ID(hits+1),LAST_INSERT_ID(0)),updated_at=UTC_TIMESTAMP()",
-   (string)$bucket_hash,(string)$client_hash,(int)$window_start,$limit
+   "INSERT INTO $table (bucket_hash,client_hash,window_start,window_seconds,expires_at,hits,updated_at) VALUES (%s,%s,%d,%d,%d,LAST_INSERT_ID(1),UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE hits=IF(hits<%d,LAST_INSERT_ID(hits+1),LAST_INSERT_ID(0)),updated_at=UTC_TIMESTAMP()",
+   (string)$bucket_hash,(string)$client_hash,(int)$window_start,(int)$window_seconds,(int)$window_start+(int)$window_seconds,$limit
   );
   if($wpdb->query($sql)===false) return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
   $admitted=$wpdb->get_var('SELECT LAST_INSERT_ID()');
@@ -120,7 +122,7 @@ class OAI_DB {
   $lock=(int)get_option('oai_rate_limits_pruned_at',0);
   if($lock && (time()-$lock)<DAY_IN_SECONDS) return;
   update_option('oai_rate_limits_pruned_at',time(),false);
-  $wpdb->query('DELETE FROM '.self::rate_limits_table().' WHERE updated_at < UTC_TIMESTAMP() - INTERVAL 2 DAY');
+  $wpdb->query('DELETE FROM '.self::rate_limits_table().' WHERE expires_at < UNIX_TIMESTAMP() - 86400');
  }
  public static function prune_quota_events(){
   // Cleanup is throttled to at most once per day; do not run a DELETE on every request.
