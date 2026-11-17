@@ -47,6 +47,16 @@ foreach($licenses as [$table,$name,$columns]) indexDefinition($store,$table,$nam
 $store->ensureLicenseSchema();
 foreach($licenses as [$table,$name,$columns]) indexDefinition($store,$table,$name,$columns);
 if (!getenv('TEST_MYSQL_DSN')) {
+    // SQLite index names are global: a name already owned by another table must fail closed, not recurse.
+    $collisionDb=sys_get_temp_dir().'/wpai-cloud-index-collision-'.bin2hex(random_bytes(8)).'.sqlite';
+    $collisionPdo=new PDO('sqlite:'.$collisionDb);
+    $collisionPdo->exec('CREATE TABLE collision (owner TEXT)');
+    $collisionPdo->exec('CREATE INDEX idx_tokens_owner ON collision (owner)');
+    $collisionStore=new Store($collisionPdo,'cloud_test_');
+    try { $collisionStore->migrate(); throw new RuntimeException('Cross-table SQLite index name collision was accepted'); }
+    catch (Fault $e) { indexCheck($e->reason==='gateway_schema_incompatible','Unexpected cross-table index collision fault: '.$e->reason); }
+    unset($collisionStore,$collisionPdo);
+    foreach([$collisionDb,$collisionDb.'-shm',$collisionDb.'-wal'] as $file) if(file_exists($file)) unlink($file);
     // A same-name index with a different column order/definition must fail closed.
     $store->execute('DROP INDEX idx_sites_owner_status_created');
     $store->execute('CREATE INDEX idx_sites_owner_status_created ON '.$store->table('sites').' (owner)');
