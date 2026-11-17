@@ -9,6 +9,15 @@ function uninstallPolicyTableExists(string $table): bool {
     global $wpdb;
     return (string)$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)))===$table;
 }
+function uninstallPolicyOptionValue(string $name) {
+    global $wpdb;
+    $raw=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s",$name));
+    return $raw===null?null:maybe_unserialize($raw);
+}
+function uninstallPolicyOptionExists(string $name): bool {
+    global $wpdb;
+    return (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name=%s",$name))===1;
+}
 function uninstallPolicyRun(bool $with_guard): void {
     $bootstrap=ABSPATH.'wp-load.php';
     $uninstall=dirname(__DIR__).'/uninstall.php';
@@ -66,9 +75,9 @@ uninstallPolicyAssert(!is_wp_error($post_id)&&$post_id>0,'Unable to create page 
 
 $assert_preserved=static function($label)use($tables,$static_options,$dynamic_options,$sentinelTable,$post_id){
     foreach($tables as $table)uninstallPolicyAssert(uninstallPolicyTableExists($table),$label.': plugin table was removed '.$table);
-    foreach($static_options as $key=>$unused)uninstallPolicyAssert(get_option($key,null)!==null,$label.': static option was removed '.$key);
+    foreach($static_options as $key=>$unused)uninstallPolicyAssert(uninstallPolicyOptionExists($key),$label.': static option was removed '.$key);
     foreach($dynamic_options as $key=>$unused)uninstallPolicyAssert(get_option($key,null)!==null,$label.': dynamic option was removed '.$key);
-    uninstallPolicyAssert(get_option('oai_third_party_sentinel')==='must-survive',$label.': unrelated oai-prefixed option was removed');
+    uninstallPolicyAssert(uninstallPolicyOptionValue('oai_third_party_sentinel')==='must-survive',$label.': unrelated oai-prefixed option was removed');
     uninstallPolicyAssert(uninstallPolicyTableExists($sentinelTable),$label.': unrelated table was removed');
     uninstallPolicyAssert(get_post($post_id)!==null,$label.': WordPress page was removed');
 };
@@ -84,13 +93,18 @@ $assert_preserved('malformed opt-in');
 update_option('oai_delete_data_on_uninstall','1',false);
 uninstallPolicyRun(true);
 foreach($tables as $table)uninstallPolicyAssert(!uninstallPolicyTableExists($table),'Opt-in did not remove plugin table '.$table);
-foreach(array_keys($static_options) as $key)uninstallPolicyAssert(get_option($key,null)===null,'Opt-in did not remove option '.$key);
+foreach(array_keys($static_options) as $key)uninstallPolicyAssert(!uninstallPolicyOptionExists($key),'Opt-in did not remove option '.$key);
 foreach(array_keys($dynamic_options) as $key)uninstallPolicyAssert(get_option($key,null)===null,'Opt-in did not remove dynamic option '.$key);
-uninstallPolicyAssert(get_option('oai_delete_data_on_uninstall',null)===null,'Opt-in preference was not removed');
-uninstallPolicyAssert(get_option('oai_third_party_sentinel')==='must-survive','Opt-in removed unrelated oai-prefixed option');
+uninstallPolicyAssert(!uninstallPolicyOptionExists('oai_delete_data_on_uninstall'),'Opt-in preference was not removed');
+uninstallPolicyAssert(uninstallPolicyOptionValue('oai_third_party_sentinel')==='must-survive','Opt-in removed unrelated oai-prefixed option');
 uninstallPolicyAssert(uninstallPolicyTableExists($sentinelTable),'Opt-in removed unrelated table');
 uninstallPolicyAssert(get_post($post_id)!==null,'Opt-in removed WordPress page');
-foreach($transients as $key)uninstallPolicyAssert(get_transient($key)===false,'Opt-in left transient '.$key);
-uninstallPolicyAssert(wp_next_scheduled('oai_gateway_pair_cleanup')===false,'Opt-in left pairing cleanup cron event');
+foreach($transients as $key){
+    uninstallPolicyAssert(!uninstallPolicyOptionExists('_transient_'.$key),'Opt-in left transient '.$key);
+    uninstallPolicyAssert(!uninstallPolicyOptionExists('_transient_timeout_'.$key),'Opt-in left transient timeout '.$key);
+}
+$cron=uninstallPolicyOptionValue('cron');$cron_found=false;
+foreach((array)$cron as $timestamp=>$hooks)if(isset($hooks['oai_gateway_pair_cleanup']))$cron_found=true;
+uninstallPolicyAssert(!$cron_found,'Opt-in left pairing cleanup cron event');
 
 echo "PASS: uninstall guard, missing/malformed opt-in preservation, explicit cleanup allowlist, unrelated content/table/option preservation, transient and cron cleanup verified".PHP_EOL;
