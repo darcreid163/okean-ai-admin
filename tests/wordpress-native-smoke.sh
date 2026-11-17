@@ -25,7 +25,7 @@ OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/s
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
 cp -R okean-ai-admin.php includes starter-themes README.txt "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin
-# Disposable site only: exercise the additive Native 23 -> 24 schema migration,
+# Disposable site only: exercise the additive Native 23 -> 25 schema migration,
 # preserving paired identity, registered OAuth client and pending operations.
 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-quota-upgrade-23-24.php"
 # Exact Native DB 24 -> 25 migration and preservation of existing records.
