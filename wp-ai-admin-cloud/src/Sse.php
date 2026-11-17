@@ -41,7 +41,12 @@ final class Sse {
             $id=Security::b64(random_bytes(24));
             if (strlen($id)!==32) throw new Fault('sse_session_creation_failed',503);
             $session=['token_hash'=>$actor['token_hash'],'owner'=>$actor['owner'],'queue'=>[],'created'=>time()];
-            set_transient(self::key($id),$session,self::TTL);
+            $store=WordPress::operatorStore();
+            $store->createSseSession($id,time()+self::TTL);
+            if (!set_transient(self::key($id),$session,self::TTL)) {
+                $store->deleteSseSession($id);
+                throw new Fault('sse_session_creation_failed',503);
+            }
             nocache_headers();
             status_header(200);
             header('Content-Type: text/event-stream; charset=utf-8');
@@ -57,12 +62,11 @@ final class Sse {
             while (microtime(true)<$deadline && !connection_aborted()) {
                 $current=get_transient(self::key($id));
                 if (!is_array($current)) break;
-                $queue=$current['queue']??[];
-                if (is_array($queue) && $queue) {
-                    $current['queue']=[];set_transient(self::key($id),$current,self::TTL);
+                $queue=$store->drainSseQueue($id,time());
+                if ($queue) {
                     foreach ($queue as $message) {
                         echo 'event: message'."\n";
-                        echo 'data: '.Security::canonical($message)."\n\n";
+                        echo 'data: '.$message."\n\n";
                     }
                     @ob_flush();@flush();$lastHeartbeat=microtime(true);
                 } elseif (microtime(true)-$lastHeartbeat>=10) {
@@ -70,6 +74,8 @@ final class Sse {
                 }
                 usleep(250000);
             }
+            $store->deleteSseSession($id);
+            delete_transient(self::key($id));
         } catch (Fault $e) { self::fail($e); }
         catch (\Throwable $e) { self::fail(new Fault('sse_service_unavailable',503)); }
     }
@@ -82,11 +88,11 @@ final class Sse {
             $raw=file_get_contents('php://input');
             if (!is_string($raw) || strlen($raw)>131072) throw new Fault('request_too_large',413);
             try { $message=json_decode($raw,true,64,JSON_THROW_ON_ERROR); } catch (\Throwable $e) { throw new Fault('invalid_json',400); }
+            // Gateway execution stays outside the queue transaction; only append is atomic.
             $reply=(new Gateway(WordPress::operatorCore()))->handle($actor,$message,time());
             if ($reply!==null) {
-                $session=self::session($id);$queue=$session['queue'];
-                if (count($queue)>=32) throw new Fault('sse_queue_full',429);
-                $queue[]=$reply;$session['queue']=$queue;set_transient(self::key($id),$session,self::TTL);
+                WordPress::operatorStore()->enqueueSseMessage($id,Security::canonical($reply),time(),time()+self::TTL,32);
+                set_transient(self::key($id),$session,self::TTL);
             }
             status_header(202);header('Cache-Control: no-store');header('Content-Length: 0');
         } catch (Fault $e) { self::fail($e); }
