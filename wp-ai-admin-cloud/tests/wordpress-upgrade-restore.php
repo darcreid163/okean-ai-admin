@@ -72,7 +72,7 @@ if($phase==='seed') {
 }
 cloudUpgradeAssert(WordPress::configured() && (string)get_option('wpai_gateway_db_version')==='4','Gateway normal boot failed');
 // Force the already-installed schema-v4 path: indexes must be applied once without changing the schema version.
-delete_option('wpai_gateway_operational_indexes_v1');
+update_option('wpai_gateway_operational_indexes_v1','0',false);
 $migrationMethod=new ReflectionMethod(WordPress::class,'migrate');
 $migrationMethod->setAccessible(true);
 $migrationMethod->invoke(null);
