@@ -28,6 +28,10 @@ wp_test plugin activate okean-ai-admin
 # Disposable site only: exercise the additive Native 23 -> 24 schema migration,
 # preserving paired identity, registered OAuth client and pending operations.
 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-quota-upgrade-23-24.php"
+# Exact Native DB 24 -> 25 migration and preservation of existing records.
+wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-rate-limit-upgrade-24-25.php"
+# Real independent PHP workers prove the IP rate limit cannot be bypassed by a race.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-rate-limit-concurrency.php"
 wp_test eval 'if(!class_exists("OAI_Elementor")) { throw new Exception("Missing Elementor adapter"); } echo "PASS: Elementor adapter loaded\\n";'
 wp_test eval 'if(!class_exists("OAI_MCP")) { throw new Exception("Missing MCP"); } echo "PASS: MCP loaded\\n";'
 wp_test plugin status okean-ai-admin
