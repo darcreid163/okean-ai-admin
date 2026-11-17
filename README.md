@@ -1,6 +1,6 @@
 # WP AI Admin — единый основной репозиторий разработки
 
-**Current integrated candidate:** Native **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-v1-20261117`) + recovered Cloud Core **0.3.11** (Gateway schema 4); current **unreleased Cloud 0.3.13-dev** adds scoped Skills/Media, read-only Abilities metadata discovery, the hash-only licence registry and the final five-tier daily tariff policy (PR #206, merged). This branch is **not** an approved production release; Cloud deployment and account activation remain separate gates.
+**Current integrated candidate:** Native **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`, atomic rate-limit admission and WooCommerce HPOS 11.3.0 acceptance) + recovered Cloud Core **0.3.11** (Gateway schema 4); current **unreleased Cloud 0.3.13-dev** adds scoped Skills/Media, read-only Abilities metadata discovery, the hash-only licence registry and the final five-tier daily tariff policy (PR #206, merged). This branch is **not** an approved production release; Cloud deployment and account activation remain separate gates.
 
 [Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). [Актуальная готовность планов, квот и лицензий на 16 ноября](docs/BETA-READINESS-2026-11-16.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
 
