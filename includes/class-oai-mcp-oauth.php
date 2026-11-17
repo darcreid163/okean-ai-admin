@@ -66,10 +66,20 @@ class OAI_MCP_OAuth {
   dbDelta($sql1);
   dbDelta($sql2);
   dbDelta($sql3);
-  foreach(array(self::clients_table(),self::codes_table(),self::tokens_table()) as $table){
+  $sql4="CREATE TABLE ".self::registry_table()." (
+   registry_key varchar(64) NOT NULL,
+   created_at datetime NOT NULL,
+   PRIMARY KEY (registry_key)
+  ) ENGINE=InnoDB $charset;";
+  dbDelta($sql4);
+  $lock_insert=$wpdb->query($wpdb->prepare('INSERT IGNORE INTO '.self::registry_table().' (registry_key,created_at) VALUES (%s,%s)',self::CLIENT_REGISTRY_LOCK,current_time('mysql',true)));
+  if($lock_insert===false)return new WP_Error('oai_oauth_schema','OAuth registry lock could not be initialized',array('status'=>503));
+  foreach(array(self::clients_table(),self::codes_table(),self::tokens_table(),self::registry_table()) as $table){
    $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
    if((string)$found!==$table)return new WP_Error('oai_oauth_schema','OAuth database table is missing after migration',array('status'=>503,'table'=>$table));
   }
+  $lock_found=$wpdb->get_var($wpdb->prepare('SELECT registry_key FROM '.self::registry_table().' WHERE registry_key=%s',self::CLIENT_REGISTRY_LOCK));
+  if($lock_found!==self::CLIENT_REGISTRY_LOCK)return new WP_Error('oai_oauth_schema','OAuth registry lock row is missing',array('status'=>503));
   update_option('oai_oauth_schema_version',self::SCHEMA_VERSION,false);
   return true;
  }
