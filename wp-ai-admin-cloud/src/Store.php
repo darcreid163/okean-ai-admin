@@ -7,14 +7,14 @@ final class Store {
     private int $transactionDepth=0;
     private static ?\WeakMap $licenseSchemaReady=null;
     public function __construct(private readonly \PDO $db, private readonly string $prefix='wpai_cloud_') {
-        if (!preg_match('/^[A-Za-z0-9_]{1,48}$/D',$prefix)) throw new Fault('invalid_table_prefix',503);
+        if (!preg_match('/^[A-Za-z0-9_]{1,45}$/D',$prefix)) throw new Fault('invalid_table_prefix',503);
         $db->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);
         $db->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE,\PDO::FETCH_ASSOC);
         $this->mysql=$db->getAttribute(\PDO::ATTR_DRIVER_NAME)==='mysql';
         if (!$this->mysql) { $db->exec('PRAGMA busy_timeout=10000'); $db->exec('PRAGMA journal_mode=WAL'); }
     }
     public function table(string $name): string {
-        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events'],true)) throw new Fault('invalid_table',503);
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','sse_sessions','sse_queue'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
@@ -73,6 +73,88 @@ final class Store {
         $this->upgradeQuotaSchema();
         $this->ensureOperationalIndexes(array_keys($definitions));
         $this->assertSchema(array_keys($definitions));
+        $this->ensureSseQueueSchema();
+    }
+    /** Additive durable queue schema for the legacy SSE transport. */
+    public function ensureSseQueueSchema(): void {
+        if ($this->transactionDepth>0) throw new Fault('sse_queue_schema_unavailable',503);
+        $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        $indexName='wpai_'.substr(hash('sha256',$this->prefix),0,16).'_idx_sse_queue_session_id';
+        if ($this->mysql) {
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_sessions').' (session_id VARCHAR(32) PRIMARY KEY, expires_at BIGINT NOT NULL)'.$tail);
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, session_id VARCHAR(32) NOT NULL, payload MEDIUMTEXT NOT NULL, created_at BIGINT NOT NULL, KEY `'.$indexName.'` (session_id,id))'.$tail);
+        } else {
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_sessions').' (session_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)');
+            $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)');
+            $this->execute('CREATE INDEX IF NOT EXISTS `'.$indexName.'` ON '.$this->table('sse_queue').'(session_id,id)');
+        }
+    }
+    public function createSseSession(string $id,int $expiresAt): void {
+        $this->transaction(function()use($id,$expiresAt) {
+            $now=time();
+            $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id IN (SELECT session_id FROM '.$this->table('sse_sessions').' WHERE expires_at<?)',[$now]);
+            $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE expires_at<?',[$now]);
+            $this->execute('INSERT INTO '.$this->table('sse_sessions').' (session_id,expires_at) VALUES (?,?)',[$id,$expiresAt]);
+        });
+    }
+    /** Reserve bounded queue capacity before executing a potentially mutating Gateway request. */
+    public function reserveSseMessage(string $id,int $now,int $expiresAt,int $limit=32): int {
+        return $this->transaction(function()use($id,$now,$expiresAt,$limit) {
+            $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
+            if (!$session || (int)$session['expires_at']<$now) throw new Fault('sse_session_expired',410);
+            $count=(int)$this->row('SELECT COUNT(*) AS n FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id])['n'];
+            if ($count >= $limit) throw new Fault('sse_queue_full',429);
+            $this->execute('INSERT INTO '.$this->table('sse_queue').' (session_id,payload,created_at) VALUES (?,?,?)',[$id,'',$now]);
+            $reservation=(int)$this->db->lastInsertId();
+            if ($reservation<1) throw new Fault('sse_queue_reservation_failed',503);
+            $this->execute('UPDATE '.$this->table('sse_sessions').' SET expires_at=? WHERE session_id=?',[$expiresAt,$id]);
+            return $reservation;
+        });
+    }
+    /** Publish a completed reply into its previously reserved queue slot. */
+    public function completeSseMessage(string $id,int $reservation,string $payload,int $now,int $expiresAt): void {
+        $this->transaction(function()use($id,$reservation,$payload,$now,$expiresAt) {
+            $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
+            if (!$session || (int)$session['expires_at']<$now) throw new Fault('sse_session_expired',410);
+            $updated=$this->execute('UPDATE '.$this->table('sse_queue').' SET payload=?,created_at=? WHERE id=? AND session_id=? AND payload=?',[$payload,$now,$reservation,$id,'']);
+            if ($updated->rowCount()!==1) throw new Fault('sse_queue_reservation_lost',503);
+            $this->execute('UPDATE '.$this->table('sse_sessions').' SET expires_at=? WHERE session_id=?',[$expiresAt,$id]);
+        });
+    }
+    public function cancelSseMessage(string $id,int $reservation): void {
+        $this->transaction(function()use($id,$reservation) {
+            $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE id=? AND session_id=? AND payload=?',[$reservation,$id,'']);
+        });
+    }
+    /** Backwards-compatible append helper used by store-level regression fixtures. */
+    public function enqueueSseMessage(string $id,string $payload,int $now,int $expiresAt,int $limit=32): void {
+        $reservation=$this->reserveSseMessage($id,$now,$expiresAt,$limit);
+        try { $this->completeSseMessage($id,$reservation,$payload,$now,$expiresAt); }
+        catch (\Throwable $e) { $this->cancelSseMessage($id,$reservation); throw $e; }
+    }
+    /** Atomically read and remove only completed messages returned to this drain. */
+    public function drainSseQueue(string $id,int $now): array {
+        return $this->transaction(function()use($id,$now) {
+            $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
+            if (!$session || (int)$session['expires_at']<$now) {
+                $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id]);
+                $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE session_id=?',[$id]);
+                return [];
+            }
+            $rows=$this->rows('SELECT id,payload FROM '.$this->table('sse_queue').' WHERE session_id=? AND payload<>? ORDER BY id',[$id,'']);
+            if ($rows) {
+                $ids=array_map(static fn($row)=>(int)$row['id'],$rows);
+                $marks=implode(',',array_fill(0,count($ids),'?'));
+                $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE id IN ('.$marks.')',$ids);
+            }
+            return array_map(static fn($row)=>(string)$row['payload'],$rows);
+        });
+    }
+    public function deleteSseSession(string $id): void {
+        $this->transaction(function()use($id) {
+            $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id]);
+            $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE session_id=?',[$id]);
+        });
     }
     private function upgradeQuotaSchema(): void {
         // Additive, restartable migration. Existing customers keep their original
