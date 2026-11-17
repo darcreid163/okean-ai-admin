@@ -88,11 +88,21 @@ final class Sse {
             $raw=file_get_contents('php://input');
             if (!is_string($raw) || strlen($raw)>131072) throw new Fault('request_too_large',413);
             try { $message=json_decode($raw,true,64,JSON_THROW_ON_ERROR); } catch (\Throwable $e) { throw new Fault('invalid_json',400); }
-            // Gateway execution stays outside the queue transaction; only append is atomic.
-            $reply=(new Gateway(WordPress::operatorCore()))->handle($actor,$message,time());
-            if ($reply!==null) {
-                WordPress::operatorStore()->enqueueSseMessage($id,Security::canonical($reply),time(),time()+self::TTL,32);
-                set_transient(self::key($id),$session,self::TTL);
+            // Reserve a bounded reply slot before any potentially mutating Gateway execution.
+            // The reservation transaction ends before Gateway is called.
+            $store=WordPress::operatorStore();
+            $reservation=$store->reserveSseMessage($id,time(),time()+self::TTL,32);
+            try {
+                $reply=(new Gateway(WordPress::operatorCore()))->handle($actor,$message,time());
+                if ($reply===null) {
+                    $store->cancelSseMessage($id,$reservation);
+                } else {
+                    $store->completeSseMessage($id,$reservation,Security::canonical($reply),time(),time()+self::TTL);
+                    set_transient(self::key($id),$session,self::TTL);
+                }
+            } catch (\\Throwable $e) {
+                try { $store->cancelSseMessage($id,$reservation); } catch (\\Throwable $ignored) {}
+                throw $e;
             }
             status_header(202);header('Cache-Control: no-store');header('Content-Length: 0');
         } catch (Fault $e) { self::fail($e); }
