@@ -42,6 +42,9 @@ OAI_MCP_OAuth::install();
 $table_suffixes=['oai_operations','oai_audit_log','oai_quota_usage','oai_quota_events','oai_oauth_clients','oai_oauth_codes','oai_oauth_tokens'];
 $tables=[];
 foreach($table_suffixes as $suffix){$tables[]=$wpdb->prefix.$suffix;uninstallPolicyAssert(uninstallPolicyTableExists($wpdb->prefix.$suffix),'Missing fixture table '.$suffix);}
+$registryTable=$wpdb->prefix.'oai_oauth_registry';
+$wpdb->query('CREATE TABLE IF NOT EXISTS '.$registryTable.' (registry_key varchar(64) NOT NULL, created_at datetime NOT NULL, PRIMARY KEY (registry_key)) ENGINE=InnoDB');
+$tables[]=$registryTable;
 $rateTable=$wpdb->prefix.'oai_rate_limits';
 $wpdb->query('CREATE TABLE IF NOT EXISTS '.$rateTable.' (bucket_hash char(64) NOT NULL, window_start bigint(20) unsigned NOT NULL, hits bigint(20) unsigned NOT NULL, expires_at bigint(20) unsigned NOT NULL, PRIMARY KEY (bucket_hash,window_start)) ENGINE=InnoDB');
 $tables[]=$rateTable;
@@ -53,6 +56,7 @@ $static_options=[
  'oai_license'=>['key'=>'fixture-license'],
  'oai_site_id'=>'fixture-site-id',
  'oai_test_automation'=>['enabled'=>true],
+ 'oai_oauth_pruned_at'=>1234567890,
 ];
 foreach($static_options as $key=>$value)update_option($key,$value,false);
 update_option('oai_third_party_sentinel','must-survive',false);
