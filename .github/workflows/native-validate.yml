@@ -133,7 +133,7 @@ jobs:
           mkdir -p dist/okean-ai-admin
           cp -a okean-ai-admin.php includes starter-themes README.md README.txt LICENSE THIRD-PARTY.md BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
           # Keep historical unregistered Elementor QA implementation in Git only;
-          # it is absent from the verified 86-file Native 2.1.17 artifact.
+          # it is absent from the verified Native 2.1.18 artifact.
           rm -f dist/okean-ai-admin/includes/class-oai-elementor-schema-save.php
           test ! -e dist/okean-ai-admin/includes/class-oai-elementor-schema-save.php
           (cd dist && zip -qr "wp-ai-admin-$VERSION.zip" okean-ai-admin)
