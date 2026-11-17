@@ -122,6 +122,16 @@ class NativeArtifactTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Non-regular ZIP entry", result.stderr)
 
+    def test_rejects_private_key_material_in_artifact_source(self):
+        secret = self.repo / "includes/credentials.php"
+        secret.write_text("-----BEGIN PRIVATE KEY-----\nfixture-secret\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "private key fixture"], check=True)
+        result = self.run_builder("build", "--repo", str(self.repo),
+                                  "--output", str(self.out1), check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Potential secret material", result.stderr)
+
     def test_rejects_metadata_that_does_not_match_source(self):
         path = self.repo / "BUILD-SIGNATURE.txt"
         path.write_text(path.read_text().replace("Build ID: 2.1.17-test-build", "Build ID: stale"))
