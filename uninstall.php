@@ -15,11 +15,15 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
     function wpai_admin_uninstall_delete_option_prefix($prefix) {
         global $wpdb;
         // LEFT() avoids LIKE wildcard/escape-mode differences for underscores in prefixes.
+        $prefix_length = strlen($prefix);
         $keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE LEFT(option_name,CHAR_LENGTH(%s))=%s",
-            $prefix,
+            "SELECT option_name FROM {$wpdb->options} WHERE BINARY LEFT(option_name,%d)=BINARY %s",
+            $prefix_length,
             $prefix
         ));
+        if ($wpdb->last_error !== '') {
+            return;
+        }
         foreach ((array) $keys as $key) {
             if (is_string($key) && strpos($key, $prefix) === 0) {
                 delete_option($key);
@@ -32,15 +36,21 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
         $base = '_transient_' . $prefix;
         $timeout = '_transient_timeout_' . $prefix;
         $base_keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE LEFT(option_name,CHAR_LENGTH(%s))=%s",
-            $base,
+            "SELECT option_name FROM {$wpdb->options} WHERE BINARY LEFT(option_name,%d)=BINARY %s",
+            strlen($base),
             $base
         ));
+        if ($wpdb->last_error !== '') {
+            return;
+        }
         $timeout_keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE LEFT(option_name,CHAR_LENGTH(%s))=%s",
-            $timeout,
+            "SELECT option_name FROM {$wpdb->options} WHERE BINARY LEFT(option_name,%d)=BINARY %s",
+            strlen($timeout),
             $timeout
         ));
+        if ($wpdb->last_error !== '') {
+            return;
+        }
         foreach (array_unique(array_merge((array) $base_keys, (array) $timeout_keys)) as $option_name) {
             if (!is_string($option_name)) {
                 continue;
