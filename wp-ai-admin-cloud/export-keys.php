@@ -49,7 +49,6 @@ try {
     fclose($handle);
     umask($oldUmask);
     if ($written !== strlen($snippet) || !$flushed || !chmod($target, 0600)) {
-        @unlink($target);
         throw new RuntimeException('Could not securely write private output file');
     }
     fwrite(STDOUT, "Exported the existing gateway keys to a private 0600 snippet. Values were not printed.\n");
