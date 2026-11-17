@@ -14,16 +14,15 @@ class OAI_Rate_Limit {
   try{
    // One row per fixed window: an old, delayed request cannot reset a newer window.
    // The unique-key upsert increments in the database, not in a transient read/write pair.
+   // LAST_INSERT_ID(expr) returns this request's exact atomic count on the same connection;
+   // a later concurrent increment cannot make this request observe somebody else's count.
    $inserted=$wpdb->query($wpdb->prepare(
-    "INSERT INTO $table (bucket_hash,window_start,hits,expires_at) VALUES (%s,%d,1,%d) ON DUPLICATE KEY UPDATE hits=hits+1",
+    "INSERT INTO $table (bucket_hash,window_start,hits,expires_at) VALUES (%s,%d,LAST_INSERT_ID(1),%d) ON DUPLICATE KEY UPDATE hits=LAST_INSERT_ID(hits+1)",
     $bucket_hash,$window_start,$window_start+($window*2)
    ));
    if($inserted===false)return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
-   $hits=$wpdb->get_var($wpdb->prepare(
-    "SELECT hits FROM $table WHERE bucket_hash=%s AND window_start=%d",
-    $bucket_hash,$window_start
-   ));
-   if($hits===null || $wpdb->last_error!=='')return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
+   $hits=$wpdb->get_var('SELECT LAST_INSERT_ID()');
+   if($hits===null || (int)$hits<1 || $wpdb->last_error!=='')return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
   }finally{
    $wpdb->suppress_errors($suppressed);
   }
