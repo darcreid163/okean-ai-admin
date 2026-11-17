@@ -79,7 +79,7 @@ if ($phase==='seed') {
         }
     }
 }
-$legacyBearer=(string)$expected['options']['oai_bearer_token'];
+$legacyBearer=(string)($phase==='seed'?$actual['options']['oai_bearer_token']:$expected['options']['oai_bearer_token']);
 $bearerRequest=new WP_REST_Request('GET','/okean-ai/v1/status');
 $bearerRequest->set_header('authorization','Bearer '.$legacyBearer);
 wp_set_current_user(0);
