@@ -55,9 +55,10 @@ rateLimitAssert($blocked===14,'Expected 14 rejected requests, got '.$blocked);
 $client=hash('sha256',wp_salt('auth').'|198.51.100.77');
 $bucketHash=hash('sha256',$bucket);
 $window=(int)(floor(time()/60)*60);
-rateLimitAssert(OAI_DB::rate_limit_hit(hash('sha256',$bucket.'-other-bucket'),$client,$window)===1,'Different bucket shared a counter');
-rateLimitAssert(OAI_DB::rate_limit_hit($bucketHash,hash('sha256','different-client'),$window)===1,'Different client shared a counter');
-rateLimitAssert(OAI_DB::rate_limit_hit($bucketHash,$client,$window+60)===1,'Different fixed window shared a counter');
+rateLimitAssert(OAI_DB::rate_limit_admit(hash('sha256',$bucket.'-other-bucket'),$client,$window,10)===true,'Different bucket shared a counter');
+rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,hash('sha256','different-client'),$window,10)===true,'Different client shared a counter');
+rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,$client,$window+60,10)===true,'Different fixed window shared a counter');
+rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,$client,$window,10)===false,'Counter admitted more requests after reaching its threshold');
 
 // Expired records are pruned; recent/current-window records remain.
 $staleBucket=hash('sha256','stale-rate-limit-fixture');
