@@ -128,6 +128,9 @@ final class Store {
             'oauth_grants' => [
                 'idx_owner' => ['owner'],
             ],
+            'oauth_access' => [
+                'idx_grant_id' => ['grant_id'],
+            ],
         ];
         foreach ($tableNames as $table) {
             foreach ($definitions[$table] ?? [] as $name => $columns) {
