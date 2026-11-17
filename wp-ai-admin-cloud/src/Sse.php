@@ -100,8 +100,8 @@ final class Sse {
                     $store->completeSseMessage($id,$reservation,Security::canonical($reply),time(),time()+self::TTL);
                     set_transient(self::key($id),$session,self::TTL);
                 }
-            } catch (\\Throwable $e) {
-                try { $store->cancelSseMessage($id,$reservation); } catch (\\Throwable $ignored) {}
+            } catch (\Throwable $e) {
+                try { $store->cancelSseMessage($id,$reservation); } catch (\Throwable $ignored) {}
                 throw $e;
             }
             status_header(202);header('Cache-Control: no-store');header('Content-Length: 0');
