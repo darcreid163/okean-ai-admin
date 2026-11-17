@@ -128,7 +128,7 @@ final class Store {
     public function enqueueSseMessage(string $id,string $payload,int $now,int $expiresAt,int $limit=32): void {
         $reservation=$this->reserveSseMessage($id,$now,$expiresAt,$limit);
         try { $this->completeSseMessage($id,$reservation,$payload,$now,$expiresAt); }
-        catch (\\Throwable $e) { $this->cancelSseMessage($id,$reservation); throw $e; }
+        catch (\Throwable $e) { $this->cancelSseMessage($id,$reservation); throw $e; }
     }
     /** Atomically read and remove only completed messages returned to this drain. */
     public function drainSseQueue(string $id,int $now): array {
