@@ -19,10 +19,11 @@ case "${1:-}" in
         checksum="$archive.sha256"
         test -f "dist/$archive"
         test -f "dist/$checksum"
+        test -f "dist/PROVENANCE.json"
         (cd dist && sha256sum -c "$checksum" && unzip -tq "$archive")
         # gh refuses creation if the release already exists. There is no update,
         # upload --clobber, or reuse of a previous release on retry.
-        gh release create "$tag" "dist/$archive" "dist/$checksum" \
+        gh release create "$tag" "dist/$archive" "dist/$checksum" "dist/PROVENANCE.json" \
             --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "WP AI Admin $version" \
             --notes 'Installable ZIP and SHA-256 checksum. See MIGRATION-STATUS.md for the release gates.'
