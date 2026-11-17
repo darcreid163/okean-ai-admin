@@ -52,6 +52,8 @@ foreach($processes as [$proc,$pipes]){
 rateLimitAssert(!$errors,'Rate-limit worker failures: '.implode('; ',$errors));
 rateLimitAssert($allowed===10,'Expected exactly 10 admitted requests, got '.$allowed);
 rateLimitAssert($blocked===14,'Expected 14 rejected requests, got '.$blocked);
+$storedHits=$wpdb->get_var($wpdb->prepare("SELECT hits FROM $table WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d AND window_seconds=%d",hash('sha256',$bucket),hash('sha256',wp_salt('auth').'|198.51.100.77'),(int)(floor(time()/3600)*3600),3600));
+rateLimitAssert((int)$storedHits===10,'Atomic counter stored '.var_export($storedHits,true).' hits instead of exactly 10');
 
 // A different bucket, client, or fixed window must have an independent counter.
 $client=hash('sha256',wp_salt('auth').'|198.51.100.77');
@@ -64,10 +66,11 @@ rateLimitAssert(OAI_DB::rate_limit_admit($bucketHash,$client,$window,3600,10)===
 
 // Expired records are pruned; recent/current-window records remain.
 $staleBucket=hash('sha256','stale-rate-limit-fixture');
-$wpdb->insert($table,[
+$staleInserted=$wpdb->insert($table,[
     'bucket_hash'=>$staleBucket,'client_hash'=>$client,'window_start'=>$window-172800,
     'window_seconds'=>3600,'expires_at'=>$window-168200,'hits'=>1,'updated_at'=>gmdate('Y-m-d H:i:s',time()-259200)
 ]);
+rateLimitAssert($staleInserted===1,'Cannot create expired rate counter fixture');
 update_option('oai_rate_limits_pruned_at',0,false);
 OAI_DB::prune_rate_limits();
 $stale=$wpdb->get_var($wpdb->prepare("SELECT hits FROM $table WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d AND window_seconds=%d",$staleBucket,$client,$window-172800,3600));
