@@ -50,7 +50,7 @@ if ($phase==='seed') {
         nativeRestoreAssert(OAI_VERSION==='2.1.14' && (int)get_option('oai_db_version')===23,'Historical code/schema restore failed');
         nativeRestoreAssert($wpdb->get_col('SHOW TABLES')===$expected['database_tables'],'Full database table restore failed');
     } else {
-        nativeRestoreAssert(OAI_VERSION==='2.1.17' && (int)get_option('oai_db_version')===24,'Candidate migration did not run');
+        nativeRestoreAssert(OAI_VERSION==='2.1.17' && (int)get_option('oai_db_version')===25,'Candidate migration did not run');
         foreach([OAI_DB::quota_table(),OAI_DB::quota_events_table()] as $table) {
             nativeRestoreAssert($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)))===$table,'Quota table missing');
         }
