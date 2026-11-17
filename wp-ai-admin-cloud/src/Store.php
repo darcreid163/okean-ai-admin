@@ -95,18 +95,42 @@ final class Store {
             $this->execute('INSERT INTO '.$this->table('sse_sessions').' (session_id,expires_at) VALUES (?,?)',[$id,$expiresAt]);
         });
     }
-    /** Lock the session row before checking the cap and appending. */
-    public function enqueueSseMessage(string $id,string $payload,int $now,int $expiresAt,int $limit=32): void {
-        $this->transaction(function()use($id,$payload,$now,$expiresAt,$limit) {
+    /** Reserve bounded queue capacity before executing a potentially mutating Gateway request. */
+    public function reserveSseMessage(string $id,int $now,int $expiresAt,int $limit=32): int {
+        return $this->transaction(function()use($id,$now,$expiresAt,$limit) {
             $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
             if (!$session || (int)$session['expires_at']<$now) throw new Fault('sse_session_expired',410);
             $count=(int)$this->row('SELECT COUNT(*) AS n FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id])['n'];
             if ($count >= $limit) throw new Fault('sse_queue_full',429);
-            $this->execute('INSERT INTO '.$this->table('sse_queue').' (session_id,payload,created_at) VALUES (?,?,?)',[$id,$payload,$now]);
+            $this->execute('INSERT INTO '.$this->table('sse_queue').' (session_id,payload,created_at) VALUES (?,?,?)',[$id,'',$now]);
+            $reservation=(int)$this->db->lastInsertId();
+            if ($reservation<1) throw new Fault('sse_queue_reservation_failed',503);
+            $this->execute('UPDATE '.$this->table('sse_sessions').' SET expires_at=? WHERE session_id=?',[$expiresAt,$id]);
+            return $reservation;
+        });
+    }
+    /** Publish a completed reply into its previously reserved queue slot. */
+    public function completeSseMessage(string $id,int $reservation,string $payload,int $now,int $expiresAt): void {
+        $this->transaction(function()use($id,$reservation,$payload,$now,$expiresAt) {
+            $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
+            if (!$session || (int)$session['expires_at']<$now) throw new Fault('sse_session_expired',410);
+            $updated=$this->execute('UPDATE '.$this->table('sse_queue').' SET payload=?,created_at=? WHERE id=? AND session_id=? AND payload=?',[$payload,$now,$reservation,$id,'']);
+            if ($updated->rowCount()!==1) throw new Fault('sse_queue_reservation_lost',503);
             $this->execute('UPDATE '.$this->table('sse_sessions').' SET expires_at=? WHERE session_id=?',[$expiresAt,$id]);
         });
     }
-    /** Atomically read and remove only the messages returned to this drain. */
+    public function cancelSseMessage(string $id,int $reservation): void {
+        $this->transaction(function()use($id,$reservation) {
+            $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE id=? AND session_id=? AND payload=?',[$reservation,$id,'']);
+        });
+    }
+    /** Backwards-compatible append helper used by store-level regression fixtures. */
+    public function enqueueSseMessage(string $id,string $payload,int $now,int $expiresAt,int $limit=32): void {
+        $reservation=$this->reserveSseMessage($id,$now,$expiresAt,$limit);
+        try { $this->completeSseMessage($id,$reservation,$payload,$now,$expiresAt); }
+        catch (\\Throwable $e) { $this->cancelSseMessage($id,$reservation); throw $e; }
+    }
+    /** Atomically read and remove only completed messages returned to this drain. */
     public function drainSseQueue(string $id,int $now): array {
         return $this->transaction(function()use($id,$now) {
             $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
@@ -115,7 +139,7 @@ final class Store {
                 $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE session_id=?',[$id]);
                 return [];
             }
-            $rows=$this->rows('SELECT id,payload FROM '.$this->table('sse_queue').' WHERE session_id=? ORDER BY id',[$id]);
+            $rows=$this->rows('SELECT id,payload FROM '.$this->table('sse_queue').' WHERE session_id=? AND payload<>? ORDER BY id',[$id,'']);
             if ($rows) {
                 $ids=array_map(static fn($row)=>(int)$row['id'],$rows);
                 $marks=implode(',',array_fill(0,count($ids),'?'));
