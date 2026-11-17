@@ -361,7 +361,7 @@ public static function register_client($req){
   }
   if((int)$count>=self::CLIENT_LIMIT){
    $wpdb->query('ROLLBACK');
-   return self::json_error('temporarily_unavailable','OAuth client registration capacity reached',429);
+   return self::json_error('client_registration_limit','OAuth client registration capacity reached',429);
   }
   $ok=$wpdb->insert(self::clients_table(),array(
    'client_id'=>$client_id,
@@ -554,6 +554,7 @@ public static function admin_post_authorize(){
  public static function token($req){
   $rate=OAI_Rate_Limit::check('oauth_token',60,60);
   if(is_wp_error($rate)) return self::json_error('temporarily_unavailable','OAuth token endpoint rate limit exceeded',429);
+  self::prune_credentials();
   $grant=sanitize_key((string)$req->get_param('grant_type'));
   if($grant==='authorization_code') return self::exchange_code($req);
   if($grant==='refresh_token') return self::refresh($req);
