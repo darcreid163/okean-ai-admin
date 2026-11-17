@@ -124,9 +124,15 @@ class OAI_Abilities_Compat {
 
  public static function get_public($name) {
   $name=is_string($name)?trim($name):'';
-  if ($name===''||strlen($name)>191||!function_exists('wp_has_ability')||!function_exists('wp_get_ability')) {
-   if (!function_exists('wp_has_ability') || !function_exists('wp_get_ability')) return self::unavailable();
+  if (!function_exists('wp_has_ability') || !function_exists('wp_get_ability')) return self::unavailable();
+  if ($name==='' || strlen($name)>191) {
    return new WP_Error('oai_ability_not_found','Ability not found or not exposed',array('status'=>404));
+  }
+  // Enforce the same discovery capability for detail lookups as for listing.
+  // Keep this guard at the compatibility layer so REST, CLI and internal
+  // callers cannot bypass it by invoking get_public() directly.
+  if (!current_user_can('read')) {
+   return new WP_Error('oai_ability_forbidden','The current user cannot inspect WordPress Ability details',array('status'=>403));
   }
   if (!wp_has_ability($name)) return new WP_Error('oai_ability_not_found','Ability not found or not exposed',array('status'=>404));
   $ability=wp_get_ability($name);
