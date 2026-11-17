@@ -24,7 +24,7 @@ Define both together, before WordPress loads. When present, they are the effecti
 2. From a shell, export the exact keys currently used by the installation. Supply the WordPress root and a new private destination outside the web root:
 
    ```sh
-php /path/to/wordpress/wp-content/plugins/okean-ai-admin/wp-ai-admin-cloud/tools/export-keys.php \
+php /path/to/wordpress/wp-content/plugins/okean-ai-admin/wp-ai-admin-cloud/export-keys.php \
   /path/to/wordpress \
   /root/private/wpai-cloud-keys.php
 ```
