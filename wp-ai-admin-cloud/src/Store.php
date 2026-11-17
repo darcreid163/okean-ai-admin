@@ -89,7 +89,7 @@ final class Store {
             if ($this->hasIndex($table,$name)) continue;
             $columnSql=implode(',',array_map(static fn($column)=>'`'.$column.'`',$columns));
             try {
-                $this->execute('CREATE INDEX `'.$name+'` ON '.$this->table($table).' ('.$columnSql.')');
+                $this->execute('CREATE INDEX `'.$name.'` ON '.$this->table($table).' ('.$columnSql.')');
             } catch (\PDOException $e) {
                 // Concurrent first requests can race after both metadata checks.
                 if (!$this->hasIndex($table,$name)) throw $e;
