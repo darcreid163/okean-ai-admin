@@ -121,6 +121,19 @@ if($phase==='seed') {
 }
 $transport->executions=0;
 Settings::prepareKeys();
+// When this PR is stacked on the Cloud Store candidate, prove the additive SSE
+// schema and queue lifecycle do not alter the existing encrypted key identity.
+if (method_exists($store,'ensureSseQueueSchema')) {
+    $keysBeforeSse=Settings::keys();
+    $store->ensureSseQueueSchema();
+    $sseSession=bin2hex(random_bytes(16));
+    $ssePayload=json_encode(['key_export_coexistence'=>true],JSON_THROW_ON_ERROR);
+    $store->createSseSession($sseSession,time()+3600);
+    $store->enqueueSseMessage($sseSession,$ssePayload,time(),time()+3600);
+    cloudUpgradeAssert($store->drainSseQueue($sseSession,time())===[$ssePayload],'SSE queue did not round-trip during key preservation acceptance');
+    $store->deleteSseSession($sseSession);
+    cloudUpgradeAssert(Settings::keys()===$keysBeforeSse,'SSE queue schema changed active Cloud encryption/signing keys');
+}
     // Export the exact effective keys to a private file outside the WordPress root.
     $exportScript=dirname(__DIR__).'/export-keys.php';
     $exportPath=$snapshot.'.keys.php';
