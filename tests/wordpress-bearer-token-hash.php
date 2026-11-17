@@ -42,6 +42,16 @@ try {
     $aliasHash=(string)get_option('oai_bearer_token_hash','');
     bearerHashAssert(OAI_DB::migrate_token()===true && hash_equals($aliasHash,(string)get_option('oai_bearer_token_hash','')),'Bearer hash migration is not idempotent');
 
+    // A valid current hash must win over a stale plaintext option (e.g. after rollback).
+    $current='wpai_current_hash_'.bin2hex(random_bytes(24));
+    $stale='wpai_stale_plaintext_'.bin2hex(random_bytes(24));
+    update_option('oai_bearer_token_hash',hash('sha256',$current),false);
+    update_option('oai_bearer_token',$stale,false);
+    update_option('oai_api_token','',false);
+    bearerHashAssert(OAI_DB::migrate_token()===true,'Existing valid hash was not preserved');
+    bearerHashAssert(hash_equals(hash('sha256',$current),(string)get_option('oai_bearer_token_hash','')),'Stale plaintext overwrote the current bearer hash');
+    bearerHashAssert(get_option('oai_bearer_token',null)===null,'Stale plaintext bearer option survived cleanup');
+
     // New installs create only a hash; no plaintext token is written to wp_options.
     delete_option('oai_bearer_token_hash');
     delete_option('oai_bearer_token');
