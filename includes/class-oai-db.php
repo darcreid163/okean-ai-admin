@@ -109,7 +109,7 @@ class OAI_DB {
  }
  public static function prune_rate_limits(){
   $last=(int)get_option('oai_rate_limits_pruned_at',0);
-  if($last && (time()-$last)<DAY_IN_SECONDS) return;
+  if($last && (time()-$last)<600) return;
   global $wpdb;
   $suppressed=$wpdb->suppress_errors(true);
   try{$result=$wpdb->query($wpdb->prepare('DELETE FROM '.self::rate_limits_table().' WHERE expires_at < %d',time()));}
