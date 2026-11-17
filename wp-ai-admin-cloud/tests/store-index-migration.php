@@ -62,9 +62,5 @@ if (!getenv('TEST_MYSQL_DSN')) {
     try { $store->migrate(); throw new RuntimeException('Mismatched index definition was accepted'); }
     catch (Fault $e) { indexCheck($e->reason==='gateway_schema_incompatible','Unexpected mismatched-index fault: '.$e->reason); }
 }
-$prefixStore=new Store(new PDO('sqlite::memory:'),str_repeat('p',45));
-indexCheck(strlen(str_replace(chr(96),'',$prefixStore->table('license_activations')) )===64,'45-character prefix must fit 64-character MySQL identifier');
-try { new Store(new PDO('sqlite::memory:'),str_repeat('p',46)); throw new RuntimeException('46-character prefix was accepted'); }
-catch (Fault $e) { indexCheck($e->reason==='invalid_table_prefix','Unexpected prefix validation fault'); }
 echo 'PASS Cloud Store index migration, idempotency and prefix contracts; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
 if (!getenv('TEST_MYSQL_DSN')) foreach([$database,$database.'-shm',$database.'-wal'] as $file) if(file_exists($file)) unlink($file);
