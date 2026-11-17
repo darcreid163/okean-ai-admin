@@ -108,16 +108,25 @@ class OAI_DB {
   $limit=(int)$limit;
   if($limit<1) return false;
   $table=self::rate_limits_table();
-  // LAST_INSERT_ID(expr) carries this connection's admission result through the
-  // same atomic upsert. Zero means the existing counter was already at limit.
-  $sql=$wpdb->prepare(
-   "INSERT INTO $table (bucket_hash,client_hash,window_start,window_seconds,expires_at,hits,updated_at) VALUES (%s,%s,%d,%d,%d,LAST_INSERT_ID(1),UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE hits=IF(hits<%d,LAST_INSERT_ID(hits+1),LAST_INSERT_ID(0)),updated_at=UTC_TIMESTAMP()",
-   (string)$bucket_hash,(string)$client_hash,(int)$window_start,(int)$window_seconds,(int)$window_start+(int)$window_seconds,$limit
+  // Ensure exactly one row exists for this bucket/client/window. The composite
+  // primary key serializes concurrent first inserts; duplicate rows are ignored.
+  $insert=$wpdb->prepare(
+   "INSERT IGNORE INTO $table (bucket_hash,client_hash,window_start,window_seconds,expires_at,hits,updated_at) VALUES (%s,%s,%d,%d,%d,0,UTC_TIMESTAMP())",
+   (string)$bucket_hash,(string)$client_hash,(int)$window_start,(int)$window_seconds,(int)$window_start+(int)$window_seconds
   );
-  if($wpdb->query($sql)===false) return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
-  $admitted=$wpdb->get_var('SELECT LAST_INSERT_ID()');
-  if($admitted===null || $wpdb->last_error!=='') return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
-  return (int)$admitted>0;
+  if($wpdb->query($insert)===false) return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
+  // InnoDB serializes this conditional increment on the unique counter row.
+  // The affected-row result is 1 for an admitted increment and 0 at the cap.
+  $update=$wpdb->prepare(
+   "UPDATE $table SET hits=hits+1,updated_at=UTC_TIMESTAMP() WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d AND window_seconds=%d AND hits<%d",
+   (string)$bucket_hash,(string)$client_hash,(int)$window_start,(int)$window_seconds,$limit
+  );
+  $affected=$wpdb->query($update);
+  if($affected===false) return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
+  if($affected===1) return true;
+  if($affected===0) return false;
+  // More than one row means the composite uniqueness invariant is broken.
+  return new WP_Error('oai_rate_limit_integrity','Rate counter uniqueness invariant failed',array('status'=>503));
  }
  public static function prune_rate_limits(){
   global $wpdb;
