@@ -37,10 +37,14 @@ final class WordPress {
         $store=self::database();
         if ((string)get_option('wpai_gateway_db_version','')==='4') {
             $store->assertSchema();
-            $store->ensureOwnerIndexes();
         } else {
             $store->migrate();
             update_option('wpai_gateway_db_version','4',false);
+        }
+        // One-time additive index migration; avoid five metadata queries on every request.
+        if ((string)get_option('wpai_gateway_owner_indexes_v1','')!=='1') {
+            $store->ensureOwnerIndexes();
+            update_option('wpai_gateway_owner_indexes_v1','1',false);
         }
         // Separate idempotent flag: the schema version stays 4 so historical
         // upgrade/restore snapshots keep working. Only current-scheme accounts
