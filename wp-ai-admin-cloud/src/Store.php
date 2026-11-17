@@ -185,7 +185,17 @@ final class Store {
         if ($found !== null) return;
         $q = chr(96);
         $columnSql = implode(',',array_map(static fn($column) => $q.$column.$q,$columns));
-        $this->execute('CREATE INDEX '.$q.$name.$q.' ON '.$this->table($table).' ('.$columnSql.')');
+        try {
+            $this->execute('CREATE INDEX '.$q.$name.$q.' ON '.$this->table($table).' ('.$columnSql.')');
+        } catch (\PDOException $e) {
+            // Concurrent first requests may both observe a missing index. Only
+            // suppress a duplicate-index race after re-reading and validating it.
+            $duplicate = $this->mysql
+                ? (int)($e->errorInfo[1] ?? 0) === 1061
+                : str_contains(strtolower($e->getMessage()),'already exists');
+            if (!$duplicate) throw $e;
+            $this->ensureIndex($table,$name,$columns);
+        }
     }
     /**
      * Additive, lazy licence schema. It is deliberately not part of the
