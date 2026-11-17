@@ -144,6 +144,67 @@ if($phase==='seed') {
 }
 $transport->executions=0;
 Settings::prepareKeys();
+// When this PR is stacked on the Cloud Store candidate, prove the additive SSE
+// schema and queue lifecycle do not alter the existing encrypted key identity.
+if (method_exists($store,'ensureSseQueueSchema')) {
+    $keysBeforeSse=Settings::keys();
+    $store->ensureSseQueueSchema();
+    $sseSession=bin2hex(random_bytes(16));
+    $ssePayload=json_encode(['key_export_coexistence'=>true],JSON_THROW_ON_ERROR);
+    $store->createSseSession($sseSession,time()+3600);
+    $store->enqueueSseMessage($sseSession,$ssePayload,time(),time()+3600);
+    cloudUpgradeAssert($store->drainSseQueue($sseSession,time())===[$ssePayload],'SSE queue did not round-trip during key preservation acceptance');
+    $store->deleteSseSession($sseSession);
+    cloudUpgradeAssert(Settings::keys()===$keysBeforeSse,'SSE queue schema changed active Cloud encryption/signing keys');
+}
+    // Export the exact effective keys to a private file outside the WordPress root.
+    $exportScript=dirname(__DIR__).'/export-keys.php';
+    $exportPath=$snapshot.'.keys.php';
+    $exportCommand=escapeshellarg(PHP_BINARY).' '.escapeshellarg($exportScript).' '.escapeshellarg(rtrim(ABSPATH,'/\\\\')).' '.escapeshellarg($exportPath);
+    $exportProcess=proc_open($exportCommand,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$exportPipes);
+    if(!is_resource($exportProcess))throw new RuntimeException('Could not start Cloud key export');
+    fclose($exportPipes[0]);
+    $exportStdout=stream_get_contents($exportPipes[1]);$exportStderr=stream_get_contents($exportPipes[2]);
+    fclose($exportPipes[1]);fclose($exportPipes[2]);$exportStatus=proc_close($exportProcess);
+    cloudUpgradeAssert($exportStatus===0 && is_file($exportPath),'Private key export failed: '.$exportStderr);
+    cloudUpgradeAssert((fileperms($exportPath)&0777)===0600,'Exported key snippet mode is not 0600');
+    $exportSnippet=(string)file_get_contents($exportPath);
+    $vaultB64=base64_encode($keys['vault']);$signingB64=base64_encode($keys['signing']);
+    cloudUpgradeAssert(str_contains($exportSnippet,"define('WP_AI_CLOUD_VAULT_KEY', '".$vaultB64."');"),'Exported vault key differs from active key');
+    cloudUpgradeAssert(str_contains($exportSnippet,"define('WP_AI_CLOUD_SIGNING_KEY', '".$signingB64."');"),'Exported signing key differs from active key');
+    cloudUpgradeAssert(!str_contains($exportStdout,$vaultB64) && !str_contains($exportStdout,$signingB64) && !str_contains($exportStderr,$vaultB64) && !str_contains($exportStderr,$signingB64),'Key material leaked to process output');
+    $again=proc_open($exportCommand,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$againPipes);
+    if(!is_resource($again))throw new RuntimeException('Could not test key export overwrite guard');
+    fclose($againPipes[0]);$againOut=stream_get_contents($againPipes[1]);$againErr=stream_get_contents($againPipes[2]);fclose($againPipes[1]);fclose($againPipes[2]);
+    cloudUpgradeAssert(proc_close($again)!==0 && (string)file_get_contents($exportPath)===$exportSnippet,'Key export overwrote an existing file');
+    // Simulate another process winning after the initial file_exists() check:
+    // a MU plugin creates the destination during wp-load.php bootstrap.
+    $racePath=$snapshot.'.raced.php';
+    $muDir=WPMU_PLUGIN_DIR;
+    if(!is_dir($muDir) && !wp_mkdir_p($muDir))throw new RuntimeException('Could not create MU plugin fixture directory');
+    $racePlugin=$muDir.'/wpai-key-export-race-'.bin2hex(random_bytes(6)).'.php';
+    $raceMarker='created-by-concurrent-exporter';
+    $raceCode="<?php\nfile_put_contents(".var_export($racePath,true).", ".var_export($raceMarker,true).", LOCK_EX);\n";
+    if(file_put_contents($racePlugin,$raceCode)===false)throw new RuntimeException('Could not create key export race fixture');
+    try {
+        $raceCommand=escapeshellarg(PHP_BINARY).' '.escapeshellarg($exportScript).' '.escapeshellarg(rtrim(ABSPATH,'/\\\\')).' '.escapeshellarg($racePath);
+        $race=proc_open($raceCommand,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$racePipes);
+        if(!is_resource($race))throw new RuntimeException('Could not start key export race fixture');
+        fclose($racePipes[0]);$raceOut=stream_get_contents($racePipes[1]);$raceErr=stream_get_contents($racePipes[2]);fclose($racePipes[1]);fclose($racePipes[2]);
+        $raceStatus=proc_close($race);
+        cloudUpgradeAssert($raceStatus!==0 && is_file($racePath) && (string)file_get_contents($racePath)===$raceMarker,'Exporter removed a file created by a competing process');
+    } finally {
+        @unlink($racePlugin);
+        @unlink($racePath);
+    }
+    $insidePath=rtrim(ABSPATH,'/\\\\').'/wpai-key-export-rejected-'.bin2hex(random_bytes(6)).'.php';
+    $insideCommand=escapeshellarg(PHP_BINARY).' '.escapeshellarg($exportScript).' '.escapeshellarg(rtrim(ABSPATH,'/\\\\')).' '.escapeshellarg($insidePath);
+    $inside=proc_open($insideCommand,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$insidePipes);
+    if(!is_resource($inside))throw new RuntimeException('Could not test web-root key export guard');
+    fclose($insidePipes[0]);stream_get_contents($insidePipes[1]);stream_get_contents($insidePipes[2]);fclose($insidePipes[1]);fclose($insidePipes[2]);
+    cloudUpgradeAssert(proc_close($inside)!==0 && !file_exists($insidePath),'Key export accepted a path inside the web root');
+    @unlink($exportPath);
+
 cloudUpgradeAssert(hash_equals($state['keys_sha256'],hash('sha256',$keys['vault'].$keys['signing'])) && Settings::keys()===$keys,'Vault/signing key changed');
 cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeOptions(),$state['options']),'Repeated key preparation rewrote wrapped keys');
 $keyAutoload=$wpdb->get_var("SELECT autoload FROM $wpdb->options WHERE option_name='wpai_gateway_wrapped_keys_v1'");

@@ -29,7 +29,7 @@ $collect=static function(string $base,array $paths): array {
     ksort($entries,SORT_STRING);
     return $entries;
 };
-$expected=$collect($source,['wp-ai-admin-cloud.php','src','includes','config']);
+$expected=$collect($source,['wp-ai-admin-cloud.php','export-keys.php','src','includes','config']);
 $found=$collect($root,array_values(array_diff(scandir($root),['.','..'])));
 if(array_keys($found)!==array_keys($expected))throw new RuntimeException('Cloud production allowlist mismatch');
 foreach($expected as $path=>$hash)if(!hash_equals($hash,$found[$path]))throw new RuntimeException('Cloud source SHA-256 mismatch: '.$path);
