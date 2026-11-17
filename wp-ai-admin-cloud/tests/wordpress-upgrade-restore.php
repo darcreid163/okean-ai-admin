@@ -73,6 +73,9 @@ if($phase==='seed') {
 cloudUpgradeAssert(WordPress::configured() && (string)get_option('wpai_gateway_db_version')==='4','Gateway normal boot failed');
 // Force the already-installed schema-v4 path: indexes must be applied once without changing the schema version.
 update_option('wpai_gateway_operational_indexes_v1','0',false);
+wp_cache_delete('wpai_gateway_operational_indexes_v1','options');
+wp_cache_delete('alloptions','options');
+wp_cache_delete('notoptions','options');
 WordPress::enable();
 $indexFlagValue=get_option('wpai_gateway_operational_indexes_v1','missing');
 $indexFlagRaw=$wpdb->get_var($wpdb->prepare('SELECT option_value FROM '.$wpdb->options.' WHERE option_name=%s','wpai_gateway_operational_indexes_v1'));
