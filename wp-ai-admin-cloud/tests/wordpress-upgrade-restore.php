@@ -141,6 +141,26 @@ Settings::prepareKeys();
     if(!is_resource($again))throw new RuntimeException('Could not test key export overwrite guard');
     fclose($againPipes[0]);$againOut=stream_get_contents($againPipes[1]);$againErr=stream_get_contents($againPipes[2]);fclose($againPipes[1]);fclose($againPipes[2]);
     cloudUpgradeAssert(proc_close($again)!==0 && (string)file_get_contents($exportPath)===$exportSnippet,'Key export overwrote an existing file');
+    // Simulate another process winning after the initial file_exists() check:
+    // a MU plugin creates the destination during wp-load.php bootstrap.
+    $racePath=$snapshot.'.raced.php';
+    $muDir=WPMU_PLUGIN_DIR;
+    if(!is_dir($muDir) && !wp_mkdir_p($muDir))throw new RuntimeException('Could not create MU plugin fixture directory');
+    $racePlugin=$muDir.'/wpai-key-export-race-'.bin2hex(random_bytes(6)).'.php';
+    $raceMarker='created-by-concurrent-exporter';
+    $raceCode="<?php\\nfile_put_contents(".var_export($racePath,true).", ".var_export($raceMarker,true).", LOCK_EX);\\n";
+    if(file_put_contents($racePlugin,$raceCode)===false)throw new RuntimeException('Could not create key export race fixture');
+    try {
+        $raceCommand=escapeshellarg(PHP_BINARY).' '.escapeshellarg($exportScript).' '.escapeshellarg(rtrim(ABSPATH,'/\\\\')).' '.escapeshellarg($racePath);
+        $race=proc_open($raceCommand,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$racePipes);
+        if(!is_resource($race))throw new RuntimeException('Could not start key export race fixture');
+        fclose($racePipes[0]);$raceOut=stream_get_contents($racePipes[1]);$raceErr=stream_get_contents($racePipes[2]);fclose($racePipes[1]);fclose($racePipes[2]);
+        $raceStatus=proc_close($race);
+        cloudUpgradeAssert($raceStatus!==0 && is_file($racePath) && (string)file_get_contents($racePath)===$raceMarker,'Exporter removed a file created by a competing process');
+    } finally {
+        @unlink($racePlugin);
+        @unlink($racePath);
+    }
     $insidePath=rtrim(ABSPATH,'/\\\\').'/wpai-key-export-rejected-'.bin2hex(random_bytes(6)).'.php';
     $insideCommand=escapeshellarg(PHP_BINARY).' '.escapeshellarg($exportScript).' '.escapeshellarg(rtrim(ABSPATH,'/\\\\')).' '.escapeshellarg($insidePath);
     $inside=proc_open($insideCommand,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$insidePipes);
