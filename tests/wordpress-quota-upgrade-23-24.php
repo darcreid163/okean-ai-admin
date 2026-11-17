@@ -1,8 +1,8 @@
 <?php
 // WP-CLI eval-file uses eval() internally; strict_types cannot be declared there.
-/** Only run on disposable WordPress CI: simulate 2.1.16 DB 23 -> 2.1.17 DB 24. */
-if (!defined('WP_CLI') || !WP_CLI || !defined('OAI_DB_VERSION') || OAI_DB_VERSION!==24) {
-    throw new RuntimeException('Disposable WP-CLI and Native DB schema 24 required');
+/** Only run on disposable WordPress CI: simulate historical DB 23 -> current DB 25. */
+if (!defined('WP_CLI') || !WP_CLI || !defined('OAI_DB_VERSION') || OAI_DB_VERSION!==25) {
+    throw new RuntimeException('Disposable WP-CLI and Native DB schema 25 required');
 }
 global $wpdb;
 function quotaUpgradeAssert(bool $ok,string $message): void { if(!$ok)throw new RuntimeException($message); }
@@ -27,11 +27,14 @@ foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table){
 }
 update_option('oai_db_version',23,false);
 OAI_DB::maybe_upgrade();
-quotaUpgradeAssert((int)get_option('oai_db_version')===24,'DB schema 24 not recorded');
+quotaUpgradeAssert((int)get_option('oai_db_version')===25,'DB schema 25 not recorded');
 foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table) {
     $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
     quotaUpgradeAssert($found===$table,'Missing quota v24 table '.$table);
 }
+$rateTable=OAI_DB::rate_limits_table();
+$rateFound=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($rateTable)));
+quotaUpgradeAssert($rateFound===$rateTable,'Missing atomic rate-limit table');
 quotaUpgradeAssert(OAI_Platform::site_id()===$siteId&&OAI_Platform::installation_id()===$installId,'Site/installation identity changed');
 // A retained enabled option is read as "1" on a new WordPress process; an
 // update to the already-enabled value does not replace it with a cached bool.
@@ -41,4 +44,4 @@ quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$c
 quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::table().' WHERE operation_id=%s',$operationId))===$operationsBefore,'Pending operation lost');
 OAI_DB::maybe_upgrade();
 quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$clients.' WHERE client_id=%s',$clientId))===1,'Repeated upgrade mutated OAuth client');
-echo "PASS: Native v23 -> v24 preserves identities, OAuth credentials and pending operation; repeat is idempotent\n";
+echo "PASS: Native v23 -> v25 preserves identities, OAuth credentials and pending operation; quota and rate-limit tables are restored; repeat is idempotent\n";
