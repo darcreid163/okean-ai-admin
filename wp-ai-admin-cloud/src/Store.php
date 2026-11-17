@@ -86,12 +86,6 @@ final class Store {
             $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('sse_queue').' (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)');
             $this->execute('CREATE INDEX IF NOT EXISTS idx_sse_queue_session_id ON '.$this->table('sse_queue').'(session_id,id)');
         }
-        if ($this->mysql) {
-            try { $this->execute('CREATE INDEX idx_sse_queue_session_id ON '.$this->table('sse_queue').'(session_id,id)'); }
-            catch (\\PDOException $e) {
-                if ((int)($e->errorInfo[1]??0)!==1061) throw $e;
-            }
-        }
     }
     public function createSseSession(string $id,int $expiresAt): void {
         $this->execute('INSERT INTO '.$this->table('sse_sessions').' (session_id,expires_at) VALUES (?,?)',[$id,$expiresAt]);
