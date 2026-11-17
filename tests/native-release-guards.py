@@ -35,6 +35,7 @@ class ReleaseGuardTests(unittest.TestCase):
             z.writestr('okean-ai-admin/okean-ai-admin.php', '<?php // synthetic Native fixture\n')
         digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         self.archive.with_suffix('.zip.sha256').write_text(f'{digest}  {self.archive.name}\n')
+        (self.root / 'dist/PROVENANCE.json').write_text(json.dumps({'archive': self.archive.name, 'archive_sha256': digest, 'source_commit': 'synthetic'}))
 
     def tearDown(self):
         self.temp.cleanup()
@@ -68,7 +69,7 @@ class ReleaseGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = [json.loads(x) for x in (self.root / 'gh.jsonl').read_text().splitlines()]
         self.assertEqual(len(commands), 1)
-        self.assertEqual(commands[0][:5], ['release', 'create', 'v2.1.17', 'dist/wp-ai-admin-2.1.17.zip', 'dist/wp-ai-admin-2.1.17.zip.sha256'])
+        self.assertEqual(commands[0][:6], ['release', 'create', 'v2.1.17', 'dist/wp-ai-admin-2.1.17.zip', 'dist/wp-ai-admin-2.1.17.zip.sha256', 'dist/PROVENANCE.json'])
         self.assertIn('--verify-tag', commands[0])
         self.assertNotIn('--clobber', commands[0])
 
