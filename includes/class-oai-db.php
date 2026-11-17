@@ -98,21 +98,22 @@ class OAI_DB {
   elseif(class_exists('OAI_MCP_OAuth')&&(int)get_option('oai_oauth_schema_version',0)<OAI_MCP_OAuth::SCHEMA_VERSION)OAI_MCP_OAuth::install();
   self::migrate_token();self::prune_quota_events();
  }
- /** Atomically increment one fixed-window counter; returns its committed count. */
- public static function rate_limit_hit($bucket_hash,$client_hash,$window_start){
+ /** Atomically admit a request up to the configured fixed-window limit. */
+ public static function rate_limit_admit($bucket_hash,$client_hash,$window_start,$limit){
   global $wpdb;
+  $limit=(int)$limit;
+  if($limit<1) return false;
   $table=self::rate_limits_table();
+  // LAST_INSERT_ID(expr) carries this connection's admission result through the
+  // same atomic upsert. Zero means the existing counter was already at limit.
   $sql=$wpdb->prepare(
-   "INSERT INTO $table (bucket_hash,client_hash,window_start,hits,updated_at) VALUES (%s,%s,%d,1,UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE hits=hits+1,updated_at=UTC_TIMESTAMP()",
-   (string)$bucket_hash,(string)$client_hash,(int)$window_start
+   "INSERT INTO $table (bucket_hash,client_hash,window_start,hits,updated_at) VALUES (%s,%s,%d,LAST_INSERT_ID(1),UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE hits=IF(hits<%d,LAST_INSERT_ID(hits+1),LAST_INSERT_ID(0)),updated_at=UTC_TIMESTAMP()",
+   (string)$bucket_hash,(string)$client_hash,(int)$window_start,$limit
   );
   if($wpdb->query($sql)===false) return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
-  $count=$wpdb->get_var($wpdb->prepare(
-   "SELECT hits FROM $table WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d",
-   (string)$bucket_hash,(string)$client_hash,(int)$window_start
-  ));
-  if($count===null || $wpdb->last_error!=='') return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
-  return (int)$count;
+  $admitted=$wpdb->get_var('SELECT LAST_INSERT_ID()');
+  if($admitted===null || $wpdb->last_error!=='') return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
+  return (int)$admitted>0;
  }
  public static function prune_rate_limits(){
   global $wpdb;
