@@ -63,7 +63,7 @@ final class WordPress {
         if (defined('WP_AI_CLOUD_ENABLED') && WP_AI_CLOUD_ENABLED!==true) throw new Fault('gateway_disabled_in_wp_config',503);
         if (class_exists('WPAICloud\\WordPress',false)) throw new Fault('separate_prototype_must_be_deactivated',503);
         foreach (['sodium','curl','pdo_mysql'] as $extension) if (!extension_loaded($extension)) throw new Fault($extension.'_required',503);
-        Settings::prepareKeys(); self::migrate(); Settings::policy();
+        Settings::prepareKeys(); update_option('wpai_gateway_operational_indexes_debug','after-prepare',false); self::migrate(); update_option('wpai_gateway_operational_indexes_debug','after-migrate',false); Settings::policy();
         update_option('wpai_gateway_enabled',true,false);
         try { self::core(); }
         catch (\Throwable $e) { update_option('wpai_gateway_enabled',false,false); throw $e; }
