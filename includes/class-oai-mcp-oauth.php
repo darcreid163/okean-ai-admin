@@ -13,6 +13,12 @@ class OAI_MCP_OAuth {
  public static function codes_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_codes';}
  public static function tokens_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_tokens';}
 
+ private static function registry_uses_innodb(){
+  global $wpdb;
+  $engine=$wpdb->get_var($wpdb->prepare('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s',self::registry_table()));
+  return $wpdb->last_error==='' && strtoupper((string)$engine)==='INNODB';
+ }
+
  public static function install(){
   global $wpdb;
   require_once ABSPATH.'wp-admin/includes/upgrade.php';
@@ -79,6 +85,7 @@ class OAI_MCP_OAuth {
    $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
    if((string)$found!==$table)return new WP_Error('oai_oauth_schema','OAuth database table is missing after migration',array('status'=>503,'table'=>$table));
   }
+  if(!self::registry_uses_innodb())return new WP_Error('oai_oauth_schema','OAuth registry table must use InnoDB for transactional client registration',array('status'=>503));
   $lock_found=$wpdb->get_var($wpdb->prepare('SELECT registry_key FROM '.self::registry_table().' WHERE registry_key=%s',self::CLIENT_REGISTRY_LOCK));
   if($lock_found!==self::CLIENT_REGISTRY_LOCK)return new WP_Error('oai_oauth_schema','OAuth registry lock row is missing',array('status'=>503));
   update_option('oai_oauth_schema_version',self::SCHEMA_VERSION,false);
@@ -310,14 +317,20 @@ class OAI_MCP_OAuth {
 
  private static function prune_credentials(){
   $last=(int)get_option('oai_oauth_pruned_at',0);
-  if($last && (time()-$last)<DAY_IN_SECONDS)return;
-  update_option('oai_oauth_pruned_at',time(),false);
+  if($last && (time()-$last)<DAY_IN_SECONDS)return true;
   global $wpdb;
   // Codes are short-lived; keep a one-day grace for diagnostics and replay rejection.
-  $wpdb->query('DELETE FROM '.self::codes_table()." WHERE expires_at < UTC_TIMESTAMP() - INTERVAL 1 DAY OR (used=1 AND created_at < UTC_TIMESTAMP() - INTERVAL 1 DAY)");
+  $codes_deleted=$wpdb->query('DELETE FROM '.self::codes_table()." WHERE expires_at < UTC_TIMESTAMP() - INTERVAL 1 DAY OR (used=1 AND created_at < UTC_TIMESTAMP() - INTERVAL 1 DAY)");
+  if($codes_deleted===false || $wpdb->last_error!=='')return false;
   // Never remove an unexpired refresh credential. Expired rows receive an additional
   // 30-day retention period; access expiry alone is not enough to delete a row.
-  $wpdb->query('DELETE FROM '.self::tokens_table()." WHERE (refresh_expires_at IS NOT NULL AND refresh_expires_at < UTC_TIMESTAMP() - INTERVAL 30 DAY) OR (refresh_expires_at IS NULL AND expires_at < UTC_TIMESTAMP() - INTERVAL 30 DAY)");
+  $tokens_deleted=$wpdb->query('DELETE FROM '.self::tokens_table()." WHERE (refresh_expires_at IS NOT NULL AND refresh_expires_at < UTC_TIMESTAMP() - INTERVAL 30 DAY) OR (refresh_expires_at IS NULL AND expires_at < UTC_TIMESTAMP() - INTERVAL 30 DAY)");
+  if($tokens_deleted===false || $wpdb->last_error!=='')return false;
+  // Advance the daily marker only after both cleanup statements succeeded. A partial
+  // cleanup is safe to retry because both DELETE statements are idempotent.
+  $now=time();
+  update_option('oai_oauth_pruned_at',$now,false);
+  return (int)get_option('oai_oauth_pruned_at',0)===$now;
 }
 
 public static function register_client($req){
@@ -347,6 +360,8 @@ public static function register_client($req){
   if(!$clean) return self::json_error('invalid_redirect_uri','redirect_uris is required');
   $client_id='oai_client_'.wp_generate_uuid4();
   global $wpdb;
+  // Refuse registration if the durable mutex cannot provide transactional row locking.
+  if(!self::registry_uses_innodb()) return self::json_error('server_error','OAuth client registry requires an InnoDB table',503);
   // All registration attempts serialize on one durable InnoDB row. Counting and
   // inserting while holding this lock prevents concurrent requests crossing the cap.
   if($wpdb->query('START TRANSACTION')===false) return self::json_error('server_error','Could not begin OAuth client registration',500);
