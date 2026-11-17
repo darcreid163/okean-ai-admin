@@ -19,8 +19,11 @@ function checkIndexDefinition(WPAICloudGateway\Store $store,string $table,string
 }
 $now=1790942400; // fixed UTC fixture, independent of WordPress/site timezone
 $database=sys_get_temp_dir().'/wpai-cloud-'.bin2hex(random_bytes(8)).'.sqlite';
+putenv('WPAI_CLOUD_SCHEMA_TRACE=1');
+fwrite(STDERR,"TRACE before fixture store\n");
+$store=fixtureStore($database);
 fwrite(STDERR,"TRACE before first migration\n");
-$store=fixtureStore($database); $store->migrate();
+$store->migrate();
 fwrite(STDERR,"TRACE after first migration\n");
 foreach ([
     ['sites','idx_owner_status_created',['owner','status','created_at']],
