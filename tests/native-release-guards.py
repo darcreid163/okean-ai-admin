@@ -20,6 +20,9 @@ class ReleaseGuardTests(unittest.TestCase):
         (self.root / 'tools').mkdir()
         shutil.copy2(ROOT / 'tools/native-release.sh', self.root / 'tools')
         (self.root / 'okean-ai-admin.php').write_text("<?php\n/**\n * Version: 2.1.17\n */\ndefine('OAI_VERSION','2.1.17');\n")
+        metadata = "WP AI Admin Build Metadata (not a cryptographic signature)\nVersion: 2.1.17\nBuild ID: 2.1.17-test-build\nRelease channel: commercial_beta\nRelease profile: commercial_beta_candidate\n"
+        (self.root / 'BUILD-SIGNATURE.txt').write_text(metadata)
+        (self.root / 'BUILD_SIGNATURE.txt').write_text(metadata)
         (self.root / 'bin').mkdir()
         fake = self.root / 'bin/gh'
         fake.write_text('#!/usr/bin/env python3\nimport json,os,sys\n'
@@ -55,6 +58,17 @@ class ReleaseGuardTests(unittest.TestCase):
                           ('refs/heads/v2.1.17', 'v2.1.17'), ('refs/tags/v2.1.17', 'v2.1.17;touch bad')]:
             with self.subTest(ref=ref, name=name):
                 self.assertNotEqual(self.run_guard('publish', GITHUB_REF=ref, GITHUB_REF_NAME=name).returncode, 0)
+        self.assert_no_gh()
+
+    def test_build_metadata_mismatch_blocks_release(self):
+        metadata = self.root / 'BUILD-SIGNATURE.txt'
+        metadata.write_text(metadata.read_text().replace('Build ID: 2.1.17-test-build', 'Build ID: stale-build'))
+        self.assertNotEqual(self.run_guard('validate').returncode, 0)
+        self.assert_no_gh()
+
+    def test_metadata_alias_mismatch_blocks_release(self):
+        (self.root / 'BUILD_SIGNATURE.txt').write_text('different metadata\\n')
+        self.assertNotEqual(self.run_guard('validate').returncode, 0)
         self.assert_no_gh()
 
     def test_header_mismatch(self):
