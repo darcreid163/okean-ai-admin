@@ -21,6 +21,8 @@ jobs:
         run: bash tools/native-release.sh validate
       - name: Offline release tag and immutable asset guards
         run: python3 tests/native-release-guards.py
+      - name: Deterministic Native artifact and provenance regression
+        run: python3 tests/native-artifact-reproducibility.py
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -134,29 +136,22 @@ jobs:
     needs: [php, wordpress-smoke]
     steps:
       - uses: actions/checkout@v4
-      - name: Build installable ZIP and checksums
+      - name: Build deterministic Native ZIP and provenance
         run: |
           set -euo pipefail
-          VERSION="$(sed -n "s/^define('OAI_VERSION','\([^']*\)').*/\1/p" okean-ai-admin.php | head -n1)"
+          VERSION="$(sed -n "s/^define('OAI_VERSION','\\([^']*\\)').*/\\1/p" okean-ai-admin.php | head -n1)"
           test -n "$VERSION"
-          mkdir -p dist/okean-ai-admin
-          cp -a okean-ai-admin.php includes starter-themes README.md README.txt LICENSE THIRD-PARTY.md BUILD-SIGNATURE.txt BUILD_SIGNATURE.txt dist/okean-ai-admin/
-          # Keep historical unregistered Elementor QA implementation in Git only;
-          # it is absent from the verified Native 2.1.18 artifact.
-          rm -f dist/okean-ai-admin/includes/class-oai-elementor-schema-save.php
-          test ! -e dist/okean-ai-admin/includes/class-oai-elementor-schema-save.php
-          (cd dist && zip -qr "wp-ai-admin-$VERSION.zip" okean-ai-admin)
-          cd dist
-          sha256sum "wp-ai-admin-$VERSION.zip" > "wp-ai-admin-$VERSION.zip.sha256"
-          unzip -tq "wp-ai-admin-$VERSION.zip"
+          python3 tools/build-native-candidate.py build --output dist/native-candidate
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          cat "wp-ai-admin-$VERSION.zip.sha256"
+          unzip -tq "dist/native-candidate/wp-ai-admin-$VERSION.zip"
+          cat "dist/native-candidate/wp-ai-admin-$VERSION.zip.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: wp-ai-admin-${{ env.VERSION }}
           path: |
-            dist/wp-ai-admin-*.zip
-            dist/wp-ai-admin-*.zip.sha256
+            dist/native-candidate/wp-ai-admin-*.zip
+            dist/native-candidate/wp-ai-admin-*.zip.sha256
+            dist/native-candidate/PROVENANCE.json
           if-no-files-found: error
 
   package-install:
@@ -191,11 +186,13 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Verify the published checksum
+      - name: Verify Native artifact provenance and checksum
         shell: bash
         run: |
           set -euo pipefail
-          (cd dist && sha256sum -c wp-ai-admin-*.zip.sha256)
+          ZIP="$(ls dist/wp-ai-admin-*.zip | head -n1)"
+          python3 tools/build-native-candidate.py verify --archive "$ZIP" --provenance dist/PROVENANCE.json --checksum "$ZIP.sha256"
+          (cd dist && sha256sum -c "$(basename "$ZIP").sha256")
       - name: Install and boot the published artifact
         env:
           WP_TEST_VERSION: ${{ matrix.wp }}
@@ -218,6 +215,11 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Verify release artifact provenance
+        run: |
+          set -euo pipefail
+          ZIP="$(ls dist/wp-ai-admin-*.zip | head -n1)"
+          python3 tools/build-native-candidate.py verify --archive "$ZIP" --provenance dist/PROVENANCE.json --checksum "$ZIP.sha256"
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
