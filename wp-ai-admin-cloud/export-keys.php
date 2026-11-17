@@ -46,9 +46,15 @@ try {
     $createdStat = fstat($handle);
     $written = fwrite($handle, $snippet);
     $flushed = fflush($handle);
+    $finalStat = fstat($handle);
+    $pathStat = @lstat($target);
+    $ownedPath = $finalStat && $pathStat
+        && (int)$finalStat['dev'] === (int)$pathStat['dev']
+        && (int)$finalStat['ino'] === (int)$pathStat['ino'];
+    $privateMode = $finalStat && (((int)$finalStat['mode'] & 0777) === 0600);
     fclose($handle);
     umask($oldUmask);
-    if ($written !== strlen($snippet) || !$flushed || !chmod($target, 0600)) {
+    if ($written !== strlen($snippet) || !$flushed || !$privateMode || !$ownedPath) {
         throw new RuntimeException('Could not securely write private output file');
     }
     fwrite(STDOUT, "Exported the existing gateway keys to a private 0600 snippet. Values were not printed.\n");
