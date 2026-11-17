@@ -112,6 +112,8 @@ For native and Cloud Core packages:
 
 The Native archive must contain only Native files. Cloud Core is exported separately and is ultimately maintained in the private `wp-ai-admin-cloud-core` repository. No final tagged release exists yet.
 
+Current Native candidate pipeline: `tools/build-native-candidate.py` builds a sorted, stored ZIP from committed Native paths, emits `PROVENANCE.json` with source commit/tree, build identity, archive checksum and per-file hashes/modes, then verifies that manifest against the exact checkout and ZIP before package installation and tagged publication. The provenance manifest is unsigned metadata; neither it nor `BUILD-SIGNATURE.txt` is a cryptographic publisher signature. The Cloud Core candidate builder has its own equivalent source-bound provenance flow.
+
 ### 6. Secrets and logging gate — AUTOMATED GATE IMPLEMENTED / final scan pending
 
 Before publication:
