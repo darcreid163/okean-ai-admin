@@ -1,7 +1,7 @@
 <?php
 // WP-CLI eval-file uses eval() internally; strict_types cannot be declared there.
-/** Only run on disposable WordPress CI: simulate 2.1.16 DB 23 -> 2.1.17 DB 24. */
-if (!defined('WP_CLI') || !WP_CLI || !defined('OAI_DB_VERSION') || OAI_DB_VERSION!==24) {
+/** Only run on disposable WordPress CI: simulate 2.1.17 DB 24 -> 2.1.18 DB 25. */
+if (!defined('WP_CLI') || !WP_CLI || !defined('OAI_DB_VERSION') || OAI_DB_VERSION!==25) {
     throw new RuntimeException('Disposable WP-CLI and Native DB schema 24 required');
 }
 global $wpdb;
@@ -27,8 +27,8 @@ foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table){
 }
 update_option('oai_db_version',23,false);
 OAI_DB::maybe_upgrade();
-quotaUpgradeAssert((int)get_option('oai_db_version')===24,'DB schema 24 not recorded');
-foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table) {
+quotaUpgradeAssert((int)get_option('oai_db_version')===25,'DB schema 25 not recorded');
+foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table(),OAI_DB::rate_limits_table()] as $table) {
     $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
     quotaUpgradeAssert($found===$table,'Missing quota v24 table '.$table);
 }
