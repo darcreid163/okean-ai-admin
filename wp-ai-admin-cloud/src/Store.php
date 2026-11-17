@@ -78,14 +78,16 @@ final class Store {
     public function ensureOwnerIndexes(): void {
         if ($this->transactionDepth>0) throw new Fault('owner_index_schema_unavailable',503);
         $indexes=[
-            'sites'=>['idx_sites_owner_status_created',['owner','status','created_at']],
-            'tokens'=>['idx_tokens_owner_revoked',['owner','revoked']],
-            'requests'=>['idx_requests_owner_created_key',['owner','created_at','request_key']],
-            'audit'=>['idx_audit_owner',['owner']],
-            'oauth_access'=>['idx_oauth_access_grant_id',['grant_id']],
+            'sites'=>['sites_owner_status_created',['owner','status','created_at']],
+            'tokens'=>['tokens_owner_revoked',['owner','revoked']],
+            'requests'=>['requests_owner_created_key',['owner','created_at','request_key']],
+            'audit'=>['audit_owner',['owner']],
+            'oauth_access'=>['oauth_access_grant_id',['grant_id']],
         ];
         foreach ($indexes as $table=>$definition) {
-            [$name,$columns]=$definition;
+            [$suffix,$columns]=$definition;
+            // SQLite index names are database-global, so isolate multiple Store prefixes.
+            $name='idx_'.substr(hash('sha256',$this->prefix),0,10).'_'.$suffix;
             if ($this->hasIndex($table,$name)) continue;
             $columnSql=implode(',',array_map(static fn($column)=>'`'.$column.'`',$columns));
             try {
