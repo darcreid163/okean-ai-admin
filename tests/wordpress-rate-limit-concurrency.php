@@ -13,6 +13,10 @@ $inserted=$wpdb->insert(OAI_DB::table(),[
     'target'=>'{"post_id":0}','created_at'=>gmdate('Y-m-d H:i:s')
 ]);
 rateLimitAssert($inserted===1,'Cannot create operation migration fixture');
+$oauthTable=OAI_MCP_OAuth::clients_table();
+$oauthClient='rate-limit-upgrade-'.wp_generate_uuid4();
+$oauthInserted=$wpdb->insert($oauthTable,['client_id'=>$oauthClient,'client_name'=>'Rate migration fixture','redirect_uris'=>'[]','created_at'=>gmdate('Y-m-d H:i:s')]);
+rateLimitAssert($oauthInserted===1,'Cannot create OAuth migration fixture');
 $table=OAI_DB::rate_limits_table();
 $indexes=$wpdb->get_results("SHOW INDEX FROM `$table`",ARRAY_A);
 $primary=array_values(array_filter(is_array($indexes)?$indexes:array(),static fn($row)=>(string)($row['Key_name']??'')==='PRIMARY'));
@@ -27,8 +31,10 @@ rateLimitAssert((int)get_option('oai_db_version')===25,'Schema did not upgrade f
 $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
 rateLimitAssert($found===$table,'Rate counter table missing after v24 -> v25 upgrade');
 rateLimitAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::table().' WHERE operation_id=%s',$operationId))===1,'Existing operation was lost during rate counter migration');
+rateLimitAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$oauthTable.' WHERE client_id=%s',$oauthClient))===1,'Existing OAuth client was lost during rate counter migration');
 OAI_DB::maybe_upgrade();
 rateLimitAssert((int)get_option('oai_db_version')===25,'Repeated v25 migration changed schema version');
+rateLimitAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$oauthTable.' WHERE client_id=%s',$oauthClient))===1,'Repeated migration changed OAuth client');
 
 // Run many independent PHP/WordPress processes against the same key/window.
 $bucket='rate-limit-concurrency-'.bin2hex(random_bytes(12));
