@@ -168,6 +168,10 @@ def verify(repo: Path, archive: Path, provenance_path: Path, checksum_path: Path
         names = package.namelist()
         if len(names) != len(set(names)) or set(names) != set(expected_files):
             raise ValueError("ZIP entries do not match provenance manifest")
+        if names != sorted(names):
+            raise ValueError("ZIP entries are not in deterministic sorted order")
+        if package.comment:
+            raise ValueError("Unexpected ZIP archive comment")
         if provenance.get("schema_version") != 1 or provenance.get("artifact_kind") != "native-wordpress-plugin":
             raise ValueError("Unsupported Native provenance schema")
         epoch = int(provenance.get("source_date_epoch", 0))
@@ -184,7 +188,8 @@ def verify(repo: Path, archive: Path, provenance_path: Path, checksum_path: Path
                 raise ValueError("Non-regular ZIP entry: " + name)
             if stat.S_IMODE(zip_mode) != int(entry.get("mode", "0"), 8):
                 raise ValueError("ZIP mode mismatch: " + name)
-            if info.compress_type != zipfile.ZIP_STORED or info.date_time != expected_date:
+            if (info.create_system != 3 or info.extra or info.comment or
+                    info.compress_type != zipfile.ZIP_STORED or info.date_time != expected_date):
                 raise ValueError("Non-deterministic ZIP metadata: " + name)
             data = package.read(name)
             if hashlib.sha256(data).hexdigest() != entry.get("sha256"):
