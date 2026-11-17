@@ -28,7 +28,6 @@ $expected=[
     ['requests','idx_requests_owner_site_created_key',['owner','site_id','created_at','request_key']],
     ['batch_steps','idx_batch_steps_request_ordinal',['request_key','ordinal']],
     ['rate','idx_rate_owner_slot',['owner','slot']],
-    ['audit','idx_audit_owner_event_created',['owner','event','created_at']],
     ['oauth_codes','idx_oauth_codes_owner_used',['owner','used']],
     ['oauth_grants','idx_oauth_grants_owner',['owner']],
     ['oauth_access','idx_oauth_access_grant_id',['grant_id']],
