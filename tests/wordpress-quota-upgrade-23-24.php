@@ -2,7 +2,7 @@
 // WP-CLI eval-file uses eval() internally; strict_types cannot be declared there.
 /** Only run on disposable WordPress CI: simulate 2.1.17 DB 24 -> 2.1.18 DB 25. */
 if (!defined('WP_CLI') || !WP_CLI || !defined('OAI_DB_VERSION') || OAI_DB_VERSION!==25) {
-    throw new RuntimeException('Disposable WP-CLI and Native DB schema 24 required');
+    throw new RuntimeException('Disposable WP-CLI and Native DB schema 25 required');
 }
 global $wpdb;
 function quotaUpgradeAssert(bool $ok,string $message): void { if(!$ok)throw new RuntimeException($message); }
