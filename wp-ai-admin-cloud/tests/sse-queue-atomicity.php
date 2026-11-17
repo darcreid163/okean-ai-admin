@@ -49,6 +49,11 @@ foreach($store->drainSseQueue($session,time()) as $payload) {
 sort($received);
 sseCheck(count($received)===100,'SSE queue lost or duplicated messages: '.count($received).' received');
 sseCheck($received===range(0,99),'SSE queue messages are missing or duplicated');
+$reservation=$store->reserveSseMessage($session,time(),time()+3600,32);
+sseCheck($store->drainSseQueue($session,time())===[],'Uncompleted SSE reservation became visible to the stream');
+$reservedPayload=json_encode(['reservation'=>'completed'],JSON_THROW_ON_ERROR);
+$store->completeSseMessage($session,$reservation,$reservedPayload,time(),time()+3600);
+sseCheck($store->drainSseQueue($session,time())===[$reservedPayload],'Completed SSE reservation was not published exactly once');
 $overflow=false;
 for($i=0;$i<32;$i++) $store->enqueueSseMessage($session,json_encode(['cap'=>$i],JSON_THROW_ON_ERROR),time(),time()+3600,32);
 try { $store->enqueueSseMessage($session,'{"cap":32}',time(),time()+3600,32); }
