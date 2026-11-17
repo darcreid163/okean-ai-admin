@@ -14,10 +14,11 @@ if (!defined('ABSPATH')) {
 if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
     function wpai_admin_uninstall_delete_option_prefix($prefix) {
         global $wpdb;
-        $pattern = $wpdb->esc_like($prefix) . '%';
+        // LEFT() avoids LIKE wildcard/escape-mode differences for underscores in prefixes.
         $keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-            $pattern
+            "SELECT option_name FROM {$wpdb->options} WHERE LEFT(option_name,CHAR_LENGTH(%s))=%s",
+            $prefix,
+            $prefix
         ));
         foreach ((array) $keys as $key) {
             if (is_string($key) && strpos($key, $prefix) === 0) {
@@ -30,15 +31,15 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
         global $wpdb;
         $base = '_transient_' . $prefix;
         $timeout = '_transient_timeout_' . $prefix;
-        $base_pattern = $wpdb->esc_like($base) . '%';
-        $timeout_pattern = $wpdb->esc_like($timeout) . '%';
         $base_keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-            $base_pattern
+            "SELECT option_name FROM {$wpdb->options} WHERE LEFT(option_name,CHAR_LENGTH(%s))=%s",
+            $base,
+            $base
         ));
         $timeout_keys = $wpdb->get_col($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-            $timeout_pattern
+            "SELECT option_name FROM {$wpdb->options} WHERE LEFT(option_name,CHAR_LENGTH(%s))=%s",
+            $timeout,
+            $timeout
         ));
         foreach (array_unique(array_merge((array) $base_keys, (array) $timeout_keys)) as $option_name) {
             if (!is_string($option_name)) {
