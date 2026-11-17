@@ -61,7 +61,8 @@ class OAI_MCP_OAuth {
    KEY refresh_hash (refresh_hash),
    KEY client_id (client_id),
    KEY user_id (user_id),
-   KEY expires_at (expires_at)
+   KEY expires_at (expires_at),
+   KEY refresh_expires_at (refresh_expires_at)
   ) $charset;";
   dbDelta($sql1);
   dbDelta($sql2);
@@ -331,7 +332,7 @@ public static function register_client($req){
   if(!array_is_list($uris) || count($uris)<1 || count($uris)>5) return self::json_error('invalid_redirect_uri','redirect_uris must contain 1–5 entries');
   $clean=array();
   foreach($uris as $raw_uri){
-   if(!is_string($raw_uri) || strlen($raw_uri)>2048) return self::json_error('invalid_redirect_uri','Each redirect URI must be a string of at most 2048 characters');
+   if(!is_string($raw_uri) || strlen($raw_uri)>2048 || preg_match('/[\\x00-\\x20]/',$raw_uri)) return self::json_error('invalid_redirect_uri','Each redirect URI must be a valid string of at most 2048 characters without whitespace or control characters');
    $uri=esc_url_raw($raw_uri);
    if(!$uri) return self::json_error('invalid_redirect_uri','Every redirect URI must be an absolute URI');
    $parts=wp_parse_url($uri);
