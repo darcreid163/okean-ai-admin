@@ -37,6 +37,7 @@ final class WordPress {
         $store=self::database();
         if ((string)get_option('wpai_gateway_db_version','')==='4') {
             $store->assertSchema();
+            $store->ensureSseQueueSchema();
         } else {
             $store->migrate();
             update_option('wpai_gateway_db_version','4',false);
@@ -61,6 +62,7 @@ final class WordPress {
     }
     public static function oauth(): OAuth { return new OAuth(self::database(),self::core(),Settings::endpoint()); }
     public static function operatorCore(): Core { return self::core(); }
+    public static function operatorStore(): Store { self::core(); return self::database(); }
     public static function pairing(): Pairing { return new Pairing(self::core(),new Vault(Settings::keys()['vault']),new HttpsTransport()); }
     public static function operatorOwner(): string { return self::owner(); }
     public static function authenticateHeader(string $auth): array {
