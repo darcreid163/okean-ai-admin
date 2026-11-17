@@ -9,10 +9,10 @@ class OAI_Rate_Limit {
   $window_start=(int)(floor(time()/$window)*$window);
   $client_hash=self::client_key();
   $bucket_hash=hash('sha256',(string)$bucket);
-  $count=OAI_DB::rate_limit_hit($bucket_hash,$client_hash,$window_start);
-  if(is_wp_error($count)) return $count;
+  $admitted=OAI_DB::rate_limit_admit($bucket_hash,$client_hash,$window_start,$limit);
+  if(is_wp_error($admitted)) return $admitted;
   OAI_DB::prune_rate_limits();
-  if($count>$limit){
+  if(!$admitted){
    $retry_after=max(1,($window_start+$window)-time());
    return new WP_Error('oai_rate_limited','Rate limit exceeded',array('status'=>429,'retry_after'=>$retry_after));
   }
