@@ -64,6 +64,12 @@ $dynamic_options=[
  'oai_operation_lease_999999'=>['token_hash'=>'fixture'],
  'oai_media_creation_'.str_repeat('c',64)=>['claim'=>'fixture'],
  'oai_cloud_usage_'.str_repeat('d',32)=>['used'=>1],
+ 'oai_workspace_creation_'.str_repeat('e',64)=>['claim'=>'fixture'],
+ 'oai_menu_creation_'.str_repeat('a',64)=>['claim'=>'fixture'],
+ 'oai_menu_item_creation_'.str_repeat('b',64)=>['claim'=>'fixture'],
+ 'oai_product_creation_'.str_repeat('c',64)=>['claim'=>'fixture'],
+ 'oai_post_creation_'.str_repeat('d',64)=>['claim'=>'fixture'],
+ 'oai_elementor_page_creation_'.str_repeat('e',64)=>['claim'=>'fixture'],
 ];
 foreach($dynamic_options as $key=>$value)update_option($key,$value,false);
 $transients=['oai_rl_fixture','oai_cimd_fixture','oai_oauth_login_fixture','oai_agent_nonce_fixture','oai_vqa_fixture','oai_vqar_fixture'];
