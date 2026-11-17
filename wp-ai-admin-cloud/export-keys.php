@@ -23,11 +23,11 @@ if (!$targetDir || $targetDir === $root || str_starts_with($targetDir . DIRECTOR
 }
 try {
     require_once $root . DIRECTORY_SEPARATOR . 'wp-load.php';
-    if (!class_exists(\\WPAICloudGateway\\Settings::class)) {
+    if (!class_exists(\WPAICloudGateway\Settings::class)) {
         throw new RuntimeException('Cloud gateway plugin is not active');
     }
     // Export the exact effective keys. Never generate replacements here.
-    $keys = \\WPAICloudGateway\\Settings::keys();
+    $keys = \WPAICloudGateway\Settings::keys();
     $vault = base64_encode($keys['vault']);
     $signing = base64_encode($keys['signing']);
     $snippet = "<?php\n"
