@@ -11,6 +11,6 @@ if(!$response instanceof WP_REST_Response)exit(3);
 $status=(int)$response->get_status();
 $data=$response->get_data();
 if($status===201 && !empty($data['client_id'])){echo 'CREATED:'.$data['client_id']."\n";exit(0);}
-if($status===429 && ($data['error']??'')==='temporarily_unavailable'){echo "FULL\n";exit(0);}
+if($status===429 && ($data['error']??'')==='client_registration_limit'){echo "FULL\n";exit(0);}
 echo 'ERROR:'.$status.':'.wp_json_encode($data)."\n";
 exit(1);
