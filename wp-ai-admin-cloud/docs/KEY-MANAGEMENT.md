@@ -38,7 +38,7 @@ The exported constants must be the exact current keys. Generating new values and
 
 ## Fresh installation
 
-For a new installation with no existing encrypted data, `tools/generate-keys.php` can create a new private configuration snippet. Use a new absolute path outside the web root, add both definitions to `wp-config.php`, and keep the file private.
+For a new installation with no existing encrypted data, enabling the gateway calls `Settings::prepareKeys()` and creates a new wrapped key pair automatically. If you prefer explicit constants from the first boot, the repository's source-only `tools/generate-keys.php` can create a private snippet; that development utility is not part of the production ZIP. Use a new absolute path outside the web root, add both definitions to `wp-config.php`, and keep the file private.
 
 Do not use `generate-keys.php` as a recovery or rotation tool for an existing installation: it creates new random keys.
 
