@@ -1,7 +1,7 @@
 # WP AI Admin — Public Release Readiness
 
 Status: **IN PROGRESS**
-Current candidate (unreleased): native **2.1.17** (DB24), Cloud Core **0.3.13-dev** (Gateway schema 4, derived from the recovered 0.3.11 baseline).
+Current integrated candidate (unreleased): Native **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`), Cloud Core **0.3.13-dev** (Gateway schema 4, derived from the recovered 0.3.11 baseline).
 Canonical public MCP: **https://wpaiadmin.ru/mcp**
 
 This document is the release-gate checklist for moving WP AI Admin from approved-user beta toward public publication. It does not change the connection contract. Any connection-affecting change must still follow `docs/CHATGPT-CONNECTION-CONTRACT.md`.
