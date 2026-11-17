@@ -21,6 +21,8 @@ if (!$targetDir || $targetDir === $root || str_starts_with($targetDir . DIRECTOR
     fwrite(STDERR, "Output must be in an existing directory outside the WordPress web root.\n");
     exit(2);
 }
+$created = false;
+$createdStat = null;
 try {
     require_once $root . DIRECTORY_SEPARATOR . 'wp-load.php';
     if (!class_exists(\WPAICloudGateway\Settings::class)) {
@@ -40,6 +42,8 @@ try {
         umask($oldUmask);
         throw new RuntimeException('Could not create private output file');
     }
+    $created = true;
+    $createdStat = fstat($handle);
     $written = fwrite($handle, $snippet);
     $flushed = fflush($handle);
     fclose($handle);
@@ -53,7 +57,15 @@ try {
 } catch (Throwable $error) {
     if (isset($handle) && is_resource($handle)) fclose($handle);
     if (isset($oldUmask)) umask($oldUmask);
-    if (is_file($target)) @unlink($target);
+    // Never remove a path that this process did not create. The destination
+    // may have appeared after the initial existence check (another exporter
+    // won the race), or may have been replaced after our exclusive create.
+    if ($created && is_array($createdStat)) {
+        $pathStat = @lstat($target);
+        if ($pathStat && (int)$pathStat['dev'] === (int)$createdStat['dev'] && (int)$pathStat['ino'] === (int)$createdStat['ino']) {
+            @unlink($target);
+        }
+    }
     fwrite(STDERR, "Could not export the current gateway keys. No key material was printed.\n");
     exit(1);
 }
