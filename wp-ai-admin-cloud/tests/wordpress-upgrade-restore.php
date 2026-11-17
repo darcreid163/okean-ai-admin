@@ -71,6 +71,16 @@ if($phase==='seed') {
     cloudUpgradeAssert(WPAI_CLOUD_VERSION===($phase==='restored'?'0.3.11':'0.3.13-dev'),'Unexpected Cloud source version');
 }
 cloudUpgradeAssert(WordPress::configured() && (string)get_option('wpai_gateway_db_version')==='4','Gateway normal boot failed');
+// Force the already-installed schema-v4 path: indexes must be applied once without changing the schema version.
+delete_option('wpai_gateway_operational_indexes_v1');
+$migrationMethod=new ReflectionMethod(WordPress::class,'migrate');
+$migrationMethod->setAccessible(true);
+$migrationMethod->invoke(null);
+cloudUpgradeAssert((string)get_option('wpai_gateway_operational_indexes_v1')==='1','Existing schema-v4 installation did not record the operational-index migration');
+$siteIndexName='wpai_'.substr(hash('sha256',$wpdb->prefix.'wpai_gateway_'),0,16).'_idx_sites_owner_status_created';
+$siteIndexes=$store->rows('SHOW INDEX FROM '.$store->table('sites'));
+cloudUpgradeAssert((bool)array_filter($siteIndexes,static fn($row)=>(string)($row['Key_name']??'')===$siteIndexName),'Existing schema-v4 installation did not receive the owner/status index');
+cloudUpgradeAssert((string)get_option('wpai_gateway_db_version')==='4','Operational-index migration changed the Gateway schema version');
 $expectBatch=in_array($phase,['upgraded','repeat','upgraded-again'],true);
 cloudUpgradeAssert(WordPress::operatorCore()->batchAvailable()===$expectBatch,'Batch state does not match the installed source');
 $keys=Settings::keys(); $vault=new Vault($keys['vault']); $signer=new Signer($keys['signing']);
