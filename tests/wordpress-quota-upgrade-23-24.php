@@ -41,4 +41,4 @@ quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$c
 quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::table().' WHERE operation_id=%s',$operationId))===$operationsBefore,'Pending operation lost');
 OAI_DB::maybe_upgrade();
 quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$clients.' WHERE client_id=%s',$clientId))===1,'Repeated upgrade mutated OAuth client');
-echo "PASS: Native v23 -> v24 preserves identities, OAuth credentials and pending operation; repeat is idempotent\n";
+echo "PASS: Native v23 -> v25 preserves identities, OAuth credentials and pending operation; repeat is idempotent\n";
