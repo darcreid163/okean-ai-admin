@@ -44,13 +44,21 @@ if ($phase==='seed') {
     nativeRestoreAssert(file_put_contents($snapshot,wp_json_encode($actual,JSON_THROW_ON_ERROR))!==false,'Cannot persist synthetic snapshot');
 } else {
     $expected=json_decode(file_get_contents($snapshot),true,512,JSON_THROW_ON_ERROR);
-    nativeRestoreAssert($actual['options']===$expected['options'],'Identity, credentials, license or sentinel changed');
+    $expected_options=$expected['options'];
+    if($phase!=='restored'){
+        nativeRestoreAssert((int)$actual['options']['oai_oauth_schema_version']===OAI_MCP_OAuth::SCHEMA_VERSION,'OAuth schema version migration did not complete');
+        $expected_options['oai_oauth_schema_version']=$actual['options']['oai_oauth_schema_version'];
+    }
+    nativeRestoreAssert($actual['options']===$expected_options,'Identity, credentials, license or sentinel changed');
     nativeRestoreAssert($actual['rows']===$expected['rows'],'OAuth rows or pending operation changed');
     if ($phase==='restored') {
         nativeRestoreAssert(OAI_VERSION==='2.1.14' && (int)get_option('oai_db_version')===23,'Historical code/schema restore failed');
         nativeRestoreAssert($wpdb->get_col('SHOW TABLES')===$expected['database_tables'],'Full database table restore failed');
     } else {
         nativeRestoreAssert(OAI_VERSION==='2.1.17' && (int)get_option('oai_db_version')===24,'Candidate migration did not run');
+        $registry_table=OAI_MCP_OAuth::registry_table();
+        nativeRestoreAssert($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($registry_table)))===$registry_table,'OAuth registry mutex table missing after upgrade');
+        nativeRestoreAssert($wpdb->get_var($wpdb->prepare('SELECT registry_key FROM '.$registry_table.' WHERE registry_key=%s',OAI_MCP_OAuth::CLIENT_REGISTRY_LOCK))===OAI_MCP_OAuth::CLIENT_REGISTRY_LOCK,'OAuth registry mutex row missing after upgrade');
         foreach([OAI_DB::quota_table(),OAI_DB::quota_events_table()] as $table) {
             nativeRestoreAssert($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)))===$table,'Quota table missing');
         }
