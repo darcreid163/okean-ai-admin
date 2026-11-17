@@ -38,9 +38,15 @@ final class WordPress {
         if ((string)get_option('wpai_gateway_db_version','')==='4') {
             $store->assertSchema();
             $store->ensureSseQueueSchema();
+            // One-time additive index migration for existing schema-v4 installations.
+            if ((string)get_option('wpai_gateway_operational_indexes_v1','')!=='1') {
+                $store->ensureOperationalIndexes();
+                update_option('wpai_gateway_operational_indexes_v1','1',false);
+            }
         } else {
             $store->migrate();
             update_option('wpai_gateway_db_version','4',false);
+            update_option('wpai_gateway_operational_indexes_v1','1',false);
         }
         // Separate idempotent flag: the schema version stays 4 so historical
         // upgrade/restore snapshots keep working. Only current-scheme accounts
