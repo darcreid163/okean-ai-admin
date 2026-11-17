@@ -99,8 +99,17 @@ class OAI_DB {
   $plain_value=get_option('oai_bearer_token','');
   $plain=is_string($plain_value)?$plain_value:'';
   if($plain===''){$legacy_value=get_option('oai_api_token','');$plain=is_string($legacy_value)?$legacy_value:'';}
+  $stored=get_option('oai_bearer_token_hash','');
+  $stored_valid=is_string($stored) && (bool)preg_match('/^[a-f0-9]{64}$/D',$stored);
   if($plain!==''){
    $candidate=hash('sha256',$plain);
+   // A valid hash is already the active credential. Never let a stale
+   // plaintext option from a rollback/partial migration overwrite it.
+   if($stored_valid){
+    delete_option('oai_bearer_token');
+    delete_option('oai_api_token');
+    return true;
+   }
    update_option('oai_bearer_token_hash',$candidate,false);
    $persisted=get_option('oai_bearer_token_hash','');
    if(!is_string($persisted) || !hash_equals($candidate,$persisted))return false;
@@ -108,8 +117,7 @@ class OAI_DB {
    delete_option('oai_api_token');
    return true;
   }
-  $stored=get_option('oai_bearer_token_hash','');
-  return is_string($stored) && (bool)preg_match('/^[a-f0-9]{64}$/D',$stored);
+  return $stored_valid;
  }
  private static $media_creation=null;
  /** Atomic first-writer claim admission for new WordPress artifacts.
