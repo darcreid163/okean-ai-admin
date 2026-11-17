@@ -22,34 +22,34 @@ fwrite(STDERR,"INDEX-TEST before migrate\n");
 $store->migrate();
 fwrite(STDERR,"INDEX-TEST after migrate\n");
 $expected=[
-    ['sites','idx_owner_status_created',['owner','status','created_at']],
-    ['tokens','idx_owner',['owner']],
-    ['requests','idx_owner_created_key',['owner','created_at','request_key']],
-    ['requests','idx_owner_site_created_key',['owner','site_id','created_at','request_key']],
-    ['batch_steps','idx_request_ordinal',['request_key','ordinal']],
-    ['rate','idx_owner_slot',['owner','slot']],
-    ['audit','idx_owner_event_created',['owner','event','created_at']],
-    ['oauth_codes','idx_owner_used',['owner','used']],
-    ['oauth_grants','idx_owner',['owner']],
-    ['oauth_access','idx_grant_id',['grant_id']],
+    ['sites','idx_sites_owner_status_created',['owner','status','created_at']],
+    ['tokens','idx_tokens_owner',['owner']],
+    ['requests','idx_requests_owner_created_key',['owner','created_at','request_key']],
+    ['requests','idx_requests_owner_site_created_key',['owner','site_id','created_at','request_key']],
+    ['batch_steps','idx_batch_steps_request_ordinal',['request_key','ordinal']],
+    ['rate','idx_rate_owner_slot',['owner','slot']],
+    ['audit','idx_audit_owner_event_created',['owner','event','created_at']],
+    ['oauth_codes','idx_oauth_codes_owner_used',['owner','used']],
+    ['oauth_grants','idx_oauth_grants_owner',['owner']],
+    ['oauth_access','idx_oauth_access_grant_id',['grant_id']],
 ];
 foreach($expected as [$table,$name,$columns]) indexDefinition($store,$table,$name,$columns);
 $store->migrate();
 foreach($expected as [$table,$name,$columns]) indexDefinition($store,$table,$name,$columns);
 $store->ensureLicenseSchema();
 $licenses=[
-    ['licenses','idx_owner_issued_id',['owner','issued_at','id']],
-    ['licenses','idx_issued_id',['issued_at','id']],
-    ['licenses','idx_owner_status',['owner','status']],
-    ['license_activations','idx_license_status',['license_id','status']],
+    ['licenses','idx_licenses_owner_issued_id',['owner','issued_at','id']],
+    ['licenses','idx_licenses_issued_id',['issued_at','id']],
+    ['licenses','idx_licenses_owner_status',['owner','status']],
+    ['license_activations','idx_license_activations_license_status',['license_id','status']],
 ];
 foreach($licenses as [$table,$name,$columns]) indexDefinition($store,$table,$name,$columns);
 $store->ensureLicenseSchema();
 foreach($licenses as [$table,$name,$columns]) indexDefinition($store,$table,$name,$columns);
 if (!getenv('TEST_MYSQL_DSN')) {
     // A same-name index with a different column order/definition must fail closed.
-    $store->execute('DROP INDEX idx_owner_status_created');
-    $store->execute('CREATE INDEX idx_owner_status_created ON '.$store->table('sites').' (owner)');
+    $store->execute('DROP INDEX idx_sites_owner_status_created');
+    $store->execute('CREATE INDEX idx_sites_owner_status_created ON '.$store->table('sites').' (owner)');
     try { $store->migrate(); throw new RuntimeException('Mismatched index definition was accepted'); }
     catch (Fault $e) { indexCheck($e->reason==='gateway_schema_incompatible','Unexpected mismatched-index fault: '.$e->reason); }
 }
