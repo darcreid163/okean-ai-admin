@@ -63,7 +63,7 @@ class NativeArtifactTests(unittest.TestCase):
         return self.run_builder("verify", "--repo", str(self.repo),
                                 "--archive", str(archive),
                                 "--provenance", str(output / "PROVENANCE.json"),
-                                "--checksum", str(output / (archive.name + ".sha256")))
+                                "--checksum", str(output / (archive.name + ".sha256")), check=False)
 
     def test_reproducible_archive_and_source_bound_provenance(self):
         self.build_to(self.out1)
