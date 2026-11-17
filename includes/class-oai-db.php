@@ -95,7 +95,21 @@ class OAI_DB {
   // Never erase unresolved reservations: time alone cannot prove the outcome.
   $wpdb->query("DELETE FROM $table WHERE state IN ('succeeded','failed') AND created_at < UTC_TIMESTAMP() - INTERVAL 90 DAY");
  }
- public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
+ public static function migrate_token(){
+  $plain=(string)get_option('oai_bearer_token','');
+  if($plain==='')$plain=(string)get_option('oai_api_token','');
+  if($plain!==''){
+   $candidate=hash('sha256',$plain);
+   update_option('oai_bearer_token_hash',$candidate,false);
+   $persisted=(string)get_option('oai_bearer_token_hash','');
+   if(!hash_equals($candidate,$persisted))return false;
+   delete_option('oai_bearer_token');
+   delete_option('oai_api_token');
+   return true;
+  }
+  $stored=(string)get_option('oai_bearer_token_hash','');
+  return $stored!=='' && (bool)preg_match('/^[a-f0-9]{64}$/D',$stored);
+ }
  private static $media_creation=null;
  /** Atomic first-writer claim admission for new WordPress artifacts.
   * WordPress add_option() can report success for duplicate-key no-op updates
