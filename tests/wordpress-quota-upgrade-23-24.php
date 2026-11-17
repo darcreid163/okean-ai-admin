@@ -32,7 +32,12 @@ OAI_DB::maybe_upgrade();
 quotaUpgradeAssert((int)get_option('oai_db_version')===OAI_DB_VERSION,'Current DB schema not recorded');
 foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table) {
     $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
-    quotaUpgradeAssert($found===$table,'Missing quota v24 table '.$table);
+    quotaUpgradeAssert($found===$table,'Missing quota table '.$table);
+}
+if(OAI_DB_VERSION>=25 && method_exists('OAI_DB','rate_limits_table')){
+    $rateTable=OAI_DB::rate_limits_table();
+    $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($rateTable)));
+    quotaUpgradeAssert($found===$rateTable,'Missing Native rate counter table '.$rateTable);
 }
 quotaUpgradeAssert(OAI_Platform::site_id()===$siteId&&OAI_Platform::installation_id()===$installId,'Site/installation identity changed');
 // A retained enabled option is read as "1" on a new WordPress process; an
