@@ -92,6 +92,7 @@ or the Cloud service.
 * Security: replace transient rate-limit read/modify/write with atomic database admission; concurrent requests cannot exceed the configured fixed-window limit.
 * Security: fail closed when rate-counter storage is unavailable; retain the existing HTTP 429 contract for rejected requests.
 * Database: add the Native v25 rate-counter table with bounded expiry cleanup; existing operations, OAuth records and quota data are preserved during upgrade.
+* WooCommerce: declare HPOS compatibility and test the order sandbox lifecycle on the WooCommerce 11.3.0 custom order datastore.
 
 = 2.1.17 =
 * Security: pin usage signing key at pairing; response-body key no longer trusted (issue #135).
