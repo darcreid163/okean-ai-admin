@@ -21,6 +21,8 @@ jobs:
         run: bash tools/native-release.sh validate
       - name: Offline release tag and immutable asset guards
         run: python3 tests/native-release-guards.py
+      - name: Deterministic Native artifact and provenance regression
+        run: python3 tests/native-artifact-reproducibility.py
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
