@@ -135,6 +135,12 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
             'oai_cloud_usage_',
             'oai_media_creation_',
             'oai_operation_lease_',
+            'oai_workspace_creation_',
+            'oai_menu_creation_',
+            'oai_menu_item_creation_',
+            'oai_product_creation_',
+            'oai_post_creation_',
+            'oai_elementor_page_creation_',
             'oai_pair_code_',
             'oai_pair_credential_',
         );
