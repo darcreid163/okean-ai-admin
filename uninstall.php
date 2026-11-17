@@ -96,6 +96,7 @@ if (!function_exists('wpai_admin_uninstall_delete_option_prefix')) {
             'oai_runtime_build_id',
             'oai_bearer_token',
             'oai_api_token',
+            'oai_bearer_token_hash',
             'oai_bearer_user_id',
             'oai_mcp_enabled',
             'oai_mcp_token_hash',
