@@ -12,6 +12,7 @@ $oai_schema_dbdelta_calls=0;
 $oai_schema_skip_table='';
 function get_option($key,$default=false) { global $oai_schema_options; return $oai_schema_options[$key]??$default; }
 function update_option($key,$value,$autoload=null) { global $oai_schema_options; $oai_schema_options[$key]=$value; return true; }
+function current_time($type,$gmt=false) { return gmdate('Y-m-d H:i:s'); }
 class OAI_Schema_Test_DB {
  public $prefix='oai_schema_test_';
  public $last_error='';
