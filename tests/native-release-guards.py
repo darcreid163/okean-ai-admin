@@ -19,7 +19,7 @@ class ReleaseGuardTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / 'tools').mkdir()
         shutil.copy2(ROOT / 'tools/native-release.sh', self.root / 'tools')
-        (self.root / 'okean-ai-admin.php').write_text("<?php\n/**\n * Version: 2.1.17\n */\ndefine('OAI_VERSION','2.1.17');\n")
+        (self.root / 'okean-ai-admin.php').write_text("<?php\n/**\n * Version: 2.1.17\n */\ndefine('OAI_VERSION','2.1.17');\ndefine('OAI_BUILD_ID','2.1.17-test-build');\ndefine('OAI_RELEASE_CHANNEL','commercial_beta');\ndefine('OAI_RELEASE_PROFILE','commercial_beta_candidate');\n")
         metadata = "WP AI Admin Build Metadata (not a cryptographic signature)\nVersion: 2.1.17\nBuild ID: 2.1.17-test-build\nRelease channel: commercial_beta\nRelease profile: commercial_beta_candidate\n"
         (self.root / 'BUILD-SIGNATURE.txt').write_text(metadata)
         (self.root / 'BUILD_SIGNATURE.txt').write_text(metadata)
