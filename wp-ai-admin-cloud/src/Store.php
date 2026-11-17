@@ -51,7 +51,6 @@ final class Store {
         }
     }
     public function migrate(): void {
-        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE Store::migrate begin\n");
         $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
         $large=$this->mysql?'MEDIUMTEXT':'TEXT';
         $definitions=[
@@ -71,11 +70,8 @@ final class Store {
             'oauth_rate'=>'bucket VARCHAR(64) NOT NULL, slot BIGINT NOT NULL, hits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(bucket,slot)'
         ];
         foreach ($definitions as $name=>$def) $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table($name).' ('.$def.')'.$tail);
-        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE Store tables ready\n");
         $this->upgradeQuotaSchema();
-        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE before operational indexes\n");
         $this->ensureOperationalIndexes(array_keys($definitions));
-        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE operational indexes ready\n");
         $this->assertSchema(array_keys($definitions));
     }
     private function upgradeQuotaSchema(): void {
@@ -108,36 +104,35 @@ final class Store {
     private function ensureOperationalIndexes(array $tableNames): void {
         $definitions = [
             'sites' => [
-                'idx_owner_status_created' => ['owner','status','created_at'],
+                'idx_sites_owner_status_created' => ['owner','status','created_at'],
             ],
             'tokens' => [
-                'idx_owner' => ['owner'],
+                'idx_tokens_owner' => ['owner'],
             ],
             'requests' => [
-                'idx_owner_created_key' => ['owner','created_at','request_key'],
-                'idx_owner_site_created_key' => ['owner','site_id','created_at','request_key'],
+                'idx_requests_owner_created_key' => ['owner','created_at','request_key'],
+                'idx_requests_owner_site_created_key' => ['owner','site_id','created_at','request_key'],
             ],
             'batch_steps' => [
-                'idx_request_ordinal' => ['request_key','ordinal'],
+                'idx_batch_steps_request_ordinal' => ['request_key','ordinal'],
             ],
             'rate' => [
-                'idx_owner_slot' => ['owner','slot'],
+                'idx_rate_owner_slot' => ['owner','slot'],
             ],
             'audit' => [
-                'idx_owner_event_created' => ['owner','event','created_at'],
+                'idx_audit_owner_event_created' => ['owner','event','created_at'],
             ],
             'oauth_codes' => [
-                'idx_owner_used' => ['owner','used'],
+                'idx_oauth_codes_owner_used' => ['owner','used'],
             ],
             'oauth_grants' => [
-                'idx_owner' => ['owner'],
+                'idx_oauth_grants_owner' => ['owner'],
             ],
             'oauth_access' => [
-                'idx_grant_id' => ['grant_id'],
+                'idx_oauth_access_grant_id' => ['grant_id'],
             ],
         ];
         foreach ($tableNames as $table) {
-            if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE index table ".$table."\n");
             foreach ($definitions[$table] ?? [] as $name => $columns) {
                 $this->ensureIndex($table, $name, $columns);
             }
@@ -146,12 +141,12 @@ final class Store {
     private function ensureLicenseIndexes(): void {
         $definitions = [
             'licenses' => [
-                'idx_owner_issued_id' => ['owner','issued_at','id'],
-                'idx_issued_id' => ['issued_at','id'],
-                'idx_owner_status' => ['owner','status'],
+                'idx_licenses_owner_issued_id' => ['owner','issued_at','id'],
+                'idx_licenses_issued_id' => ['issued_at','id'],
+                'idx_licenses_owner_status' => ['owner','status'],
             ],
             'license_activations' => [
-                'idx_license_status' => ['license_id','status'],
+                'idx_license_activations_license_status' => ['license_id','status'],
             ],
         ];
         foreach ($definitions as $table => $indexes) {
@@ -161,7 +156,6 @@ final class Store {
         }
     }
     private function ensureIndex(string $table, string $name, array $columns): void {
-        if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE index start ".$table."/".$name."\n");
         $physical = $this->prefix.$table;
         $found = null;
         if ($this->mysql) {
@@ -176,8 +170,11 @@ final class Store {
                 if ($indexColumns === $columns) { $found = $indexName; break; }
             }
         } else {
+            // SQLite index names are database-global, unlike MySQL's table-local names.
+            // Detect a same-name index owned by another table before attempting CREATE.
+            $named = $this->row("SELECT tbl_name FROM sqlite_master WHERE type='index' AND name=?",[$name]);
+            if ($named && (string)$named['tbl_name'] !== $physical) throw new Fault('gateway_schema_incompatible',503);
             $rows = $this->rows('PRAGMA index_list('.$this->table($table).')');
-            if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE index list ".$table." count=".count($rows)."\n");
             foreach ($rows as $row) {
                 $indexName = (string)$row['name'];
                 $quoted = str_replace("'", "''", $indexName);
@@ -193,7 +190,6 @@ final class Store {
         $q = chr(96);
         $columnSql = implode(',',array_map(static fn($column) => $q.$column.$q,$columns));
         try {
-            if (getenv('WPAI_CLOUD_SCHEMA_TRACE')) fwrite(STDERR,"TRACE create index ".$table."/".$name."\n");
             $this->execute('CREATE INDEX '.$q.$name.$q.' ON '.$this->table($table).' ('.$columnSql.')');
         } catch (\PDOException $e) {
             // Concurrent first requests may both observe a missing index. Only
