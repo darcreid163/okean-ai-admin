@@ -26,7 +26,7 @@ case "${1:-}" in
         gh release create "$tag" "dist/$archive" "dist/$checksum" "dist/PROVENANCE.json" \
             --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "WP AI Admin $version" \
-            --notes 'Installable ZIP and SHA-256 checksum. See MIGRATION-STATUS.md for the release gates.'
+            --notes 'Installable ZIP, SHA-256 checksum and source-bound provenance manifest. The provenance is not a cryptographic publisher signature. See MIGRATION-STATUS.md for the release gates.'
         ;;
     *) echo 'Usage: native-release.sh validate|publish' >&2; exit 2 ;;
 esac
