@@ -13,7 +13,7 @@ class OAI_REST {
   return $response;
  }
  private static function is_list_array($a){ if(function_exists('array_is_list')) return array_is_list($a); $i=0; foreach($a as $k=>$v){if($k!==$i++) return false;} return true; }
- public static function token_hash(){ OAI_DB::migrate_token(); return (string)get_option('oai_bearer_token_hash',''); }
+ public static function token_hash(){ OAI_DB::migrate_token(); $hash=get_option('oai_bearer_token_hash',''); return is_string($hash)&&preg_match('/^[a-f0-9]{64}$/D',$hash)?$hash:''; }
  private static function authorization_header($req){
   $auth=(string)$req->get_header('authorization');
   if(!$auth) $auth=(string)$req->get_header('x-authorization');
