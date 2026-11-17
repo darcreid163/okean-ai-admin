@@ -70,6 +70,8 @@ class OAI_DB {
   KEY expires_at (expires_at)
   ) ENGINE=InnoDB $charset;";
   dbDelta($rlsql);
+  $rate_table_found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($rl)));
+  if((string)$rate_table_found!==$rl) return new WP_Error('oai_rate_limit_schema','Rate counter table is unavailable',array('status'=>503));
  $qsql="CREATE TABLE $q (
  plan varchar(32) NOT NULL,
  period_key varchar(32) NOT NULL,
