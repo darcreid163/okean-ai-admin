@@ -8,6 +8,7 @@ class OAI_DB {
  public static function audit_table(){global $wpdb; return $wpdb->prefix.'oai_audit_log';}
  public static function quota_table(){global $wpdb; return $wpdb->prefix.'oai_quota_usage';}
  public static function quota_events_table(){global $wpdb; return $wpdb->prefix.'oai_quota_events';}
+ public static function rate_limits_table(){global $wpdb; return $wpdb->prefix.'oai_rate_limits';}
  public static function install(){global $wpdb; require_once ABSPATH.'wp-admin/includes/upgrade.php'; $t=self::table(); $charset=$wpdb->get_charset_collate(); $sql="CREATE TABLE $t (
  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
  operation_id varchar(64) NOT NULL,
