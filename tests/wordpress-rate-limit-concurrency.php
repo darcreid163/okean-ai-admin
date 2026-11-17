@@ -14,7 +14,9 @@ $inserted=$wpdb->insert(OAI_DB::table(),[
 ]);
 rateLimitAssert($inserted===1,'Cannot create operation migration fixture');
 $table=OAI_DB::rate_limits_table();
-$primary=$wpdb->get_results("SHOW INDEX FROM `$table` WHERE Key_name='PRIMARY' ORDER BY Seq_in_index",ARRAY_A);
+$indexes=$wpdb->get_results("SHOW INDEX FROM `$table`",ARRAY_A);
+$primary=array_values(array_filter(is_array($indexes)?$indexes:array(),static fn($row)=>(string)($row['Key_name']??'')==='PRIMARY'));
+usort($primary,static fn($a,$b)=>(int)$a['Seq_in_index']<=>(int)$b['Seq_in_index']);
 $primaryColumns=array_map(static fn($row)=>(string)$row['Column_name'],$primary);
 rateLimitAssert($primaryColumns===['bucket_hash','client_hash','window_start','window_seconds'],'Rate counter composite primary key mismatch: '.json_encode($primaryColumns));
 $wpdb->query('DROP TABLE IF EXISTS `'.$table.'`');
