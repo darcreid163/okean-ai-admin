@@ -89,12 +89,9 @@ final class Store {
     }
     public function createSseSession(string $id,int $expiresAt): void {
         $this->transaction(function()use($id,$expiresAt) {
-            $expired=$this->rows('SELECT session_id FROM '.$this->table('sse_sessions').' WHERE expires_at<?',[$expiresAt-120]);
-            foreach($expired as $row) {
-                $old=(string)$row['session_id'];
-                $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id=?',[$old]);
-                $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE session_id=?',[$old]);
-            }
+            $now=time();
+            $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id IN (SELECT session_id FROM '.$this->table('sse_sessions').' WHERE expires_at<?)',[$now]);
+            $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE expires_at<?',[$now]);
             $this->execute('INSERT INTO '.$this->table('sse_sessions').' (session_id,expires_at) VALUES (?,?)',[$id,$expiresAt]);
         });
     }
