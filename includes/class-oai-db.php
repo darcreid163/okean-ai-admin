@@ -8,6 +8,7 @@ class OAI_DB {
  public static function audit_table(){global $wpdb; return $wpdb->prefix.'oai_audit_log';}
  public static function quota_table(){global $wpdb; return $wpdb->prefix.'oai_quota_usage';}
  public static function quota_events_table(){global $wpdb; return $wpdb->prefix.'oai_quota_events';}
+ public static function rate_limits_table(){global $wpdb; return $wpdb->prefix.'oai_rate_limits';}
  public static function install(){global $wpdb; require_once ABSPATH.'wp-admin/includes/upgrade.php'; $t=self::table(); $charset=$wpdb->get_charset_collate(); $sql="CREATE TABLE $t (
  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
  operation_id varchar(64) NOT NULL,
@@ -39,6 +40,7 @@ class OAI_DB {
  $a=self::audit_table();
  $q=self::quota_table();
  $qe=self::quota_events_table();
+ $rl=self::rate_limits_table();
  $qesql="CREATE TABLE $qe (
  request_key char(64) NOT NULL,
  channel varchar(32) NOT NULL,
@@ -80,11 +82,21 @@ class OAI_DB {
  KEY event (event),
  KEY created_at (created_at)
  ) $charset;";
- dbDelta($asql); update_option('oai_db_version',OAI_DB_VERSION); if(class_exists('OAI_MCP_OAuth')) OAI_MCP_OAuth::install(); self::migrate_token(); }
+ dbDelta($asql);
+ $rlsql="CREATE TABLE $rl (
+ bucket_hash char(64) NOT NULL,
+ window_start bigint(20) unsigned NOT NULL,
+ hits bigint(20) unsigned NOT NULL DEFAULT 0,
+ expires_at bigint(20) unsigned NOT NULL,
+ PRIMARY KEY  (bucket_hash,window_start),
+ KEY expires_at (expires_at)
+ ) ENGINE=InnoDB $charset;";
+ dbDelta($rlsql);
+ update_option('oai_db_version',OAI_DB_VERSION); if(class_exists('OAI_MCP_OAuth')) OAI_MCP_OAuth::install(); self::migrate_token(); }
  public static function maybe_upgrade(){
   if((int)get_option('oai_db_version',0)<OAI_DB_VERSION)self::install();
   elseif(class_exists('OAI_MCP_OAuth')&&(int)get_option('oai_oauth_schema_version',0)<OAI_MCP_OAuth::SCHEMA_VERSION)OAI_MCP_OAuth::install();
-  self::migrate_token();self::prune_quota_events();
+  self::migrate_token();self::prune_quota_events();self::prune_rate_limits();
  }
  public static function prune_quota_events(){
   // Cleanup is throttled to at most once per day; do not run a DELETE on every request.
@@ -94,6 +106,13 @@ class OAI_DB {
   global $wpdb; $table=self::quota_events_table();
   // Never erase unresolved reservations: time alone cannot prove the outcome.
   $wpdb->query("DELETE FROM $table WHERE state IN ('succeeded','failed') AND created_at < UTC_TIMESTAMP() - INTERVAL 90 DAY");
+ }
+ public static function prune_rate_limits(){
+  $last=(int)get_option('oai_rate_limits_pruned_at',0);
+  if($last && (time()-$last)<DAY_IN_SECONDS) return;
+  global $wpdb;
+  $result=$wpdb->query($wpdb->prepare('DELETE FROM '.self::rate_limits_table().' WHERE expires_at < %d',time()));
+  if($result!==false)update_option('oai_rate_limits_pruned_at',time(),false);
  }
  public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
  private static $media_creation=null;
