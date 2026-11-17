@@ -30,6 +30,7 @@ class CandidateTests(unittest.TestCase):
         for name in ("src", "includes", "config"):
             shutil.copytree(SOURCE / name, cloud / name)
         shutil.copy2(SOURCE / "wp-ai-admin-cloud.php", cloud)
+        shutil.copy2(SOURCE / "export-keys.php", cloud)
         (cloud / "tests").mkdir()
         shutil.copy2(SOURCE / "tests/artifact-allowlist.php", cloud / "tests")
         self.git("init", "-q")
