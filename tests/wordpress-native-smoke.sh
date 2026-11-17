@@ -8,6 +8,8 @@ wp_test() { php "$WORK/wp-cli.phar" --path="$WORK/site" --allow-root "$@"; }
 wp_test core download --version="${WP_TEST_VERSION:-latest}"
 wp_test config create --dbname=wp_test --dbuser=root --dbpass=test-password --dbhost=127.0.0.1
 wp_test core install --url=http://localhost:8080 --title=Smoke --admin_user=ci-admin --admin_password=test-only-ci-password --admin_email=ci@example.invalid --skip-email
+# OAuth schema v2 migration: durable registry mutex row for atomic client-cap admission.
+DB_HOST=127.0.0.1 DB_USER=root DB_PASSWORD=test-password DB_NAME=wp_test php "$GITHUB_WORKSPACE/tests/oauth-schema-upgrade.php"
 install_ci_plugin() {
   local plugin="$1" version="$2"
   if [[ "$version" == "latest" ]]; then
