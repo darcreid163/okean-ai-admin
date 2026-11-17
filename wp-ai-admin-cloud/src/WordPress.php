@@ -34,6 +34,7 @@ final class WordPress {
         add_action('wpai_gateway_pair_cleanup',static function($key){if(is_string($key)&&preg_match('/^wpai_pair_request_[a-f0-9]{64}$/D',$key))delete_option($key);});
     }
     private static function migrate(): void {
+        update_option('wpai_gateway_operational_indexes_debug','migrate-called',false);
         $store=self::database();
         if ((string)get_option('wpai_gateway_db_version','')==='4') {
             $store->assertSchema();
@@ -58,6 +59,7 @@ final class WordPress {
     }
     public static function statusPage(): void { Admin::page(); }
     public static function enable(): void {
+        update_option('wpai_gateway_operational_indexes_debug','enable-called',false);
         if (defined('WP_AI_CLOUD_ENABLED') && WP_AI_CLOUD_ENABLED!==true) throw new Fault('gateway_disabled_in_wp_config',503);
         if (class_exists('WPAICloud\\WordPress',false)) throw new Fault('separate_prototype_must_be_deactivated',503);
         foreach (['sodium','curl','pdo_mysql'] as $extension) if (!extension_loaded($extension)) throw new Fault($extension.'_required',503);
