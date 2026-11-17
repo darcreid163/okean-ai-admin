@@ -37,6 +37,7 @@ final class WordPress {
         $store=self::database();
         if ((string)get_option('wpai_gateway_db_version','')==='4') {
             $store->assertSchema();
+            $store->ensureOwnerIndexes();
         } else {
             $store->migrate();
             update_option('wpai_gateway_db_version','4',false);
