@@ -117,7 +117,16 @@ if($phase==='seed') {
     $state=json_decode(file_get_contents($snapshot),true,512,JSON_THROW_ON_ERROR);
     cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeRows($store),$state['rows']),'Retained ledger/site/OAuth rows changed');
     cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeOptions(),$state['options']),'Gateway keys/settings or sentinel changed');
-    cloudUpgradeAssert($wpdb->get_col('SHOW TABLES')===$state['tables'],'Database table set changed');
+    $actualTables=$wpdb->get_col('SHOW TABLES');
+    $expectedTables=$state['tables'];
+    if ($expectBatch) {
+        $expectedTables[]=$wpdb->prefix.'wpai_gateway_sse_sessions';
+        $expectedTables[]=$wpdb->prefix.'wpai_gateway_sse_queue';
+    }
+    $expectedTables=array_values(array_unique($expectedTables));
+    sort($expectedTables,SORT_STRING);
+    sort($actualTables,SORT_STRING);
+    cloudUpgradeAssert($actualTables===$expectedTables,'Database table set changed or additive SSE queue schema missing');
 }
 $transport->executions=0;
 Settings::prepareKeys();
