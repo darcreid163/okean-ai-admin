@@ -72,6 +72,9 @@ class OAI_DB {
   dbDelta($rlsql);
   $rate_table_found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($rl)));
   if((string)$rate_table_found!==$rl) return new WP_Error('oai_rate_limit_schema','Rate counter table is unavailable',array('status'=>503));
+  $rate_primary=$wpdb->get_results("SHOW INDEX FROM `$rl` WHERE Key_name='PRIMARY' ORDER BY Seq_in_index",ARRAY_A);
+  $rate_primary_columns=array_map(static fn($row)=>(string)$row['Column_name'],is_array($rate_primary)?$rate_primary:array());
+  if($rate_primary_columns!==array('bucket_hash','client_hash','window_start','window_seconds')) return new WP_Error('oai_rate_limit_schema','Rate counter composite key is invalid',array('status'=>503));
  $qsql="CREATE TABLE $q (
  plan varchar(32) NOT NULL,
  period_key varchar(32) NOT NULL,
