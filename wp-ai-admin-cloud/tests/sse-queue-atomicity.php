@@ -2,10 +2,21 @@
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
 use WPAICloudGateway\Fault;
+use WPAICloudGateway\Store;
 function sseCheck(bool $ok,string $message): void { if(!$ok) throw new RuntimeException($message); }
 $database=sys_get_temp_dir().'/wpai-sse-'.bin2hex(random_bytes(8)).'.sqlite';
 $store=fixtureStore($database);
 $store->migrate();
+if (!getenv('TEST_MYSQL_DSN')) {
+    // SQLite index names are database-global; separate Store prefixes need separate SSE indexes.
+    $secondPrefix='sse_'.bin2hex(random_bytes(4)).'_';
+    $secondStore=new Store(new PDO('sqlite:'.$database),$secondPrefix);
+    $secondStore->migrate();
+    $secondIndex='wpai_'.substr(hash('sha256',$secondPrefix),0,16).'_idx_sse_queue_session_id';
+    $secondRows=$secondStore->rows("PRAGMA index_info('".$secondIndex."')");
+    sseCheck(array_map(static fn($row)=>(string)$row['name'],$secondRows)===['session_id','id'],'Second SSE Store prefix did not get its own queue index');
+    unset($secondStore);
+}
 $session=bin2hex(random_bytes(16));
 $store->createSseSession($session,time()+3600);
 $workers=[];
