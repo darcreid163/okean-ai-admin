@@ -148,7 +148,7 @@ Settings::prepareKeys();
     if(!is_dir($muDir) && !wp_mkdir_p($muDir))throw new RuntimeException('Could not create MU plugin fixture directory');
     $racePlugin=$muDir.'/wpai-key-export-race-'.bin2hex(random_bytes(6)).'.php';
     $raceMarker='created-by-concurrent-exporter';
-    $raceCode="<?php\\nfile_put_contents(".var_export($racePath,true).", ".var_export($raceMarker,true).", LOCK_EX);\\n";
+    $raceCode="<?php\nfile_put_contents(".var_export($racePath,true).", ".var_export($raceMarker,true).", LOCK_EX);\n";
     if(file_put_contents($racePlugin,$raceCode)===false)throw new RuntimeException('Could not create key export race fixture');
     try {
         $raceCommand=escapeshellarg(PHP_BINARY).' '.escapeshellarg($exportScript).' '.escapeshellarg(rtrim(ABSPATH,'/\\\\')).' '.escapeshellarg($racePath);
