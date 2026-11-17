@@ -119,9 +119,6 @@ final class Store {
             'rate' => [
                 'idx_rate_owner_slot' => ['owner','slot'],
             ],
-            'audit' => [
-                'idx_audit_owner_event_created' => ['owner','event','created_at'],
-            ],
             'oauth_codes' => [
                 'idx_oauth_codes_owner_used' => ['owner','used'],
             ],
