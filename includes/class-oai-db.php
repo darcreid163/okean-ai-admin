@@ -96,8 +96,9 @@ class OAI_DB {
   $wpdb->query("DELETE FROM $table WHERE state IN ('succeeded','failed') AND created_at < UTC_TIMESTAMP() - INTERVAL 90 DAY");
  }
  public static function migrate_token(){
-  $plain=(string)get_option('oai_bearer_token','');
-  if($plain==='')$plain=(string)get_option('oai_api_token','');
+  $plain_value=get_option('oai_bearer_token','');
+  $plain=is_string($plain_value)?$plain_value:'';
+  if($plain===''){$legacy_value=get_option('oai_api_token','');$plain=is_string($legacy_value)?$legacy_value:'';}
   if($plain!==''){
    $candidate=hash('sha256',$plain);
    update_option('oai_bearer_token_hash',$candidate,false);
@@ -107,8 +108,8 @@ class OAI_DB {
    delete_option('oai_api_token');
    return true;
   }
-  $stored=(string)get_option('oai_bearer_token_hash','');
-  return $stored!=='' && (bool)preg_match('/^[a-f0-9]{64}$/D',$stored);
+  $stored=get_option('oai_bearer_token_hash','');
+  return is_string($stored) && (bool)preg_match('/^[a-f0-9]{64}$/D',$stored);
  }
  private static $media_creation=null;
  /** Atomic first-writer claim admission for new WordPress artifacts.
