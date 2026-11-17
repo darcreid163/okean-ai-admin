@@ -77,6 +77,8 @@ def committed_files(repo: Path, commit: str) -> tuple[dict[str, bytes], dict[str
         meta, raw_path = entry.split(b"\t", 1)
         mode, kind, oid = meta.split()
         path = raw_path.decode("utf-8")
+        if "\\" in path or PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts:
+            raise ValueError("Unsafe Native artifact source path: " + path)
         if path in EXCLUDED:
             continue
         if mode not in (b"100644", b"100755") or kind != b"blob":
@@ -182,7 +184,8 @@ def verify(repo: Path, archive: Path, provenance_path: Path, checksum_path: Path
         expected_date = timestamp.timetuple()[:5] + (timestamp.second // 2 * 2,)
         for name in names:
             path = PurePosixPath(name)
-            if path.is_absolute() or ".." in path.parts or not name.startswith(PREFIX):
+            if ("\\" in name or path.is_absolute() or ".." in path.parts or
+                    any(part in ("", ".") for part in name.split("/")) or not name.startswith(PREFIX)):
                 raise ValueError("Unsafe ZIP path: " + name)
             info = package.getinfo(name)
             zip_mode = info.external_attr >> 16
