@@ -17,12 +17,15 @@ ROOTS = [
 ]
 EXCLUDED = {"includes/class-oai-elementor-schema-save.php"}
 PREFIX = "okean-ai-admin/"
-FORBIDDEN_SUFFIXES = (".zip", ".sql", ".sqlite", ".pem", ".p12", ".key", ".env", ".bak")
+FORBIDDEN_SUFFIXES = (".zip", ".sql", ".sqlite", ".sqlite3", ".db", ".pem", ".p12", ".pfx", ".crt", ".key", ".env", ".bak", ".log", ".dump", ".cache")
 SECRET_PATTERNS = [
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     re.compile(rb"(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{35,}"),
     re.compile(rb"(?:sk_live|rk_live)_[A-Za-z0-9]{12,}"),
     re.compile(rb"github_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(rb"AKIA[0-9A-Z]{16}"),
+    re.compile(rb"xox[baprs]-[A-Za-z0-9-]{10,}"),
+    re.compile(rb"sk-(?:proj-)?[A-Za-z0-9_-]{24,}"),
     re.compile(rb"WP_AI_CLOUD_(?:VAULT|SIGNING)_KEY\s*[:=]\s*['\"]?[A-Za-z0-9+/=]{16,}"),
 ]
 
@@ -78,7 +81,7 @@ def committed_files(repo: Path, commit: str) -> tuple[dict[str, bytes], dict[str
             continue
         if mode not in (b"100644", b"100755") or kind != b"blob":
             raise ValueError("Non-regular Native artifact entry: " + path)
-        if path.lower().endswith(FORBIDDEN_SUFFIXES):
+        if path.lower().endswith(FORBIDDEN_SUFFIXES) or PurePosixPath(path).name.lower().startswith(".env"):
             raise ValueError("Forbidden file in Native artifact: " + path)
         data = git(repo, "cat-file", "blob", oid.decode())
         if any(pattern.search(data) for pattern in SECRET_PATTERNS):
