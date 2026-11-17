@@ -100,7 +100,7 @@ final class Store {
         if ($this->mysql) {
             return $this->row('SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=? LIMIT 1',[$this->prefix.$table,$name])!==null;
         }
-        $rows=$this->rows('PRAGMA index_list(`'.$this->prefix.$table+'`)');
+        $rows=$this->rows('PRAGMA index_list(`'.$this->prefix.$table.'`)');
         foreach ($rows as $row) if ((string)($row['name']??'')===$name) return true;
         return false;
     }
