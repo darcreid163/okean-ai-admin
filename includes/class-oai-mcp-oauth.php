@@ -5,8 +5,11 @@
 if (!defined('ABSPATH')) exit;
 
 class OAI_MCP_OAuth {
- const SCHEMA_VERSION=1;
+ const SCHEMA_VERSION=2;
+ const CLIENT_LIMIT=10000;
+ const CLIENT_REGISTRY_LOCK='client_registration';
  public static function clients_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_clients';}
+ public static function registry_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_registry';}
  public static function codes_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_codes';}
  public static function tokens_table(){global $wpdb; return $wpdb->prefix.'oai_oauth_tokens';}
 
@@ -294,45 +297,88 @@ class OAI_MCP_OAuth {
   return $requested_redirect_to;
  }
 
- public static function register_client($req){
+ private static function prune_credentials(){
+  $last=(int)get_option('oai_oauth_pruned_at',0);
+  if($last && (time()-$last)<DAY_IN_SECONDS)return;
+  update_option('oai_oauth_pruned_at',time(),false);
+  global $wpdb;
+  // Codes are short-lived; keep a one-day grace for diagnostics and replay rejection.
+  $wpdb->query('DELETE FROM '.self::codes_table()." WHERE expires_at < UTC_TIMESTAMP() - INTERVAL 1 DAY OR (used=1 AND created_at < UTC_TIMESTAMP() - INTERVAL 1 DAY)");
+  // Never remove an unexpired refresh credential. Expired rows receive an additional
+  // 30-day retention period; access expiry alone is not enough to delete a row.
+  $wpdb->query('DELETE FROM '.self::tokens_table()." WHERE (refresh_expires_at IS NOT NULL AND refresh_expires_at < UTC_TIMESTAMP() - INTERVAL 30 DAY) OR (refresh_expires_at IS NULL AND expires_at < UTC_TIMESTAMP() - INTERVAL 30 DAY)");
+}
+
+public static function register_client($req){
   $rate=OAI_Rate_Limit::check('oauth_register',20,60);
   if(is_wp_error($rate)) return self::json_error('temporarily_unavailable','OAuth client registration rate limit exceeded',429);
+  self::prune_credentials();
   $data=$req->get_json_params();
-  if(!is_array($data)) return self::json_error('invalid_client_metadata','JSON object required');
+  if(!is_array($data) || array_is_list($data)) return self::json_error('invalid_client_metadata','JSON object required');
   $name=sanitize_text_field((string)($data['client_name']??'MCP client'));
+  if($name==='' || strlen($name)>100) return self::json_error('invalid_client_metadata','client_name must be 1–100 characters');
   $uris=isset($data['redirect_uris']) && is_array($data['redirect_uris'])?$data['redirect_uris']:array();
-  if(empty($uris)) return self::json_error('invalid_redirect_uri','redirect_uris is required');
+  if(!array_is_list($uris) || count($uris)<1 || count($uris)>5) return self::json_error('invalid_redirect_uri','redirect_uris must contain 1–5 entries');
   $clean=array();
-  foreach($uris as $uri){
-   $uri=esc_url_raw((string)$uri);
+  foreach($uris as $raw_uri){
+   if(!is_string($raw_uri) || strlen($raw_uri)>2048) return self::json_error('invalid_redirect_uri','Each redirect URI must be a string of at most 2048 characters');
+   $uri=esc_url_raw($raw_uri);
    if(!$uri) return self::json_error('invalid_redirect_uri','Every redirect URI must be an absolute URI');
    $parts=wp_parse_url($uri);
-   if(!$parts || empty($parts['scheme']) || empty($parts['host'])) return self::json_error('invalid_redirect_uri','Every redirect URI must include scheme and host');
-   if($parts['scheme']==='http' && !in_array(strtolower((string)$parts['host']),array('localhost','127.0.0.1','[::1]'),true)) return self::json_error('invalid_redirect_uri','HTTP redirect URIs are allowed only for localhost');
+   if(!$parts || empty($parts['scheme']) || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) return self::json_error('invalid_redirect_uri','Every redirect URI must have a valid scheme and host without credentials or fragment');
+   $scheme=strtolower((string)$parts['scheme']);
+   $host=strtolower((string)$parts['host']);
+   $loopback=$scheme==='http' && in_array($host,array('localhost','127.0.0.1','[::1]'),true);
+   if($scheme!=='https' && !$loopback) return self::json_error('invalid_redirect_uri','HTTPS is required except for localhost redirect URIs');
    $clean[]=$uri;
   }
+  $clean=array_values(array_unique($clean));
+  if(!$clean) return self::json_error('invalid_redirect_uri','redirect_uris is required');
   $client_id='oai_client_'.wp_generate_uuid4();
   global $wpdb;
+  // All registration attempts serialize on one durable InnoDB row. Counting and
+  // inserting while holding this lock prevents concurrent requests crossing the cap.
+  if($wpdb->query('START TRANSACTION')===false) return self::json_error('server_error','Could not begin OAuth client registration',500);
+  $lock=$wpdb->get_var($wpdb->prepare('SELECT registry_key FROM '.self::registry_table().' WHERE registry_key=%s FOR UPDATE',self::CLIENT_REGISTRY_LOCK));
+  if($lock!==self::CLIENT_REGISTRY_LOCK || $wpdb->last_error!==''){
+   $wpdb->query('ROLLBACK');
+   return self::json_error('server_error','OAuth client registry lock is unavailable',503);
+  }
+  $count=$wpdb->get_var('SELECT COUNT(*) FROM '.self::clients_table());
+  if($count===null || $wpdb->last_error!==''){
+   $wpdb->query('ROLLBACK');
+   return self::json_error('server_error','Could not read OAuth client capacity',503);
+  }
+  if((int)$count>=self::CLIENT_LIMIT){
+   $wpdb->query('ROLLBACK');
+   return self::json_error('temporarily_unavailable','OAuth client registration capacity reached',429);
+  }
   $ok=$wpdb->insert(self::clients_table(),array(
    'client_id'=>$client_id,
-   'client_name'=>$name?:'MCP client',
-   'redirect_uris'=>wp_json_encode(array_values(array_unique($clean)),JSON_UNESCAPED_SLASHES),
+   'client_name'=>$name,
+   'redirect_uris'=>wp_json_encode($clean,JSON_UNESCAPED_SLASHES),
    'created_at'=>current_time('mysql',true)
   ));
-  if(!$ok) return self::json_error('server_error','Could not register client',500);
+  if(!$ok){
+   $wpdb->query('ROLLBACK');
+   return self::json_error('server_error','Could not register client',500);
+  }
+  if($wpdb->query('COMMIT')===false){
+   $wpdb->query('ROLLBACK');
+   return self::json_error('server_error','Could not commit OAuth client registration',500);
+  }
   return new WP_REST_Response(array(
    'client_id'=>$client_id,
-   'client_name'=>$name?:'MCP client',
-   'redirect_uris'=>array_values(array_unique($clean)),
+   'client_name'=>$name,
+   'redirect_uris'=>$clean,
    'grant_types'=>array('authorization_code','refresh_token'),
    'response_types'=>array('code'),
    'token_endpoint_auth_method'=>'none',
    'scopes_supported'=>array('mcp:read','mcp:write','offline_access'),
    'scope'=>'mcp:read mcp:write offline_access'
   ),201);
- }
-
- public static function admin_post_authorize(){
+}
+public static function admin_post_authorize(){
   $request=new WP_REST_Request('POST','/okean-ai/v1/oauth/authorize');
   foreach(array('client_id','redirect_uri','response_type','scope','state','code_challenge','code_challenge_method','resource','oauth_action','decision','_wpnonce') as $key){
    if(isset($_POST[$key])) $request->set_param($key,wp_unslash($_POST[$key]));
