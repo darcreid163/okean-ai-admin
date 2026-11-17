@@ -71,6 +71,7 @@ final class Store {
         ];
         foreach ($definitions as $name=>$def) $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table($name).' ('.$def.')'.$tail);
         $this->upgradeQuotaSchema();
+        $this->ensureOperationalIndexes(array_keys($definitions));
         $this->assertSchema(array_keys($definitions));
     }
     private function upgradeQuotaSchema(): void {
@@ -94,6 +95,94 @@ final class Store {
             $column=$this->row('SELECT DATA_TYPE,CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?',[$this->prefix.$name,'period']);
             if ($column && $column['DATA_TYPE']==='varchar' && (int)$column['CHARACTER_MAXIMUM_LENGTH']===7) $this->execute('ALTER TABLE '.$this->table($name).' MODIFY COLUMN period VARCHAR(10) NOT NULL');
         }
+    }
+    /**
+     * Additive, restartable indexes for the gateway's owner-scoped hot paths.
+     * Index column order is verified on both supported database engines; a
+     * same-name index with a different definition is treated as schema damage.
+     */
+    private function ensureOperationalIndexes(array $tableNames): void {
+        $definitions = [
+            'sites' => [
+                'idx_owner_status_created' => ['owner','status','created_at'],
+            ],
+            'tokens' => [
+                'idx_owner' => ['owner'],
+            ],
+            'requests' => [
+                'idx_owner_created_key' => ['owner','created_at','request_key'],
+                'idx_owner_site_created_key' => ['owner','site_id','created_at','request_key'],
+            ],
+            'batch_steps' => [
+                'idx_request_ordinal' => ['request_key','ordinal'],
+            ],
+            'rate' => [
+                'idx_owner_slot' => ['owner','slot'],
+            ],
+            'audit' => [
+                'idx_owner_event_created' => ['owner','event','created_at'],
+            ],
+            'oauth_codes' => [
+                'idx_owner_used' => ['owner','used'],
+            ],
+            'oauth_grants' => [
+                'idx_owner' => ['owner'],
+            ],
+        ];
+        foreach ($tableNames as $table) {
+            foreach ($definitions[$table] ?? [] as $name => $columns) {
+                $this->ensureIndex($table, $name, $columns);
+            }
+        }
+    }
+    private function ensureLicenseIndexes(): void {
+        $definitions = [
+            'licenses' => [
+                'idx_owner_issued_id' => ['owner','issued_at','id'],
+                'idx_issued_id' => ['issued_at','id'],
+                'idx_owner_status' => ['owner','status'],
+            ],
+            'license_activations' => [
+                'idx_license_status' => ['license_id','status'],
+            ],
+        ];
+        foreach ($definitions as $table => $indexes) {
+            foreach ($indexes as $name => $columns) {
+                $this->ensureIndex($table, $name, $columns);
+            }
+        }
+    }
+    private function ensureIndex(string $table, string $name, array $columns): void {
+        $physical = $this->prefix.$table;
+        $found = null;
+        if ($this->mysql) {
+            $rows = $this->rows(
+                'SELECT INDEX_NAME,COLUMN_NAME,SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? ORDER BY INDEX_NAME,SEQ_IN_INDEX',
+                [$physical]
+            );
+            $indexes = [];
+            foreach ($rows as $row) $indexes[(string)$row['INDEX_NAME']][] = (string)$row['COLUMN_NAME'];
+            foreach ($indexes as $indexName => $indexColumns) {
+                if ($indexName === $name && $indexColumns !== $columns) throw new Fault('gateway_schema_incompatible',503);
+                if ($indexColumns === $columns) { $found = $indexName; break; }
+            }
+        } else {
+            $rows = $this->rows('PRAGMA index_list('.$this->table($table).')');
+            foreach ($rows as $row) {
+                $indexName = (string)$row['name'];
+                $quoted = str_replace("'", "''", $indexName);
+                $indexColumns = array_map(
+                    static fn($column) => (string)$column['name'],
+                    $this->rows("PRAGMA index_info('".$quoted."')")
+                );
+                if ($indexName === $name && $indexColumns !== $columns) throw new Fault('gateway_schema_incompatible',503);
+                if ($indexColumns === $columns) { $found = $indexName; break; }
+            }
+        }
+        if ($found !== null) return;
+        $q = chr(96);
+        $columnSql = implode(',',array_map(static fn($column) => $q.$column.$q,$columns));
+        $this->execute('CREATE INDEX '.$q.$name.$q.' ON '.$this->table($table).' ('.$columnSql.')');
     }
     /**
      * Additive, lazy licence schema. It is deliberately not part of the
@@ -122,6 +211,7 @@ final class Store {
                 if (!$duplicate) throw $e;
             }
         }
+        $this->ensureLicenseIndexes();
         $this->assertSchema(['licenses','license_activations','license_events']);
         if (!$this->hasColumn('accounts','license_id')) throw new Fault('license_schema_incompatible',503);
         self::$licenseSchemaReady[$this]=true;
