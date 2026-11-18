@@ -259,6 +259,47 @@ final class Core {
         }
         return ['token'=>$value,'status_hash'=>null];
     }
+    /**
+     * Read-only operator diagnostic. It never returns the decrypted site token,
+     * status key, ciphertext, URL or any credential material.
+     */
+    public function diagnoseSiteCredential(string $owner,string $siteId): array {
+        $site=$this->ownedSite($owner,$siteId);
+        $sealed=(string)($site['token_sealed']??'');
+        $bytes=base64_decode($sealed,true);
+        $payloadValid=$bytes!==false && strlen($bytes)>=40;
+        if(!$payloadValid) return [
+            'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
+            'sealed_payload_format_valid'=>false,'vault_binding_valid'=>false,
+            'credential_format'=>'unknown','site_token_format_valid'=>false,
+            'status_key_present'=>false,'failure'=>'invalid_sealed_secret',
+        ];
+        try {
+            $credential=$this->siteCredential($site);
+        } catch(Fault $e) {
+            return [
+                'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
+                'sealed_payload_format_valid'=>true,'vault_binding_valid'=>$e->reason!=='secret_binding_failed',
+                'credential_format'=>'unknown','site_token_format_valid'=>false,
+                'status_key_present'=>false,'failure'=>$e->reason,
+            ];
+        } catch(\\Throwable $e) {
+            return [
+                'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
+                'sealed_payload_format_valid'=>true,'vault_binding_valid'=>false,
+                'credential_format'=>'unknown','site_token_format_valid'=>false,
+                'status_key_present'=>false,'failure'=>'credential_diagnostic_failed',
+            ];
+        }
+        return [
+            'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
+            'sealed_payload_format_valid'=>true,'vault_binding_valid'=>true,
+            'credential_format'=>$credential['status_hash']===null?'legacy_token':'paired_token',
+            'site_token_format_valid'=>is_string($credential['token']) && preg_match('/^[A-Za-z0-9._~-]{20,512}$/D',$credential['token'])===1,
+            'status_key_present'=>is_string($credential['status_hash']) && preg_match('/^[a-f0-9]{64}$/D',$credential['status_hash'])===1,
+            'failure'=>null,
+        ];
+    }
     private function upstream(array $site,array $request): array {
         $credential=$this->siteCredential($site);
         return $this->transport->rpc($site['home'],$credential['token'],$request);
