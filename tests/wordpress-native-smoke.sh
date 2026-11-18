@@ -27,6 +27,10 @@ OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/s
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
 cp -R okean-ai-admin.php includes starter-themes README.txt "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin
+# Register the disposable Ability before the compatibility test; WordPress
+# freezes the registry after wp_abilities_api_init.
+mkdir -p "$WORK/site/wp-content/mu-plugins"
+cp "$GITHUB_WORKSPACE/tests/fixtures/oai-abilities-mu.php" "$WORK/site/wp-content/mu-plugins/oai-abilities-mu.php"
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-bearer-token-hash.php"
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-abilities-compat.php"
 # OAuth registration bounds, retention and atomic global capacity under concurrent requests.
@@ -84,8 +88,6 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-cr
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-public-evidence.php"
 
 # Exercise actual WP Abilities registration and Native read-only discovery.
-mkdir -p "$WORK/site/wp-content/mu-plugins"
-cp "$GITHUB_WORKSPACE/tests/fixtures/oai-abilities-mu.php" "$WORK/site/wp-content/mu-plugins/oai-abilities-mu.php"
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-abilities-smoke.php"
 
 # Disposable workspace creation: durable admission before draft filesystem artifacts.
