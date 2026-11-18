@@ -65,7 +65,58 @@ try {
     $verify_rollback = OAI_Verify::operation($operation_id, null, 'rollback');
     wflAssert(!empty($verify_rollback['verified']), 'File rollback did not verify: ' . wp_json_encode($verify_rollback));
 
-    echo "PASS file lifecycle: 3 MB sandbox → approve → atomic apply → verify → rollback → verify\n";
+    // Simulate process interruption at three deterministic points. These fixtures
+    // set the ledger to "applying" only after approval and deliberately leave
+    // no execution lease, exactly as a crashed PHP request would.
+    $make_recovery_operation = function ($payload) use ($scope, $name) {
+        $request = new WP_REST_Request('POST', '/okean-ai/v1/files/write');
+        $request->set_param('scope', $scope);
+        $request->set_param('path', $name);
+        $request->set_param('content', $payload);
+        $row = wflOk(OAI_REST::files_write($request), 'Create interrupted Apply fixture');
+        $id = (int)($row['id'] ?? 0);
+        wflAssert($id > 0 && ($row['status'] ?? '') === 'pending', 'Interrupted Apply fixture was not pending');
+        wflOk(OAI_AI_Lifecycle_Control::perform($id, 'approve', 'file-lifecycle-ci', $actor_id),
+            'Approve interrupted Apply fixture');
+        wflAssert(OAI_DB::update($id, array('status' => 'applying', 'phase' => 'applying')) !== false,
+            'Could not simulate interrupted applying ledger state');
+        return $id;
+    };
+
+    // Crash after atomic rename but before ledger finalization: recovery must
+    // verify and finalize, without issuing a second write.
+    $recovery_after = "recovered after atomic rename\\n";
+    $recovery_id = $make_recovery_operation($recovery_after);
+    wflAssert(file_put_contents($full, $recovery_after) === strlen($recovery_after),
+        'Could not simulate target already committed before process interruption');
+    $recovered = wflOk(OAI_AI_Lifecycle_Control::perform($recovery_id, 'apply', 'file-lifecycle-ci', $actor_id),
+        'Recover committed interrupted Apply');
+    wflAssert(($recovered['status'] ?? '') === 'applied', 'Committed interrupted Apply was not finalized as applied');
+    wflAssert(file_get_contents($full) === $recovery_after, 'Committed Apply recovery changed the target bytes');
+
+    // Crash before the filesystem mutation: recovery must return to approved
+    // and require a fresh explicit Apply, never replay the write automatically.
+    $recovery_before = "must not be replayed automatically\\n";
+    $recovery_id = $make_recovery_operation($recovery_before);
+    $not_replayed = OAI_AI_Lifecycle_Control::perform($recovery_id, 'apply', 'file-lifecycle-ci', $actor_id);
+    wflAssert(is_wp_error($not_replayed) && $not_replayed->get_error_code() === 'oai_apply_recovery_ready',
+        'Uncommitted interrupted Apply must return to approved without replay');
+    wflAssert((OAI_DB::get($recovery_id)['status'] ?? '') === 'approved', 'Uncommitted Apply recovery did not restore approved status');
+    wflAssert(file_get_contents($full) === $recovery_after, 'Recovery replayed an uncommitted write unexpectedly');
+
+    // An unrelated external write during interruption is ambiguous: recovery
+    // must preserve it and leave the operation applying for manual inspection.
+    $recovery_uncertain = "uncertain external writer\\n";
+    $recovery_id = $make_recovery_operation("planned but not committed\\n");
+    wflAssert(file_put_contents($full, $recovery_uncertain) === strlen($recovery_uncertain),
+        'Could not simulate an unrelated external write');
+    $uncertain = OAI_AI_Lifecycle_Control::perform($recovery_id, 'apply', 'file-lifecycle-ci', $actor_id);
+    wflAssert(is_wp_error($uncertain) && $uncertain->get_error_code() === 'oai_apply_outcome_uncertain',
+        'Ambiguous interrupted Apply must fail closed');
+    wflAssert(file_get_contents($full) === $recovery_uncertain, 'Ambiguous recovery overwrote an external change');
+    wflAssert((OAI_DB::get($recovery_id)['status'] ?? '') === 'applying', 'Ambiguous recovery changed the ledger state');
+
+    echo "PASS file lifecycle: atomic apply/rollback plus committed, uncommitted and ambiguous interruption recovery\\n";
 } finally {
     OAI_AI_Lifecycle_Control::disable($actor_id);
     if (is_file($full)) @unlink($full);
