@@ -14,14 +14,14 @@
 | Integration branch | `release/native-2.1.18-integration-20261118` | Native 2.1.18 + Cloud Store/key-preservation merge candidate; see current PR #232 head |
 | PR #232 | Draft, open, base `main` | Not merged |
 
-Exact combined integration SHA `e71bf7bd30ac4ad48be90d0478efca115305b9cb` passed:
+Exact combined integration SHA `fea7f8d2e4f2517fa0c5221b13df0a80f0e83162` passed:
 
-- Native workflow [44255676940](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676940): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles, Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
-- Cloud workflow [44255676930](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676930): PASS — PHP 8.2/8.3/8.4, SQLite/MySQL contracts including SSE queue/index migration, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
+- Native workflow [44257146243](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676940): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles, Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
+- Cloud workflow [44257146236](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676930): PASS — PHP 8.2/8.3/8.4, SQLite/MySQL contracts including SSE queue/index and stream-close races, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
 - The file lifecycle suite verifies 3 MB atomic Apply/Verify/Rollback and interrupted Apply recovery in three cases: committed write, no write yet, and ambiguous external change.
 - Cloud upgrade/restore includes SSE schema coexistence and exact vault/signing key preservation/export checks.
 
-This exact combined tree passed Native and Cloud CI. CI does not prove installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance. Documentation commits made after `e71bf7b` require their own exact-head CI.
+This exact combined tree passed Native and Cloud CI. Stream close now retains pending reservations and undrained replies while revoking transient auth context. Legacy SSE still has no client acknowledgement/replay after socket disconnect and remains best-effort; use Streamable HTTP when replay is required. CI does not prove installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance. Documentation commits after this code SHA require their own exact-head CI.
 
 ## 2. Integrated in PR #232
 
@@ -71,18 +71,17 @@ The approved quota catalogue is five daily UTC tiers: Free 50, Daily 500, Pro 2,
 ## 5. Repository housekeeping decisions
 
 - PR #207, #213, #222, #223 and #225 are source branches whose selected work is now integrated into PR #232. Keep their history; close them as **superseded, not merged** only after this exact-head integration remains green and their final diffs are confirmed represented.
-- PR #226 and stacked PR #224 are superseded by the already-integrated source tree in PR #232; close as superseded, not merged, retaining their branches and history.
+- PR #226 and stacked PR #224 are closed as superseded, not merged; their selected changes are integrated in PR #232, and their branches/history are retained.
 - PR #197 (OpenCode configuration cleanup) is unrelated to release qualification; defer it.
-- Issues #20's original 2.0.74 audit scope is closed as completed. Issues #36 and #38 are retained as historical QA/source-access records with current status notes. #92, #203, #218, #220 and #212 remain open for their outstanding acceptance dependencies. Issues #214/#216 are completed by the integrated Cloud Store work and can be closed.
+- Issues #20's original 2.0.74 audit scope is closed as completed. Issues #36 and #38 are retained as historical QA/source-access records with current status notes. #92, #203, #218, #220 and #212 remain open for their outstanding acceptance dependencies. Issues #214/#216 are closed as completed by the integrated Cloud Store work.
 - The repository has many historical branches (the first API page alone contains 100). Do not mass-delete by age. Delete only branches whose PR is merged/closed, whose commits are reachable from the retained integration/main history, and whose unique work has been reviewed. Preserve unmerged historical evidence.
 - Dated audit/readiness documents are historical snapshots, not live status. Use this file and #40 for current release state.
 
 ## 6. Safe release sequence
 
-1. Re-run exact-head Native + Cloud CI after the latest documentation reconciliation.
-2. Complete external OAuth expiry, two-owner tenant isolation and staging lifecycle/restore acceptance.
-3. Freeze and inspect exact Native-only and Cloud artifacts; confirm checksums, provenance, licenses and secret scans.
-4. Obtain owner approval for the selected release type: closed/free beta or self-service paid release.
-5. Only after explicit approval: merge, tag, publish, split public Native/private Cloud repositories, and separately schedule deployment with backup and rollback.
+1. Complete external OAuth expiry, two-owner tenant isolation and staging lifecycle/restore acceptance.
+2. Freeze and inspect exact Native-only and Cloud artifacts; confirm checksums, provenance, licenses and secret scans.
+3. Obtain owner approval for the selected release type: closed/free beta or self-service paid release.
+4. Only after explicit approval: merge, tag, publish, split public Native/private Cloud repositories, and separately schedule deployment with backup and rollback.
 
 Until those gates are complete, this project is a **green-CI release candidate**, not an approved production release.
