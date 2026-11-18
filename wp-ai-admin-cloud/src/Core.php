@@ -270,30 +270,35 @@ final class Core {
         $payloadValid=$bytes!==false && strlen($bytes)>=40;
         if(!$payloadValid) return [
             'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
-            'sealed_payload_format_valid'=>false,'vault_binding_valid'=>false,
-            'credential_format'=>'unknown','site_token_format_valid'=>false,
-            'status_key_present'=>false,'failure'=>'invalid_sealed_secret',
+            'sealed_payload_format_valid'=>false,'vault_key_loaded'=>true,'decryption_attempted'=>false,'credential_readable'=>false,'vault_binding_valid'=>false,
+            'binding_context'=>'site:'.$owner.':'.$siteId,'binding_failure_class'=>'invalid_sealed_payload',
+            'credential_format'=>'unreadable','site_token_format_valid'=>null,
+            'status_key_present'=>null,'failure'=>'invalid_sealed_secret',
         ];
         try {
             $credential=$this->siteCredential($site);
         } catch(Fault $e) {
             return [
                 'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
-                'sealed_payload_format_valid'=>true,'vault_binding_valid'=>$e->reason!=='secret_binding_failed',
-                'credential_format'=>'unknown','site_token_format_valid'=>false,
-                'status_key_present'=>false,'failure'=>$e->reason,
+                'sealed_payload_format_valid'=>true,'vault_key_loaded'=>true,'decryption_attempted'=>true,'credential_readable'=>false,'vault_binding_valid'=>$e->reason!=='secret_binding_failed',
+                'binding_context'=>'site:'.$owner.':'.$siteId,
+                'binding_failure_class'=>$e->reason==='secret_binding_failed'?'authentication_failed_unknown_cause':'credential_decode_failed',
+                'credential_format'=>'unreadable','site_token_format_valid'=>null,
+                'status_key_present'=>null,'failure'=>$e->reason,
             ];
         } catch(\Throwable $e) {
             return [
                 'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
-                'sealed_payload_format_valid'=>true,'vault_binding_valid'=>false,
-                'credential_format'=>'unknown','site_token_format_valid'=>false,
-                'status_key_present'=>false,'failure'=>'credential_diagnostic_failed',
+                'sealed_payload_format_valid'=>true,'vault_key_loaded'=>true,'decryption_attempted'=>true,'credential_readable'=>false,'vault_binding_valid'=>false,
+                'binding_context'=>'site:'.$owner.':'.$siteId,'binding_failure_class'=>'diagnostic_exception',
+                'credential_format'=>'unreadable','site_token_format_valid'=>null,
+                'status_key_present'=>null,'failure'=>'credential_diagnostic_failed',
             ];
         }
         return [
             'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
-            'sealed_payload_format_valid'=>true,'vault_binding_valid'=>true,
+            'sealed_payload_format_valid'=>true,'vault_key_loaded'=>true,'decryption_attempted'=>true,'credential_readable'=>true,'vault_binding_valid'=>true,
+            'binding_context'=>'site:'.$owner.':'.$siteId,'binding_failure_class'=>null,
             'credential_format'=>$credential['status_hash']===null?'legacy_token':'paired_token',
             'site_token_format_valid'=>is_string($credential['token']) && preg_match('/^[A-Za-z0-9._~-]{20,512}$/D',$credential['token'])===1,
             'status_key_present'=>is_string($credential['status_hash']) && preg_match('/^[a-f0-9]{64}$/D',$credential['status_hash'])===1,
