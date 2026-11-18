@@ -343,13 +343,6 @@ rejects(fn()=>$oauth->exchange([
     'code_verifier'=>$expiredVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
 ],$now+300,fn($owner)=>true),'invalid_grant');
 
-// Wrong-client revocation is a no-op; the registered client can still revoke.
-$oauth->revoke($otherToken['refresh_token'],$oauthClient['client_id']);
-$stillBoundOtherActor=$core->authenticate($otherToken['access_token'],$now);
-$oauth->binding($stillBoundOtherActor,$now);
-$oauth->revoke($otherToken['refresh_token'],$otherOAuth['client_id']);
-rejects(fn()=>$oauth->binding($stillBoundOtherActor,$now),'invalid_or_expired_token');
-
 // Expired refresh credentials cannot be used even when the account is active.
 $expiryVerifier=str_repeat('x',64);
 $expiryAuth=$oauth->authorization([
@@ -392,6 +385,10 @@ $ownerTwoToken=$oauth->exchange([
 ],$now,fn($owner)=>$owner==='2');
 $ownerTwoActor=$core->authenticate($ownerTwoToken['access_token'],$now);
 $oauth->binding($ownerTwoActor,$now);
+// A foreign OAuth client cannot revoke another client's live grant.
+$oauth->revoke($ownerTwoToken['refresh_token'],$oauthClient['client_id']);
+$stillActiveAfterWrongClientRevoke=$core->authenticate($ownerTwoToken['access_token'],$now);
+$oauth->binding($stillActiveAfterWrongClientRevoke,$now);
 
 $pendingVerifier=str_repeat('p',64);
 $pendingAuth=$oauth->authorization([
