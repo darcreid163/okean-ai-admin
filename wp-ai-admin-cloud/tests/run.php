@@ -24,9 +24,19 @@ check($repeatSite['id']===$site['id']&&count($core->sites('1'))===2,'Same-accoun
 $healthyCredential=$core->diagnoseSiteCredential('1',$site['id']);
 check($healthyCredential['vault_binding_valid']===true && $healthyCredential['site_token_format_valid']===true && $healthyCredential['failure']===null,'Read-only credential diagnostic rejected a valid site secret');
 check(!array_key_exists('token',$healthyCredential) && !array_key_exists('ciphertext',$healthyCredential),'Credential diagnostic exposed secret material');
+$beforeDiagnosticCalls=$transport->executions;
+$healthyConnection=$core->diagnoseSiteConnection('1',$site['id']);
+check($healthyConnection['credential']['vault_binding_valid']===true && $healthyConnection['upstream']['catalog_received']===true,'Connection diagnostic did not validate the upstream catalog');
+check($healthyConnection['upstream']['passed']===true && $healthyConnection['upstream']['missing_tools']===[],'Connection diagnostic did not find all seven required read tools');
+check($healthyConnection['billable_actions']===0 && $healthyConnection['writes_tested']===false && $transport->executions===$beforeDiagnosticCalls,'Read-only diagnostic consumed quota or dispatched a site tool');
+check(!array_key_exists('token',$healthyConnection) && !array_key_exists('ciphertext',$healthyConnection),'Connection diagnostic exposed secret material');
+
 $wrongVaultCore=fixtureCore($store,$transport,100,str_repeat('z',32));
 $wrongKeyDiagnostic=$wrongVaultCore->diagnoseSiteCredential('1',$site['id']);
 check($wrongKeyDiagnostic['sealed_payload_format_valid']===true && $wrongKeyDiagnostic['vault_binding_valid']===false && $wrongKeyDiagnostic['failure']==='secret_binding_failed','Credential diagnostic did not distinguish a vault binding failure');
+$wrongConnection=$wrongVaultCore->diagnoseSiteConnection('1',$site['id']);
+check($wrongConnection['upstream']['attempted']===false && $wrongConnection['upstream']['blocked_by']==='credential_check_failed','Connection diagnostic attempted upstream access after Vault failure');
+
 rejects(fn()=>$core->connect('2','https://site-a.example.com','fixture-site-admin-token-aaaaaaaa',$now),'site_already_registered');
 $read=$core->mint('1',[$site['id']],['mcp:read'],$now);
 $write=$core->mint('1',[$site['id'],$site2['id']],['mcp:read','mcp:write'],$now);
