@@ -167,8 +167,9 @@ final class Store {
             // when the 45-second SSE reader window ends first.
             $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
             if (!$session) return true;
-            $pending=$this->row('SELECT COUNT(*) AS n FROM '.$this->table('sse_queue').' WHERE session_id=? AND payload=?',[$id,'']);
-            if ((int)($pending['n']??0)>0) return false;
+            $queued=$this->row('SELECT COUNT(*) AS n FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id]);
+            // Preserve both active reservations and completed replies not yet drained.
+            if ((int)($queued['n']??0)>0) return false;
             $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id]);
             $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE session_id=?',[$id]);
             return true;
