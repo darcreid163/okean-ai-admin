@@ -159,10 +159,19 @@ final class Store {
             return array_map(static fn($row)=>(string)$row['payload'],$rows);
         });
     }
-    public function deleteSseSession(string $id): void {
-        $this->transaction(function()use($id) {
+    /** Close a stream session without destroying an in-flight Gateway reply reservation. */
+    public function deleteSseSession(string $id): bool {
+        return $this->transaction(function()use($id): bool {
+            // Serialize close against reserve/complete on the session row. A request
+            // already executing Gateway must be allowed to publish its reply even
+            // when the 45-second SSE reader window ends first.
+            $session=$this->row('SELECT expires_at FROM '.$this->table('sse_sessions').' WHERE session_id=?'.$this->lock(),[$id]);
+            if (!$session) return true;
+            $pending=$this->row('SELECT COUNT(*) AS n FROM '.$this->table('sse_queue').' WHERE session_id=? AND payload=?',[$id,'']);
+            if ((int)($pending['n']??0)>0) return false;
             $this->execute('DELETE FROM '.$this->table('sse_queue').' WHERE session_id=?',[$id]);
             $this->execute('DELETE FROM '.$this->table('sse_sessions').' WHERE session_id=?',[$id]);
+            return true;
         });
     }
     private function upgradeQuotaSchema(): void {
