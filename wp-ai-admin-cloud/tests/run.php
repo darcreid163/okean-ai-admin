@@ -34,6 +34,9 @@ check(!array_key_exists('token',$healthyConnection) && !array_key_exists('cipher
 $wrongVaultCore=fixtureCore($store,$transport,100,str_repeat('z',32));
 $wrongKeyDiagnostic=$wrongVaultCore->diagnoseSiteCredential('1',$site['id']);
 check($wrongKeyDiagnostic['sealed_payload_format_valid']===true && $wrongKeyDiagnostic['vault_binding_valid']===false && $wrongKeyDiagnostic['failure']==='secret_binding_failed','Credential diagnostic did not distinguish a vault binding failure');
+check($wrongKeyDiagnostic['vault_key_loaded']===true && $wrongKeyDiagnostic['decryption_attempted']===true && $wrongKeyDiagnostic['credential_readable']===false,'Vault diagnostic did not report successful key loading and failed credential decryption');
+check($wrongKeyDiagnostic['status_key_present']===null && $wrongKeyDiagnostic['site_token_format_valid']===null && $wrongKeyDiagnostic['binding_failure_class']==='authentication_failed_unknown_cause','Unreadable ciphertext must not be misreported as a missing status key or malformed token');
+check($wrongKeyDiagnostic['binding_context']==='site:1:'.$site['id'],'Diagnostic binding context does not match the exact owner and registration ID');
 $wrongConnection=$wrongVaultCore->diagnoseSiteConnection('1',$site['id']);
 check($wrongConnection['upstream']['attempted']===false && $wrongConnection['upstream']['blocked_by']==='credential_check_failed','Connection diagnostic attempted upstream access after Vault failure');
 
