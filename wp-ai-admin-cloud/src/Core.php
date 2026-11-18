@@ -300,6 +300,71 @@ final class Core {
             'failure'=>null,
         ];
     }
+    /**
+     * Read-only admin diagnostic for one owned site. Checks the local Vault
+     * binding first, then performs exactly one upstream tools/list request.
+     * It never invokes a site tool, changes storage, or consumes user quota.
+     */
+    public function diagnoseSiteConnection(string $owner,string $siteId): array {
+        $credential=$this->diagnoseSiteCredential($owner,$siteId);
+        $report=[
+            'site_id'=>$siteId,
+            'credential'=>$credential,
+            'upstream'=>['attempted'=>false,'catalog_received'=>false,'tool_count'=>0,'required_tools'=>[],'missing_tools'=>[],'passed'=>false],
+            'billable_actions'=>0,
+            'writes_tested'=>false,
+        ];
+        if (($credential['failure']??null)!==null || ($credential['site_token_format_valid']??false)!==true) {
+            $report['upstream']['blocked_by']='credential_check_failed';
+            return $report;
+        }
+        $report['upstream']['attempted']=true;
+        try {
+            $site=$this->ownedSite($owner,$siteId);
+            $secret=$this->siteCredential($site);
+            $reply=$this->transport->rpc($site['home'],$secret['token'],[
+                'jsonrpc'=>'2.0',
+                'id'=>'cloud-diagnostic-catalog',
+                'method'=>'tools/list',
+            ]);
+            if (isset($reply['error'])) throw new Fault('upstream_rpc_error',502);
+            $tools=$reply['result']['tools']??null;
+            if (!is_array($tools) || count($tools)>500) throw new Fault('invalid_upstream_catalog',502);
+            $names=[];
+            foreach($tools as $tool) {
+                if (is_array($tool) && is_string($tool['name']??null)) $names[$tool['name']]=true;
+            }
+            $required=[
+                'wp.get_site'=>['wp.get_site','wp_get_site'],
+                'wp.list_plugins'=>['wp.list_plugins','wp_list_plugins'],
+                'wp.list_themes'=>['wp.list_themes','wp_list_themes'],
+                'wp.read_post'=>['wp.read_post','wp_read_post'],
+                'gutenberg.get_blocks'=>['gutenberg.get_blocks','gutenberg_get_blocks'],
+                'elementor.get_structure'=>['elementor.get_structure','elementor_get_structure'],
+                'woocommerce.search_products'=>['woocommerce.search_products','woocommerce_search_products'],
+            ];
+            $available=[]; $missing=[];
+            foreach($required as $label=>$aliases) {
+                $found=false;
+                foreach($aliases as $alias) if(isset($names[$alias])) { $found=true; break; }
+                $available[$label]=$found;
+                if(!$found) $missing[]=$label;
+            }
+            $report['upstream']=[
+                'attempted'=>true,
+                'catalog_received'=>true,
+                'tool_count'=>count($tools),
+                'required_tools'=>$available,
+                'missing_tools'=>$missing,
+                'passed'=>count($missing)===0,
+            ];
+        } catch(Fault $e) {
+            $report['upstream']['failure']=$e->reason;
+        } catch(\Throwable $e) {
+            $report['upstream']['failure']='upstream_diagnostic_failed';
+        }
+        return $report;
+    }
     private function upstream(array $site,array $request): array {
         $credential=$this->siteCredential($site);
         return $this->transport->rpc($site['home'],$credential['token'],$request);
