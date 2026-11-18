@@ -37,9 +37,16 @@ final class WordPress {
         $store=self::database();
         if ((string)get_option('wpai_gateway_db_version','')==='4') {
             $store->assertSchema();
+            $store->ensureSseQueueSchema();
+            // One-time additive index migration for existing schema-v4 installations.
+            if ((string)get_option('wpai_gateway_operational_indexes_v1','')!=='1') {
+                $store->ensureOperationalIndexes();
+                update_option('wpai_gateway_operational_indexes_v1','1',false);
+            }
         } else {
             $store->migrate();
             update_option('wpai_gateway_db_version','4',false);
+            update_option('wpai_gateway_operational_indexes_v1','1',false);
         }
         // Separate idempotent flag: the schema version stays 4 so historical
         // upgrade/restore snapshots keep working. Only current-scheme accounts
@@ -61,6 +68,7 @@ final class WordPress {
     }
     public static function oauth(): OAuth { return new OAuth(self::database(),self::core(),Settings::endpoint()); }
     public static function operatorCore(): Core { return self::core(); }
+    public static function operatorStore(): Store { self::core(); return self::database(); }
     public static function pairing(): Pairing { return new Pairing(self::core(),new Vault(Settings::keys()['vault']),new HttpsTransport()); }
     public static function operatorOwner(): string { return self::owner(); }
     public static function authenticateHeader(string $auth): array {

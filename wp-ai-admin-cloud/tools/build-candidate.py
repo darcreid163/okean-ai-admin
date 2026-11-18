@@ -27,7 +27,7 @@ def build(repo, output, php="php"):
     if not 1980 <= timestamp.year <= 2107:
         raise ValueError("Commit timestamp outside ZIP range")
     date = timestamp.timetuple()[:5] + (timestamp.second // 2 * 2,)
-    roots = [prefix + part for part in ("wp-ai-admin-cloud.php", "src", "includes", "config")]
+    roots = [prefix + part for part in ("wp-ai-admin-cloud.php", "export-keys.php", "src", "includes", "config")]
     entries = git(repo, "ls-tree", "-rz", "--full-tree", commit, "--", *roots)
     files = {}
     for entry in entries.split(b"\0"):

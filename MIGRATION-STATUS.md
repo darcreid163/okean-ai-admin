@@ -23,12 +23,15 @@ PR #232 includes Native 2.1.18 / DB25 atomic rate-limit admission and HPOS suppo
 
 File replacement uses same-directory staging, full write/hash verification and rename. There is no delete-before-rename or copy/unlink fallback. Replacement fails closed if unsupported. Windows semantics and power-loss durability are not yet platform-qualified.
 
-## 3. Cloud work not yet integrated
+## 3. Cloud Store and key-preservation integration
 
-- PR #226: atomic durable SSE queue, owner-scoped Store indexes, SQLite index collision guard and MySQL table-prefix boundary.
-- PR #224: safe CLI-only Cloud key preservation/export utility, stacked on #226.
+The selected changes from PR #226 and stacked PR #224 are now integrated into the current PR #232 release branch:
+- Atomic, bounded legacy SSE queue with reservation-before-execution, atomic publish/drain, expiry and single-delivery semantics.
+- Prefix-scoped SSE indexes, owner-scoped Store indexes with exact schema checks, SQLite index-collision guard and MySQL table-prefix boundary.
+- CLI-only key-preservation export utility, private output restrictions and key-management/recovery documentation.
+- Regression coverage for concurrent SSE producers/drainers, queue capacity, prefix isolation, index migration/idempotency, artifact allowlists and Cloud upgrade/restore.
 
-These remain separate Draft PRs and are not in PR #232. Integrate and validate them before freezing a public Cloud release candidate. Do not perform AUTH_KEY/AUTH_SALT rotation or destructive restore without a verified key-preservation/recovery procedure.
+The combined source preview passed Native and Cloud CI on its own tested tree; the current PR #232 combined integration tree must pass its own exact-head Native + Cloud workflows before qualification. Do not perform AUTH_KEY/AUTH_SALT rotation or destructive restore without following the verified key-preservation procedure.
 
 ## 4. Plans, quota and account migration
 

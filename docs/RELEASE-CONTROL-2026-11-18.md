@@ -11,7 +11,7 @@
 | Native plugin | 2.1.18, DB schema 25, build `2.1.18-native-rate-limit-hpos-v1-20261117` | Candidate in PR #232 |
 | Cloud Core | 0.3.13-dev, Gateway Store schema 4 (recovered 0.3.11 baseline) | Candidate source; not a production release |
 | Main | `1e459dc6fd6ede2db6e15145c6aa66c9b4d81f5a` | Unchanged |
-| Integration branch | `release/native-2.1.18-integration-20261118` | `432b1ece676f4520a2e0d2a7fdf55176c8d44115` |
+| Integration branch | `release/native-2.1.18-integration-20261118` | Native 2.1.18 + Cloud Store/key-preservation merge candidate; see current PR #232 head |
 | PR #232 | Draft, open, base `main` | Not merged |
 
 Exact-head CI for integration SHA `432b1ece676f4520a2e0d2a7fdf55176c8d44115`:
@@ -20,7 +20,7 @@ Exact-head CI for integration SHA `432b1ece676f4520a2e0d2a7fdf55176c8d44115`:
 - Cloud workflow [44253496283](https://github.com/darcreid163/okean-ai-admin/actions/runs/44253496283): PASS — PHP 8.2/8.3/8.4, SQLite/MySQL contracts, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
 - The file lifecycle suite verifies 3 MB atomic Apply/Verify/Rollback and interrupted Apply recovery in three cases: committed write, no write yet, and ambiguous external change.
 
-CI proves the exact source and disposable test matrix only. It does not prove the installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance.
+The tested combined PR #226/#224 preview passed Native run [44103142276](https://github.com/darcreid163/okean-ai-admin/actions/runs/44103142276) and Cloud run [44103142290](https://github.com/darcreid163/okean-ai-admin/actions/runs/44103142290). Those runs qualify that preview tree only. The current PR #232 combined tree is undergoing its own exact-head Native + Cloud CI. CI does not prove installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance.
 
 ## 2. Integrated in PR #232
 
@@ -39,12 +39,12 @@ The staged rename strategy intentionally fails closed if the platform cannot rep
 
 ## 3. Work still outside PR #232
 
-### P0 — integrate and qualify Cloud Store
+### P0 — Cloud Store and key-preservation integration
 
-- [PR #226](https://github.com/darcreid163/okean-ai-admin/pull/226): durable atomic SSE queue, owner-scoped indexes, SQLite index collision guard and MySQL table-prefix boundary.
-- [PR #224](https://github.com/darcreid163/okean-ai-admin/pull/224): CLI-only Cloud key preservation/export utility, stacked on #226.
-
-The Cloud Store queue race can lose replies under concurrent append/drain. This is a release blocker for a public Cloud service unless the transport is replaced or the risk is explicitly removed by a verified design. Integrate #226 with the current Cloud candidate, resolve the shared Cloud upgrade/restore tests, and run exact-head Native + Cloud CI. Then integrate or separately qualify #224 key recovery before any AUTH_KEY/AUTH_SALT rotation or Cloud restore procedure that depends on those keys.
+- PR #226 and stacked PR #224 are now integrated into the current PR #232 branch.
+- The Cloud Store queue race can lose replies under concurrent append/drain; the integrated implementation adds bounded atomic queue admission/publish/drain and regression tests.
+- The key-preservation utility and recovery documentation are included. Follow the documented export procedure before any AUTH_KEY/AUTH_SALT rotation or Cloud restore that depends on those keys.
+- The combined preview passed its own Native + Cloud CI. The new PR #232 combined tree must pass exact-head Native + Cloud CI before this gate is marked complete.
 
 ### P0 — external/manual acceptance
 
