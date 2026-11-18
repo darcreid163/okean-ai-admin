@@ -113,6 +113,52 @@ class OAI_Files {
   if($expected_hash!==''&&!hash_equals($expected_hash,$hash))return new WP_Error('oai_conflict','File changed immediately before mutation',array('status'=>409,'current_sha256'=>$hash));
   return true;
  }
+ private static function atomic_replace($scope,$relative,$file,$content,$expected_exists,$expected_hash){
+  // Stage beside the destination so rename stays on the same filesystem.
+  // Never fall back to copy/unlink: a failed replacement must leave the old
+  // destination intact rather than exposing a truncated or partial file.
+  $dir=dirname($file); $real_dir=realpath($dir);
+  if($real_dir===false||!is_dir($real_dir))return new WP_Error('oai_dir','Target directory is unavailable',array('status'=>500));
+  $tmp=@tempnam($real_dir,'.wpai-atomic-');
+  if($tmp===false)return new WP_Error('oai_temp','Could not create a same-directory temporary file',array('status'=>500));
+  $handle=null;
+  try{
+   clearstatcache(true,$tmp);
+   $tmp_real=realpath($tmp);
+   if(is_link($tmp)||$tmp_real===false||!hash_equals($real_dir,dirname($tmp_real)))return new WP_Error('oai_temp','Temporary file escaped the target directory',array('status'=>500));
+   $handle=@fopen($tmp,'wb');
+   if($handle===false)return new WP_Error('oai_temp','Could not open temporary file',array('status'=>500));
+   $length=strlen($content); $offset=0;
+   while($offset<$length){
+    $written=@fwrite($handle,substr($content,$offset));
+    if($written===false||$written===0)return new WP_Error('oai_write','Temporary file write was incomplete',array('status'=>500));
+    $offset+=$written;
+   }
+   if(!@fflush($handle))return new WP_Error('oai_write','Could not flush temporary file',array('status'=>500));
+   if(function_exists('fsync')&&!@fsync($handle))return new WP_Error('oai_write','Could not sync temporary file',array('status'=>500));
+   if(!@fclose($handle)){$handle=null;return new WP_Error('oai_write','Could not close temporary file',array('status'=>500));}
+   $handle=null;
+   clearstatcache(true,$tmp);
+   if(!is_file($tmp)||filesize($tmp)!==$length||!hash_equals(hash('sha256',$content),(string)@hash_file('sha256',$tmp)))return new WP_Error('oai_write_verify','Temporary file verification failed',array('status'=>500));
+   $mode=FS_CHMOD_FILE;
+   if($expected_exists){$perms=@fileperms($file);if($perms!==false)$mode=$perms&0777;}
+   $fs=self::fs();
+   if(!$fs||!$fs->chmod($tmp,$mode))return new WP_Error('oai_permissions','Could not set staged file permissions',array('status'=>500));
+   $safe=self::revalidate_target($scope,$relative,$file,$expected_exists,$expected_hash);
+   if(is_wp_error($safe))return $safe;
+   // PHP rename replaces an existing file when the platform permits it.
+   // On Windows a non-writable/open destination may make rename fail; fail
+   // closed and preserve the original instead of unlinking it first.
+   if(!@rename($tmp,$file))return new WP_Error('oai_atomic_replace','Atomic file replacement failed; original target was not deliberately removed',array('status'=>500));
+   $tmp=null;
+   clearstatcache(true,$file);
+   if(is_link($file)||!is_file($file)||!hash_equals(hash('sha256',$content),(string)@hash_file('sha256',$file)))return new WP_Error('oai_write_verify','Replaced file failed post-write verification',array('status'=>500));
+   return true;
+  }finally{
+   if(is_resource($handle))@fclose($handle);
+   if(is_string($tmp)&&$tmp!==''&&file_exists($tmp))@unlink($tmp);
+  }
+ }
  public static function write($scope,$path,$content,$expected_sha256='',$expected_exists=null){
   $file=OAI_Security::resolve_path_for_write($scope,$path); if(is_wp_error($file))return $file;
   if(strlen($content)>5*1024*1024)return new WP_Error('oai_file_large','Write limit is 5 MB',array('status'=>413));
@@ -134,7 +180,8 @@ class OAI_Files {
    $safe=self::revalidate_target($scope,$path,$file,$exists,$old_hash);if(is_wp_error($safe))return $safe;
    $dir=dirname($file); if(!is_dir($dir) && !wp_mkdir_p($dir))return new WP_Error('oai_dir','Could not create directory',array('status'=>500));
    $safe=self::revalidate_target($scope,$path,$file,$exists,$old_hash);if(is_wp_error($safe))return $safe;
-   $backup=$exists?$old:null; $ok=$fs->put_contents($file,$content,FS_CHMOD_FILE); if(!$ok)return new WP_Error('oai_write','File write failed',array('status'=>500));
+   $backup=$exists?$old:null;
+   $ok=self::atomic_replace($scope,$path,$file,$content,$exists,$old_hash);if(is_wp_error($ok))return $ok;
    return array('ok'=>true,'before_sha256'=>$old_hash,'after_sha256'=>hash('sha256',$content),'backup'=>$backup,'bytes'=>strlen($content),'path'=>$path);
   }finally{self::release_target_lock($lock);}
  }
