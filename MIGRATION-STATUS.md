@@ -1,54 +1,73 @@
-# WP AI Admin — PUBLICATION BLOCKED (publication and installation)
+# WP AI Admin — release status and migration boundaries
 
-## Version authority
+**Status: release qualification in progress. No production release, merge to main or deployment is approved.**
 
-- Combined integration working candidate: **Native 2.1.18** (`OAI_DB_VERSION=25`, build `2.1.18-native-rate-limit-hpos-v1-20261117`; atomic rate limiting and WooCommerce HPOS 11.3.0 acceptance), **Cloud Core 0.3.11** as the restored baseline (Gateway schema **4**); **unreleased Cloud 0.3.13-dev** as the explicitly changed candidate, including the hash-only licence registry and the approved plan catalogue.
-- Previously recorded ZIP hashes, retained for provenance only (they do not identify the current working tree): Native `4bf534f3a30344fa94cf599d526477887ed89175e494d32b6b35e5a05f1cc1ac`; Cloud `b83ebc098b5ef3e22b7f083df8d26849c233839b226d516725c027984de82793`.
-- Site-installed Native versions must be rechecked before deployment; historical checks differed between sites. Installed file hashes remain unverified.
-- Canonical endpoints and identity preservation are unchanged. Do not use GitHub Actions credentials to access production.
+## 1. Version authority
 
-## Current source state — 14 November 2026
+| Component | Candidate | Notes |
+|---|---|---|
+| Native | 2.1.18, DB schema 25 | Build `2.1.18-native-rate-limit-hpos-v1-20261117` |
+| Cloud Core | 0.3.13-dev | Recovered 0.3.11 baseline; Gateway Store schema 4; Cloud plugin DB version 2 |
+| Main | `1e459dc6fd6ede2db6e15145c6aa66c9b4d81f5a` | Remains unchanged |
+| Integration PR | #232 Draft | Native and selected Cloud-compatible hardening, not merged |
 
-`main` at `436aa3be2865f6f92aa9c7b550a6e2f8c62562cb` (squash of PR #189) passed both hosted workflows:
-[Native](https://github.com/darcreid163/okean-ai-admin/actions/runs/43596399424)
-and [Cloud](https://github.com/darcreid163/okean-ai-admin/actions/runs/43596399421).
-The preceding feature HEAD `518e35557144a50dfaa47541d94246433187b93d` also passed
-[Native](https://github.com/darcreid163/okean-ai-admin/actions/runs/43596115991)
-and [Cloud](https://github.com/darcreid163/okean-ai-admin/actions/runs/43596116004).
-These results establish CI for the cited SHAs only. Follow-up branches, including
-documentation-only changes, require their own exact-HEAD checks. Staging,
-installed-file parity, external-client acceptance and publication gates are not
-implied by these results.
+Code candidate SHA `6e60163383afce5c81c59e6c452772cd26d21fc4` passed:
+- Native run [44252504373](https://github.com/darcreid163/okean-ai-admin/actions/runs/44252504373): PHP 8.2/8.3/8.4, three WordPress smoke profiles, Native artifact and package install on WP 7.0.6/latest.
+- Cloud run [44252504378](https://github.com/darcreid163/okean-ai-admin/actions/runs/44252504378): PHP 8.2/8.3/8.4, SQLite/MySQL contracts, browser contracts, WordPress upgrade/restore and Cloud artifact.
 
-## Current plans and licences
+Later documentation-only commits on this branch require their own exact-head checks. CI is not evidence of production installation or live-client acceptance.
 
-- Target catalogue (`schemes.tariffs_v3`): Free **100 actions/UTC day**; Pro 2,000 ₽/month, PRO+ 5,000 ₽/month and PRO++ 10,000 ₽/month, each `requires_owner_approval` with a `null` limit. PRO+/PRO++ are display names for the stable slugs `business`/`businesspro`.
-- The active default remains the frozen `tariffs_v2` until a separately authorized account/tariff migration. Free is 100 actions/UTC day in both schemes.
-- Billable calls on a pending paid plan fail closed with `plan_quota_not_configured`; reads, verification, receipts, rollback and usage remain available. No paid limit is invented or carried over.
-- Cloud Core alone decides plan, licence, quota and balance. Licence keys are hash-only at rest, shown once, revocable and never trusted from Native input.
-- No automatic payments, auto-renewal or money debits. Batch is enabled in the shipped catalogue as `successful_object_v1` (per successful object) for `cloud_site_batch_call`; an explicitly stored `wpai_gateway_batch_object_v1` option remains an operator kill switch. Scheduled `batch_create`/`batch_resume` stay gated until their receipt accounting is ready.
+## 2. Integrated Native changes
 
-See [the beta-readiness report](docs/BETA-READINESS-2026-11-14.md),
-[the licence registry](docs/LICENSE-REGISTRY.md) and
-[the mission brief](docs/OPEN-BETA-RELEASE-MISSION.md).
+PR #232 includes Native 2.1.18 / DB25 atomic rate-limit admission and HPOS support, uninstall data preservation, OAuth registry hardening, REST Bearer hash-at-rest migration, media creation single-winner admission, read-only Abilities discovery/schema, file path/snapshot/staged-write hardening, editor snapshot guards and file lifecycle/recovery tests.
 
-## Mandatory merge gates
+File replacement uses same-directory staging, full write/hash verification and rename. There is no delete-before-rename or copy/unlink fallback. Replacement fails closed if unsupported. Windows semantics and power-loss durability are not yet platform-qualified.
 
-- [ ] Native CI exact PR HEAD green: PHP 8.2/8.3/8.4, WordPress smoke/migration 23→24, build archive, **Native-only publication gate**.
-- [ ] Cloud CI exact PR HEAD green: PHP 8.2/8.3/8.4, SQLite + MySQL 3→4 migration, OAuth PKCE/refresh/revoke, tenant isolation, atomic Ledger/Batch, recovery tests.
-- [ ] Plan catalogue and licence registry contracts pass on SQLite and MySQL: Free daily terms, pending paid quotas fail closed, hash-only one-time keys, lifecycle, activation limits and cross-account isolation.
-- [ ] Paid quota numbers are explicitly approved by the owner; no billable paid path is enabled before that approval.
-- [ ] Account/tariff migration to `tariffs_v3` is separately authorized, rehearsed and reversible; it has not been performed.
-- [ ] Source integrity/secret scan passes and no old Cloud 0.3.6/0.1.0 runtime remains in current tree.
-- [ ] Real staging upgrade and rollback, Verify/Receipt/Proof signatures, Elementor/Gutenberg/Woo/Media/Menu e2e matrix.
-- [ ] Installed files compared to archived hashes before site upgrade, with backups.
-- [ ] Review unique work in older #35/#37/#41/#43/#44/#45 and the separate Native/Cloud recovery PRs; resolve without lost code.
-- [ ] Final manual approval to merge `main`, export into public Native/private Cloud release repos, make integration private and deploy to production.
+## 3. Cloud work not yet integrated
 
-No automatic payments or unapproved quota resets. Never merge the superseded alternate Billing engine in Cloud PR #9. No production changes are performed by this branch. Paid-plan quotas remain fail-closed until the owner supplies numbers.
+- PR #226: atomic durable SSE queue, owner-scoped Store indexes, SQLite index collision guard and MySQL table-prefix boundary.
+- PR #224: safe CLI-only Cloud key preservation/export utility, stacked on #226.
 
-**Disclosure warning:** Cloud 0.3.11 source is available to anyone with the public repository. Future repo privacy does not retract prior downloads.
+These remain separate Draft PRs and are not in PR #232. Integrate and validate them before freezing a public Cloud release candidate. Do not perform AUTH_KEY/AUTH_SALT rotation or destructive restore without a verified key-preservation/recovery procedure.
 
-## Unified repository transition
+## 4. Plans, quota and account migration
 
-As directed 21 October 2026, `darcreid163/okean-ai-admin` is the sole development monorepo until final acceptance. Split publication to Native public and Cloud private happens only afterward. Never merge older PR #46 *as a Native-only destination*: use the reconciled combined integration branch and both CI workflows. Existing PRs remain historical evidence and must not overwrite newer recovered runtime or normalized tariffs. No production writes.
+Current owner-approved daily UTC quota catalogue:
+
+| Plan | Stable slug | Quota/day | Price |
+|---|---|---:|---:|
+| Free | `free` | 50 | 0 ₽/month |
+| Daily | `daily` | 500 | not set |
+| Pro | `pro` | 2,000 | 2,000 ₽/month |
+| PRO+ | `business` | 5,000 | 5,000 ₽/month |
+| PRO++ | `businesspro` | 10,000 | 10,000 ₽/month |
+
+- Cloud Core is the sole authority for plan, license, quota and balance.
+- Successful single-tool operations count as one action; each successfully processed Batch object counts as one action.
+- Failed operations, retries already settled, Verify and Rollback do not create additional successful-action charges.
+- Automatic money debits and auto-renewal are disabled. Payment-to-license fulfillment is not implemented/qualified.
+- Existing `legacy_monthly_v1` accounts retain historical terms. Do not silently migrate or reprice accounts.
+- The default scheme and live account state must be checked separately before any activation/migration. No production tariff migration is authorized by this branch.
+- The last recorded live Cloud observation is dated 16 November 2026; this review did not reconnect to any site, so current live activation is unknown.
+
+## 5. Remaining release gates
+
+- Integrate PR #226 and PR #224 into the reviewed Cloud candidate.
+- Complete real ChatGPT token expiry/reconnect qualification (#92).
+- Complete two-owner tenant isolation and clean external ChatGPT/MCP acceptance.
+- Complete disposable staging lifecycle, clean install, upgrade, paired backup/restore and post-restore identity checks.
+- Freeze Native-only and separate Cloud artifacts from exact committed source; verify provenance, checksums, dependency/license notices and secret scans.
+- Confirm legal/privacy/terms/retention and support process.
+- Decide whether the first release is a closed/free beta or a self-service paid launch. Paid launch additionally requires the payment-to-license workflow in #203; shipping/tax/store-settings coverage (#168/#169) can remain post-beta unless advertised as a full WooCommerce suite.
+
+## 6. Repository and production boundaries
+
+- The repository is public and contains both Native and Cloud development source. Making it private later cannot retract existing clones, forks or downloads.
+- Intended final split remains public Native-only repository and private Cloud Core repository, only after qualification and explicit owner approval.
+- Do not commit production keys, credentials, customer data, database snapshots or deployment configuration.
+- No live WordPress site, production database, billing account or license was accessed or modified in this review.
+- Do not merge, tag, publish, deploy, migrate accounts or change repository visibility without separate explicit approval.
+
+## Canonical status
+
+Use [docs/RELEASE-CONTROL-2026-11-18.md](docs/RELEASE-CONTROL-2026-11-18.md) and [issue #40](https://github.com/darcreid163/okean-ai-admin/issues/40) as the current source of release truth. Older dated reports remain historical evidence, not current installation instructions.
