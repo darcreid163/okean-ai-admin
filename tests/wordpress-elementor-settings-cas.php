@@ -19,13 +19,12 @@ if ($postId <= 0 || is_wp_error($postId)) throw new RuntimeException('Could not 
 try {
     $nodeId = 'casnode01';
     $initialSettings = array('title' => 'Initial title', 'align' => 'left');
-    $initialData = array(array(
-        'id' => $nodeId,
-        'elType' => 'widget',
-        'widgetType' => 'heading',
-        'settings' => $initialSettings,
-        'elements' => array(),
-    ));
+    $htmlNodeId = 'cashtml01';
+    $initialHtml = '<div>Initial HTML</div>';
+    $initialData = array(
+        array('id' => $nodeId, 'elType' => 'widget', 'widgetType' => 'heading', 'settings' => $initialSettings, 'elements' => array()),
+        array('id' => $htmlNodeId, 'elType' => 'widget', 'widgetType' => 'html', 'settings' => array('html' => $initialHtml), 'elements' => array()),
+    );
     update_post_meta($postId, '_elementor_data', wp_slash(wp_json_encode($initialData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
     $approvedJson = wp_json_encode($initialSettings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $approvedHash = hash('sha256', $approvedJson);
@@ -42,6 +41,20 @@ try {
     $stored = OAI_Elementor::find_node($postId, $nodeId);
     ewCasAssert(!is_wp_error($stored) && $stored['node']['settings'] === $newerSettings,
         'Stale Apply overwrote the newer Elementor editor settings');
+
+    // HTML widget writes use the same final pre-save snapshot guard.
+    $htmlExpectedHash = hash('sha256', $initialHtml);
+    $latestData = OAI_Elementor::get_data($postId);
+    $latestData[1]['settings']['html'] = '<div>Human editor HTML</div>';
+    update_post_meta($postId, '_elementor_data', wp_slash(wp_json_encode($latestData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
+    $htmlWriter = new ReflectionMethod('OAI_REST', 'elementor_widget_html_write');
+    $htmlWriter->setAccessible(true);
+    $htmlAttempt = $htmlWriter->invoke(null, $postId . ':' . $htmlNodeId, '<div>AI overwrite</div>', $htmlExpectedHash);
+    ewCasAssert(is_wp_error($htmlAttempt) && $htmlAttempt->get_error_code() === 'oai_snapshot_mismatch',
+        'Stale Elementor HTML snapshot was not rejected');
+    $htmlStored = OAI_Elementor::find_node($postId, $htmlNodeId);
+    ewCasAssert(!is_wp_error($htmlStored) && $htmlStored['node']['settings']['html'] === '<div>Human editor HTML</div>',
+        'Stale Apply overwrote newer Elementor HTML');
 
     $missingHash = OAI_Elementor::save_settings($postId . ':' . $nodeId, array('title' => 'No snapshot'));
     ewCasAssert(is_wp_error($missingHash) && $missingHash->get_error_code() === 'oai_snapshot_required',
