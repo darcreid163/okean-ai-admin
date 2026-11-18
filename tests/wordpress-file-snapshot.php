@@ -30,7 +30,7 @@ $outside_dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wpai-outside-dir-' . 
 try {
     $absent = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $missing);
     fileSnapshotAssert(is_array($absent) && $absent === array(false, null), 'A validated missing nested target must be represented as a new file');
-    $new_payload = "new nested file\\n";
+    $new_payload = "new nested file\n";
     $new_write = OAI_Files::write($scope, $missing, $new_payload, '', false);
     fileSnapshotAssert(!is_wp_error($new_write) && !empty($new_write['ok']), 'New nested file write failed after locked path revalidation');
     $new_full = $base . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $missing);
@@ -47,7 +47,7 @@ try {
     $oversized = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $relative);
     fileSnapshotAssert(is_wp_error($oversized) && $oversized->get_error_code() === 'oai_file_large', 'An existing file above the read limit must fail closed, not masquerade as a missing file');
     // Symlink file targets and symlinked parent directories must fail closed.
-    fileSnapshotAssert(file_put_contents($outside, "outside sentinel\\n") !== false, 'Could not create outside sentinel');
+    fileSnapshotAssert(file_put_contents($outside, "outside sentinel\n") !== false, 'Could not create outside sentinel');
     fileSnapshotAssert(symlink($outside, $link_full), 'Symlink fixture creation is unavailable');
     $file_link = OAI_Security::resolve_path_for_write($scope, $link_name);
     fileSnapshotAssert(is_wp_error($file_link) && $file_link->get_error_code() === 'oai_path_denied', 'Symlink file target was accepted');
@@ -63,7 +63,7 @@ try {
     fileSnapshotAssert(is_wp_error($dir_result) && $dir_result->get_error_code() === 'oai_path_denied', 'Symlink parent directory was accepted');
     $dir_write = OAI_Files::write($scope, $dir_path, 'escaped write');
     fileSnapshotAssert(is_wp_error($dir_write) && $dir_write->get_error_code() === 'oai_path_denied', 'Write traversed a symlink parent directory');
-    echo "PASS file snapshot/security: absent/existing/oversized snapshots, symlink target and parent rejection\\n";
+    echo "PASS file snapshot/security: absent/existing/oversized snapshots, symlink target and parent rejection\n";
 } finally {
     if (is_file($full)) @unlink($full);
     if (is_link($link_full)) @unlink($link_full);
