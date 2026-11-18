@@ -8,6 +8,8 @@ wp_test() { php "$WORK/wp-cli.phar" --path="$WORK/site" --allow-root "$@"; }
 wp_test core download --version="${WP_TEST_VERSION:-latest}"
 wp_test config create --dbname=wp_test --dbuser=root --dbpass=test-password --dbhost=127.0.0.1
 wp_test core install --url=http://localhost:8080 --title=Smoke --admin_user=ci-admin --admin_password=test-only-ci-password --admin_email=ci@example.invalid --skip-email
+# OAuth schema v2 migration: durable registry mutex row for atomic client-cap admission.
+DB_HOST=127.0.0.1 DB_USER=root DB_PASSWORD=test-password DB_NAME=wp_test php "$GITHUB_WORKSPACE/tests/oauth-schema-upgrade.php"
 install_ci_plugin() {
   local plugin="$1" version="$2"
   if [[ "$version" == "latest" ]]; then
@@ -25,7 +27,9 @@ OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/s
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
 cp -R okean-ai-admin.php includes starter-themes README.txt "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin
-# Disposable site only: exercise the additive Native 23 -> 24 schema migration,
+# OAuth registration bounds, retention and atomic global capacity under concurrent requests.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-oauth-registration.php"
+# Disposable site only: exercise the additive Native 23 -> 25 schema migration,
 # preserving paired identity, registered OAuth client and pending operations.
 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-quota-upgrade-23-24.php"
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-rate-limit-concurrency.php"
