@@ -1,6 +1,6 @@
 # Data Retention and Uninstall Policy
 
-Status: release-candidate policy for **Native 2.1.17 (DB24)** / **Cloud Core 0.3.13-dev (schema4)**.
+Status: release-candidate policy for **Native 2.1.18 (DB25)** / **Cloud Core 0.3.13-dev (schema4)**.
 This candidate is not an approved production release.
 
 ## Principle
