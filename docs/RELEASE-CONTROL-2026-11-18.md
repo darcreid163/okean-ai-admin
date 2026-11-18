@@ -14,15 +14,15 @@
 | Integration branch | `release/native-2.1.18-integration-20261118` | Native 2.1.18 + Cloud Store/key-preservation merge candidate; see current PR #232 head |
 | PR #232 | Draft, open, base `main` | Not merged |
 
-The integration source snapshot `576e5c01517fc5f413d45b3dba07ec7f0bc0c817` passed exact-head CI:
+The current integration head `8b5e3c944f2e5fb56b1d7bbb0494f025a8742000` passed exact-head CI:
 
-- Native workflow [44292098778](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098778): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles (including WooCommerce 11.3 HPOS), Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
-- Cloud workflow [44292098786](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098786): PASS — PHP 8.2/8.3/8.4 contracts, browser contracts, WordPress 7.0.6/latest upgrade checks and Cloud artifact.
-- These run IDs validate the source snapshot above. This documentation reconciliation creates a new commit and must pass its own exact-head CI before the repository's current head can be called green.
-- The file lifecycle suite verifies 3 MB atomic Apply/Verify/Rollback and interrupted Apply recovery in three cases: committed write, no write yet, and ambiguous external change.
-- Cloud upgrade/restore includes SSE schema coexistence and exact vault/signing key preservation/export checks.
+- Native workflow [44299756727](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756727): PASS — PHP 8.2/8.3/8.4, pinned WordPress 7.0.6 + Elementor 4.3.3 + WooCommerce 11.1.2 smoke, latest compatibility smoke, WooCommerce 11.3 HPOS smoke, deterministic Native artifact/provenance and install/boot on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
+- Cloud workflow [44299756819](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756819): PASS — PHP 8.2/8.3/8.4 contracts, SQLite/MySQL migration/OAuth/tenant-isolation/billing contracts, browser pairing/OAuth navigation, WordPress 7.0.6/latest upgrade and backup-restore checks, and Cloud candidate artifact.
+- Native artifact `14424803049`, SHA-256 `ec99ac2065b9dd6a74184e7108d28b934559df8df18562668991558c4881dd94`.
+- Cloud artifact `14424589748`, SHA-256 `c56b2a80436250fa1aaa27d1380212aac62f49ed7e3d4377fad9a1a6de6f2c7c`.
+- These are expiring GitHub Actions artifacts, not signed public releases.
 
-This exact combined tree passed Native and Cloud CI. Stream close now retains pending reservations and undrained replies while revoking transient auth context. Legacy SSE still has no client acknowledgement/replay after socket disconnect and remains best-effort; use Streamable HTTP when replay is required. CI does not prove installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance. Documentation commits after this code SHA require their own exact-head CI.
+Stream close retains pending reservations and undrained replies while revoking transient auth context. Legacy SSE still has no client acknowledgement/replay after socket disconnect and remains best-effort; use Streamable HTTP when replay is required. CI does not prove installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance. The connection contract addendum for this candidate is `docs/CHATGPT-CONNECTION-CONTRACT-ADDENDUM-2026-11-18.md`.
 
 ## 2. Integrated in PR #232
 
