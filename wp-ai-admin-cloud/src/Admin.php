@@ -58,7 +58,7 @@ final class Admin {
         echo '<h2 style="margin:4px 0 12px">Результат диагностики подключения и MCP</h2>';
         echo '<p><strong>'.($passed?'Проверка пройдена':'Обнаружена проблема').'</strong> · site_id: <code>'.esc_html((string)($report['site_id']??'')).'</code></p>';
         echo '<h3>1. Учётные данные и Vault</h3><table class="widefat striped" style="max-width:900px"><tbody>';
-        $credentialLabels=['status'=>'Статус регистрации','sealed_payload_format_valid'=>'Формат зашифрованных данных','vault_key_loaded'=>'Ключ Vault загружен','decryption_attempted'=>'Расшифровка выполнялась','credential_readable'=>'Учётные данные читаются','vault_binding_valid'=>'Привязка Vault','binding_context'=>'Контекст привязки (AAD)','binding_failure_class'=>'Класс ошибки расшифровки','credential_format'=>'Формат учётных данных','site_token_format_valid'=>'Формат токена сайта','status_key_present'=>'Ключ статуса','failure'=>'Ошибка'];
+        $credentialLabels=['status'=>'Статус регистрации','sealed_payload_format_valid'=>'Формат зашифрованных данных','vault_key_loaded'=>'Ключ Vault загружен','vault_key_source'=>'Источник ключа Vault','decryption_attempted'=>'Расшифровка выполнялась','credential_readable'=>'Учётные данные читаются','vault_binding_valid'=>'Привязка Vault','binding_context'=>'Контекст привязки (AAD)','binding_failure_class'=>'Класс ошибки расшифровки','credential_format'=>'Формат учётных данных','site_token_format_valid'=>'Формат токена сайта','status_key_present'=>'Ключ статуса','failure'=>'Ошибка'];
         foreach($credentialLabels as $key=>$label){
             if(!array_key_exists($key,$credential))continue;
             $value=$credential[$key];
@@ -164,6 +164,7 @@ final class Admin {
                         $owned=array_column($core->sites($owner),'id');
                         if(!in_array($site,$owned,true)) throw new Fault('invalid_site_selection',403);
                         $output=$core->diagnoseSiteConnection($owner,$site);
+                        $output['credential']['vault_key_source']=Settings::keySource();
                     } elseif ($action==='test') $output=self::smoke(self::submitted('gateway_token'),self::submitted('site_id'));
                     else throw new Fault('unknown_form_action');
                 }
