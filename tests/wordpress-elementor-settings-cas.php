@@ -59,6 +59,17 @@ try {
     $missingHash = OAI_Elementor::save_settings($postId . ':' . $nodeId, array('title' => 'No snapshot'));
     ewCasAssert(is_wp_error($missingHash) && $missingHash->get_error_code() === 'oai_snapshot_required',
         'Direct Elementor settings save without approved snapshot was accepted');
+
+    // Gutenberg/post_content writes also re-read the authoritative database value immediately before Apply.
+    $approvedContent = 'Original Gutenberg content';
+    wp_update_post(array('ID' => $postId, 'post_content' => $approvedContent));
+    wp_update_post(array('ID' => $postId, 'post_content' => 'Human editor Gutenberg content'));
+    $contentAttempt = OAI_Content::apply_patch($postId, 'post_content', 'AI overwrite', $approvedContent);
+    ewCasAssert(is_wp_error($contentAttempt) && $contentAttempt->get_error_code() === 'oai_conflict',
+        'Stale Gutenberg content snapshot was not rejected');
+    $contentSnapshot = OAI_Authoritative::post_field($postId, 'post_content');
+    ewCasAssert(!is_wp_error($contentSnapshot) && $contentSnapshot['value'] === 'Human editor Gutenberg content',
+        'Stale Apply overwrote newer Gutenberg content');
     echo "PASS Elementor settings CAS: stale snapshot and missing snapshot rejected without overwriting newer editor state\n";
 } finally {
     wp_delete_post($postId, true);
