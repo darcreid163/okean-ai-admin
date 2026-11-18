@@ -49,6 +49,36 @@ final class Admin {
         }
         return $offers;
     }
+    /** Render diagnostics in a dedicated, human-readable panel. */
+    private static function diagnosticPanel(array $report): void {
+        $credential=is_array($report['credential']??null)?$report['credential']:[];
+        $upstream=is_array($report['upstream']??null)?$report['upstream']:[];
+        $passed=($credential['vault_binding_valid']??false)===true && ($upstream['passed']??false)===true;
+        echo '<section class="notice '.($passed?'notice-success':'notice-error').'" style="margin:18px 0;padding:12px 16px;border-left-width:4px">';
+        echo '<h2 style="margin:4px 0 12px">Результат диагностики подключения и MCP</h2>';
+        echo '<p><strong>'.($passed?'Проверка пройдена':'Обнаружена проблема').'</strong> · site_id: <code>'.esc_html((string)($report['site_id']??'')).'</code></p>';
+        echo '<h3>1. Учётные данные и Vault</h3><table class="widefat striped" style="max-width:900px"><tbody>';
+        $credentialLabels=['status'=>'Статус регистрации','sealed_payload_format_valid'=>'Формат зашифрованных данных','vault_binding_valid'=>'Привязка Vault','credential_format'=>'Формат учётных данных','site_token_format_valid'=>'Формат токена сайта','status_key_present'=>'Ключ статуса','failure'=>'Ошибка'];
+        foreach($credentialLabels as $key=>$label){
+            if(!array_key_exists($key,$credential))continue;
+            $value=$credential[$key];
+            $shown=is_bool($value)?($value?'Да':'Нет'):(is_scalar($value)?(string)$value:wp_json_encode($value));
+            echo '<tr><th style="width:280px">'.esc_html($label).'</th><td><code>'.esc_html($shown).'</code></td></tr>';
+        }
+        echo '</tbody></table><h3>2. Связь с Native MCP и каталог инструментов</h3>';
+        echo '<p>Запрос к сайту: <strong>'.(!empty($upstream['attempted'])?'выполнялся':'не выполнялся').'</strong> · Каталог получен: <strong>'.(!empty($upstream['catalog_received'])?'да':'нет').'</strong> · Инструментов: <strong>'.(int)($upstream['tool_count']??0).'</strong></p>';
+        if(!empty($upstream['blocked_by']))echo '<p>Проверка остановлена: <code>'.esc_html((string)$upstream['blocked_by']).'</code></p>';
+        if(!empty($upstream['failure']))echo '<p>Ошибка upstream: <code>'.esc_html((string)$upstream['failure']).'</code></p>';
+        if(isset($upstream['required_tools'])&&is_array($upstream['required_tools'])){
+            echo '<table class="widefat striped" style="max-width:900px"><thead><tr><th>Обязательный инструмент</th><th>Наличие</th></tr></thead><tbody>';
+            foreach($upstream['required_tools'] as $name=>$available)echo '<tr><td><code>'.esc_html((string)$name).'</code></td><td>'.(!empty($available)?'<span style="color:#16803c">Есть</span>':'<span style="color:#b32d2e">Нет</span>').'</td></tr>';
+            echo '</tbody></table>';
+        }
+        if(!empty($upstream['missing_tools']))echo '<p>Отсутствуют: <code>'.esc_html(implode(', ',array_map('strval',$upstream['missing_tools']))).'</code></p>';
+        echo '<h3>3. Безопасность проверки</h3><p>Billable actions: <strong>'.(int)($report['billable_actions']??0).'</strong> · Записывающие операции проверялись: <strong>'.(!empty($report['writes_tested'])?'да':'нет').'</strong></p>';
+        echo '<details><summary>Показать полный JSON диагностики</summary><pre style="white-space:pre-wrap;max-height:420px;overflow:auto">'.esc_html(wp_json_encode($report,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)).'</pre></details>';
+        echo '</section>';
+    }
     public static function page(): void {
         if (!current_user_can('manage_options')) return;
         nocache_headers();
@@ -141,8 +171,11 @@ final class Admin {
             catch (\Throwable $e) { $output=['error'=>'gateway_service_unavailable']; }
         }
         echo '<hr><h2>Gateway — тестовый режим</h2><p>Сервер '.(WordPress::configured()?'настроен':'выключен или требует настройки').'. MCP: <code>'.esc_html(Settings::endpoint()).'</code></p>';
-        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и автоматические списания не включены. Дневные квоты утверждённого каталога: Free — 50, Daily — 500, Pro — 2 000, PRO+ — 5 000, PRO++ — 10 000 действий в сутки UTC. Исторические аккаунты legacy_monthly_v1 сохраняют прежние месячные условия до отдельно авторизованного перевода. Cloud Core — единственный источник плана, лицензии и квоты. Ручной сброс дневной квоты доступен только администратору на стороне сервера; публичного REST/MCP-инструмента для сброса нет.</p>';
-        if ($output!==null) echo '<pre style="white-space:pre-wrap">'.esc_html(wp_json_encode($output,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)).'</pre>';
+        echo '<p>Доступ к бете — администраторам и допущенным пользователям. OAuth с PKCE и выбором сайтов добавлен; платежи и автоматические списания не включены. Дневные квоты утверждённого каталога: Free — 50, Daily — 500, Pro — 2 000, PRO+ — 5 000, PRO++ — 10 000 действий в сутки UTC. Для платных планов Pro, PRO+ и PRO++ квота активируется только после отдельного утверждения владельцем. До утверждения все billable-вызовы отклоняются; чтение, проверки, получение квитанций и откат остаются доступны. Исторические аккаунты legacy_monthly_v1 сохраняют прежние месячные условия до отдельно авторизованного перевода. Cloud Core — единственный источник плана, лицензии и квоты. Ручной сброс дневной квоты доступен только администратору на стороне сервера; публичного REST/MCP-инструмента для сброса нет.</p>';
+        if ($output!==null) {
+            if(isset($output['credential'],$output['upstream'])) self::diagnosticPanel($output);
+            else echo '<pre style="white-space:pre-wrap">'.esc_html(wp_json_encode($output,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)).'</pre>';
+        }
         if ($secret!==null) {
             if ($secretKind==='license') {
                 echo '<p><strong>Ключ лицензии показывается один раз. Сохраните его в защищённом месте.</strong></p><textarea readonly autocomplete="off" rows="2" cols="90">'.esc_textarea($secret).'</textarea>';
