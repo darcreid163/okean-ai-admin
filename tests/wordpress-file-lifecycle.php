@@ -68,7 +68,7 @@ try {
     // Simulate process interruption at three deterministic points. These fixtures
     // set the ledger to "applying" only after approval and deliberately leave
     // no execution lease, exactly as a crashed PHP request would.
-    $make_recovery_operation = function ($payload) use ($scope, $name) {
+    $make_recovery_operation = function ($payload) use ($scope, $name, $actor_id) {
         $request = new WP_REST_Request('POST', '/okean-ai/v1/files/write');
         $request->set_param('scope', $scope);
         $request->set_param('path', $name);
