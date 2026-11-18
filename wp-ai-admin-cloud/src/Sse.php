@@ -74,9 +74,11 @@ final class Sse {
                 }
                 usleep(250000);
             }
-            if ($store->deleteSseSession($id)) {
-                delete_transient(self::key($id));
-            }
+            // Always revoke the transient auth context when the reader closes.
+            // Store cleanup retains any queued/in-flight reply rows until they can be
+            // completed/drained or expire; new POSTs cannot reuse a closed stream.
+            $store->deleteSseSession($id);
+            delete_transient(self::key($id));
         } catch (Fault $e) { self::fail($e); }
         catch (\Throwable $e) { self::fail(new Fault('sse_service_unavailable',503)); }
     }
@@ -99,7 +101,6 @@ final class Sse {
                     $store->cancelSseMessage($id,$reservation);
                 } else {
                     $store->completeSseMessage($id,$reservation,Security::canonical($reply),time(),time()+self::TTL);
-                    set_transient(self::key($id),$session,self::TTL);
                 }
             } catch (\Throwable $e) {
                 try { $store->cancelSseMessage($id,$reservation); } catch (\Throwable $ignored) {}
