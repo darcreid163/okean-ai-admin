@@ -11,11 +11,11 @@
 | Main | `1e459dc6fd6ede2db6e15145c6aa66c9b4d81f5a` | Remains unchanged |
 | Integration PR | #232 Draft | Native 2.1.18 + Cloud Store + key preservation, not merged |
 
-Exact combined candidate SHA `e71bf7bd30ac4ad48be90d0478efca115305b9cb` passed:
-- Native run [44255676940](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676940): PHP 8.2/8.3/8.4, three WordPress smoke profiles, Native artifact and package install on WP 7.0.6/latest.
-- Cloud run [44255676930](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676930): PHP 8.2/8.3/8.4, SQLite/MySQL contracts including SSE queue/index migration, browser contracts, WordPress upgrade/restore and Cloud artifact.
+Exact combined candidate SHA `fea7f8d2e4f2517fa0c5221b13df0a80f0e83162` passed:
+- Native run [44257146243](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676940): PHP 8.2/8.3/8.4, three WordPress smoke profiles, Native artifact and package install on WP 7.0.6/latest.
+- Cloud run [44257146236](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676930): PHP 8.2/8.3/8.4, SQLite/MySQL contracts including SSE queue/index and stream-close races, browser contracts, WordPress upgrade/restore and Cloud artifact.
 
-This exact combined head passed both workflows. CI is not evidence of production installation or live-client acceptance.
+This exact combined head passed both workflows. The new regression retains pending reservations and undrained replies on stream close while revoking transient auth context. Legacy SSE remains best-effort without client acknowledgement/replay after socket disconnect; use Streamable HTTP where replay guarantees are required. CI is not evidence of production installation or live-client acceptance.
 
 ## 2. Integrated Native changes
 
