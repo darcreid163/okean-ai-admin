@@ -6,7 +6,7 @@ Canonical public MCP: **https://wpaiadmin.ru/mcp**
 
 This document is the release-gate checklist for moving WP AI Admin from approved-user beta toward public publication. It does not change the connection contract. Any connection-affecting change must still follow `docs/CHATGPT-CONNECTION-CONTRACT.md`.
 
-> **Current reconciliation (18 November 2026):** Native 2.1.18 / DB25 + Cloud Store + key-preservation candidate `fea7f8d2e4f2517fa0c5221b13df0a80f0e83162` passed Native run [44257146243](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676940) and Cloud run [44257146236](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676930). PR #232 remains Draft and unmerged. Source PRs #226/#224 are superseded, not merged; their selected changes are integrated in #232. The SSE close-race regression is included; legacy SSE remains best-effort after socket disconnect, with Streamable HTTP preferred when replay is required. Real ChatGPT expiry (#92), two-owner acceptance, staging lifecycle/restore, and final artifacts remain open. See [the canonical 18 November release control](RELEASE-CONTROL-2026-11-18.md) for exact scope and sequence. Any subsequent code or documentation commit needs exact-head revalidation.
+> **Current reconciliation (18 November 2026):** Native 2.1.18 / DB25 + Cloud Store + key-preservation candidate source snapshot `576e5c01517fc5f413d45b3dba07ec7f0bc0c817` passed Native run [44292098778](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098778) and Cloud run [44292098786](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098786). This document reconciliation is a subsequent documentation-only commit and requires its own exact-head CI. PR #232 remains Draft and unmerged. Source PRs #226/#224 are superseded, not merged; their selected changes are integrated in #232. The SSE close-race regression is included; legacy SSE remains best-effort after socket disconnect, with Streamable HTTP preferred when replay is required. Real ChatGPT expiry (#92), two-owner acceptance, staging lifecycle/restore, and final artifacts remain open. See [the canonical 18 November release control](RELEASE-CONTROL-2026-11-18.md) for exact scope and sequence. Any subsequent code or documentation commit needs exact-head revalidation.
 
 Exact current commits, CI runs and installed-build hashes are tracked in issue [#40](https://github.com/darcreid163/okean-ai-admin/issues/40). The roadmap to closed beta is `docs/RELEASE-PLAN-2026-11-05.md`.
 
@@ -88,7 +88,7 @@ The current workflows are:
 
 They run on the exact commit and include:
 - PHP 8.2 / 8.3 / 8.4 syntax and contract tests;
-- WordPress smoke with pinned (WordPress 7.0.6, WooCommerce 4.3.3, Elementor 11.1.2, GD) and latest (Imagick) profiles;
+- WordPress smoke with pinned (WordPress 7.0.6, Elementor 4.3.3, WooCommerce 11.1.2, GD) and latest (Imagick) profiles;
 - WooCommerce / Elementor / Gutenberg integration;
 - WordPress upgrade and paired code/database/uploads restore;
 - creation-claim concurrency and read-only claim inventory;
@@ -167,7 +167,7 @@ Before general-public enrollment, publish and link:
 - explicit statement of what data traverses Cloud Core;
 - deletion/account closure procedure.
 
-`SECURITY.md`, `docs/DATA-FLOW.md`, `docs/DATA-RETENTION.md`, `docs/PROOF-SEMANTICS.md`, public onboarding guidance and the release plan are present. Root LICENSE is still intentionally absent: do not choose a software license implicitly; license selection remains a product/legal decision. Privacy Policy, Terms, subprocessors/hosting disclosure, permanent account deletion procedure and paid-plan refund/cancellation terms are still pending.
+`SECURITY.md`, `docs/DATA-FLOW.md`, `docs/DATA-RETENTION.md`, `docs/PROOF-SEMANTICS.md`, public onboarding guidance and the release plan are present. The repository root LICENSE file is present and contains GNU GPL version 2 text; plugin metadata and third-party notices currently state GPL-2.0-or-later. Do not describe the root license file as absent. Any legal review of distribution terms remains separate from this technical readiness checklist. Privacy Policy, Terms, subprocessors/hosting disclosure, permanent account deletion procedure and paid-plan refund/cancellation terms are still pending.
 
 ### 10. Billing and entitlement truthfulness gate — BETA TRUTHFULNESS AUTOMATED / paid commercial enforcement pending
 
