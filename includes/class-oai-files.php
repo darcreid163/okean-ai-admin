@@ -21,7 +21,7 @@ class OAI_Files {
   return array('scope'=>$scope,'path'=>$path,'items'=>$items);
  }
  public static function read($scope,$path){
-  $file=OAI_Security::resolve_path($scope,$path); if(is_wp_error($file))return $file; if(!is_file($file))return new WP_Error('oai_not_file','File not found',array('status'=>404));
+  $file=OAI_Security::resolve_path_for_write($scope,$path); if(is_wp_error($file))return $file; if(!is_file($file))return new WP_Error('oai_not_file','File not found',array('status'=>404));
   if(filesize($file)>2*1024*1024)return new WP_Error('oai_file_large','File exceeds 2 MB read limit',array('status'=>413));
   $fs=self::fs(); $data=$fs?$fs->get_contents($file):file_get_contents($file); return array('scope'=>$scope,'path'=>$path,'bytes'=>strlen($data),'sha256'=>hash('sha256',$data),'content'=>$data);
  }
@@ -97,6 +97,22 @@ class OAI_Files {
   return $handle;
  }
  private static function release_target_lock($handle){flock($handle,LOCK_UN);fclose($handle);}
+ private static function revalidate_target($scope,$relative,$expected_file,$expected_exists,$expected_hash=''){
+  clearstatcache(true);
+  $fresh=OAI_Security::resolve_path_for_write($scope,$relative);
+  if(is_wp_error($fresh))return $fresh;
+  if(!hash_equals((string)$expected_file,(string)$fresh))return new WP_Error('oai_path_changed','File path changed during the operation',array('status'=>409));
+  if(is_link($fresh))return new WP_Error('oai_path_denied','Symlink file targets are not allowed',array('status'=>403));
+  $exists=file_exists($fresh);
+  if($exists!== (bool)$expected_exists)return new WP_Error('oai_conflict','File existence changed during the operation',array('status'=>409));
+  if(!$exists)return true;
+  if(!is_file($fresh))return new WP_Error('oai_path_denied','Target is not a regular file',array('status'=>403));
+  $current=@file_get_contents($fresh);
+  if($current===false)return new WP_Error('oai_read','Could not re-read file before mutation',array('status'=>500));
+  $hash=hash('sha256',$current);
+  if($expected_hash!==''&&!hash_equals($expected_hash,$hash))return new WP_Error('oai_conflict','File changed immediately before mutation',array('status'=>409,'current_sha256'=>$hash));
+  return true;
+ }
  public static function write($scope,$path,$content,$expected_sha256='',$expected_exists=null){
   $file=OAI_Security::resolve_path_for_write($scope,$path); if(is_wp_error($file))return $file;
   if(strlen($content)>5*1024*1024)return new WP_Error('oai_file_large','Write limit is 5 MB',array('status'=>413));
@@ -113,6 +129,10 @@ class OAI_Files {
    $old_hash=hash('sha256',(string)$old);
    if($expected_sha256!=='' && !hash_equals($expected_sha256,$old_hash))return new WP_Error('oai_conflict','File changed since snapshot',array('status'=>409,'current_sha256'=>$old_hash));
    $dir=dirname($file); if(!is_dir($dir) && !wp_mkdir_p($dir))return new WP_Error('oai_dir','Could not create directory',array('status'=>500));
+   // Re-resolve after lock acquisition and directory creation. This closes the
+   // avoidable validation-to-mutation window for path/symlink swaps; it is not
+   // an OS-level no-follow/CAS primitive against a hostile last-instruction race.
+   $safe=self::revalidate_target($scope,$path,$file,$exists,$old_hash);if(is_wp_error($safe))return $safe;
    $backup=$exists?$old:null; $ok=$fs->put_contents($file,$content,FS_CHMOD_FILE); if(!$ok)return new WP_Error('oai_write','File write failed',array('status'=>500));
    return array('ok'=>true,'before_sha256'=>$old_hash,'after_sha256'=>hash('sha256',$content),'backup'=>$backup,'bytes'=>strlen($content),'path'=>$path);
   }finally{self::release_target_lock($lock);}
@@ -128,6 +148,7 @@ class OAI_Files {
    $data=$fs->get_contents($file); if($data===false)return new WP_Error('oai_read','Could not read file before delete',array('status'=>500));
    $current=hash('sha256',(string)$data);
    if($expected_sha256!=='' && !hash_equals($expected_sha256,$current))return new WP_Error('oai_conflict','File changed since snapshot',array('status'=>409,'current_sha256'=>$current));
+   $safe=self::revalidate_target($scope,$path,$file,true,$current);if(is_wp_error($safe))return $safe;
    if(!$fs->delete($file,false,'f'))return new WP_Error('oai_delete','File delete failed',array('status'=>500));
    return array('ok'=>true,'before_sha256'=>$current,'path'=>$path);
   }finally{self::release_target_lock($lock);}
