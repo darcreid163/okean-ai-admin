@@ -11,11 +11,11 @@
 | Main | `1e459dc6fd6ede2db6e15145c6aa66c9b4d81f5a` | Remains unchanged |
 | Integration PR | #232 Draft | Native and selected Cloud-compatible hardening, not merged |
 
-Code candidate SHA `6e60163383afce5c81c59e6c452772cd26d21fc4` passed:
-- Native run [44252504373](https://github.com/darcreid163/okean-ai-admin/actions/runs/44252504373): PHP 8.2/8.3/8.4, three WordPress smoke profiles, Native artifact and package install on WP 7.0.6/latest.
-- Cloud run [44252504378](https://github.com/darcreid163/okean-ai-admin/actions/runs/44252504378): PHP 8.2/8.3/8.4, SQLite/MySQL contracts, browser contracts, WordPress upgrade/restore and Cloud artifact.
+Code candidate SHA `432b1ece676f4520a2e0d2a7fdf55176c8d44115` passed:
+- Native run [44253496274](https://github.com/darcreid163/okean-ai-admin/actions/runs/44253496274): PHP 8.2/8.3/8.4, three WordPress smoke profiles, Native artifact and package install on WP 7.0.6/latest.
+- Cloud run [44253496283](https://github.com/darcreid163/okean-ai-admin/actions/runs/44253496283): PHP 8.2/8.3/8.4, SQLite/MySQL contracts, browser contracts, WordPress upgrade/restore and Cloud artifact.
 
-Later documentation-only commits on this branch require their own exact-head checks. CI is not evidence of production installation or live-client acceptance.
+This exact branch head, including the synchronized release documentation, passed both workflows above. CI is not evidence of production installation or live-client acceptance.
 
 ## 2. Integrated Native changes
 

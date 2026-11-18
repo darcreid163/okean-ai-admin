@@ -11,13 +11,13 @@
 | Native plugin | 2.1.18, DB schema 25, build `2.1.18-native-rate-limit-hpos-v1-20261117` | Candidate in PR #232 |
 | Cloud Core | 0.3.13-dev, Gateway Store schema 4 (recovered 0.3.11 baseline) | Candidate source; not a production release |
 | Main | `1e459dc6fd6ede2db6e15145c6aa66c9b4d81f5a` | Unchanged |
-| Integration branch | `release/native-2.1.18-integration-20261118` | `6e60163383afce5c81c59e6c452772cd26d21fc4` |
+| Integration branch | `release/native-2.1.18-integration-20261118` | `432b1ece676f4520a2e0d2a7fdf55176c8d44115` |
 | PR #232 | Draft, open, base `main` | Not merged |
 
-Exact-head CI for integration SHA `6e60163383afce5c81c59e6c452772cd26d21fc4`:
+Exact-head CI for integration SHA `432b1ece676f4520a2e0d2a7fdf55176c8d44115`:
 
-- Native workflow [44252504373](https://github.com/darcreid163/okean-ai-admin/actions/runs/44252504373): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles, Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
-- Cloud workflow [44252504378](https://github.com/darcreid163/okean-ai-admin/actions/runs/44252504378): PASS — PHP 8.2/8.3/8.4, SQLite/MySQL contracts, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
+- Native workflow [44253496274](https://github.com/darcreid163/okean-ai-admin/actions/runs/44253496274): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles, Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
+- Cloud workflow [44253496283](https://github.com/darcreid163/okean-ai-admin/actions/runs/44253496283): PASS — PHP 8.2/8.3/8.4, SQLite/MySQL contracts, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
 - The file lifecycle suite verifies 3 MB atomic Apply/Verify/Rollback and interrupted Apply recovery in three cases: committed write, no write yet, and ambiguous external change.
 
 CI proves the exact source and disposable test matrix only. It does not prove the installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance.
