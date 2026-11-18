@@ -15,10 +15,10 @@ Universal AI Admin for WordPress: sandbox, diff, approval, verification and roll
 WP AI Admin connects your WordPress site to AI agents (ChatGPT, custom MCP clients) through a secure
 READ → PLAN → SANDBOX → DIFF → APPROVAL → APPLY → VERIFY → RECEIPT/PROOF → ROLLBACK lifecycle.
 
-Every mutation — post content, WooCommerce products, Gutenberg blocks, Elementor pages, menus, media,
-options — goes through an approval gate before touching the database. Verification confirms the change
-landed correctly; if it did not, one-click rollback restores the exact pre-change state using the
-saved `before_data` snapshot. All operations are sealed with a cryptographic receipt.
+Supported mutations — post content, WooCommerce products, Gutenberg blocks, Elementor pages, menus, media,
+options and guarded files — go through an explicit approval gate before live changes. Verification checks
+persisted state; rollback uses the recorded before snapshot and verifies restoration. If a newer external
+change is detected, the plugin fails closed rather than overwriting it. Settled operations retain sealed receipts/proofs.
 
 Key capabilities:
 
@@ -42,7 +42,7 @@ Key capabilities:
 * **Media** — upload, alt/title update, gallery management.
 * **Menus** — create, add/move/remove items.
 * **Options** — allowlisted option writes with protected-core and control-plane guards.
-* **Abilities API** — extensible read/write ability system for third-party integrations.
+* **WordPress Abilities compatibility** — read-only discovery and schema inspection. Arbitrary third-party Ability execution is disabled; future writes must use a typed sandbox/approval adapter.
 
 == Installation ==
 
@@ -67,8 +67,8 @@ read and plan freely; it cannot apply changes to your database without a human a
 
 = What happens if an AI change breaks something? =
 
-Click Rollback in the WP AI Admin dashboard. The plugin saved the exact pre-change state as
-`before_data` before applying; rollback restores it atomically and verifies the result.
+Use the approved Rollback action in the WP AI Admin dashboard. The plugin records the before snapshot
+before applying and verifies the restored state. If the target has changed independently, rollback is blocked to protect newer data.
 
 = Can I use this without WP AI Admin Cloud? =
 
