@@ -6,6 +6,8 @@ Canonical public MCP: **https://wpaiadmin.ru/mcp**
 
 This document is the release-gate checklist for moving WP AI Admin from approved-user beta toward public publication. It does not change the connection contract. Any connection-affecting change must still follow `docs/CHATGPT-CONNECTION-CONTRACT.md`.
 
+> **Current reconciliation (18 November 2026):** Native 2.1.18 / DB25 code candidate `6e60163383afce5c81c59e6c452772cd26d21fc4` passed Native run [44252504373](https://github.com/darcreid163/okean-ai-admin/actions/runs/44252504373) and Cloud run [44252504378](https://github.com/darcreid163/okean-ai-admin/actions/runs/44252504378). PR #232 remains Draft and unmerged. Cloud Store atomic SSE/index work (#226) and key preservation (#224) are not yet in that candidate. Real ChatGPT expiry (#92), two-owner acceptance, staging lifecycle/restore, and final artifacts remain open. See [the canonical 18 November release control](RELEASE-CONTROL-2026-11-18.md) for exact scope and sequence. Any subsequent code or documentation commit needs exact-head revalidation.
+
 Exact current commits, CI runs and installed-build hashes are tracked in issue [#40](https://github.com/darcreid163/okean-ai-admin/issues/40). The roadmap to closed beta is `docs/RELEASE-PLAN-2026-11-05.md`.
 
 ## Release principle
