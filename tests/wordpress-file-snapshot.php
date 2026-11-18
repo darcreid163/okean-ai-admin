@@ -42,7 +42,7 @@ try {
     fileSnapshotAssert(file_put_contents($full, $small) === strlen($small), 'Could not create small file fixture');
     $present = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $relative);
     fileSnapshotAssert(is_array($present) && $present[0] === true && $present[1] === $small, 'Existing file snapshot must preserve exact bytes');
-    $replacement_payload = "atomically replaced file\\n";
+    $replacement_payload = "atomically replaced file\n";
     $temp_before = glob($base . DIRECTORY_SEPARATOR . '.wpai-atomic-*');
     if (!is_array($temp_before)) $temp_before = array();
     $replaced = OAI_Files::write($scope, $relative, $replacement_payload, hash('sha256', $small), true);
