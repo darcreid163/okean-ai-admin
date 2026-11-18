@@ -128,10 +128,11 @@ class OAI_Files {
    if($old===false)return new WP_Error('oai_read','Could not read file before write',array('status'=>500));
    $old_hash=hash('sha256',(string)$old);
    if($expected_sha256!=='' && !hash_equals($expected_sha256,$old_hash))return new WP_Error('oai_conflict','File changed since snapshot',array('status'=>409,'current_sha256'=>$old_hash));
+   // Re-resolve after lock acquisition before creating any parent directories,
+   // then again after mkdir immediately before the file mutation. This narrows
+   // path/symlink swap windows but is not an OS-level no-follow/CAS primitive.
+   $safe=self::revalidate_target($scope,$path,$file,$exists,$old_hash);if(is_wp_error($safe))return $safe;
    $dir=dirname($file); if(!is_dir($dir) && !wp_mkdir_p($dir))return new WP_Error('oai_dir','Could not create directory',array('status'=>500));
-   // Re-resolve after lock acquisition and directory creation. This closes the
-   // avoidable validation-to-mutation window for path/symlink swaps; it is not
-   // an OS-level no-follow/CAS primitive against a hostile last-instruction race.
    $safe=self::revalidate_target($scope,$path,$file,$exists,$old_hash);if(is_wp_error($safe))return $safe;
    $backup=$exists?$old:null; $ok=$fs->put_contents($file,$content,FS_CHMOD_FILE); if(!$ok)return new WP_Error('oai_write','File write failed',array('status'=>500));
    return array('ok'=>true,'before_sha256'=>$old_hash,'after_sha256'=>hash('sha256',$content),'backup'=>$backup,'bytes'=>strlen($content),'path'=>$path);
