@@ -212,5 +212,80 @@ for($i=0;$i<10;$i++) { $pipes=[]; $handle=proc_open([...$command,'same-logical-a
 foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])); $err=stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit=proc_close($handle); check($exit===0 && in_array($out,['success','request_outcome_pending_reconciliation'],true),'Duplicate worker failed: '.$err.' '.$out); }
 check($core->usage('duplicate',$now)['used']===1 && $core->usage('duplicate',$now)['reserved']===0 && count(file($executionLog))===1,'Concurrent duplicate action executed or charged more than once');
 putenv('CLOUD_TEST_TOKEN'); putenv('CLOUD_TEST_EXECUTION_LOG'); unlink($executionLog);
+
+// OAuth tenant-binding and refresh-token replay contract.
+require_once dirname(__DIR__).'/src/OAuth.php';
+$oauth=new WPAICloudGateway\OAuth($store,$core,'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp');
+$oauthClient=$oauth->register(['client_name'=>'Tenant isolation fixture','redirect_uris'=>['https://client.example.invalid/callback']],$now);
+$verifier=str_repeat('v',64);
+$challenge=WPAICloudGateway\Security::b64(hash('sha256',$verifier,true));
+$authorization=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code',
+    'scope'=>'mcp:read offline_access',
+    'code_challenge'=>$challenge,
+    'code_challenge_method'=>'S256',
+    'state'=>'tenant-isolation-state',
+]);
+$oauthCode=$oauth->approve('1',$authorization,[$site['id']],$now);
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$oauthCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$verifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='2'),'access_denied');
+$oauthToken=$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$oauthCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$verifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='1');
+check(isset($oauthToken['access_token'],$oauthToken['refresh_token']),'OAuth offline grant did not issue both credentials');
+$oauthActor=$core->authenticate($oauthToken['access_token'],$now);
+$oauth->binding($oauthActor,$now);
+check($oauthActor['owner']==='1' && $oauthActor['site_ids']===[$site['id']],'OAuth grant owner/site binding changed');
+$refreshed=$oauth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
+    'refresh_token'=>$oauthToken['refresh_token'],
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+60,fn($owner)=>$owner==='1');
+check(isset($refreshed['access_token'],$refreshed['refresh_token']),'Refresh did not rotate credentials');
+rejects(fn()=>$core->authenticate($oauthToken['access_token'],$now+60),'invalid_or_expired_token');
+$refreshedActor=$core->authenticate($refreshed['access_token'],$now+60);
+$oauth->binding($refreshedActor,$now+60);
+check($refreshedActor['owner']==='1' && $refreshedActor['site_ids']===[$site['id']],'Refresh changed owner/site binding');
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
+    'refresh_token'=>$oauthToken['refresh_token'],
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+120,fn($owner)=>$owner==='1'),'invalid_grant');
+rejects(fn()=>$oauth->binding($refreshedActor,$now+120),'invalid_or_expired_token');
+$otherOAuth=$oauth->register(['client_name'=>'Second tenant client','redirect_uris'=>['https://other-client.example.invalid/callback']],$now);
+$otherVerifier=str_repeat('w',64);
+$otherAuth=$oauth->authorization([
+    'client_id'=>$otherOAuth['client_id'],
+    'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read offline_access',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$otherVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'second-tenant-state',
+]);
+$otherCode=$oauth->approve('2',$otherAuth,[$other['id']],$now);
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$otherOAuth['client_id'],
+    'code'=>$otherCode,'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'code_verifier'=>$otherVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='1'),'access_denied');
+$otherToken=$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$otherOAuth['client_id'],
+    'code'=>$otherCode,'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'code_verifier'=>$otherVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='2');
+$otherActor=$core->authenticate($otherToken['access_token'],$now);
+$oauth->binding($otherActor,$now);
+check($otherActor['owner']==='2' && $otherActor['site_ids']===[$other['id']],'Second tenant OAuth grant crossed owner/site boundary');
+$oauth->revoke($otherToken['refresh_token'],$otherOAuth['client_id']);
+rejects(fn()=>$oauth->binding($otherActor,$now),'invalid_or_expired_token');
+
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
 if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
