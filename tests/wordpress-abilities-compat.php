@@ -11,7 +11,24 @@ $adminIds=get_users(array('role'=>'administrator','number'=>1,'fields'=>'ID'));
 if (!$adminIds) throw new RuntimeException('Disposable administrator not found');
 wp_set_current_user((int)$adminIds[0]);
 $name='oai-acceptance/read-example';
-if (!wp_get_ability($name)) throw new RuntimeException('CI MU plugin did not register Ability at init');
+// This test runs before the separate MU-plugin boot-lifecycle fixture. Register
+// its own disposable Ability here instead of depending on a fixture that is
+// intentionally installed later in wordpress-native-smoke.sh.
+if (function_exists('wp_register_ability_category')) {
+ wp_register_ability_category('oai-acceptance',array('label'=>'Acceptance tests','description'=>'Disposable CI category'));
+}
+if (!wp_get_ability($name)) {
+ $registered=wp_register_ability($name,array(
+  'label'=>'Smoke metadata read','description'=>'Disposable ability for compatibility discovery',
+  'category'=>'oai-acceptance','input_schema'=>array('type'=>'object','properties'=>array()),
+  'output_schema'=>array('type'=>'object','properties'=>array()),
+  'execute_callback'=>static function($input){return array('ok'=>true);},
+  'permission_callback'=>static function(){return current_user_can('manage_options');},
+  'meta'=>array('show_in_rest'=>true),
+ ));
+ if (is_wp_error($registered)) throw new RuntimeException('Could not register disposable Ability: '.$registered->get_error_message());
+}
+if (!wp_get_ability($name)) throw new RuntimeException('Disposable Ability registration failed');
 $compat=OAI_Abilities_Compat::list_public('',1,100);
 if (is_wp_error($compat)) throw new RuntimeException('Compat Ability discovery failed: '.$compat->get_error_message());
 $names=array_column($compat['items'],'name');
