@@ -357,15 +357,32 @@ class OAI_REST {
   $p=absint($id)?get_post($id):null;
   if(!$p)return new WP_Error('oai_target','Post not found',array('status'=>404));
   if(!current_user_can('edit_post',$id))return new WP_Error('oai_post_permission','Post edit permission required',array('status'=>403));
-  $title_b64=(string)$req->get_param('title_b64'); $excerpt_b64=(string)$req->get_param('excerpt_b64'); $content_b64=(string)$req->get_param('content_b64');
-  $title=$title_b64!==''?self::decode_b64_text($title_b64):(string)$req->get_param('title');
-  $excerpt=$excerpt_b64!==''?self::decode_b64_text($excerpt_b64):(string)$req->get_param('excerpt');
-  $content=$content_b64!==''?self::decode_b64_text($content_b64):(string)$req->get_param('content');
-  if($title===false||$excerpt===false||$content===false)return new WP_Error('oai_payload','Invalid text payload',array('status'=>400));
   $before=array('title'=>(string)$p->post_title,'excerpt'=>(string)$p->post_excerpt,'content'=>(string)$p->post_content);
-  $after=array('title'=>$title,'excerpt'=>$excerpt,'content'=>$content);
+  $after=array();
+  foreach(array('title','excerpt','content') as $field){
+   $value=self::post_update_field($req,$field,$before[$field]);
+   if(is_wp_error($value))return $value;
+   $after[$field]=$value;
+  }
   if(self::same_snapshot('post_update',$after,$before))return new WP_Error('oai_noop','Operation does not change the target',array('status'=>409));
   return self::sandbox_create_from_patch('post_update',$id,'post',$before,$after,array('kind'=>'post_update','field'=>'post','before_exists'=>true));
+ }
+ private static function post_update_field($req,$field,$current){
+  $encoded_key=$field.'_b64';
+  $has_encoded=$req->has_param($encoded_key);
+  $has_plain=$req->has_param($field);
+  if($has_encoded&&$has_plain)return new WP_Error('oai_payload_ambiguous','Provide either '.$field.' or '.$encoded_key.', not both',array('status'=>400,'field'=>$field));
+  if(!$has_encoded&&!$has_plain)return (string)$current;
+  if($has_encoded){
+   $raw=$req->get_param($encoded_key);
+   if(!is_string($raw))return new WP_Error('oai_payload','Encoded '.$field.' must be a string',array('status'=>400,'field'=>$field));
+   $value=self::decode_b64_text($raw);
+   if($value===false)return new WP_Error('oai_payload','Invalid encoded '.$field,array('status'=>400,'field'=>$field));
+   return $value;
+  }
+  $value=$req->get_param($field);
+  if(!is_string($value))return new WP_Error('oai_payload',' '.$field.' must be a string',array('status'=>400,'field'=>$field));
+  return $value;
  }
  private static function decode_b64_text($value){
   $decoded=base64_decode((string)$value,true);
