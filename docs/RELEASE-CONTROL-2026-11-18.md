@@ -14,10 +14,11 @@
 | Integration branch | `release/native-2.1.18-integration-20261118` | Native 2.1.18 + Cloud Store/key-preservation merge candidate; see current PR #232 head |
 | PR #232 | Draft, open, base `main` | Not merged |
 
-Exact combined integration SHA `fea7f8d2e4f2517fa0c5221b13df0a80f0e83162` passed:
+The integration source snapshot `576e5c01517fc5f413d45b3dba07ec7f0bc0c817` passed exact-head CI:
 
-- Native workflow [44257146243](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676940): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles, Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
-- Cloud workflow [44257146236](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676930): PASS — PHP 8.2/8.3/8.4, SQLite/MySQL contracts including SSE queue/index and stream-close races, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
+- Native workflow [44292098778](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098778): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles (including WooCommerce 11.3 HPOS), Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
+- Cloud workflow [44292098786](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098786): PASS — PHP 8.2/8.3/8.4 contracts, browser contracts, WordPress 7.0.6/latest upgrade checks and Cloud artifact.
+- These run IDs validate the source snapshot above. This documentation reconciliation creates a new commit and must pass its own exact-head CI before the repository's current head can be called green.
 - The file lifecycle suite verifies 3 MB atomic Apply/Verify/Rollback and interrupted Apply recovery in three cases: committed write, no write yet, and ambiguous external change.
 - Cloud upgrade/restore includes SSE schema coexistence and exact vault/signing key preservation/export checks.
 
