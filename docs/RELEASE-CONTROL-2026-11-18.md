@@ -14,13 +14,14 @@
 | Integration branch | `release/native-2.1.18-integration-20261118` | Native 2.1.18 + Cloud Store/key-preservation merge candidate; see current PR #232 head |
 | PR #232 | Draft, open, base `main` | Not merged |
 
-Exact-head CI for integration SHA `432b1ece676f4520a2e0d2a7fdf55176c8d44115`:
+Exact combined integration SHA `e71bf7bd30ac4ad48be90d0478efca115305b9cb` passed:
 
-- Native workflow [44253496274](https://github.com/darcreid163/okean-ai-admin/actions/runs/44253496274): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles, Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
-- Cloud workflow [44253496283](https://github.com/darcreid163/okean-ai-admin/actions/runs/44253496283): PASS — PHP 8.2/8.3/8.4, SQLite/MySQL contracts, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
+- Native workflow [44255676940](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676940): PASS — PHP 8.2/8.3/8.4, all three WordPress smoke profiles, Native artifact build and package installation on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
+- Cloud workflow [44255676930](https://github.com/darcreid163/okean-ai-admin/actions/runs/44255676930): PASS — PHP 8.2/8.3/8.4, SQLite/MySQL contracts including SSE queue/index migration, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
 - The file lifecycle suite verifies 3 MB atomic Apply/Verify/Rollback and interrupted Apply recovery in three cases: committed write, no write yet, and ambiguous external change.
+- Cloud upgrade/restore includes SSE schema coexistence and exact vault/signing key preservation/export checks.
 
-The tested combined PR #226/#224 preview passed Native run [44103142276](https://github.com/darcreid163/okean-ai-admin/actions/runs/44103142276) and Cloud run [44103142290](https://github.com/darcreid163/okean-ai-admin/actions/runs/44103142290). Those runs qualify that preview tree only. The current PR #232 combined tree is undergoing its own exact-head Native + Cloud CI. CI does not prove installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance.
+This exact combined tree passed Native and Cloud CI. CI does not prove installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance. Documentation commits made after `e71bf7b` require their own exact-head CI.
 
 ## 2. Integrated in PR #232
 
@@ -37,14 +38,15 @@ The tested combined PR #226/#224 preview passed Native run [44103142276](https:/
 
 The staged rename strategy intentionally fails closed if the platform cannot replace an existing file. Windows replacement semantics and power-loss durability have not been qualified; do not claim universal atomic replacement across operating systems.
 
-## 3. Work still outside PR #232
+## 3. Remaining release gates
 
-### P0 — Cloud Store and key-preservation integration
+### Cloud Store and key preservation — integrated and CI-qualified
 
-- PR #226 and stacked PR #224 are now integrated into the current PR #232 branch.
-- The Cloud Store queue race can lose replies under concurrent append/drain; the integrated implementation adds bounded atomic queue admission/publish/drain and regression tests.
-- The key-preservation utility and recovery documentation are included. Follow the documented export procedure before any AUTH_KEY/AUTH_SALT rotation or Cloud restore that depends on those keys.
-- The combined preview passed its own Native + Cloud CI. The new PR #232 combined tree must pass exact-head Native + Cloud CI before this gate is marked complete.
+The selected changes from PR #226 and stacked PR #224 are present in PR #232. Source file blobs were compared directly; the integration branch contains the full implementation plus superset validation workflow and upgrade/restore assertions. No duplicate cherry-pick is required. The source PRs are superseded, not merged, and their branch history is retained.
+
+Included: bounded durable SSE queue reservations before Gateway execution, transactional completion/cancellation and atomic drain; owner-scoped Store indexes; SQLite collision guards; MySQL prefix/table limits; additive schema-v4 migration; CLI-only exact-key export to a private 0600 file outside the web root; and upgrade/restore key identity tests.
+
+Key export preserves the currently effective vault/signing keys. It does not rotate either key. Actual key rotation remains out of scope and requires a separate migration/trust-rollover procedure.
 
 ### P0 — external/manual acceptance
 
@@ -69,19 +71,18 @@ The approved quota catalogue is five daily UTC tiers: Free 50, Daily 500, Pro 2,
 ## 5. Repository housekeeping decisions
 
 - PR #207, #213, #222, #223 and #225 are source branches whose selected work is now integrated into PR #232. Keep their history; close them as **superseded, not merged** only after this exact-head integration remains green and their final diffs are confirmed represented.
-- PR #226 and stacked PR #224 remain active separate Cloud work; do not close them.
+- PR #226 and stacked PR #224 are superseded by the already-integrated source tree in PR #232; close as superseded, not merged, retaining their branches and history.
 - PR #197 (OpenCode configuration cleanup) is unrelated to release qualification; defer it.
-- Issues #20's original 2.0.74 audit scope is closed as completed. Issues #36 and #38 are retained as historical QA/source-access records with current status notes. #92, #203, #214, #216, #218, #220 and #212 remain open for their outstanding acceptance or integration dependencies.
+- Issues #20's original 2.0.74 audit scope is closed as completed. Issues #36 and #38 are retained as historical QA/source-access records with current status notes. #92, #203, #218, #220 and #212 remain open for their outstanding acceptance dependencies. Issues #214/#216 are completed by the integrated Cloud Store work and can be closed.
 - The repository has many historical branches (the first API page alone contains 100). Do not mass-delete by age. Delete only branches whose PR is merged/closed, whose commits are reachable from the retained integration/main history, and whose unique work has been reviewed. Preserve unmerged historical evidence.
 - Dated audit/readiness documents are historical snapshots, not live status. Use this file and #40 for current release state.
 
 ## 6. Safe release sequence
 
-1. Integrate Cloud Store #226 and key preservation #224 into a reviewed release candidate.
-2. Run exact-head Native + Cloud CI and resolve every failed or skipped required job.
-3. Complete external OAuth expiry, two-owner tenant isolation and staging lifecycle/restore acceptance.
-4. Freeze and inspect exact Native-only and Cloud artifacts; confirm checksums, provenance, licenses and secret scans.
-5. Obtain owner approval for the selected release type: closed/free beta or self-service paid release.
-6. Only after explicit approval: merge, tag, publish, split public Native/private Cloud repositories, and separately schedule deployment with backup and rollback.
+1. Re-run exact-head Native + Cloud CI after the latest documentation reconciliation.
+2. Complete external OAuth expiry, two-owner tenant isolation and staging lifecycle/restore acceptance.
+3. Freeze and inspect exact Native-only and Cloud artifacts; confirm checksums, provenance, licenses and secret scans.
+4. Obtain owner approval for the selected release type: closed/free beta or self-service paid release.
+5. Only after explicit approval: merge, tag, publish, split public Native/private Cloud repositories, and separately schedule deployment with backup and rollback.
 
 Until those gates are complete, this project is a **green-CI release candidate**, not an approved production release.
