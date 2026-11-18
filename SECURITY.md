@@ -8,7 +8,7 @@ Current candidate (unreleased):
 - WP AI Admin native: **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`)
 - WP AI Admin Cloud Core: **0.3.13-dev** (Gateway schema 4, derived from the recovered 0.3.11 baseline)
 
-This candidate is not an approved production release. The current Draft integration is PR [#232](https://github.com/darcreid163/okean-ai-admin/pull/232). Native 2.1.18, Cloud Store/key-preservation changes (#226/#224) and SSE close-race hardening are integrated in the release branch; exact-head CI passed on source snapshot `576e5c01517fc5f413d45b3dba07ec7f0bc0c817` (Native [44292098778](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098778), Cloud [44292098786](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098786)). A later documentation-only reconciliation is being revalidated on its own exact head. External OAuth expiry, two-owner acceptance, staging and artifact freeze remain outstanding. See [#40](https://github.com/darcreid163/okean-ai-admin/issues/40) and [the 18 November release control](docs/RELEASE-CONTROL-2026-11-18.md).
+This candidate is not an approved production release. The current Draft integration is PR [#232](https://github.com/darcreid163/okean-ai-admin/pull/232). Native 2.1.18, Cloud Store/key-preservation changes (#226/#224) and SSE close-race hardening are integrated in the release branch; exact-head CI passed at `8b5e3c944f2e5fb56b1d7bbb0494f025a8742000` (Native [44299756727](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756727), Cloud [44299756819](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756819)). These are CI results for the current candidate only; the Actions artifacts are not signed public releases. External OAuth expiry, two-owner acceptance, staging and artifact freeze remain outstanding. See [#40](https://github.com/darcreid163/okean-ai-admin/issues/40) and [the 18 November release control](docs/RELEASE-CONTROL-2026-11-18.md).
 
 Quota and per-object Batch accounting are implemented in Cloud Core, but production activation/account migration is a separate gate. Automatic money debits and auto-renewal remain disabled. Do not represent this candidate as a self-service paid service: payment-to-license fulfillment is not qualified.
 
@@ -74,6 +74,10 @@ A public release must not be marked ready solely from unit tests. Required evide
 - a final live acceptance against a disposable WordPress site.
 
 CI infrastructure failures are treated separately from product test failures and both must be resolved before closing the release gate.
+
+## Scope and visibility of this repository
+
+`darcreid163/okean-ai-admin` is currently PUBLIC. Native and Cloud source in any public branch, PR, commit, Actions log or artifact must be treated as disclosed. Never commit production credentials, server keys, customer data, database dumps or private backups. A private visibility change does not make already downloaded copies, public forks or local clones private.
 
 ## Scope of this repository
 
