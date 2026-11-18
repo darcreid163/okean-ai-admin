@@ -30,6 +30,14 @@ $outside_dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wpai-outside-dir-' . 
 try {
     $absent = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $missing);
     fileSnapshotAssert(is_array($absent) && $absent === array(false, null), 'A validated missing nested target must be represented as a new file');
+    $new_payload = "new nested file\\n";
+    $new_write = OAI_Files::write($scope, $missing, $new_payload, '', false);
+    fileSnapshotAssert(!is_wp_error($new_write) && !empty($new_write['ok']), 'New nested file write failed after locked path revalidation');
+    $new_full = $base . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $missing);
+    fileSnapshotAssert(is_file($new_full) && file_get_contents($new_full) === $new_payload, 'New nested file bytes do not match');
+    $new_delete = OAI_Files::delete($scope, $missing, hash('sha256', $new_payload));
+    fileSnapshotAssert(!is_wp_error($new_delete) && !file_exists($new_full), 'New nested file delete failed after path revalidation');
+    @rmdir(dirname($new_full));
     $small = "snapshot fixture\n";
     fileSnapshotAssert(file_put_contents($full, $small) === strlen($small), 'Could not create small file fixture');
     $present = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $relative);
