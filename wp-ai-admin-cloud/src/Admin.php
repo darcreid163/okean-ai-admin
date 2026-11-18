@@ -58,11 +58,11 @@ final class Admin {
         echo '<h2 style="margin:4px 0 12px">Результат диагностики подключения и MCP</h2>';
         echo '<p><strong>'.($passed?'Проверка пройдена':'Обнаружена проблема').'</strong> · site_id: <code>'.esc_html((string)($report['site_id']??'')).'</code></p>';
         echo '<h3>1. Учётные данные и Vault</h3><table class="widefat striped" style="max-width:900px"><tbody>';
-        $credentialLabels=['status'=>'Статус регистрации','sealed_payload_format_valid'=>'Формат зашифрованных данных','vault_binding_valid'=>'Привязка Vault','credential_format'=>'Формат учётных данных','site_token_format_valid'=>'Формат токена сайта','status_key_present'=>'Ключ статуса','failure'=>'Ошибка'];
+        $credentialLabels=['status'=>'Статус регистрации','sealed_payload_format_valid'=>'Формат зашифрованных данных','vault_key_loaded'=>'Ключ Vault загружен','decryption_attempted'=>'Расшифровка выполнялась','credential_readable'=>'Учётные данные читаются','vault_binding_valid'=>'Привязка Vault','binding_context'=>'Контекст привязки (AAD)','binding_failure_class'=>'Класс ошибки расшифровки','credential_format'=>'Формат учётных данных','site_token_format_valid'=>'Формат токена сайта','status_key_present'=>'Ключ статуса','failure'=>'Ошибка'];
         foreach($credentialLabels as $key=>$label){
             if(!array_key_exists($key,$credential))continue;
             $value=$credential[$key];
-            $shown=is_bool($value)?($value?'Да':'Нет'):(is_scalar($value)?(string)$value:wp_json_encode($value));
+            $shown=$value===null?'Не удалось определить':(is_bool($value)?($value?'Да':'Нет'):(is_scalar($value)?(string)$value:wp_json_encode($value)));
             echo '<tr><th style="width:280px">'.esc_html($label).'</th><td><code>'.esc_html($shown).'</code></td></tr>';
         }
         echo '</tbody></table><h3>2. Связь с Native MCP и каталог инструментов</h3>';
