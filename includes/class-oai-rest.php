@@ -1375,7 +1375,7 @@ frame.addEventListener('load',function(){
     }elseif($r['type']==='woocommerce_coupon'){
      $err=OAI_WooCommerce::apply_coupon($r['target'],is_array($after)?$after:array());
     } elseif(in_array($r['type'],array('post_title','post_excerpt','post_content'),true)){
-     $parts=explode(':',$r['target'],2); $err=OAI_Content::apply_patch(absint($parts[0]),$parts[1]??'post_content',(string)$after);
+     $parts=explode(':',$r['target'],2); $err=OAI_Content::apply_patch(absint($parts[0]),$parts[1]??'post_content',(string)$after,(string)$before);
     } elseif(in_array($r['type'],array('file_write','theme_file_write'),true)){
      $err=self::write($r['type'],$r['target'],$after,hash('sha256',(string)$before),array_key_exists('before_exists',$meta)?(bool)$meta['before_exists']:true);
     } elseif(in_array($r['type'],array('elementor_widget_settings','elementor_widget_html'),true)){
@@ -1391,7 +1391,7 @@ frame.addEventListener('load',function(){
    }
 
    if(is_wp_error($err)){
-    if(in_array($r['type'],array('file_write','theme_file_write'),true) && $err->get_error_code()==='oai_conflict'){
+    if((in_array($r['type'],array('file_write','theme_file_write','post_title','post_excerpt','post_content'),true)) && $err->get_error_code()==='oai_conflict'){
      // The final hash/existence check rejected BEFORE writing. Never run
      // automatic rollback against another writer's coincidentally equal data.
      $conflict_result=self::record_apply_conflict($id,$r,$before,$err,'applying');
