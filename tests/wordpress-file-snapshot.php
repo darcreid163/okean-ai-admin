@@ -21,6 +21,12 @@ $name = 'wpai-file-snapshot-' . bin2hex(random_bytes(8)) . '.txt';
 $relative = $name;
 $full = $base . DIRECTORY_SEPARATOR . $name;
 $missing = 'wpai-missing-' . bin2hex(random_bytes(8)) . DIRECTORY_SEPARATOR . 'new-file.txt';
+$link_name = 'wpai-file-link-' . bin2hex(random_bytes(8)) . '.txt';
+$link_full = $base . DIRECTORY_SEPARATOR . $link_name;
+$outside = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wpai-outside-' . bin2hex(random_bytes(8)) . '.txt';
+$dir_link_name = 'wpai-dir-link-' . bin2hex(random_bytes(8));
+$dir_link_full = $base . DIRECTORY_SEPARATOR . $dir_link_name;
+$outside_dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wpai-outside-dir-' . bin2hex(random_bytes(8));
 try {
     $absent = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $missing);
     fileSnapshotAssert(is_array($absent) && $absent === array(false, null), 'A validated missing nested target must be represented as a new file');
@@ -32,7 +38,28 @@ try {
     fileSnapshotAssert(file_put_contents($full, $large) === strlen($large), 'Could not create large file fixture');
     $oversized = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $relative);
     fileSnapshotAssert(is_wp_error($oversized) && $oversized->get_error_code() === 'oai_file_large', 'An existing file above the read limit must fail closed, not masquerade as a missing file');
-    echo "PASS file snapshot: absent nested target, exact existing snapshot, oversized target fail-closed\n";
+    // Symlink file targets and symlinked parent directories must fail closed.
+    fileSnapshotAssert(file_put_contents($outside, "outside sentinel\\n") !== false, 'Could not create outside sentinel');
+    fileSnapshotAssert(symlink($outside, $link_full), 'Symlink fixture creation is unavailable');
+    $file_link = OAI_Security::resolve_path_for_write($scope, $link_name);
+    fileSnapshotAssert(is_wp_error($file_link) && $file_link->get_error_code() === 'oai_path_denied', 'Symlink file target was accepted');
+    $write_link = OAI_Files::write($scope, $link_name, 'overwrite attempt');
+    fileSnapshotAssert(is_wp_error($write_link) && $write_link->get_error_code() === 'oai_path_denied', 'Write followed a symlink file target');
+    $delete_link = OAI_Files::delete($scope, $link_name);
+    fileSnapshotAssert(is_wp_error($delete_link) && $delete_link->get_error_code() === 'oai_path_denied', 'Delete accepted a symlink file target');
+
+    fileSnapshotAssert(mkdir($outside_dir), 'Could not create outside directory');
+    fileSnapshotAssert(symlink($outside_dir, $dir_link_full), 'Directory symlink fixture creation is unavailable');
+    $dir_path = $dir_link_name . DIRECTORY_SEPARATOR . 'escaped.txt';
+    $dir_result = OAI_Security::resolve_path_for_write($scope, $dir_path);
+    fileSnapshotAssert(is_wp_error($dir_result) && $dir_result->get_error_code() === 'oai_path_denied', 'Symlink parent directory was accepted');
+    $dir_write = OAI_Files::write($scope, $dir_path, 'escaped write');
+    fileSnapshotAssert(is_wp_error($dir_write) && $dir_write->get_error_code() === 'oai_path_denied', 'Write traversed a symlink parent directory');
+    echo "PASS file snapshot/security: absent/existing/oversized snapshots, symlink target and parent rejection\\n";
 } finally {
     if (is_file($full)) @unlink($full);
+    if (is_link($link_full)) @unlink($link_full);
+    if (is_link($dir_link_full)) @unlink($dir_link_full);
+    if (is_file($outside)) @unlink($outside);
+    if (is_dir($outside_dir)) @rmdir($outside_dir);
 }
