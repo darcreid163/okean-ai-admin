@@ -129,6 +129,11 @@ final class Admin {
                     } elseif ($action==='license_reactivate') {
                         if(self::submitted('license_confirm')!=='REACTIVATE') throw new Fault('license_reactivate_confirmation_required',409);
                         $output=$core->reactivateLicense((string)get_current_user_id(),self::submitted('license_id'),time());
+                    } elseif ($action==='diagnose_site') {
+                        $site=self::submitted('site_id');
+                        $owned=array_column($core->sites($owner),'id');
+                        if(!in_array($site,$owned,true)) throw new Fault('invalid_site_selection',403);
+                        $output=$core->diagnoseSiteConnection($owner,$site);
                     } elseif ($action==='test') $output=self::smoke(self::submitted('gateway_token'),self::submitted('site_id'));
                     else throw new Fault('unknown_form_action');
                 }
@@ -178,6 +183,7 @@ final class Admin {
                 echo '<h3>'.esc_html($site['home']).'</h3><p>site_id: <code>'.esc_html($site['id']).'</code></p>';
                 self::form('issue','Получить токен gateway на 1 час',$id);
                 self::form('test','Проверить gateway через HTTPS',$id.'<p><label>Токен gateway<br><input type="password" name="gateway_token" autocomplete="new-password" size="70" required></label></p>');
+                self::form('diagnose_site','Диагностика подключения и MCP',$id.'<p>Read-only: проверка Vault, связи с сайтом и семи обязательных инструментов. Не расходует квоту и не изменяет сайт.</p>');
             }
             echo '<h3>Лицензии</h3>';
             echo '<p>Cloud Core — единственный источник плана и лицензии. Ключ хранится только в виде SHA-256, показывается один раз и не может быть восстановлен. Автоматическая привязанная лицензия создаётся при регистрации аккаунта и при назначении плана; её ключ намеренно не сохраняется. Выпуск, reissue и отзыв выполняются только администратором.</p>';
