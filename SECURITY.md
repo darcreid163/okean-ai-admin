@@ -5,10 +5,12 @@
 Security fixes are prepared against the current public-beta candidate and the latest published commercial-beta baseline when practical. Historical development branches and superseded test artifacts are not security-supported release channels.
 
 Current candidate (unreleased):
-- WP AI Admin native: **2.1.17** (DB schema 24)
+- WP AI Admin native: **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`)
 - WP AI Admin Cloud Core: **0.3.13-dev** (Gateway schema 4, derived from the recovered 0.3.11 baseline)
 
-This candidate is not an approved production release. Installed builds, file hashes and the acceptance state are tracked in issue [#40](https://github.com/darcreid163/okean-ai-admin/issues/40). Billing, Batch accounting and commercial entitlement enforcement are disabled for the beta.
+This candidate is not an approved production release. The current Draft integration is PR [#232](https://github.com/darcreid163/okean-ai-admin/pull/232), exact candidate SHA `6e60163383afce5c81c59e6c452772cd26d21fc4`; Native and Cloud CI passed on this SHA. Cloud Store hardening (#226) and key preservation (#224), external OAuth expiry, two-owner acceptance, staging and artifact freeze remain outstanding. See [#40](https://github.com/darcreid163/okean-ai-admin/issues/40) and [the 18 November release control](docs/RELEASE-CONTROL-2026-11-18.md).
+
+Quota and per-object Batch accounting are implemented in Cloud Core, but production activation/account migration is a separate gate. Automatic money debits and auto-renewal remain disabled. Do not represent this candidate as a self-service paid service: payment-to-license fulfillment is not qualified.
 
 ## Reporting a vulnerability
 
