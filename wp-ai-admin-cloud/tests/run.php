@@ -287,5 +287,90 @@ check($otherActor['owner']==='2' && $otherActor['site_ids']===[$other['id']],'Se
 $oauth->revoke($otherToken['refresh_token'],$otherOAuth['client_id']);
 rejects(fn()=>$oauth->binding($otherActor,$now),'invalid_or_expired_token');
 
+
+// OAuth negative-path regression coverage: one-time codes, client/resource
+// binding, expiry, and client-scoped revocation. All identities are synthetic.
+$foreignClient=$oauth->register([
+    'client_name'=>'Wrong-client fixture',
+    'redirect_uris'=>['https://wrong-client.example.invalid/callback'],
+],$now);
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$foreignClient['client_id'],
+    'refresh_token'=>$oauthToken['refresh_token'],
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+90,fn($owner)=>true),'invalid_grant');
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$oauthCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$verifier,'resource'=>'https://gateway.example.com/wp-json/other',
+],$now+90,fn($owner)=>true),'invalid_grant');
+
+// A successfully exchanged authorization code is strictly single-use.
+$replayVerifier=str_repeat('r',64);
+$replayAuth=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$replayVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'single-use-code-state',
+]);
+$replayCode=$oauth->approve('1',$replayAuth,[$site['id']],$now);
+$replayParams=[
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$replayCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$replayVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+];
+$replayIssued=$oauth->exchange($replayParams,$now,fn($owner)=>$owner==='1');
+rejects(fn()=>$oauth->exchange($replayParams,$now+1,fn($owner)=>true),'invalid_grant');
+$replayActor=$core->authenticate($replayIssued['access_token'],$now+1);
+$oauth->binding($replayActor,$now+1);
+
+// Authorization codes expire at the five-minute boundary.
+$expiredVerifier=str_repeat('e',64);
+$expiredAuth=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$expiredVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'expired-code-state',
+]);
+$expiredCode=$oauth->approve('1',$expiredAuth,[$site['id']],$now);
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$expiredCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$expiredVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+300,fn($owner)=>true),'invalid_grant');
+
+// Wrong-client revocation is a no-op; the registered client can still revoke.
+$oauth->revoke($otherToken['refresh_token'],$oauthClient['client_id']);
+$stillBoundOtherActor=$core->authenticate($otherToken['access_token'],$now);
+$oauth->binding($stillBoundOtherActor,$now);
+$oauth->revoke($otherToken['refresh_token'],$otherOAuth['client_id']);
+rejects(fn()=>$oauth->binding($stillBoundOtherActor,$now),'invalid_or_expired_token');
+
+// Expired refresh credentials cannot be used even when the account is active.
+$expiryVerifier=str_repeat('x',64);
+$expiryAuth=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read offline_access',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$expiryVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'expired-refresh-state',
+]);
+$expiryCode=$oauth->approve('1',$expiryAuth,[$site['id']],$now);
+$expiryToken=$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$expiryCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$expiryVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='1');
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
+    'refresh_token'=>$expiryToken['refresh_token'],
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+2592000,fn($owner)=>true),'invalid_grant');
+
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
 if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
