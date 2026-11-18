@@ -84,5 +84,14 @@ try { $store->enqueueSseMessage($session,'{"cap":32}',time(),time()+3600,32); }
 catch(Fault $e) { $overflow=$e->reason==='sse_queue_full'; }
 sseCheck($overflow,'SSE queue limit was not enforced');
 sseCheck(count($store->drainSseQueue($session,time()))===32,'SSE queue cap drain returned an unexpected count');
-$store->deleteSseSession($session);
-echo "PASS: 100 concurrent SSE appends drained without loss or duplication; queue cap enforced\n";
+
+// Closing the 45-second reader must not delete a reservation while its Gateway
+// request is still running in another PHP worker.
+$pendingReservation=$store->reserveSseMessage($session,time(),time()+3600,32);
+sseCheck($store->deleteSseSession($session)===false,'Closing an SSE stream deleted a session with an in-flight reply reservation');
+$pendingPayload=json_encode(['in_flight'=>'completed_after_stream_close'],JSON_THROW_ON_ERROR);
+$store->completeSseMessage($session,$pendingReservation,$pendingPayload,time(),time()+3600);
+sseCheck($store->drainSseQueue($session,time())===[$pendingPayload],'In-flight Gateway reply could not be published after stream close');
+sseCheck($store->deleteSseSession($session)===true,'Closed SSE session was not removed after its reservation completed');
+sseCheck($store->row('SELECT session_id FROM '.$store->table('sse_sessions').' WHERE session_id=?',[$session])===null,'SSE session remained after safe close');
+echo "PASS: 100 concurrent SSE appends drained without loss/duplication; cap enforced; stream close preserves in-flight reservations\n";
