@@ -226,6 +226,36 @@ class OAI_DB {
   try{$ready=$wpdb->query('SET TRANSACTION ISOLATION LEVEL '.str_replace('-',' ',$isolation));}finally{$wpdb->suppress_errors($suppressed);}
   return $ready===false?new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503)):true;
  }
+ /** Strict first-writer INSERT for media claims; add_option() is not used here.
+  * add_option() may report success for duplicate-key no-op updates on some
+  * database drivers/configurations. Only exactly one inserted row owns the
+  * right to create files and attachments.
+  *
+  * @return true|false|WP_Error true=inserted, false=claim already exists
+  */
+ private static function insert_media_creation_claim($name,$raw){
+  global $wpdb;
+  if(!is_string($name)||!preg_match('/^oai_media_creation_[a-f0-9]{64}$/D',$name)||!is_string($raw)||$raw==='')
+   return new WP_Error('oai_creation_claim_value','Invalid media creation reservation',array('status'=>400));
+  $ready=self::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $previous=$wpdb->suppress_errors(true);
+  try{
+   $inserted=$wpdb->insert($wpdb->options,array(
+    'option_name'=>$name,'option_value'=>$raw,'autoload'=>'off'
+   ),array('%s','%s','%s'));
+  }finally{
+   $wpdb->suppress_errors($previous);
+   wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');
+  }
+  if($inserted===1)return true;
+  // Distinguish a duplicate winner from a storage failure using the database,
+  // not WordPress's object cache or add_option()'s boolean result.
+  $existing=$wpdb->get_var($wpdb->prepare(
+   'SELECT option_value FROM '.$wpdb->options.' WHERE option_name=%s',$name
+  ));
+  if($existing!==null)return false;
+  return new WP_Error('oai_creation_storage','Media creation reservation storage unavailable',array('status'=>503));
+ }
  private static function media_creation_cas($name,$expected,$next=null){
   global $wpdb;
   $sql=$next===null?'DELETE FROM '.$wpdb->options.' WHERE option_name=%s AND BINARY option_value=BINARY %s':'UPDATE '.$wpdb->options.' SET option_value=%s WHERE option_name=%s AND BINARY option_value=BINARY %s';
@@ -268,7 +298,9 @@ class OAI_DB {
    if($existing===null){
     if($wpdb->last_error!=='')return new WP_Error('oai_creation_storage','Creation reservation is unavailable',array('status'=>503));
     wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');
-    if(add_option($name,$raw,'',false)){$acquired=true;break;}
+    $inserted=self::insert_media_creation_claim($name,$raw);
+    if(is_wp_error($inserted))return $inserted;
+    if($inserted===true){$acquired=true;break;}
     continue;
    }
    $prior=json_decode((string)$existing['option_value'],true);
