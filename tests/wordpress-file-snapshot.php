@@ -21,6 +21,7 @@ $name = 'wpai-file-snapshot-' . bin2hex(random_bytes(8)) . '.txt';
 $relative = $name;
 $full = $base . DIRECTORY_SEPARATOR . $name;
 $missing = 'wpai-missing-' . bin2hex(random_bytes(8)) . DIRECTORY_SEPARATOR . 'new-file.txt';
+$new_full = $base . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $missing);
 $link_name = 'wpai-file-link-' . bin2hex(random_bytes(8)) . '.txt';
 $link_full = $base . DIRECTORY_SEPARATOR . $link_name;
 $outside = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wpai-outside-' . bin2hex(random_bytes(8)) . '.txt';
@@ -33,7 +34,6 @@ try {
     $new_payload = "new nested file\n";
     $new_write = OAI_Files::write($scope, $missing, $new_payload, '', false);
     fileSnapshotAssert(!is_wp_error($new_write) && !empty($new_write['ok']), 'New nested file write failed after locked path revalidation');
-    $new_full = $base . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $missing);
     fileSnapshotAssert(is_file($new_full) && file_get_contents($new_full) === $new_payload, 'New nested file bytes do not match');
     $new_delete = OAI_Files::delete($scope, $missing, hash('sha256', $new_payload));
     fileSnapshotAssert(!is_wp_error($new_delete) && !file_exists($new_full), 'New nested file delete failed after path revalidation');
@@ -66,6 +66,8 @@ try {
     echo "PASS file snapshot/security: absent/existing/oversized snapshots, symlink target and parent rejection\n";
 } finally {
     if (is_file($full)) @unlink($full);
+    if (is_file($new_full)) @unlink($new_full);
+    if (is_dir(dirname($new_full))) @rmdir(dirname($new_full));
     if (is_link($link_full)) @unlink($link_full);
     if (is_link($dir_link_full)) @unlink($dir_link_full);
     if (is_file($outside)) @unlink($outside);
