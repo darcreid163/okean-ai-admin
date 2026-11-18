@@ -52,10 +52,17 @@ try {
     $temp_after = glob($base . DIRECTORY_SEPARATOR . '.wpai-atomic-*');
     if (!is_array($temp_after)) $temp_after = array();
     fileSnapshotAssert(count(array_diff($temp_after, $temp_before)) === 0, 'Atomic replacement left a staged temporary file behind');
-    $large = str_repeat('L', 2 * 1024 * 1024 + 1);
-    fileSnapshotAssert(file_put_contents($full, $large) === strlen($large), 'Could not create large file fixture');
+    $three_mb = str_repeat('V', 3 * 1024 * 1024);
+    $three_write = OAI_Files::write($scope, $relative, $three_mb, hash('sha256', $replacement_payload), true);
+    fileSnapshotAssert(!is_wp_error($three_write) && !empty($three_write['ok']), 'A 3 MB file write within the 5 MB write limit failed');
+    $three_snapshot = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $relative);
+    fileSnapshotAssert(is_array($three_snapshot) && $three_snapshot[0] === true && strlen($three_snapshot[1]) === strlen($three_mb) && hash_equals(hash('sha256', $three_mb), hash('sha256', $three_snapshot[1])), 'Internal verification snapshot must support files above the public 2 MB read limit');
+    $public_large_read = OAI_Files::read($scope, $relative);
+    fileSnapshotAssert(is_wp_error($public_large_read) && $public_large_read->get_error_code() === 'oai_file_large', 'Public file read limit must remain 2 MB');
+    $large = str_repeat('L', 5 * 1024 * 1024 + 1);
+    fileSnapshotAssert(file_put_contents($full, $large) === strlen($large), 'Could not create oversized verification fixture');
     $oversized = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $relative);
-    fileSnapshotAssert(is_wp_error($oversized) && $oversized->get_error_code() === 'oai_file_large', 'An existing file above the read limit must fail closed, not masquerade as a missing file');
+    fileSnapshotAssert(is_wp_error($oversized) && $oversized->get_error_code() === 'oai_file_large', 'An existing file above the 5 MB verification limit must fail closed, not masquerade as a missing file');
     // Symlink file targets and symlinked parent directories must fail closed.
     fileSnapshotAssert(file_put_contents($outside, "outside sentinel\n") !== false, 'Could not create outside sentinel');
     fileSnapshotAssert(symlink($outside, $link_full), 'Symlink fixture creation is unavailable');
