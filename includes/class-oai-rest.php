@@ -13,7 +13,7 @@ class OAI_REST {
   return $response;
  }
  private static function is_list_array($a){ if(function_exists('array_is_list')) return array_is_list($a); $i=0; foreach($a as $k=>$v){if($k!==$i++) return false;} return true; }
- public static function token(){return (string)(get_option('oai_bearer_token','') ?: get_option('oai_api_token',''));}
+ public static function token_hash(){ OAI_DB::migrate_token(); $hash=get_option('oai_bearer_token_hash',''); return is_string($hash)&&preg_match('/^[a-f0-9]{64}$/D',$hash)?$hash:''; }
  private static function authorization_header($req){
   $auth=(string)$req->get_header('authorization');
   if(!$auth) $auth=(string)$req->get_header('x-authorization');
@@ -39,7 +39,7 @@ class OAI_REST {
   $auth=self::authorization_header($req);
   if(stripos($auth,'basic ')===0){ $user=self::application_password_user($req); return !is_wp_error($user); }
   $p=preg_split('/\s+/',trim($auth));
-  if(count($p)!==2 || strtolower($p[0])!=='bearer' || self::token()==='' || !hash_equals(self::token(),$p[1])) return false;
+  if(count($p)!==2 || strtolower($p[0])!=='bearer' || self::token_hash()==='' || !hash_equals(self::token_hash(),hash('sha256',$p[1]))) return false;
   // Bearer auth is a WordPress API credential, not a logged-in browser session.
   // Bind it to the local-owner administrator so callbacks that use current_user_can()
   // see the same security principal that authenticated the request.

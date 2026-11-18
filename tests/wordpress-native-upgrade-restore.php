@@ -14,7 +14,7 @@ wp_set_current_user(1);
 nativeRestoreAssert(current_user_can('manage_options'),'Disposable administrator missing');
 $token='oai_pair_'.str_repeat('u',43);
 $oauthToken='synthetic-upgrade-oauth-access';
-$options=['oai_site_id','oai_installation_id','oai_mcp_enabled','oai_mcp_token_hash','oai_oauth_schema_version','oai_license',OAI_Gateway_Pairing::CREDENTIAL_PREFIX.hash('sha256',$token),'wpai_upgrade_sentinel'];
+$options=['oai_site_id','oai_installation_id','oai_mcp_enabled','oai_mcp_token_hash','oai_oauth_schema_version','oai_license','oai_bearer_token','oai_api_token','oai_bearer_token_hash','oai_bearer_user_id',OAI_Gateway_Pairing::CREDENTIAL_PREFIX.hash('sha256',$token),'wpai_upgrade_sentinel'];
 $tables=[OAI_DB::table(),OAI_MCP_OAuth::clients_table(),OAI_MCP_OAuth::codes_table(),OAI_MCP_OAuth::tokens_table()];
 $now=gmdate('Y-m-d H:i:s');
 if ($phase==='seed') {
@@ -24,6 +24,8 @@ if ($phase==='seed') {
     nativeRestoreAssert(!is_wp_error($license),'Cannot seed local license');
     update_option('oai_mcp_enabled',true,false);
     update_option('oai_mcp_token_hash',hash('sha256','synthetic-manual-upgrade-token'),false);
+    update_option('oai_bearer_token','wpai_legacy_upgrade_bearer_'.str_repeat('b',32),false);
+    update_option('oai_bearer_user_id',1,false);
     update_option(OAI_Gateway_Pairing::CREDENTIAL_PREFIX.hash('sha256',$token),['user_id'=>1,'account_id'=>'1','account_label'=>'Synthetic upgrade owner','created_at'=>time()],false);
     update_option('wpai_upgrade_sentinel','before-upgrade',false);
     $client='synthetic-upgrade-client';
@@ -46,6 +48,11 @@ if ($phase==='seed') {
     $expected=json_decode(file_get_contents($snapshot),true,512,JSON_THROW_ON_ERROR);
     $expected_options=$expected['options'];
     if($phase!=='restored'){
+        $legacy_bearer=(string)$expected_options['oai_bearer_token'];
+        nativeRestoreAssert($legacy_bearer!==''&&hash_equals(hash('sha256',$legacy_bearer),(string)$actual['options']['oai_bearer_token_hash']),'Legacy REST bearer hash migration changed the credential');
+        nativeRestoreAssert($actual['options']['oai_bearer_token']===null&&$actual['options']['oai_api_token']===null,'Plaintext REST bearer option survived candidate upgrade');
+        $expected_options['oai_bearer_token_hash']=$actual['options']['oai_bearer_token_hash'];
+        $expected_options['oai_bearer_token']=null;$expected_options['oai_api_token']=null;
         nativeRestoreAssert((int)$actual['options']['oai_oauth_schema_version']===OAI_MCP_OAuth::SCHEMA_VERSION,'OAuth schema version migration did not complete');
         $expected_options['oai_oauth_schema_version']=$actual['options']['oai_oauth_schema_version'];
     }
@@ -76,6 +83,12 @@ if ($phase==='seed') {
         }
     }
 }
+$legacyBearer=(string)($phase==='seed'?$actual['options']['oai_bearer_token']:$expected['options']['oai_bearer_token']);
+$bearerRequest=new WP_REST_Request('GET','/okean-ai/v1/status');$bearerRequest->set_header('authorization','Bearer '.$legacyBearer);
+wp_set_current_user(0);nativeRestoreAssert(OAI_REST::perm($bearerRequest)===true,'Retained legacy REST bearer no longer authenticates');
+wp_set_current_user(0);$badBearer=new WP_REST_Request('GET','/okean-ai/v1/status');$badBearer->set_header('authorization','Bearer '.$legacyBearer.'-wrong');
+nativeRestoreAssert(OAI_REST::perm($badBearer)===false,'Wrong REST bearer token was accepted');wp_set_current_user(1);
+if(method_exists('OAI_REST','token_hash')){$bearerAutoload=$wpdb->get_var($wpdb->prepare('SELECT autoload FROM '.$wpdb->options.' WHERE option_name=%s','oai_bearer_token_hash'));nativeRestoreAssert(in_array($bearerAutoload,['no','off','auto-off'],true),'REST bearer hash became autoloaded');}
 nativeRestoreAssert(is_array(OAI_Gateway_Pairing::authenticate($token)),'Retained paired credential no longer authenticates');
 nativeRestoreAssert(is_array(OAI_MCP_OAuth::authenticate_access_token($oauthToken)),'Retained OAuth credential no longer authenticates');
 nativeRestoreAssert(OAI_MCP_OAuth::authenticate_access_token('synthetic-revoked-access')===false,'Revoked OAuth credential became valid');

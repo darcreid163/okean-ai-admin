@@ -15,9 +15,15 @@ class OAI_Admin {
    update_option('oai_runtime_build_id',$current_build,false);
    if(!defined('OAI_BUILD_CHANGED_THIS_REQUEST'))define('OAI_BUILD_CHANGED_THIS_REQUEST',true);
   }
-  if(!get_option('oai_bearer_token','')){
-   $old=get_option('oai_api_token','');
-   update_option('oai_bearer_token',$old?:wp_generate_password(48,false,false),false);
+  $migration_ok=OAI_DB::migrate_token();
+  $legacy_plain=(string)get_option('oai_bearer_token','');$legacy_alias=(string)get_option('oai_api_token','');
+  if($migration_ok!==true&&($legacy_plain!==''||$legacy_alias!==''))return;
+  $bearer_hash=get_option('oai_bearer_token_hash','');
+  if(!is_string($bearer_hash)||!preg_match('/^[a-f0-9]{64}$/D',$bearer_hash)){
+   $new_token=wp_generate_password(48,false,false);$new_hash=hash('sha256',$new_token);
+   update_option('oai_bearer_token_hash',$new_hash,false);
+   $persisted=get_option('oai_bearer_token_hash','');
+   if(!is_string($persisted)||!hash_equals($new_hash,$persisted))return;
   }
   if(!get_option('oai_bearer_user_id',0)){
    $license=OAI_License::status();
