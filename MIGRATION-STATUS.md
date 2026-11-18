@@ -1,6 +1,6 @@
 # WP AI Admin — release status and migration boundaries
 
-**Status: release qualification in progress. No production release, merge to main or deployment is approved.**
+**PUBLICATION BLOCKED — release qualification in progress. No production release, merge to main or deployment is approved.**
 
 ## 1. Version authority
 
