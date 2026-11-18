@@ -127,3 +127,7 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-cr
 wp_test theme install twentytwentyone || true
 wp_test theme activate twentytwentyone
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-classic-theme.php"
+
+# Uninstall is data-preserving by default; explicit per-site opt-in is required.
+# Run last because the opted-in fixture removes only the plugin's disposable tables.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-uninstall-policy.php"

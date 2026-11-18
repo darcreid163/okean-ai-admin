@@ -174,6 +174,12 @@ class OAI_Admin {
  }
  public static function page(){
   if(!current_user_can('manage_options')) wp_die(esc_html__('Недостаточно прав.'));
+  if(isset($_POST['oai_save_uninstall_policy']) && check_admin_referer('oai_uninstall_data_save')){
+   $posted=isset($_POST['oai_delete_data_on_uninstall'])&&is_string($_POST['oai_delete_data_on_uninstall'])?wp_unslash($_POST['oai_delete_data_on_uninstall']):'0';
+   $enabled=$posted==='1'?'1':'0';
+   update_option('oai_delete_data_on_uninstall',$enabled,false);
+   echo '<div class="notice notice-success"><p>'.esc_html($enabled==='1'?'Согласие на удаление данных при деинсталляции сохранено.':'Данные будут сохранены при удалении плагина.').'</p></div>';
+  }
   $mcp_toggle=self::handle_mcp_toggle();
   if($mcp_toggle!==null){
    echo '<div class="notice '.(is_wp_error($mcp_toggle)?'notice-error':'notice-success').'"><p>'.esc_html(is_wp_error($mcp_toggle)?$mcp_toggle->get_error_message():($mcp_toggle['enabled']?'Доступ ИИ включён. Подключите этот сайт через OAuth.':'Доступ ИИ выключен. Автоматические режимы остановлены; OAuth-подключения сохранены.')).'</p></div>';
@@ -228,6 +234,7 @@ class OAI_Admin {
   $quota_pending=$server_ready&&(($projection['quota_status']??'approved')!=='approved');
   $local_quota=OAI_Quota::status();
   $mcp_enabled=(bool)get_option('oai_mcp_enabled',false);
+  $uninstall_data=get_option('oai_delete_data_on_uninstall','0')==='1';
   $connected=class_exists('OAI_Gateway_Pairing')&&OAI_Gateway_Pairing::is_connected();
   $account_label=trim((string)($cloud_usage['account_label']??''));
   $plan_label=$server_ready?trim((string)($projection['plan_label']??'')):'';
@@ -420,6 +427,17 @@ class OAI_Admin {
    <div class="oai-section-head"><h2>Все операции</h2><span class="oai-muted">Всего: <?php echo (int)$ops_total;?> · страница <?php echo (int)$ops_page;?> / <?php echo (int)$ops_pages;?></span></div>
    <p class="oai-kpi-note">Полный журнал разбит по 25 операций на страницу. Здесь можно найти, просмотреть и выполнить доступное действие с любой сохранённой операцией.</p>
    <?php self::render_operation_table($rows,$creators,'Операций пока нет.'); if($ops_pages>1){$base=add_query_arg(array('page'=>'okean-ai-admin','oai_ops_page'=>'%#%'),admin_url('admin.php')).'#oai-operation-history';echo '<div class="tablenav"><div class="tablenav-pages">'.wp_kses_post(paginate_links(array('base'=>$base,'format'=>'','current'=>$ops_page,'total'=>$ops_pages,'prev_text'=>'‹ Назад','next_text'=>'Вперёд ›','type'=>'plain'))).'</div></div>';}?>
+  </section>
+  <section class="oai-card oai-section" id="oai-uninstall-data">
+   <div class="oai-section-head"><h2>Удаление данных при деинсталляции</h2><span class="oai-badge <?php echo $uninstall_data?'oai-warn':'';?>"><?php echo $uninstall_data?'Удалять данные':'Сохранять данные';?></span></div>
+   <p>По умолчанию удаление файлов плагина <strong>не удаляет</strong> историю операций, аудит, OAuth-подключения, идентификатор сайта и настройки лицензии. При необходимости можно отдельно разрешить удаление только данных WP AI Admin при полном удалении плагина.</p>
+   <p><strong>Это не затрагивает деактивацию и обновление.</strong> При включении будут удалены локальные таблицы и настройки WP AI Admin; страницы, товары, медиафайлы, пользователи, темы и данные других плагинов останутся. Действие необратимо.</p>
+   <form method="post"><?php wp_nonce_field('oai_uninstall_data_save');?>
+    <input type="hidden" name="oai_delete_data_on_uninstall" value="0">
+    <p><label><input type="checkbox" name="oai_delete_data_on_uninstall" value="1" <?php checked($uninstall_data);?>> Разрешить удаление локальных данных WP AI Admin при удалении плагина</label></p>
+    <p><button class="button" name="oai_save_uninstall_policy" value="1" onclick="return confirm('Сохранить настройку удаления данных при деинсталляции? Если она включена, локальные операции, аудит, OAuth и настройки WP AI Admin будут удалены без возможности восстановления.');">Сохранить настройку</button></p>
+   </form>
+   <p class="oai-kpi-note">В Multisite согласие проверяется отдельно для каждого сайта. При сетевом удалении очищаются только сайты, где администратор явно включил эту настройку.</p>
   </section>
   </div>
   <?php

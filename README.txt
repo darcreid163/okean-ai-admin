@@ -80,6 +80,10 @@ central quota ledger, multi-site management, and a signed usage dashboard.
 No. Receipts contain only state/units/fingerprints. Tool output is never stored by the plugin
 or the Cloud service.
 
+== Uninstall and data retention ==
+
+By default, deleting WP AI Admin preserves its local operation history, audit records, OAuth connections, pairing identity and license settings. To remove plugin-owned data, an administrator must explicitly enable the uninstall deletion option in the WP AI Admin dashboard before deleting the plugin. Deactivation and upgrades never delete data. WordPress pages, products, media, users and other plugins' data are not removed. On Multisite, consent is checked separately for each site.
+
 == Screenshots ==
 
 1. Dashboard with server usage projection and approval queue.
