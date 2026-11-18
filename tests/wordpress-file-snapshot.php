@@ -42,6 +42,16 @@ try {
     fileSnapshotAssert(file_put_contents($full, $small) === strlen($small), 'Could not create small file fixture');
     $present = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $relative);
     fileSnapshotAssert(is_array($present) && $present[0] === true && $present[1] === $small, 'Existing file snapshot must preserve exact bytes');
+    $replacement_payload = "atomically replaced file\\n";
+    $temp_before = glob($base . DIRECTORY_SEPARATOR . '.wpai-atomic-*');
+    if (!is_array($temp_before)) $temp_before = array();
+    $replaced = OAI_Files::write($scope, $relative, $replacement_payload, hash('sha256', $small), true);
+    fileSnapshotAssert(!is_wp_error($replaced) && !empty($replaced['ok']), 'Existing file atomic replacement failed');
+    fileSnapshotAssert(file_get_contents($full) === $replacement_payload, 'Existing file replacement did not publish the complete payload');
+    fileSnapshotAssert(hash_equals(hash('sha256', $replacement_payload), hash_file('sha256', $full)), 'Existing file replacement hash mismatch');
+    $temp_after = glob($base . DIRECTORY_SEPARATOR . '.wpai-atomic-*');
+    if (!is_array($temp_after)) $temp_after = array();
+    fileSnapshotAssert(count(array_diff($temp_after, $temp_before)) === 0, 'Atomic replacement left a staged temporary file behind');
     $large = str_repeat('L', 2 * 1024 * 1024 + 1);
     fileSnapshotAssert(file_put_contents($full, $large) === strlen($large), 'Could not create large file fixture');
     $oversized = OAI_REST::snapshot_for_verify('file_write', $scope . ':' . $relative);
