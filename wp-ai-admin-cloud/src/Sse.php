@@ -74,8 +74,9 @@ final class Sse {
                 }
                 usleep(250000);
             }
-            $store->deleteSseSession($id);
-            delete_transient(self::key($id));
+            if ($store->deleteSseSession($id)) {
+                delete_transient(self::key($id));
+            }
         } catch (Fault $e) { self::fail($e); }
         catch (\Throwable $e) { self::fail(new Fault('sse_service_unavailable',503)); }
     }
