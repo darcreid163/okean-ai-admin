@@ -372,5 +372,48 @@ rejects(fn()=>$oauth->exchange([
     'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
 ],$now+2592000,fn($owner)=>true),'invalid_grant');
 
+
+// Account suspension must atomically invalidate outstanding OAuth codes,
+// access grants and site credentials without affecting another tenant.
+$ownerTwoVerifier=str_repeat('2',64);
+$ownerTwoAuth=$oauth->authorization([
+    'client_id'=>$otherOAuth['client_id'],
+    'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read offline_access',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$ownerTwoVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'suspension-control-tenant',
+]);
+$ownerTwoCode=$oauth->approve('2',$ownerTwoAuth,[$other['id']],$now);
+$ownerTwoToken=$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$otherOAuth['client_id'],
+    'code'=>$ownerTwoCode,'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'code_verifier'=>$ownerTwoVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='2');
+$ownerTwoActor=$core->authenticate($ownerTwoToken['access_token'],$now);
+$oauth->binding($ownerTwoActor,$now);
+
+$pendingVerifier=str_repeat('p',64);
+$pendingAuth=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$pendingVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'suspension-pending-code',
+]);
+$pendingCode=$oauth->approve('1',$pendingAuth,[$site['id']],$now);
+$suspension=$core->suspendAccount('1',$now+10);
+check($suspension['suspended']===true && $suspension['access_revoked']===true,'Account suspension did not report access revocation');
+rejects(fn()=>$core->authenticate($replayIssued['access_token'],$now+10),'invalid_or_expired_token');
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$pendingCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$pendingVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+10,fn($owner)=>true),'invalid_grant');
+$stillActiveOtherTenant=$core->authenticate($ownerTwoToken['access_token'],$now+10);
+$oauth->binding($stillActiveOtherTenant,$now+10);
+check($stillActiveOtherTenant['owner']==='2' && $stillActiveOtherTenant['site_ids']===[$other['id']],'Suspending one owner affected another tenant');
+
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
 if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
