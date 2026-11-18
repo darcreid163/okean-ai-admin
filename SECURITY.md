@@ -12,6 +12,8 @@ This candidate is not an approved production release. The current Draft integrat
 
 Quota and per-object Batch accounting are implemented in Cloud Core, but production activation/account migration is a separate gate. Automatic money debits and auto-renewal remain disabled. Do not represent this candidate as a self-service paid service: payment-to-license fulfillment is not qualified.
 
+Current repository visibility and scan limitations are recorded in [the 18 November repository security audit](docs/REPOSITORY-SECURITY-AUDIT-2026-11-18.md). Use the [documentation index](docs/README.md) to distinguish current release authority from historical snapshots.
+
 ## Reporting a vulnerability
 
 Do not publish credentials, OAuth codes, access/refresh tokens, paired site secrets, PKCE verifiers, private keys, full callback query strings, production database dumps, customer data or reproducible exploit details in a public issue.
