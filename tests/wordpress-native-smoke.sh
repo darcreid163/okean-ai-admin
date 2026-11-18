@@ -35,6 +35,7 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-be
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-abilities-compat.php"
 # File snapshots distinguish missing targets from existing files that exceed read limits.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-file-snapshot.php"
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-file-lifecycle.php"
 # OAuth registration bounds, retention and atomic global capacity under concurrent requests.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-oauth-registration.php"
 # Disposable site only: exercise the additive Native 23 -> 25 schema migration,
