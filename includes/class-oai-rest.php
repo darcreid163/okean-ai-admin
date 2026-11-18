@@ -102,6 +102,8 @@ class OAI_REST {
   register_rest_route($n,'/read/gutenberg/(?P<id>\d+)',array('methods'=>'GET','callback'=>array(__CLASS__,'gutenberg_resolved'))+$args);
   register_rest_route($n,'/read/gutenberg/(?P<id>\d+)/locate',array('methods'=>'GET','callback'=>array(__CLASS__,'gutenberg_locate'))+$args);
   register_rest_route($n,'/gutenberg/patch',array('methods'=>'POST','callback'=>array(__CLASS__,'gutenberg_patch'))+$args);
+  register_rest_route($n,'/abilities/public',array('methods'=>'GET','callback'=>array(__CLASS__,'abilities_public'))+$args);
+  register_rest_route($n,'/abilities/public/(?P<name>[a-zA-Z0-9\\-\\/]+)',array('methods'=>'GET','callback'=>array(__CLASS__,'ability_public_detail'))+$args);
   register_rest_route($n,'/read/site',array('methods'=>'GET','callback'=>array(__CLASS__,'site'))+$args);
   register_rest_route($n,'/read/plugins',array('methods'=>'GET','callback'=>array(__CLASS__,'plugins'))+$args);
   register_rest_route($n,'/read/capabilities',array('methods'=>'GET','callback'=>array(__CLASS__,'capabilities'))+$args);
@@ -1926,7 +1928,19 @@ frame.addEventListener('load',function(){
  }
  public static function workspace_surfaces($req){return OAI_Workspace::surfaces((string)$req->get_param('workspace_id'));}
  public static function surfaces_catalog($req){return OAI_Surfaces::catalog();}
- public static function foundation_capabilities(){ return array('version'=>OAI_VERSION,'architecture'=>'modular-bootstrap-workspace-editable-surfaces-sandbox-plan-diff-preview-approval-apply-verify-proof-receipt-rollback','visual_ui'=>'deferred','wpvibe_foundations'=>array('modular_bootstrap'=>true,'operation_audit'=>true,'change_receipts'=>true,'proof_hashes'=>true,'builder_adapters'=>true,'elementor_document_save_and_repair'=>true,'elementor_frontend_preview'=>true,'file_scopes'=>array('child_theme','theme'),'workspace'=>true,'starter_theme_classic'=>true,'editable_surfaces'=>true,'operation_lifecycle'=>true,'rollback_descriptors'=>true,'file_conflict_sha256'=>true,'content_patch'=>true,'woocommerce_safe_patch'=>true,'gutenberg_read'=>true,'abilities_api'=>function_exists('wp_register_ability'),'mcp_jsonrpc'=>true,'agent_hmac'=>true,'rate_limit'=>true,'wp_filesystem'=>true,'future'=>array('detached_background_ops','live_reload','advanced_change_tracker','builder_login','classic_theme_tools','beaver_builder','bricks','breakdance','divi','seedprod')),'security'=>array('direct_live_writes'=>false,'arbitrary_php'=>false,'arbitrary_sql'=>false,'arbitrary_routes'=>false,'approval_required'=>true)); }
+ public static function abilities_public($req){
+  return OAI_Abilities_Compat::list_public(
+   (string)$req->get_param('category'),
+   max(1,absint($req->get_param('page')?:1)),
+   max(1,min(100,absint($req->get_param('per_page')?:50)))
+  );
+ }
+ public static function ability_public_detail($req){
+  $url=$req->get_url_params();
+  $name=is_array($url)&&isset($url['name'])?(string)$url['name']:'';
+  return OAI_Abilities_Compat::get_public($name);
+ }
+ public static function foundation_capabilities(){ return array('version'=>OAI_VERSION,'architecture'=>'modular-bootstrap-workspace-editable-surfaces-sandbox-plan-diff-preview-approval-apply-verify-proof-receipt-rollback','visual_ui'=>'deferred','wpaiadmin_foundations'=>array('modular_bootstrap'=>true,'operation_audit'=>true,'change_receipts'=>true,'proof_hashes'=>true,'builder_adapters'=>true,'elementor_document_save_and_repair'=>true,'elementor_frontend_preview'=>true,'file_scopes'=>array('child_theme','theme'),'workspace'=>true,'starter_theme_classic'=>true,'editable_surfaces'=>true,'operation_lifecycle'=>true,'rollback_descriptors'=>true,'file_conflict_sha256'=>true,'content_patch'=>true,'woocommerce_safe_patch'=>true,'gutenberg_read'=>true,'abilities_api'=>function_exists('wp_register_ability'),'mcp_jsonrpc'=>true,'agent_hmac'=>true,'rate_limit'=>true,'wp_filesystem'=>true,'future'=>array('detached_background_ops','live_reload','advanced_change_tracker','builder_login','classic_theme_tools','beaver_builder','bricks','breakdance','divi','seedprod')),'security'=>array('direct_live_writes'=>false,'arbitrary_php'=>false,'arbitrary_sql'=>false,'arbitrary_routes'=>false,'approval_required'=>true)); }
  public static function receipt($req){$x=OAI_Receipts::build(absint($req['id']));return $x?:new WP_Error('oai_not_found','Operation not found',array('status'=>404));}
  public static function gutenberg($req){return OAI_Gutenberg::blocks(absint($req['id']));}
  public static function woocommerce($req){return OAI_WooCommerce::get(absint($req['id']));}
