@@ -283,7 +283,7 @@ final class Core {
                 'credential_format'=>'unknown','site_token_format_valid'=>false,
                 'status_key_present'=>false,'failure'=>$e->reason,
             ];
-        } catch(\\Throwable $e) {
+        } catch(\Throwable $e) {
             return [
                 'site_id'=>$siteId,'owner'=>$owner,'status'=>$site['status'],
                 'sealed_payload_format_valid'=>true,'vault_binding_valid'=>false,
