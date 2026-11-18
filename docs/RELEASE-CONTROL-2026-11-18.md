@@ -85,3 +85,15 @@ The approved quota catalogue is five daily UTC tiers: Free 50, Daily 500, Pro 2,
 4. Only after explicit approval: merge, tag, publish, split public Native/private Cloud repositories, and separately schedule deployment with backup and rollback.
 
 Until those gates are complete, this project is a **green-CI release candidate**, not an approved production release.
+
+## 7. Platform qualification follow-up — issue #233
+
+The current same-directory staging + rename implementation has only been qualified by the Linux-based CI environment. It deliberately fails closed when replacement rename is unsupported and does not use a delete-old-file or copy/unlink fallback. Do not describe this as universally atomic across platforms.
+
+Before claiming Windows support or power-loss durability, run a dedicated disposable platform matrix:
+- Windows PHP 8.2/8.3/8.4: replace an existing regular file, preserve the original on every injected pre-commit failure, verify mode/ownership expectations where supported, and reject symlink/reparse-point escapes.
+- Linux and Windows: simulate short writes, failed flush, rename failure, target replacement races, stale snapshots, and process interruption at each staging boundary.
+- After every rejected/ambiguous Apply, verify the original target hash and the operation ledger state; never clean up an artifact whose ownership is uncertain.
+- Record filesystem, PHP build, OS version and exact source SHA with the result. Until the matrix passes, keep Windows replacement semantics and power-loss durability explicitly unsupported/unqualified.
+
+Issue #233 is the canonical owner of this follow-up. This work is a release qualification requirement only if Windows is included in the supported deployment promise; otherwise retain the documented fail-closed limitation and defer broader platform guarantees.
