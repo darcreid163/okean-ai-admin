@@ -85,8 +85,15 @@ catch(Fault $e) { $overflow=$e->reason==='sse_queue_full'; }
 sseCheck($overflow,'SSE queue limit was not enforced');
 sseCheck(count($store->drainSseQueue($session,time()))===32,'SSE queue cap drain returned an unexpected count');
 
-// Closing the 45-second reader must not delete a reservation while its Gateway
-// request is still running in another PHP worker.
+// Closing the 45-second reader must not delete a completed reply that has not
+// yet been drained by the SSE reader.
+$queuedPayload=json_encode(['queued_before_close'=>true],JSON_THROW_ON_ERROR);
+$store->enqueueSseMessage($session,$queuedPayload,time(),time()+3600,32);
+sseCheck($store->deleteSseSession($session)===false,'Closing an SSE stream deleted an undrained completed reply');
+sseCheck($store->drainSseQueue($session,time())===[$queuedPayload],'Undrained reply was not retained across stream close');
+
+// Nor may close delete a reservation while its Gateway request is still running
+// in another PHP worker.
 $pendingReservation=$store->reserveSseMessage($session,time(),time()+3600,32);
 sseCheck($store->deleteSseSession($session)===false,'Closing an SSE stream deleted a session with an in-flight reply reservation');
 $pendingPayload=json_encode(['in_flight'=>'completed_after_stream_close'],JSON_THROW_ON_ERROR);
