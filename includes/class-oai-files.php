@@ -21,7 +21,7 @@ class OAI_Files {
   return array('scope'=>$scope,'path'=>$path,'items'=>$items);
  }
  public static function read($scope,$path){
-  $file=OAI_Security::resolve_path_for_write($scope,$path); if(is_wp_error($file))return $file; if(!is_file($file))return new WP_Error('oai_not_file','File not found',array('status'=>404));
+  $file=OAI_Security::resolve_path($scope,$path); if(is_wp_error($file))return $file; if(!is_file($file))return new WP_Error('oai_not_file','File not found',array('status'=>404));
   if(filesize($file)>2*1024*1024)return new WP_Error('oai_file_large','File exceeds 2 MB read limit',array('status'=>413));
   $fs=self::fs(); $data=$fs?$fs->get_contents($file):file_get_contents($file); return array('scope'=>$scope,'path'=>$path,'bytes'=>strlen($data),'sha256'=>hash('sha256',$data),'content'=>$data);
  }
@@ -139,7 +139,7 @@ class OAI_Files {
   }finally{self::release_target_lock($lock);}
  }
  public static function delete($scope,$path,$expected_sha256=''){
-  $file=OAI_Security::resolve_path($scope,$path); if(is_wp_error($file))return $file;
+  $file=OAI_Security::resolve_path_for_write($scope,$path); if(is_wp_error($file))return $file;
   $fs=self::fs(); if(!$fs)return new WP_Error('oai_filesystem','WordPress Filesystem unavailable',array('status'=>500));
   if(($fs->method??'')!=='direct')return new WP_Error('oai_filesystem','Guarded file changes require the local direct filesystem',array('status'=>503));
   $lock=self::target_lock($file);if(is_wp_error($lock))return $lock;
