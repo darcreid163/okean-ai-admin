@@ -298,3 +298,14 @@ A release candidate is publishable only when:
 - deactivation safety reset and automation-mode reset on build change;
 - deterministic Native/Cloud artifacts, SHA-256 provenance and payload secret scans;
 - public health/initialize metadata secret-leak checks.
+
+
+## Exact-head CI and secret-scan update — 19 November 2026
+
+Current PR #232 branch head: `5ae4e9d9f478e289b7cae954d94de5350b3b61ad`. PR remains Draft/open/unmerged; main is unchanged.
+
+- Native exact-head CI [44478492524](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492524): SUCCESS.
+- Cloud Core exact-head CI [44478492520](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492520): SUCCESS.
+- Secret history scan [44478492445](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492445): SUCCESS; 1,855 commits reviewed with no unallowlisted findings.
+
+This closes the automated exact-head CI and repository-history scan checks for this head only. It does not close live OAuth expiry/reconnect (#92), real two-owner acceptance, staging lifecycle/restore, final artifact/legal/privacy review or paid checkout-to-license fulfillment (#203). The release job remains intentionally skipped on PRs. See issue #40 for the canonical gate status. Any documentation commit after this snapshot requires a new exact-head CI run.
