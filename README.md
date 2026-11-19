@@ -1,8 +1,10 @@
 # WP AI Admin — единый основной репозиторий разработки
 
-**Current integrated candidate:** Native **2.1.17** (DB schema 24; build `2.1.17-usage-batch-v1-20261019`) + recovered Cloud Core **0.3.11** (Gateway schema 4); current **unreleased Cloud 0.3.13-dev** adds scoped Skills/Media, read-only Abilities metadata discovery, the hash-only licence registry and the final five-tier daily tariff policy (PR #206, merged). This branch is **not** an approved production release; Cloud deployment and account activation remain separate gates.
+**Current integrated candidate:** Native **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`) + Cloud Core **0.3.13-dev** (Gateway Store schema 4, recovered 0.3.11 baseline). The current combined candidate, including Native 2.1.18, Cloud Store atomic SSE/index hardening, Cloud key preservation and SSE close-race protection, passed exact-head Native and Cloud CI on exact current candidate head `8b5e3c944f2e5fb56b1d7bbb0494f025a8742000` (Native run [44299756727](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756727), Cloud run [44299756819](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756819)). Both workflows passed. Native artifact SHA-256: `ec99ac2065b9dd6a74184e7108d28b934559df8df18562668991558c4881dd94`; Cloud artifact SHA-256: `c56b2a80436250fa1aaa27d1380212aac62f49ed7e3d4377fad9a1a6de6f2c7c`. These are expiring Actions artifacts, not signed releases. PR [#232](https://github.com/darcreid163/okean-ai-admin/pull/232) remains Draft and is not merged. **This is not an approved production release.**
 
-[Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). [Актуальная готовность планов, квот и лицензий на 16 ноября](docs/BETA-READINESS-2026-11-16.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
+**Current release blockers and authoritative status:** [Release Control — 18 November 2026](docs/RELEASE-CONTROL-2026-11-18.md) and [canonical tracker #40](https://github.com/darcreid163/okean-ai-admin/issues/40). [Documentation index](docs/README.md). [Repository security audit](docs/REPOSITORY-SECURITY-AUDIT-2026-11-18.md) records current public visibility and scan limitations. Cloud Store and key-preservation work are integrated into PR #232; source PRs #226/#224 are superseded, not merged. Live OAuth expiry, two-owner isolation, staging acceptance and artifact freeze are still required.
+
+[Текущий контракт подключения](docs/CHATGPT-CONNECTION-CONTRACT-ADDENDUM-2026-11-18.md) — дополнение для Native 2.1.18 / Cloud 0.3.13-dev. Исторические аудиты и документы с датами сохранены как архивные свидетельства, а не как актуальный статус.  [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). [Актуальная готовность планов, квот и лицензий на 16 ноября](docs/BETA-READINESS-2026-11-16.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
 
 ## Один основной репозиторий до завершения проекта
 
@@ -56,6 +58,10 @@ Cloud Gateway applies the same presentation contract to known Native metadata/ev
 [Current audit, 22 October](docs/AUDIT-2026-10-22.md) · [Recovery history, 21 October](docs/RELEASE-STATE-2026-10-21.md) · [Migration / release checklist](MIGRATION-STATUS.md) · [Repository policies](docs/REPOSITORY-BOUNDARIES.md).
 
 Historical dated release notes are preserved as references, not active installation instructions.
+
+## Uninstall и сохранность данных
+
+По умолчанию удаление плагина сохраняет локальную историю операций, аудит, OAuth-подключения, pairing и настройки лицензии. На панели WP AI Admin можно отдельно включить **«Разрешить удаление локальных данных при удалении плагина»**. Только при этом явном согласии `uninstall.php` удаляет allowlist таблиц и настроек WP AI Admin. Деактивация и обновление данные не удаляют; страницы, товары, медиафайлы, пользователи и данные других плагинов не затрагиваются. В Multisite согласие проверяется отдельно для каждого сайта.
 
 ## Историческая точка проверки (22.10.2026)
 

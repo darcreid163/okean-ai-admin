@@ -99,7 +99,7 @@ try{
  ctAssert($content['type']==='page'&&$content['status']==='draft'&&strpos($content['content'],$marker)!==false,'Classic content read is wrong');
  $plan=ctOk(OAI_Content::patch($page_id,'post_content',$marker,$marker.'-patched'),'Plan classic content patch');
  ctAssert(strpos($plan['after'],$marker.'-patched')!==false&&strpos(get_post($page_id)->post_content,$marker.'-patched')===false,'Content planning wrote the post');
- ctOk(OAI_Content::apply_patch($page_id,'post_content',$plan['after']),'Apply classic content patch');
+ ctOk(OAI_Content::apply_patch($page_id,'post_content',$plan['after'],$plan['before']),'Apply classic content patch');
  ctAssert(strpos(get_post($page_id)->post_content,$marker.'-patched')!==false,'Content apply did not persist');
  $unmatched=OAI_Content::patch($page_id,'post_content','text that is not present','other');
  ctAssert(is_wp_error($unmatched)&&$unmatched->get_error_code()==='oai_match','Unmatched content patch was not refused');

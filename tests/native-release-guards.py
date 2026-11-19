@@ -19,7 +19,10 @@ class ReleaseGuardTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / 'tools').mkdir()
         shutil.copy2(ROOT / 'tools/native-release.sh', self.root / 'tools')
-        (self.root / 'okean-ai-admin.php').write_text("<?php\n/**\n * Version: 2.1.17\n */\ndefine('OAI_VERSION','2.1.17');\n")
+        (self.root / 'okean-ai-admin.php').write_text("<?php\n/**\n * Version: 2.1.17\n */\ndefine('OAI_VERSION','2.1.17');\ndefine('OAI_BUILD_ID','2.1.17-test-build');\ndefine('OAI_RELEASE_CHANNEL','commercial_beta');\ndefine('OAI_RELEASE_PROFILE','commercial_beta_candidate');\n")
+        metadata = "WP AI Admin Build Metadata (not a cryptographic signature)\nVersion: 2.1.17\nBuild ID: 2.1.17-test-build\nRelease channel: commercial_beta\nRelease profile: commercial_beta_candidate\n"
+        (self.root / 'BUILD-SIGNATURE.txt').write_text(metadata)
+        (self.root / 'BUILD_SIGNATURE.txt').write_text(metadata)
         (self.root / 'bin').mkdir()
         fake = self.root / 'bin/gh'
         fake.write_text('#!/usr/bin/env python3\nimport json,os,sys\n'
@@ -35,6 +38,7 @@ class ReleaseGuardTests(unittest.TestCase):
             z.writestr('okean-ai-admin/okean-ai-admin.php', '<?php // synthetic Native fixture\n')
         digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         self.archive.with_suffix('.zip.sha256').write_text(f'{digest}  {self.archive.name}\n')
+        (self.root / 'dist/PROVENANCE.json').write_text(json.dumps({'archive': self.archive.name, 'archive_sha256': digest, 'source_commit': 'synthetic'}))
 
     def tearDown(self):
         self.temp.cleanup()
@@ -57,6 +61,17 @@ class ReleaseGuardTests(unittest.TestCase):
                 self.assertNotEqual(self.run_guard('publish', GITHUB_REF=ref, GITHUB_REF_NAME=name).returncode, 0)
         self.assert_no_gh()
 
+    def test_build_metadata_mismatch_blocks_release(self):
+        metadata = self.root / 'BUILD-SIGNATURE.txt'
+        metadata.write_text(metadata.read_text().replace('Build ID: 2.1.17-test-build', 'Build ID: stale-build'))
+        self.assertNotEqual(self.run_guard('validate').returncode, 0)
+        self.assert_no_gh()
+
+    def test_metadata_alias_mismatch_blocks_release(self):
+        (self.root / 'BUILD_SIGNATURE.txt').write_text('different metadata\\n')
+        self.assertNotEqual(self.run_guard('validate').returncode, 0)
+        self.assert_no_gh()
+
     def test_header_mismatch(self):
         plugin = self.root / 'okean-ai-admin.php'
         plugin.write_text(plugin.read_text().replace(' * Version: 2.1.17', ' * Version: 9.9.9'))
@@ -68,9 +83,14 @@ class ReleaseGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = [json.loads(x) for x in (self.root / 'gh.jsonl').read_text().splitlines()]
         self.assertEqual(len(commands), 1)
-        self.assertEqual(commands[0][:5], ['release', 'create', 'v2.1.17', 'dist/wp-ai-admin-2.1.17.zip', 'dist/wp-ai-admin-2.1.17.zip.sha256'])
+        self.assertEqual(commands[0][:6], ['release', 'create', 'v2.1.17', 'dist/wp-ai-admin-2.1.17.zip', 'dist/wp-ai-admin-2.1.17.zip.sha256', 'dist/PROVENANCE.json'])
         self.assertIn('--verify-tag', commands[0])
         self.assertNotIn('--clobber', commands[0])
+
+    def test_missing_provenance_blocks_release(self):
+        (self.root / 'dist/PROVENANCE.json').unlink()
+        self.assertNotEqual(self.run_guard('publish').returncode, 0)
+        self.assert_no_gh()
 
     def test_existing_release_failure_is_not_retried(self):
         self.assertNotEqual(self.run_guard('publish', GH_FIXTURE_EXIT='1').returncode, 0)

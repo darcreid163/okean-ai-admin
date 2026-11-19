@@ -33,6 +33,20 @@ check($actor['site_ids']===[$site['id']] && $actor['scopes']===['mcp:read','mcp:
 check($token['resource']===$url && isset($token['refresh_token']),'Audience or refresh missing');
 rejects(fn()=>$oauth->exchange($exchange,$now,$eligible),'invalid_grant');
 rejects(fn()=>$core->catalog($actor,$other['id'],$now),'scope_or_site_denied');
+// Authenticate the second owner independently and prove isolation in both directions.
+$codeOwner2=$oauth->approve('2',$auth,[$other['id']],$now);
+$exchangeOwner2=$exchange;$exchangeOwner2['code']=$codeOwner2;
+$tokenOwner2=$oauth->exchange($exchangeOwner2,$now,fn($id)=>$id==='2');
+$actorOwner2=$core->authenticate($tokenOwner2['access_token'],$now);
+check($actorOwner2['owner']==='2' && $actorOwner2['site_ids']===[$other['id']],
+    'Second owner received another tenant identity or site consent');
+rejects(fn()=>$core->catalog($actorOwner2,$site['id'],$now),'scope_or_site_denied');
+rejects(fn()=>$core->call($actorOwner2,$site['id'],'wp_get_site',[],'cross-tenant-owner2-to-owner1',$now),
+    'scope_or_site_denied');
+rejects(fn()=>$core->call($actor,$other['id'],'wp_get_site',[],'cross-tenant-owner1-to-owner2',$now),
+    'scope_or_site_denied');
+check($core->usage('1',$now)['used']===0 && $core->usage('2',$now)['used']===0,
+    'Denied cross-tenant calls consumed billable quota');
 $wrongAudience=new OAuth($store,$core,'https://other.example.com/mcp');rejects(fn()=>$wrongAudience->binding($actor,$now),'invalid_or_expired_token');
 $queryQ=$query;$queryQ['client_id']=$qwen['client_id'];$queryQ['redirect_uri']=$qwen['redirect_uris'][0];
 $codeQ=$oauth->approve('1',$oauth->authorization($queryQ),[$site['id']],$now);

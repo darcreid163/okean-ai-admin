@@ -23,7 +23,7 @@ $validate=static function(string $path,bool $pass,string $reason='')use($source,
 };
 try{
     $stage=$root.'/stage';mkdir($stage);
-    foreach(['wp-ai-admin-cloud.php','src','includes','config'] as $name)$copy($source.'/'.$name,$stage.'/'.$name);
+    foreach(['wp-ai-admin-cloud.php','export-keys.php','src','includes','config'] as $name)$copy($source.'/'.$name,$stage.'/'.$name);
     $validate($stage,true);$validate($stage.'/',true);
     $core=$stage.'/src/Core.php';$original=file_get_contents($core);
     file_put_contents($core,$original."\n// post-checkout tamper\n");

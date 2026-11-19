@@ -47,6 +47,14 @@ function plcUpdatePost($id, $title, $excerpt, $content) {
     $req->set_param('content_b64', base64_encode($content));
     return OAI_REST::post_update_draft($req);
 }
+function plcPartialUpdatePost($id, array $changes) {
+    $req = new WP_REST_Request('POST', '/okean-ai/v1/posts/update');
+    $req->set_param('post_id', $id);
+    foreach ($changes as $key => $value) {
+        $req->set_param($key, $value);
+    }
+    return OAI_REST::post_update_draft($req);
+}
 function plcAction($id, $action, $client = 'post-lifecycle-ci') {
     $actor = (int)get_current_user_id();
     return OAI_AI_Lifecycle_Control::perform($id, $action, $client, $actor ?: 1);
@@ -190,6 +198,59 @@ try {
     plcAssert(!is_wp_error($target_post) && $target_post > 0, 'Cannot create update target post');
     $target_post = (int)$target_post;
     $cleaned[] = $target_post;
+
+    /* Partial updates must preserve every field that the caller omitted. */
+    $partial_title = plcOk(plcPartialUpdatePost($target_post, array(
+        'title' => 'WP AI Partial Title Only',
+    )), 'Plan title-only partial update');
+    $partial_after = $partial_title['after_data'] ?? array();
+    plcAssert(($partial_after['title'] ?? null) === 'WP AI Partial Title Only'
+        && ($partial_after['excerpt'] ?? null) === $orig_excerpt
+        && ($partial_after['content'] ?? null) === $orig_content,
+        'Title-only plan changed or blanked omitted excerpt/content fields');
+    $partial_title_id = (int)$partial_title['id'];
+    plcOk(plcAction($partial_title_id, 'approve'), 'Approve title-only partial update');
+    plcOk(plcAction($partial_title_id, 'apply'), 'Apply title-only partial update');
+    $partial_title_post = get_post($target_post);
+    plcAssert((string)$partial_title_post->post_title === 'WP AI Partial Title Only'
+        && (string)$partial_title_post->post_excerpt === $orig_excerpt
+        && hash_equals(hash('sha256', (string)$partial_title_post->post_content), hash('sha256', $orig_content)),
+        'Title-only Apply did not preserve omitted excerpt/content');
+    plcOk(plcAction($partial_title_id, 'rollback'), 'Rollback title-only partial update');
+    $partial_title_restored = get_post($target_post);
+    plcAssert((string)$partial_title_restored->post_title === $orig_title
+        && (string)$partial_title_restored->post_excerpt === $orig_excerpt
+        && hash_equals(hash('sha256', (string)$partial_title_restored->post_content), hash('sha256', $orig_content)),
+        'Title-only Rollback did not restore the exact original post');
+
+    // An explicitly supplied empty base64 value is a deliberate clear, not an omitted field.
+    $partial_empty = plcOk(plcPartialUpdatePost($target_post, array(
+        'excerpt_b64' => '',
+    )), 'Plan explicit empty excerpt update');
+    $partial_empty_after = $partial_empty['after_data'] ?? array();
+    plcAssert(($partial_empty_after['title'] ?? null) === $orig_title
+        && ($partial_empty_after['excerpt'] ?? null) === ''
+        && ($partial_empty_after['content'] ?? null) === $orig_content,
+        'Explicit empty excerpt was not distinguished from omitted fields');
+    $partial_empty_id = (int)$partial_empty['id'];
+    plcOk(plcAction($partial_empty_id, 'approve'), 'Approve explicit empty excerpt update');
+    plcOk(plcAction($partial_empty_id, 'apply'), 'Apply explicit empty excerpt update');
+    $empty_applied = get_post($target_post);
+    plcAssert((string)$empty_applied->post_excerpt === ''
+        && (string)$empty_applied->post_title === $orig_title
+        && hash_equals(hash('sha256', (string)$empty_applied->post_content), hash('sha256', $orig_content)),
+        'Explicit empty excerpt Apply changed unrelated fields');
+    plcOk(plcAction($partial_empty_id, 'rollback'), 'Rollback explicit empty excerpt update');
+    $empty_restored = get_post($target_post);
+    plcAssert((string)$empty_restored->post_excerpt === $orig_excerpt
+        && (string)$empty_restored->post_title === $orig_title
+        && hash_equals(hash('sha256', (string)$empty_restored->post_content), hash('sha256', $orig_content)),
+        'Explicit empty excerpt Rollback did not restore original fields');
+
+    plcErr(plcPartialUpdatePost($target_post, array('content_b64' => '%%%invalid-base64%%%')),
+        'oai_payload', 'Malformed base64 partial field was accepted');
+    plcErr(plcPartialUpdatePost($target_post, array('title' => 'ambiguous', 'title_b64' => base64_encode('other'))),
+        'oai_payload_ambiguous', 'Ambiguous plain/base64 field pair was accepted');
 
     $upd_title = 'WP AI Update Changed';
     $upd_excerpt = 'changed excerpt';

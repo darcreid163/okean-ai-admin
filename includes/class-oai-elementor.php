@@ -218,9 +218,13 @@ class OAI_Elementor {
  }
  private static function is_list($a){if(function_exists('array_is_list'))return array_is_list($a);$i=0;foreach($a as $k=>$v){if($k!==$i++)return false;}return true;}
 
- public static function save_settings($target,$settings){
+ public static function save_settings($target,$settings,$expected_sha256=''){
   $parts=explode(':',(string)$target,2); $post_id=absint($parts[0]??0); $node_id=sanitize_text_field($parts[1]??'');
+  if(!is_string($expected_sha256)||!preg_match('/^[a-f0-9]{64}$/D',$expected_sha256))return new WP_Error('oai_snapshot_required','Elementor settings Apply requires the approved before-snapshot SHA-256',array('status'=>400));
   $ref=self::find_node($post_id,$node_id); if(is_wp_error($ref))return $ref;
+  $current_settings=is_array($ref['node']['settings']??null)?$ref['node']['settings']:array();
+  $current_json=wp_json_encode($current_settings,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  if(!is_string($current_json)||!hash_equals($expected_sha256,hash('sha256',$current_json)))return new WP_Error('oai_snapshot_mismatch','Elementor widget settings changed immediately before save',array('status'=>409,'current_sha256'=>is_string($current_json)?hash('sha256',$current_json):null));
   $data=$ref['data']; $changed=false;
   $walk=function(&$nodes) use (&$walk,$node_id,$settings,&$changed){
    if(!is_array($nodes)||$changed)return;

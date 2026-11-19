@@ -30,7 +30,7 @@ issued only for `offline_access` (see `CHATGPT-CONNECTION-CONTRACT.md` §3.B.5).
    the client can explicitly request `offline_access`.
 2. One central account with two registered sites (for example
    `wpaiadmin.ru` and `okean.market`) and explicit selection of both sites.
-3. Native 2.1.17 and Cloud Core 0.3.13-dev (or the exact candidate under test);
+3. Native 2.1.18 (DB25) and Cloud Core 0.3.13-dev (Gateway Store schema 4), or the exact candidate under test;
    record the actual installed versions and file hashes separately.
 4. Sanitized access to central/native logs that shows status codes and error
    codes but never token or code values.

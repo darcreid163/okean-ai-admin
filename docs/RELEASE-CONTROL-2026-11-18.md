@@ -1,0 +1,111 @@
+# Release control — 18 November 2026
+
+**Canonical release tracker:** [GitHub issue #40](https://github.com/darcreid163/okean-ai-admin/issues/40)  
+**Release freeze checklist:** [issue #212](https://github.com/darcreid163/okean-ai-admin/issues/212)  
+**Integration PR:** [#232 — Native 2.1.18 / DB25](https://github.com/darcreid163/okean-ai-admin/pull/232)
+
+## 1. Authoritative source state
+
+| Component | Current candidate | State |
+|---|---|---|
+| Native plugin | 2.1.18, DB schema 25, build `2.1.18-native-rate-limit-hpos-v1-20261117` | Candidate in PR #232 |
+| Cloud Core | 0.3.13-dev, Gateway Store schema 4 (recovered 0.3.11 baseline) | Candidate source; not a production release |
+| Main | `1e459dc6fd6ede2db6e15145c6aa66c9b4d81f5a` | Unchanged |
+| Integration branch | `release/native-2.1.18-integration-20261118` | Native 2.1.18 + Cloud Store/key-preservation merge candidate; see current PR #232 head |
+| PR #232 | Draft, open, base `main` | Not merged |
+
+The current integration head `8b5e3c944f2e5fb56b1d7bbb0494f025a8742000` passed exact-head CI:
+
+- Native workflow [44299756727](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756727): PASS — PHP 8.2/8.3/8.4, pinned WordPress 7.0.6 + Elementor 4.3.3 + WooCommerce 11.1.2 smoke, latest compatibility smoke, WooCommerce 11.3 HPOS smoke, deterministic Native artifact/provenance and install/boot on WordPress 7.0.6/latest. Release job is skipped on PRs by design.
+- Cloud workflow [44299756819](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756819): PASS — PHP 8.2/8.3/8.4 contracts, SQLite/MySQL migration/OAuth/tenant-isolation/billing contracts, browser pairing/OAuth navigation, WordPress 7.0.6/latest upgrade and backup-restore checks, and Cloud candidate artifact.
+- Native artifact `14424803049`, SHA-256 `ec99ac2065b9dd6a74184e7108d28b934559df8df18562668991558c4881dd94`.
+- Cloud artifact `14424589748`, SHA-256 `c56b2a80436250fa1aaa27d1380212aac62f49ed7e3d4377fad9a1a6de6f2c7c`.
+- These are expiring GitHub Actions artifacts, not signed public releases.
+
+Stream close retains pending reservations and undrained replies while revoking transient auth context. Legacy SSE still has no client acknowledgement/replay after socket disconnect and remains best-effort; use Streamable HTTP when replay is required. CI does not prove installed production files, live Cloud configuration, external ChatGPT expiry behavior, or owner acceptance. The connection contract addendum for this candidate is `docs/CHATGPT-CONNECTION-CONTRACT-ADDENDUM-2026-11-18.md`.
+
+## 2. Integrated in PR #232
+
+- Native 2.1.18 / DB25 atomic persistent rate-limit admission and WooCommerce HPOS declaration/acceptance.
+- Uninstall data preservation by default, with explicit opt-in cleanup policy.
+- OAuth client registry schema v2, bounded registration and safe expiry retention.
+- REST Bearer hash-at-rest migration; plaintext legacy options are removed only after verified hash persistence.
+- Strict media-creation single-winner claim.
+- Read-only WordPress Abilities discovery/schema compatibility. Arbitrary Ability execution remains disabled.
+- File path/symlink/snapshot hardening; public reads capped at 2 MB, internal Apply/Verify supports the 5 MB write limit.
+- Staged same-directory file replacement with complete write/hash verification and rename; no delete-before-rename or copy/unlink fallback.
+- Editor/content snapshot conflict guards.
+- File lifecycle and interrupted-Apply recovery regression coverage.
+
+The staged rename strategy intentionally fails closed if the platform cannot replace an existing file. Windows replacement semantics and power-loss durability have not been qualified; do not claim universal atomic replacement across operating systems.
+
+## 3. Remaining release gates
+
+### Cloud Store and key preservation — integrated and CI-qualified
+
+The selected changes from PR #226 and stacked PR #224 are present in PR #232. Source file blobs were compared directly; the integration branch contains the full implementation plus superset validation workflow and upgrade/restore assertions. No duplicate cherry-pick is required. The source PRs are superseded, not merged, and their branch history is retained.
+
+Included: bounded durable SSE queue reservations before Gateway execution, transactional completion/cancellation and atomic drain; owner-scoped Store indexes; SQLite collision guards; MySQL prefix/table limits; additive schema-v4 migration; CLI-only exact-key export to a private 0600 file outside the web root; and upgrade/restore key identity tests.
+
+Key export preserves the currently effective vault/signing keys. It does not rotate either key. Actual key rotation remains out of scope and requires a separate migration/trust-rollover procedure.
+
+### P0 — external/manual acceptance
+
+- [Issue #92](https://github.com/darcreid163/okean-ai-admin/issues/92): observe real ChatGPT access-token expiry and confirm automatic renewal or a clear, safe reconnect path. No token values in evidence.
+- Two independent account owners: prove negative cross-tenant isolation, selected-site enforcement, revocation and replay denial.
+- Clean external ChatGPT/MCP client: consent, PKCE, site selection, tool catalog and revoke/reconnect.
+- Disposable production-like staging: one full Read → Sandbox → Approval → Apply → Verify → Receipt/Proof → Rollback → Verify cycle; clean install, upgrade, paired backup/restore and post-restore identity check.
+- Final artifact freeze: exact source commit, Native-only ZIP, separate Cloud package, checksums/provenance, dependency/license notices, secret scan and install test.
+- Legal/privacy/terms, retention, support and vulnerability-reporting process for the actual release geography and product model.
+
+No live site was accessed for this review. The last recorded live Cloud plan observation is dated 16 November and must not be treated as current.
+
+## 4. Commercial scope — decide what is being released
+
+The approved quota catalogue is five daily UTC tiers: Free 50, Daily 500, Pro 2,000, PRO+ 5,000, PRO++ 10,000 actions. Daily price remains unset; monthly prices remain as separately approved. Existing legacy account terms must not be silently migrated or repriced. Cloud Gateway Ledger remains the charging authority; successful Batch objects are counted individually. Automatic money debits and auto-renewal remain disabled.
+
+- [Issue #203](https://github.com/darcreid163/okean-ai-admin/issues/203): YooKassa checkout and paid-order-to-license fulfillment are not implemented/qualified. This blocks a self-service paid launch. A closed/free beta can proceed only with explicit manual license provisioning and no claim of automatic payment fulfillment.
+- [Issues #168/#169](https://github.com/darcreid163/okean-ai-admin/issues/168): WooCommerce shipping, tax and full store-settings surfaces remain incomplete. They are post-beta scope unless the product is marketed as a complete WooCommerce administration suite.
+- [Issue #200](https://github.com/darcreid163/okean-ai-admin/issues/200): first-party Application Password provisioning/label is not yet a Native feature; current Native uses credentials created by the external connection flow. Defer unless the release explicitly promises first-party credential creation.
+- Arbitrary Ability execution, broad Skills expansion, Divi/SeedProd and speculative builder adapters stay out of scope.
+
+## 5. Repository housekeeping decisions
+
+- PR #207, #213, #222, #223 and #225 are source branches whose selected work is now integrated into PR #232. Keep their history; close them as **superseded, not merged** only after this exact-head integration remains green and their final diffs are confirmed represented.
+- PR #226 and stacked PR #224 are closed as superseded, not merged; their selected changes are integrated in PR #232, and their branches/history are retained.
+- PR #197 (OpenCode configuration cleanup) is unrelated to release qualification; defer it.
+- Issues #20's original 2.0.74 audit scope is closed as completed. Issues #36 and #38 are retained as historical QA/source-access records with current status notes. #92, #203, #218, #220 and #212 remain open for their outstanding acceptance dependencies. Issues #214/#216 are closed as completed by the integrated Cloud Store work.
+- The repository has many historical branches (the first API page alone contains 100). Do not mass-delete by age. Delete only branches whose PR is merged/closed, whose commits are reachable from the retained integration/main history, and whose unique work has been reviewed. Preserve unmerged historical evidence.
+- Dated audit/readiness documents are historical snapshots, not live status. Use this file and #40 for current release state.
+
+## 6. Safe release sequence
+
+1. Complete external OAuth expiry, two-owner tenant isolation and staging lifecycle/restore acceptance.
+2. Freeze and inspect exact Native-only and Cloud artifacts; confirm checksums, provenance, licenses and secret scans.
+3. Obtain owner approval for the selected release type: closed/free beta or self-service paid release.
+4. Only after explicit approval: merge, tag, publish, split public Native/private Cloud repositories, and separately schedule deployment with backup and rollback.
+
+Until those gates are complete, this project is a **green-CI release candidate**, not an approved production release.
+
+## 7. Platform qualification follow-up — issue #233
+
+The current same-directory staging + rename implementation has only been qualified by the Linux-based CI environment. It deliberately fails closed when replacement rename is unsupported and does not use a delete-old-file or copy/unlink fallback. Do not describe this as universally atomic across platforms.
+
+Before claiming Windows support or power-loss durability, run a dedicated disposable platform matrix:
+- Windows PHP 8.2/8.3/8.4: replace an existing regular file, preserve the original on every injected pre-commit failure, verify mode/ownership expectations where supported, and reject symlink/reparse-point escapes.
+- Linux and Windows: simulate short writes, failed flush, rename failure, target replacement races, stale snapshots, and process interruption at each staging boundary.
+- After every rejected/ambiguous Apply, verify the original target hash and the operation ledger state; never clean up an artifact whose ownership is uncertain.
+- Record filesystem, PHP build, OS version and exact source SHA with the result. Until the matrix passes, keep Windows replacement semantics and power-loss durability explicitly unsupported/unqualified.
+
+Issue #233 is the canonical owner of this follow-up. This work is a release qualification requirement only if Windows is included in the supported deployment promise; otherwise retain the documented fail-closed limitation and defer broader platform guarantees.
+
+
+## Exact-head reconciliation — 19 November 2026
+
+The authoritative PR #232 API reports this branch at `5ae4e9d9f478e289b7cae954d94de5350b3b61ad`, targeting `main`. PR #232 remains OPEN, DRAFT and UNMERGED. The main branch is unchanged.
+
+- Native exact-head workflow [44478492524](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492524): **SUCCESS** — PHP 8.2/8.3/8.4; pinned WordPress 7.0.6 + Elementor 4.3.3 + WooCommerce 11.1.2; latest compatibility; WooCommerce 11.3.0 HPOS; deterministic artifact/provenance; package install/boot on WordPress 7.0.6 and latest. PR release job skipped by policy.
+- Cloud Core exact-head workflow [44478492520](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492520): **SUCCESS** — PHP 8.2/8.3/8.4 contracts, SQLite/MySQL OAuth/tenant-isolation/billing/SSE contracts, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
+- Secret history scan PR run [44478492445](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492445): **SUCCESS**. The all-ref scan reviewed 1,855 commits; no unallowlisted findings. Exact false-positive fingerprints are documented in `.gitleaksignore` and `docs/SECRET-SCAN-ALLOWLIST.md`.
+
+These results supersede earlier exact-head snapshots in this file; historical run links are retained as history, not current status. This is a green-CI candidate, not release approval. Manual OAuth expiry/reconnect (#92), two-owner external isolation, external MCP lifecycle, staging mutation/restore, final artifact/license/privacy review remain open. Paid self-service fulfillment (#203) is not qualified. Windows replacement qualification remains deferred (#233/#234). No merge, tag, publication or deployment is authorized.

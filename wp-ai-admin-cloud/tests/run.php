@@ -6,6 +6,9 @@ use WPAICloudGateway\{Fault,Security,Vault,Signer,Gateway,Core};
 $checks=0;
 function check(bool $ok,string $message): void { global $checks; $checks++; if (!$ok) throw new RuntimeException($message); }
 function rejects(callable $fn,string $reason): void { try {$fn();} catch(Fault $e) { check($e->reason===$reason,'Expected '.$reason.', got '.$e->reason); return; } throw new RuntimeException('Expected rejection: '.$reason); }
+$longPrefixStore=new WPAICloudGateway\Store(new PDO('sqlite::memory:'),str_repeat('p',45));
+check(strlen(trim($longPrefixStore->table('license_activations'),chr(96)))===64,'Maximum valid table prefix must keep MySQL table identifiers within 64 characters');
+rejects(fn()=>new WPAICloudGateway\Store(new PDO('sqlite::memory:'),str_repeat('p',46)),'invalid_table_prefix');
 $now=1790942400; // fixed UTC fixture, independent of WordPress/site timezone
 $database=sys_get_temp_dir().'/wpai-cloud-'.bin2hex(random_bytes(8)).'.sqlite';
 $store=fixtureStore($database); $store->migrate();
@@ -18,6 +21,25 @@ $other=$core->connect('2','https://other.example.com','fixture-site-admin-token-
 check(count($core->sites('1'))===2,'Tenant site list leaked');
 $repeatSite=$core->connect('1','https://site-a.example.com','fixture-site-admin-token-aaaaaaaa',$now);
 check($repeatSite['id']===$site['id']&&count($core->sites('1'))===2,'Same-account repeat connection must preserve the active registration');
+$healthyCredential=$core->diagnoseSiteCredential('1',$site['id']);
+check($healthyCredential['vault_binding_valid']===true && $healthyCredential['site_token_format_valid']===true && $healthyCredential['failure']===null,'Read-only credential diagnostic rejected a valid site secret');
+check(!array_key_exists('token',$healthyCredential) && !array_key_exists('ciphertext',$healthyCredential),'Credential diagnostic exposed secret material');
+$beforeDiagnosticCalls=$transport->executions;
+$healthyConnection=$core->diagnoseSiteConnection('1',$site['id']);
+check($healthyConnection['credential']['vault_binding_valid']===true && $healthyConnection['upstream']['catalog_received']===true,'Connection diagnostic did not validate the upstream catalog');
+check($healthyConnection['upstream']['passed']===true && $healthyConnection['upstream']['missing_tools']===[],'Connection diagnostic did not find all seven required read tools');
+check($healthyConnection['billable_actions']===0 && $healthyConnection['writes_tested']===false && $transport->executions===$beforeDiagnosticCalls,'Read-only diagnostic consumed quota or dispatched a site tool');
+check(!array_key_exists('token',$healthyConnection) && !array_key_exists('ciphertext',$healthyConnection),'Connection diagnostic exposed secret material');
+
+$wrongVaultCore=fixtureCore($store,$transport,100,str_repeat('z',32));
+$wrongKeyDiagnostic=$wrongVaultCore->diagnoseSiteCredential('1',$site['id']);
+check($wrongKeyDiagnostic['sealed_payload_format_valid']===true && $wrongKeyDiagnostic['vault_binding_valid']===false && $wrongKeyDiagnostic['failure']==='secret_binding_failed','Credential diagnostic did not distinguish a vault binding failure');
+check($wrongKeyDiagnostic['vault_key_loaded']===true && $wrongKeyDiagnostic['decryption_attempted']===true && $wrongKeyDiagnostic['credential_readable']===false,'Vault diagnostic did not report successful key loading and failed credential decryption');
+check($wrongKeyDiagnostic['status_key_present']===null && $wrongKeyDiagnostic['site_token_format_valid']===null && $wrongKeyDiagnostic['binding_failure_class']==='authentication_failed_unknown_cause','Unreadable ciphertext must not be misreported as a missing status key or malformed token');
+check($wrongKeyDiagnostic['binding_context']==='site:1:'.$site['id'],'Diagnostic binding context does not match the exact owner and registration ID');
+$wrongConnection=$wrongVaultCore->diagnoseSiteConnection('1',$site['id']);
+check($wrongConnection['upstream']['attempted']===false && $wrongConnection['upstream']['blocked_by']==='credential_check_failed','Connection diagnostic attempted upstream access after Vault failure');
+
 rejects(fn()=>$core->connect('2','https://site-a.example.com','fixture-site-admin-token-aaaaaaaa',$now),'site_already_registered');
 $read=$core->mint('1',[$site['id']],['mcp:read'],$now);
 $write=$core->mint('1',[$site['id'],$site2['id']],['mcp:read','mcp:write'],$now);
@@ -209,5 +231,205 @@ for($i=0;$i<10;$i++) { $pipes=[]; $handle=proc_open([...$command,'same-logical-a
 foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])); $err=stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit=proc_close($handle); check($exit===0 && in_array($out,['success','request_outcome_pending_reconciliation'],true),'Duplicate worker failed: '.$err.' '.$out); }
 check($core->usage('duplicate',$now)['used']===1 && $core->usage('duplicate',$now)['reserved']===0 && count(file($executionLog))===1,'Concurrent duplicate action executed or charged more than once');
 putenv('CLOUD_TEST_TOKEN'); putenv('CLOUD_TEST_EXECUTION_LOG'); unlink($executionLog);
+
+// OAuth tenant-binding and refresh-token replay contract.
+require_once dirname(__DIR__).'/src/OAuth.php';
+$oauth=new WPAICloudGateway\OAuth($store,$core,'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp');
+$oauthClient=$oauth->register(['client_name'=>'Tenant isolation fixture','redirect_uris'=>['https://client.example.invalid/callback']],$now);
+$verifier=str_repeat('v',64);
+$challenge=WPAICloudGateway\Security::b64(hash('sha256',$verifier,true));
+$authorization=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code',
+    'scope'=>'mcp:read offline_access',
+    'code_challenge'=>$challenge,
+    'code_challenge_method'=>'S256',
+    'state'=>'tenant-isolation-state',
+]);
+$oauthCode=$oauth->approve('1',$authorization,[$site['id']],$now);
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$oauthCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$verifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='2'),'access_denied');
+$oauthToken=$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$oauthCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$verifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='1');
+check(isset($oauthToken['access_token'],$oauthToken['refresh_token']),'OAuth offline grant did not issue both credentials');
+$oauthActor=$core->authenticate($oauthToken['access_token'],$now);
+$oauth->binding($oauthActor,$now);
+check($oauthActor['owner']==='1' && $oauthActor['site_ids']===[$site['id']],'OAuth grant owner/site binding changed');
+$refreshed=$oauth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
+    'refresh_token'=>$oauthToken['refresh_token'],
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+60,fn($owner)=>$owner==='1');
+check(isset($refreshed['access_token'],$refreshed['refresh_token']),'Refresh did not rotate credentials');
+rejects(fn()=>$core->authenticate($oauthToken['access_token'],$now+60),'invalid_or_expired_token');
+$refreshedActor=$core->authenticate($refreshed['access_token'],$now+60);
+$oauth->binding($refreshedActor,$now+60);
+check($refreshedActor['owner']==='1' && $refreshedActor['site_ids']===[$site['id']],'Refresh changed owner/site binding');
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
+    'refresh_token'=>$oauthToken['refresh_token'],
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+120,fn($owner)=>$owner==='1'),'invalid_grant');
+rejects(fn()=>$oauth->binding($refreshedActor,$now+120),'invalid_or_expired_token');
+$otherOAuth=$oauth->register(['client_name'=>'Second tenant client','redirect_uris'=>['https://other-client.example.invalid/callback']],$now);
+$otherVerifier=str_repeat('w',64);
+$otherAuth=$oauth->authorization([
+    'client_id'=>$otherOAuth['client_id'],
+    'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read offline_access',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$otherVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'second-tenant-state',
+]);
+$otherCode=$oauth->approve('2',$otherAuth,[$other['id']],$now);
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$otherOAuth['client_id'],
+    'code'=>$otherCode,'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'code_verifier'=>$otherVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='1'),'access_denied');
+$otherToken=$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$otherOAuth['client_id'],
+    'code'=>$otherCode,'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'code_verifier'=>$otherVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='2');
+$otherActor=$core->authenticate($otherToken['access_token'],$now);
+$oauth->binding($otherActor,$now);
+check($otherActor['owner']==='2' && $otherActor['site_ids']===[$other['id']],'Second tenant OAuth grant crossed owner/site boundary');
+$oauth->revoke($otherToken['refresh_token'],$otherOAuth['client_id']);
+rejects(fn()=>$oauth->binding($otherActor,$now),'invalid_or_expired_token');
+
+
+// OAuth negative-path regression coverage: one-time codes, client/resource
+// binding, expiry, and client-scoped revocation. All identities are synthetic.
+$foreignClient=$oauth->register([
+    'client_name'=>'Wrong-client fixture',
+    'redirect_uris'=>['https://wrong-client.example.invalid/callback'],
+],$now);
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$foreignClient['client_id'],
+    'refresh_token'=>$oauthToken['refresh_token'],
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+90,fn($owner)=>true),'invalid_grant');
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$oauthCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$verifier,'resource'=>'https://gateway.example.com/wp-json/other',
+],$now+90,fn($owner)=>true),'invalid_grant');
+
+// A successfully exchanged authorization code is strictly single-use.
+$replayVerifier=str_repeat('r',64);
+$replayAuth=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$replayVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'single-use-code-state',
+]);
+$replayCode=$oauth->approve('1',$replayAuth,[$site['id']],$now);
+$replayParams=[
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$replayCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$replayVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+];
+$replayIssued=$oauth->exchange($replayParams,$now,fn($owner)=>$owner==='1');
+rejects(fn()=>$oauth->exchange($replayParams,$now+1,fn($owner)=>true),'invalid_grant');
+$replayActor=$core->authenticate($replayIssued['access_token'],$now+1);
+$oauth->binding($replayActor,$now+1);
+
+// Authorization codes expire at the five-minute boundary.
+$expiredVerifier=str_repeat('e',64);
+$expiredAuth=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$expiredVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'expired-code-state',
+]);
+$expiredCode=$oauth->approve('1',$expiredAuth,[$site['id']],$now);
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$expiredCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$expiredVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+300,fn($owner)=>true),'invalid_grant');
+
+// Expired refresh credentials cannot be used even when the account is active.
+$expiryVerifier=str_repeat('x',64);
+$expiryAuth=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read offline_access',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$expiryVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'expired-refresh-state',
+]);
+$expiryCode=$oauth->approve('1',$expiryAuth,[$site['id']],$now);
+$expiryToken=$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$expiryCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$expiryVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='1');
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
+    'refresh_token'=>$expiryToken['refresh_token'],
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+2592000,fn($owner)=>true),'invalid_grant');
+
+
+// Account suspension must atomically invalidate outstanding OAuth codes,
+// access grants and site credentials without affecting another tenant.
+$ownerTwoVerifier=str_repeat('2',64);
+$ownerTwoAuth=$oauth->authorization([
+    'client_id'=>$otherOAuth['client_id'],
+    'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read offline_access',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$ownerTwoVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'suspension-control-tenant',
+]);
+$ownerTwoCode=$oauth->approve('2',$ownerTwoAuth,[$other['id']],$now);
+$ownerTwoToken=$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$otherOAuth['client_id'],
+    'code'=>$ownerTwoCode,'redirect_uri'=>'https://other-client.example.invalid/callback',
+    'code_verifier'=>$ownerTwoVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now,fn($owner)=>$owner==='2');
+$ownerTwoActor=$core->authenticate($ownerTwoToken['access_token'],$now);
+$oauth->binding($ownerTwoActor,$now);
+// A foreign OAuth client cannot revoke another client's live grant.
+$oauth->revoke($ownerTwoToken['refresh_token'],$oauthClient['client_id']);
+$stillActiveAfterWrongClientRevoke=$core->authenticate($ownerTwoToken['access_token'],$now);
+$oauth->binding($stillActiveAfterWrongClientRevoke,$now);
+
+$pendingVerifier=str_repeat('p',64);
+$pendingAuth=$oauth->authorization([
+    'client_id'=>$oauthClient['client_id'],
+    'redirect_uri'=>'https://client.example.invalid/callback',
+    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+    'response_type'=>'code','scope'=>'mcp:read',
+    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$pendingVerifier,true)),
+    'code_challenge_method'=>'S256','state'=>'suspension-pending-code',
+]);
+$pendingCode=$oauth->approve('1',$pendingAuth,[$site['id']],$now);
+$suspension=$core->suspendAccount('1',$now+10);
+check($suspension['suspended']===true && $suspension['access_revoked']===true,'Account suspension did not report access revocation');
+rejects(fn()=>$core->authenticate($replayIssued['access_token'],$now+10),'invalid_or_expired_token');
+rejects(fn()=>$oauth->exchange([
+    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
+    'code'=>$pendingCode,'redirect_uri'=>'https://client.example.invalid/callback',
+    'code_verifier'=>$pendingVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
+],$now+10,fn($owner)=>true),'invalid_grant');
+$stillActiveOtherTenant=$core->authenticate($ownerTwoToken['access_token'],$now+10);
+$oauth->binding($stillActiveOtherTenant,$now+10);
+check($stillActiveOtherTenant['owner']==='2' && $stillActiveOtherTenant['site_ids']===[$other['id']],'Suspending one owner affected another tenant');
+
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
 if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
