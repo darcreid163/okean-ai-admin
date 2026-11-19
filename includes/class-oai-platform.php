@@ -116,7 +116,9 @@ class OAI_Platform {
   $add('identity.installation_id',self::installation_id()!=='',array('installation_id'=>self::installation_id()));
   $add('database.connection',isset($wpdb)&&$wpdb->dbh,array('prefix'=>isset($wpdb)?$wpdb->prefix:null));
   $add('wordpress.rest',function_exists('register_rest_route'));
-  $add('oauth.schema_version',class_exists('OAI_MCP_OAuth')&&OAI_MCP_OAuth::SCHEMA_VERSION===1&&(int)get_option('oai_oauth_schema_version',0)===1);
+  $oauth_schema_version=class_exists('OAI_MCP_OAuth')?(int)OAI_MCP_OAuth::SCHEMA_VERSION:0;
+  $installed_oauth_schema_version=(int)get_option('oai_oauth_schema_version',0);
+  $add('oauth.schema_version',$oauth_schema_version>0&&$installed_oauth_schema_version===$oauth_schema_version,array('expected_schema_version'=>$oauth_schema_version,'installed_schema_version'=>$installed_oauth_schema_version));
   $release=self::release_profile();
   $add('commercial.release_profile',
    defined('OAI_VERSION')&&version_compare(OAI_VERSION,'2.1.0','>=')
@@ -165,7 +167,8 @@ class OAI_Platform {
     if((string)$found!==$table)$oauth_tables_ok=false;
    }
   }else $oauth_tables_ok=false;
-  $add('commercial.oauth_schema_ready',$oauth_tables_ok&&(int)get_option('oai_oauth_schema_version',0)===1,array('schema_version'=>(int)get_option('oai_oauth_schema_version',0)));
+  $oauth_schema_ready=$oauth_tables_ok&&$oauth_schema_version>0&&$installed_oauth_schema_version===$oauth_schema_version;
+  $add('commercial.oauth_schema_ready',$oauth_schema_ready,array('schema_version'=>$installed_oauth_schema_version,'expected_schema_version'=>$oauth_schema_version,'tables_ready'=>$oauth_tables_ok));
   $admin_source=(string)@file_get_contents(OAI_DIR.'includes/class-oai-admin.php');
   $generic_test_defaults=class_exists('OAI_Test_Automation')
    &&OAI_Test_Automation::FILE_PREFIX==='wp-ai-admin-tests/'
@@ -176,11 +179,15 @@ class OAI_Platform {
   $add('commercial.generic_test_defaults',$generic_test_defaults,array('file_prefix'=>class_exists('OAI_Test_Automation')?OAI_Test_Automation::FILE_PREFIX:null));
   $admin_ui_ok=class_exists('OAI_Admin')
    &&OAI_Admin::OPERATIONS_PER_PAGE===25
-   &&strpos($admin_source,'oai_disconnect_all')!==false
-   &&strpos($admin_source,'Подключённые клиенты · отключение')===false
-   &&strpos($admin_source,'name="oai_test_automation_posts[]"')!==false
-   &&strpos($admin_source,"'post_status'=>array('draft','private')")!==false;
-  $add('commercial.admin_ui_contract',$admin_ui_ok,array('operations_per_page'=>class_exists('OAI_Admin')?OAI_Admin::OPERATIONS_PER_PAGE:null));
+   &&OAI_Admin::ACTION_TABLE_LIMIT===50
+   &&method_exists('OAI_Admin','page')
+   &&strpos($admin_source,'oai_disconnect_all')!==false;
+  $add('commercial.admin_ui_contract',$admin_ui_ok,array(
+   'operations_per_page'=>class_exists('OAI_Admin')?OAI_Admin::OPERATIONS_PER_PAGE:null,
+   'action_table_limit'=>class_exists('OAI_Admin')?OAI_Admin::ACTION_TABLE_LIMIT:null,
+   'page_handler'=>class_exists('OAI_Admin')&&method_exists('OAI_Admin','page'),
+   'disconnect_action'=>strpos($admin_source,'oai_disconnect_all')!==false
+  ));
   $add('control_plane.entitlement_verifier',class_exists('OAI_Control_Plane')&&OAI_Control_Plane::CONTRACT_VERSION===1&&method_exists('OAI_Control_Plane','verify'),array('sodium_available'=>function_exists('sodium_crypto_sign_verify_detached'),'remote_enforcement'=>false));
   $caps=OAI_Capabilities::available();
   $execution=OAI_WP_CLI_Execution::readiness();
