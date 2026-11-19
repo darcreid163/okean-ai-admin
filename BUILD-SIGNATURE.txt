@@ -3,10 +3,11 @@ Version: 2.1.18
 Build ID: 2.1.18-native-rate-limit-hpos-v1-20261117
 Release channel: commercial_beta
 Release profile: commercial_beta_candidate
-Purpose: atomic Native rate-limit admission, additive DB v25 migration, WooCommerce HPOS compatibility and WooCommerce 11.3.0 order lifecycle acceptance
-Expected catalog: 120 tools
-Inherited self-test checks: 79 (runtime retest required after installation)
-Security fuzz at 10 iterations: 220 (runtime retest required after installation)
+Purpose: atomic Native rate-limit admission, additive DB v25 migration, WooCommerce HPOS compatibility, WooCommerce 11.3.0 order lifecycle acceptance, and OAuth self-test contract repair
+Expected catalog: 128 tools (verified on wpaiadmin.ru, 2026-11-19)
+Inherited self-test checks: 79 (live result: 79 PASS / 0 FAIL on 2026-11-19)
+Security fuzz at 10 iterations: 220 checks (live result: 220 PASS / 0 FAIL on 2026-11-19)
+OAuth schema: version 2; self-test expected version is derived from OAI_MCP_OAuth::SCHEMA_VERSION
 Direct live writes: false
 Production default: human approval only
 AI Lifecycle and Test Automation: administrator opt-in, client-bound and build-bound
