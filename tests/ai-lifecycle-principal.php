@@ -89,6 +89,17 @@ OAI_DB::$row=array(
  'meta_data'=>'{}',
 );
 check(!is_wp_error(OAI_AI_Lifecycle_Control::enable(7)),'administrator can enable lifecycle control');
+check(OAI_AI_Lifecycle_Control::is_enabled_for_principal(7),'enabled AI lifecycle is available to its configured administrator');
+check(!OAI_AI_Lifecycle_Control::is_enabled_for_principal(8),'enabled AI lifecycle is not available to a different administrator');
+require dirname(__DIR__).'/includes/class-oai-mcp.php';
+$description_method=new ReflectionMethod('OAI_MCP','lifecycle_tool_description');
+$description_method->setAccessible(true);
+$enabled_approve_description=$description_method->invoke(null,'approve',7);
+$enabled_apply_description=$description_method->invoke(null,'apply',7);
+check(strpos($enabled_approve_description,'may approve operations')!==false,'MCP operation.approve metadata advertises enabled AI lifecycle');
+check(strpos($enabled_apply_description,'may apply operations')!==false,'MCP operation.apply metadata advertises enabled AI lifecycle');
+$other_admin_description=$description_method->invoke(null,'approve',8);
+check(strpos($other_admin_description,'different site administrator')!==false,'MCP metadata does not grant lifecycle capability to another administrator');
 
 $approved=OAI_AI_Lifecycle_Control::perform(42,'approve','gateway_client_first',7);
 check(!is_wp_error($approved),'operation creator can approve from first MCP client');
