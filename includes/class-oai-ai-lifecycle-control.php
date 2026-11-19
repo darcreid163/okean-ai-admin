@@ -88,6 +88,18 @@ class OAI_AI_Lifecycle_Control {
   return true;
  }
 
+ /**
+  * True only when AI Lifecycle Control is enabled for the authenticated MCP
+  * administrator. This is the same principal gate used by perform().
+  */
+ public static function is_enabled_for_principal($user_id){
+  if(!self::is_active())return false;
+  $user_id=absint($user_id);
+  if(!$user_id || !user_can($user_id,'manage_options'))return false;
+  $cfg=self::raw();
+  return $user_id===absint($cfg['owner_user_id']??0);
+ }
+
  public static function status(){
   $cfg=self::raw();
   return array(

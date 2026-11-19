@@ -10,7 +10,48 @@ class OAI_MCP {
   register_rest_route('okean-ai','/mcp',array('methods'=>'POST','callback'=>array(__CLASS__,'handle'),'permission_callback'=>array(__CLASS__,'permission')));
   register_rest_route('okean-ai','/mcp',array('methods'=>'GET','callback'=>array(__CLASS__,'info'),'permission_callback'=>array(__CLASS__,'permission')));
  }
- public static function info(){return array('name'=>'Okean AI Admin MCP','version'=>OAI_VERSION,'protocol'=>'MCP Streamable HTTP / JSON-RPC 2.0','enabled'=>(bool)get_option('oai_mcp_enabled',false),'license'=>OAI_License::user_status(),'auth'=>'Bearer access token','write_model'=>'sandbox + human approval; optional admin-enabled AI lifecycle control; optional short-lived scoped test automation');}
+ public static function info(){
+  $lifecycle=self::lifecycle_capability();
+  $write_model=!empty($lifecycle['available'])
+   ? 'sandbox; administrator-enabled AI Lifecycle Control permits this authenticated administrator to approve/apply; operation ownership, snapshot, expiry, conflict and verification guards remain enforced'
+   : 'sandbox + human wp-admin approval; an administrator may enable AI Lifecycle Control for their own authenticated MCP identity';
+  return array('name'=>'WP AI Admin MCP','version'=>OAI_VERSION,'protocol'=>'MCP Streamable HTTP / JSON-RPC 2.0','enabled'=>(bool)get_option('oai_mcp_enabled',false),'license'=>OAI_License::user_status(),'auth'=>'Bearer access token','write_model'=>$write_model,'ai_lifecycle'=>$lifecycle);
+ }
+ private static function lifecycle_capability($principal_id=null){
+  $status=class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('active'=>false,'owner_user_id'=>0);
+  $enabled=!empty($status['active']);
+  $owner=absint($status['owner_user_id']??0);
+  $principal=$principal_id===null?absint(self::$auth_context['user_id']??0):absint($principal_id);
+  $matches=$enabled && $owner>0 && $principal>0 && $owner===$principal;
+  return array(
+   'enabled'=>$enabled,
+   'available'=>class_exists('OAI_AI_Lifecycle_Control') && OAI_AI_Lifecycle_Control::is_enabled_for_principal($principal),
+   'principal_matches'=>$matches,
+   'human_approval_required'=>!$matches,
+   'mode'=>$matches?'ai_and_human_lifecycle':'human_lifecycle_only',
+  );
+ }
+ private static function lifecycle_tool_description($action,$principal_id=null){
+  $capability=self::lifecycle_capability($principal_id);
+  if(!empty($capability['available'])){
+   return 'AI Lifecycle Control is enabled for this authenticated site administrator. The AI client may '.$action.' operations on this site through the sandbox lifecycle. Operation creator ownership, approved snapshot integrity, expiry, conflict checks, verification and audit receipts remain mandatory; manual wp-admin controls remain available.';
+  }
+  if(!empty($capability['enabled'])){
+   return 'AI Lifecycle Control is enabled for a different site administrator and is not available to this connection. Human wp-admin '.$action.' is required. The configured administrator can enable it for this authenticated identity; sandbox, ownership, snapshot, expiry, conflict and verification guards remain mandatory.';
+  }
+  return 'Human wp-admin '.$action.' is required by default. A site administrator can enable AI Lifecycle Control for their authenticated MCP identity to let the AI '.$action.' operations through the sandbox lifecycle. Operation creator ownership, approved snapshot integrity, expiry, conflict checks, verification and audit receipts remain mandatory.';
+ }
+ private static function perform_operation_lifecycle($id,$action){
+  $client_id=(string)(self::$auth_context['client_id']??'');
+  $user_id=absint(self::$auth_context['user_id']??0);
+  if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){
+   return OAI_AI_Lifecycle_Control::perform(absint($id),$action,$client_id,$user_id);
+  }
+  if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){
+   return OAI_Test_Automation::perform(absint($id),$action,$client_id,$user_id);
+  }
+  return new WP_Error('oai_human_approval_required','Human wp-admin '.$action.' is required. Enable AI Lifecycle Control for this authenticated administrator to authorize AI lifecycle actions.',array('status'=>403,'ai_lifecycle_enabled'=>false,'human_approval_required'=>true));
+ }
  private static function token_hash(){return (string)get_option('oai_mcp_token_hash','');}
  public static function generate_token($user_id=0){ $token='oai_mcp_'.wp_generate_password(56,false,false); update_option('oai_mcp_token_hash',hash('sha256',$token),false); if($user_id) update_option('oai_mcp_token_user_id',absint($user_id),false); else delete_option('oai_mcp_token_user_id'); update_option('oai_mcp_enabled',true,false); return $token; }
  public static function admin_generate_token(){
@@ -439,9 +480,9 @@ class OAI_MCP {
   $tools[]=self::tool('elementor.patch_settings','Create a sandbox patch for Elementor widget settings; live data is not written until human approval.', $schemas['elementor.patch_settings'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('wp.option_update_sandbox','Create a normal sandbox operation for one WordPress option value. This tool never writes the live option directly; approval, apply, verify and rollback use the standard lifecycle.',$schemas['wp.option_update_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
   $tools[]=self::tool('file.write_sandbox','Create a sandbox file write using existing file scopes and rollback protection.', $schemas['file.write_sandbox'],array('readOnlyHint'=>false,'destructiveHint'=>false));
-  $tools[]=self::tool('operation.reject','Reject requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations.', $schemas['operation.reject'],array('readOnlyHint'=>false,'destructiveHint'=>true));
-  $tools[]=self::tool('operation.approve','Approval requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
-  $tools[]=self::tool('operation.apply','Apply requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations and still runs conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('operation.reject',self::lifecycle_tool_description('reject').' Scoped Test Automation Mode remains limited to session-tagged test operations.', $schemas['operation.reject'],array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('operation.approve',self::lifecycle_tool_description('approve').' Scoped Test Automation Mode remains limited to session-tagged test operations.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
+  $tools[]=self::tool('operation.apply',self::lifecycle_tool_description('apply').' Scoped Test Automation Mode remains limited to session-tagged test operations and still runs conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('system.operations_cleanup','Safely inspect or delete terminal operation ledger rows. Dry-run is default. Active pending/approved/applying/rollback_pending/rolling_back operations are always protected. Applied rows require explicit include_applied=true. rollback_failed and verification_failed rows hold recovery evidence (the only copy of before_data needed to repair a failed rollback or verification) and are protected unless include_failed_recovery=true is set separately. Audit log is preserved.',$schemas['system.operations_cleanup'],array('readOnlyHint'=>false,'destructiveHint'=>true));
   $tools[]=self::tool('operation.rollback','Rollback requires human wp-admin confirmation by default; scoped Test Automation Mode can act only on session-tagged test operations and still runs rollback conflict/verify guards.',array('type'=>'object','required'=>array('id'),'additionalProperties'=>false,'properties'=>array('id'=>array('type'=>'integer','minimum'=>1))),array('readOnlyHint'=>false,'destructiveHint'=>true));
   return $tools;
@@ -602,9 +643,8 @@ class OAI_MCP {
    case 'elementor_patch_settings':$r=new WP_REST_Request('POST','/okean-ai/v1/elementor/patch');$r->set_param('target',absint($a['post_id']??0).':'.sanitize_text_field((string)($a['widget_id']??'')));$r->set_param('changes',$a['changes']??array());$out=OAI_REST::elementor_patch($r);break;
    case 'file_write_sandbox':$r=new WP_REST_Request('POST','/okean-ai/v1/files/write');foreach($a as $k=>$v)$r->set_param($k,$v);$out=OAI_REST::files_write($r);break;
    case 'operation_reject':
-    if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'reject',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'reject',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    return self::response($id,null,array('code'=>-32003,'message'=>'Human rejection is required in wp-admin unless AI Lifecycle Control or scoped Test Automation Mode is active'));
+    $out=self::perform_operation_lifecycle(absint($a['id']??0),'reject');
+    break;
    case 'woocommerce_create_product_sandbox':
     $data=is_array($a['product']??null)?$a['product']:array();$snap=OAI_WooCommerce::create_draft($data,$a['idempotency_key']??'');
     if(is_wp_error($snap)){$out=$snap;break;}
@@ -641,19 +681,16 @@ class OAI_MCP {
     $out=OAI_REST::sandbox_create($r);
     break;
    case 'operation_approve':
-    if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'approve',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'approve',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    return self::response($id,null,array('code'=>-32003,'message'=>'Human approval is required in wp-admin unless AI Lifecycle Control or scoped Test Automation Mode is active'));
+    $out=self::perform_operation_lifecycle(absint($a['id']??0),'approve');
+    break;
    case 'operation_apply':
     $license=OAI_License::can('mcp_apply');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));
-    if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'apply',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'apply',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    return self::response($id,null,array('code'=>-32003,'message'=>'Human approval required in wp-admin before apply unless AI Lifecycle Control is active'));
+    $out=self::perform_operation_lifecycle(absint($a['id']??0),'apply');
+    break;
    case 'operation_rollback':
     $license=OAI_License::can('mcp_rollback');if(is_wp_error($license))return self::response($id,null,array('code'=>-32004,'message'=>$license->get_error_message()));
-    if(class_exists('OAI_AI_Lifecycle_Control')&&OAI_AI_Lifecycle_Control::is_active()){$out=OAI_AI_Lifecycle_Control::perform(absint($a['id']??0),'rollback',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    if(class_exists('OAI_Test_Automation')&&OAI_Test_Automation::is_active()){$out=OAI_Test_Automation::perform(absint($a['id']??0),'rollback',(string)(self::$auth_context['client_id']??''),absint(self::$auth_context['user_id']??0));break;}
-    return self::response($id,null,array('code'=>-32003,'message'=>'Rollback must be confirmed in wp-admin unless AI Lifecycle Control is active'));
+    $out=self::perform_operation_lifecycle(absint($a['id']??0),'rollback');
+    break;
    default:return self::response($id,null,array('code'=>-32602,'message'=>'Unknown tool'));
   }
   $sandbox_tools=array('woodmart_update_setting_sandbox','gutenberg_patch','content_patch','woocommerce_patch','woocommerce_update_product_sandbox','woocommerce_update_order_sandbox','woocommerce_create_product_sandbox','woocommerce_create_coupon_sandbox','woocommerce_update_coupon_sandbox','media_upload_sandbox','media_update_alt_sandbox','media_update_title_sandbox','media_set_featured_sandbox','menu_create_sandbox','menu_add_item_sandbox','menu_remove_item_sandbox','menu_move_item_sandbox','menu_assign_location_sandbox','elementor_patch_container_settings','elementor_patch_page_layout','elementor_create_draft','elementor_patch_widget','elementor_patch_fragment','elementor_patch_settings','wp_option_update_sandbox','file_write_sandbox','wordpress_create_draft','wordpress_update_sandbox');
