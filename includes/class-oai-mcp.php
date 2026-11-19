@@ -17,11 +17,11 @@ class OAI_MCP {
    : 'sandbox + human wp-admin approval; an administrator may enable AI Lifecycle Control for their own authenticated MCP identity';
   return array('name'=>'WP AI Admin MCP','version'=>OAI_VERSION,'protocol'=>'MCP Streamable HTTP / JSON-RPC 2.0','enabled'=>(bool)get_option('oai_mcp_enabled',false),'license'=>OAI_License::user_status(),'auth'=>'Bearer access token','write_model'=>$write_model,'ai_lifecycle'=>$lifecycle);
  }
- private static function lifecycle_capability(){
+ private static function lifecycle_capability($principal_id=null){
   $status=class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('active'=>false,'owner_user_id'=>0);
   $enabled=!empty($status['active']);
   $owner=absint($status['owner_user_id']??0);
-  $principal=absint(self::$auth_context['user_id']??0);
+  $principal=$principal_id===null?absint(self::$auth_context['user_id']??0):absint($principal_id);
   $matches=$enabled && $owner>0 && $principal>0 && $owner===$principal;
   return array(
    'enabled'=>$enabled,
@@ -31,8 +31,8 @@ class OAI_MCP {
    'mode'=>$matches?'ai_and_human_lifecycle':'human_lifecycle_only',
   );
  }
- private static function lifecycle_tool_description($action){
-  $capability=self::lifecycle_capability();
+ private static function lifecycle_tool_description($action,$principal_id=null){
+  $capability=self::lifecycle_capability($principal_id);
   if(!empty($capability['available'])){
    return 'AI Lifecycle Control is enabled for this authenticated site administrator. The AI client may '.$action.' operations on this site through the sandbox lifecycle. Operation creator ownership, approved snapshot integrity, expiry, conflict checks, verification and audit receipts remain mandatory; manual wp-admin controls remain available.';
   }
