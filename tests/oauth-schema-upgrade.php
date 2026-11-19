@@ -48,15 +48,23 @@ try {
  assert_schema((int)get_option('oai_oauth_schema_version',0)===0,'Incomplete schema was marked current');
  $oai_schema_skip_table='';
  OAI_DB::maybe_upgrade();
- assert_schema((int)get_option('oai_oauth_schema_version',0)===2,'OAuth schema version not updated');
+ assert_schema((int)get_option('oai_oauth_schema_version',0)===OAI_MCP_OAuth::SCHEMA_VERSION,'OAuth schema version not updated to the code-defined current version');
  assert_schema((string)$wpdb->get_var($wpdb->prepare('SELECT registry_key FROM '.OAI_MCP_OAuth::registry_table().' WHERE registry_key=%s','client_registration'))==='client_registration','OAuth registry lock row was not created');
  assert_schema(strtoupper((string)$wpdb->get_var($wpdb->prepare('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s',OAI_MCP_OAuth::registry_table())))==='INNODB','OAuth registry mutex table must be InnoDB');
  assert_schema((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s AND INDEX_NAME=%s',OAI_MCP_OAuth::tokens_table(),'refresh_expires_at'))>0,'Refresh expiry cleanup index is missing');
  assert_schema($oai_schema_dbdelta_calls===8,'Unexpected number of migration calls');
  $wpdb->query("INSERT INTO ".OAI_MCP_OAuth::clients_table()." (client_id,client_name,redirect_uris,created_at) VALUES ('retained-client','Retained','[]',UTC_TIMESTAMP())");
  assert_schema(!$wpdb->last_error,'Could not insert OAuth client');
+ // Simulate an installation that still advertises the retired schema v1.
+ // The normal upgrade path must migrate it to the code-defined current schema
+ // without dropping registered OAuth clients or rerunning on later requests.
+ update_option('oai_oauth_schema_version',OAI_MCP_OAuth::SCHEMA_VERSION-1,false);
  OAI_DB::maybe_upgrade();
- assert_schema($oai_schema_dbdelta_calls===8,'dbDelta ran on a normal request');
+ assert_schema((int)get_option('oai_oauth_schema_version',0)===OAI_MCP_OAuth::SCHEMA_VERSION,'Legacy OAuth schema was not upgraded to the current version');
+ assert_schema((int)$wpdb->get_var("SELECT COUNT(*) FROM ".OAI_MCP_OAuth::clients_table()." WHERE client_id='retained-client'")===1,'Legacy OAuth upgrade lost a registered client');
+ $migration_calls=$oai_schema_dbdelta_calls;
+ OAI_DB::maybe_upgrade();
+ assert_schema($oai_schema_dbdelta_calls===$migration_calls,'OAuth migration reran on a current-schema request');
  assert_schema((int)$wpdb->get_var("SELECT COUNT(*) FROM ".OAI_MCP_OAuth::clients_table()." WHERE client_id='retained-client'")===1,'Registered OAuth client was lost');
  echo "PASS: incomplete migration retries; successful upgrade runs once and retains OAuth client\n";
 } finally {
