@@ -98,3 +98,14 @@ Before claiming Windows support or power-loss durability, run a dedicated dispos
 - Record filesystem, PHP build, OS version and exact source SHA with the result. Until the matrix passes, keep Windows replacement semantics and power-loss durability explicitly unsupported/unqualified.
 
 Issue #233 is the canonical owner of this follow-up. This work is a release qualification requirement only if Windows is included in the supported deployment promise; otherwise retain the documented fail-closed limitation and defer broader platform guarantees.
+
+
+## Exact-head reconciliation — 19 November 2026
+
+The authoritative PR #232 API reports this branch at `5ae4e9d9f478e289b7cae954d94de5350b3b61ad`, targeting `main`. PR #232 remains OPEN, DRAFT and UNMERGED. The main branch is unchanged.
+
+- Native exact-head workflow [44478492524](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492524): **SUCCESS** — PHP 8.2/8.3/8.4; pinned WordPress 7.0.6 + Elementor 4.3.3 + WooCommerce 11.1.2; latest compatibility; WooCommerce 11.3.0 HPOS; deterministic artifact/provenance; package install/boot on WordPress 7.0.6 and latest. PR release job skipped by policy.
+- Cloud Core exact-head workflow [44478492520](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492520): **SUCCESS** — PHP 8.2/8.3/8.4 contracts, SQLite/MySQL OAuth/tenant-isolation/billing/SSE contracts, browser contracts, WordPress 7.0.6/latest upgrade/restore and Cloud artifact.
+- Secret history scan PR run [44478492445](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492445): **SUCCESS**. The all-ref scan reviewed 1,855 commits; no unallowlisted findings. Exact false-positive fingerprints are documented in `.gitleaksignore` and `docs/SECRET-SCAN-ALLOWLIST.md`.
+
+These results supersede earlier exact-head snapshots in this file; historical run links are retained as history, not current status. This is a green-CI candidate, not release approval. Manual OAuth expiry/reconnect (#92), two-owner external isolation, external MCP lifecycle, staging mutation/restore, final artifact/license/privacy review remain open. Paid self-service fulfillment (#203) is not qualified. Windows replacement qualification remains deferred (#233/#234). No merge, tag, publication or deployment is authorized.
