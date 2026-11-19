@@ -27,6 +27,8 @@ OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/s
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
 cp -R okean-ai-admin.php includes starter-themes README.txt "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin
+# Run the complete live Native self-test against the freshly installed current schema.
+wp_test eval '$r=OAI_Platform::self_test(); if(!is_array($r)||($r["failed"]??-1)!==0){ fwrite(STDERR,wp_json_encode($r)); exit(1); } echo "PASS: Native runtime self-test ".$r["passed"]."/".$r["total"]."\\n";'
 # Register the disposable Ability before the compatibility test; WordPress
 # freezes the registry after wp_abilities_api_init.
 mkdir -p "$WORK/site/wp-content/mu-plugins"
