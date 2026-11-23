@@ -35,7 +35,7 @@ final class Settings {
             LIMIT 1";
         try {
             $row=$wpdb->get_row($wpdb->prepare($sql,$owner),ARRAY_A);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             // Missing/inaccessible Cloud licence tables must never grant access.
             return false;
         }
