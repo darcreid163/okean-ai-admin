@@ -40,12 +40,14 @@ function robokassaPaymentCheck(bool $ok,string $message): void {
 }
 function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGateway\Core $core): void {
     $owner='991';
+    $baseOrderId=random_int(100000000,999999999);
+    $transactionSeed=bin2hex(random_bytes(8));
     $core->ensureAccount($owner);
     $policy=json_decode((string)file_get_contents(dirname(__DIR__).'/config/plans.json'),true,32,JSON_THROW_ON_ERROR);
     $store->ensureLicenseSchema();
     $store->ensureCommerceSchema();
 
-    $order=new WC_Order(9001,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0);
+    $order=new WC_Order($baseOrderId+1,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-first');
     $first=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$order);
     robokassaPaymentCheck($first['settled']===true && $first['idempotent']===false,'first verified order must issue a licence');
     $license=$store->row('SELECT * FROM '.$store->table('licenses').' WHERE id=?',[$first['license_id']]);
@@ -55,15 +57,15 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $duplicate=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$order);
     robokassaPaymentCheck($duplicate['idempotent']===true && $duplicate['license_id']===$first['license_id'],'replayed order must not issue or extend twice');
 
-    $renewal=new WC_Order(9002,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-renewal');
+    $renewal=new WC_Order($baseOrderId+2,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-renewal');
     $second=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$renewal);
     robokassaPaymentCheck((int)$second['expires_at']>(int)$first['expires_at'],'same-plan renewal must extend from the existing expiry');
 
-    $badAmount=new WC_Order(9003,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1200)],1200.0,'RUB','robokassa','rk-op-bad');
+    $badAmount=new WC_Order($baseOrderId+3,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1200)],1200.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-bad');
     try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$badAmount); throw new RuntimeException('Robokassa payment test failed: wrong amount accepted'); }
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='paid_product_line_total_mismatch','wrong amount must fail closed'); }
 
-    $guest=new WC_Order(9004,0,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0);
+    $guest=new WC_Order($baseOrderId+4,0,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-guest');
     try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$guest); throw new RuntimeException('Robokassa payment test failed: guest order accepted'); }
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='registered_customer_required','guest order must not receive a licence'); }
 
