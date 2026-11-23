@@ -158,7 +158,7 @@ final class Store {
             gateway_order_id VARCHAR(64) NOT NULL,
             owner VARCHAR(64) NOT NULL,
             license_id VARCHAR(32) NOT NULL DEFAULT '',
-            amount_rub INTEGER NOT NULL,
+            amount_kopecks INTEGER NOT NULL,
             refund_kind VARCHAR(16) NOT NULL,
             outcome VARCHAR(32) NOT NULL,
             payload_hash CHAR(64) NOT NULL,
