@@ -44,3 +44,28 @@ A finding is an investigation lead, not permission to modify an entitlement. In 
 - Verify the report on a dedicated Robokassa test shop with representative paid, refunded, partial-refund and replayed orders.
 - Add a separate operator-approved repair workflow only after the report has been validated.
 - Keep public payments disabled until all release gates, including test-shop E2E and a verified chargeback policy, pass.
+
+
+## Operator-approved repair: missing Cloud payment row
+
+The report exposes a repair form only for a paid Robokassa WooCommerce order that has a non-empty gateway transaction reference and no matching Cloud payment ledger row.
+
+Before submitting, the operator must verify the successful operation and matching amount/order in the Robokassa merchant cabinet, then type the exact order-specific phrase shown in the form. The action is protected by `manage_options`, a WordPress nonce and the typed confirmation.
+
+The repair service:
+- rechecks that the WooCommerce order is paid, uses a Robokassa gateway, belongs to a registered customer and has a gateway transaction reference;
+- refuses to run if a Cloud payment row already exists;
+- invokes the canonical `WooCommercePayments::settle()` flow, not a separate licence-issuance shortcut;
+- revalidates the current approved tariff, product, SKU, amount, currency, owner and transaction-derived payload;
+- uses the existing atomic Cloud transaction and replay protection;
+- verifies the resulting settled payment and linked `tariffs_v3` licence before reporting success.
+
+The action does not repair a stuck `processing` row, missing licence on an already-settled payment, amount/product/owner mismatches, refunds, or chargebacks. Those remain manual-review cases. A concurrent callback that settles the order first results in a no-op response rather than a second licence.
+
+## Repair acceptance tests
+
+- Valid paid Robokassa order with a transaction reference and no Cloud ledger row is settled through the canonical flow.
+- The new payment row and linked licence are checked for owner, plan and quota scheme.
+- Missing transaction reference is rejected.
+- Unpaid order is rejected.
+- Existing Cloud payment ledger row is rejected; no second licence is issued.
