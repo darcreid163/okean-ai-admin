@@ -95,8 +95,11 @@ final class WordPress {
         if (!function_exists('wc_get_order')) throw new Fault('woocommerce_unavailable',503);
         $order=wc_get_order($orderId);
         if (!$order instanceof \WC_Order) throw new Fault('repair_order_not_found',404);
+        if (!$order->is_paid()) throw new Fault('repair_payment_not_confirmed',409);
+        if (!str_starts_with((string)$order->get_payment_method(),'robokassa')) throw new Fault('repair_gateway_mismatch',409);
+        if ((int)$order->get_customer_id()<=0) throw new Fault('repair_registered_customer_required',409);
+        if (trim((string)$order->get_transaction_id())==='') throw new Fault('repair_transaction_reference_required',409);
         $owner=(string)(int)$order->get_customer_id();
-        if ((int)$owner<=0) throw new Fault('repair_registered_customer_required',409);
         Settings::account($owner);
         self::core()->ensureAccount($owner);
         return ReconciliationRepair::repairMissingPaymentLedger(self::database(),Settings::policy(),$order);
