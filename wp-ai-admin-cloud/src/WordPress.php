@@ -77,7 +77,7 @@ final class WordPress {
      * Process only a Robokassa refund whose official GetState result is persisted as finished.
      * The payment owner is derived from the immutable WooCommerce customer ID.
      */
-    public static function settleConfirmedWooRefund(\\WC_Order $order,string $requestId,float $amount,bool $isFull): array {
+    public static function settleConfirmedWooRefund(\WC_Order $order,string $requestId,float $amount,bool $isFull): array {
         if (!self::ready()) throw new Fault('cloud_not_configured',503);
         $owner=(string)(int)$order->get_customer_id();
         if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
