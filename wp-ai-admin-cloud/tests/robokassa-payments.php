@@ -121,6 +121,8 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $pendingOrder->set_meta('_robokassa_refund_requests',['pending-'.$transactionSeed=>['status'=>'processing','amount'=>1499.0,'is_full'=>true]]);
     $GLOBALS['robokassaRefundFixtureOrders'][$pendingOrderId]=$pendingOrder;
     \WPAICloudGateway\WooCommercePayments::refundStatusChecked($pendingOrderId,'pending-'.$transactionSeed);
+    $deferredStatus=\WPAICloudGateway\WooCommercePayments::deferOrderRefundUntilAllRequestsTerminal('refunded',$pendingOrderId,1);
+    robokassaPaymentCheck($deferredStatus===false,'WooCommerce full-refund status must be deferred while any refund is processing');
     $canceledOrderId=$baseOrderId+8;
     $canceledOrder=new WC_Order($canceledOrderId,991,[],1499.0);
     $canceledOrder->set_meta('_robokassa_refund_requests',['canceled-'.$transactionSeed=>['status'=>'canceled','amount'=>1499.0,'is_full'=>true]]);
