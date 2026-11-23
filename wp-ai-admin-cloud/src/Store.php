@@ -132,7 +132,7 @@ final class Store {
         $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
         $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('commerce_payments').' (
             gateway_order_id VARCHAR(64) NOT NULL PRIMARY KEY,
-            transaction_id VARCHAR(128) NOT NULL DEFAULT '',
+            transaction_hash CHAR(64) NULL,
             owner VARCHAR(64) NOT NULL,
             product_id INTEGER NOT NULL,
             sku VARCHAR(64) NOT NULL,
@@ -146,7 +146,8 @@ final class Store {
             expires_at BIGINT NOT NULL DEFAULT 0,
             payload_hash CHAR(64) NOT NULL,
             created_at BIGINT NOT NULL,
-            settled_at BIGINT NOT NULL DEFAULT 0
+            settled_at BIGINT NOT NULL DEFAULT 0,
+            UNIQUE KEY transaction_hash (transaction_hash)
         )'.$tail);
     }
 
