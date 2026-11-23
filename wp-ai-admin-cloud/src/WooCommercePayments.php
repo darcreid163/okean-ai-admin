@@ -19,6 +19,8 @@ final class WooCommercePayments {
         // The official Robokassa GetState handler runs at priority 10; process its persisted terminal result afterwards.
         add_action('robokassa_refund_check_event', [self::class, 'refundStatusChecked'], 20, 2);
         add_action('wpai_cloud_retry_refund', [self::class, 'retryConfirmedRefund'], 10, 2);
+        // Keep WooCommerce from marking an order fully refunded while any gateway refund is still pending.
+        add_filter('woocommerce_order_fully_refunded_status', [self::class, 'deferOrderRefundUntilAllRequestsTerminal'], 20, 3);
         // Reject a correctly signed classic callback if its signed amount differs from the immutable Woo order total.
         add_action('parse_request', [self::class, 'preflightClassicResult'], 0, 1);
     }
@@ -93,6 +95,18 @@ final class WooCommercePayments {
         self::processConfirmedRefund((int)$orderId,(string)$requestId);
     }
 
+    public static function deferOrderRefundUntilAllRequestsTerminal($status,$orderId,$refundId) {
+        if (!function_exists('wc_get_order')) return $status;
+        $order=wc_get_order((int)$orderId);
+        if (!$order instanceof \\WC_Order || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) return $status;
+        $requests=$order->get_meta('_robokassa_refund_requests',true);
+        if (!is_array($requests)) return $status;
+        foreach ($requests as $request) {
+            if (is_array($request) && ($request['status']??'')==='processing') return false;
+        }
+        return $status;
+    }
+
     public static function retryConfirmedRefund($orderId,$requestId): void {
         self::processConfirmedRefund((int)$orderId,(string)$requestId);
     }
@@ -110,6 +124,11 @@ final class WooCommercePayments {
         if (!is_finite($amount) || $amount<=0 || $amount>(float)$order->get_total()+0.005) return;
         try {
             $result=WordPress::settleConfirmedWooRefund($order,$requestId,$amount,$isFull);
+            // If out-of-order partial callbacks complete the cumulative full amount,
+            // the final callback may itself have is_full=false in Woo's local metadata.
+            if (($result['refund_kind']??'')==='full' && $order->get_status()!=='refunded') {
+                $order->update_status('refunded');
+            }
             $order->delete_meta_data('_wpai_cloud_refund_retry_count_'.$requestId);
             $order->save_meta_data();
             if ($result['entitlement_revoked']) {
