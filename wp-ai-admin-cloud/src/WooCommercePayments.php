@@ -17,8 +17,6 @@ final class WooCommercePayments {
         add_action('woocommerce_payment_complete', [self::class, 'paymentComplete'], 30, 1);
         // Reject a correctly signed classic callback if its signed amount differs from the immutable Woo order total.
         add_action('parse_request', [self::class, 'preflightClassicResult'], 0, 1);
-        // Robokassa 1.9.2 ResultUrl2 stores a verified OK state but does not call payment_complete().
-        add_action('woocommerce_after_order_object_save', [self::class, 'resultUrl2Complete'], 30, 2);
     }
 
     /**
@@ -42,24 +40,6 @@ final class WooCommercePayments {
         if (!is_finite($signedAmount) || abs($signedAmount-(float)$order->get_total())>0.005) {
             status_header(409); echo 'PAYMENT AMOUNT MISMATCH'; exit;
         }
-    }
-
-    /**
-     * ResultUrl2 in Robokassa 1.9.2 verifies RS256 and persists the operation
-     * state before saving the order. Its OK branch does not mark WooCommerce
-     * paid, so complete only that verified, server-persisted state here.
-     */
-    public static function resultUrl2Complete($order, $dataStore): void {
-        if (!$order instanceof \WC_Order || $order->is_paid()) return;
-        $method=(string)$order->get_payment_method();
-        if ($method==='' || !str_starts_with($method,self::GATEWAY_PREFIX)) return;
-        if ((string)$order->get_meta('_robokassa_result2_state',true)!=='OK') return;
-        $operationKey=(string)$order->get_meta('_robokassa_operation_key',true);
-        $timestamp=(int)$order->get_meta('_robokassa_result2_timestamp',true);
-        if ($operationKey==='' || $timestamp<=0 || $timestamp>time()+300 || $timestamp<time()-(7*86400)) return;
-        // The ResultUrl2 verifier has already checked RS256, shop identity,
-        // timestamp and allowed state before writing these metadata fields.
-        $order->payment_complete($operationKey);
     }
 
     public static function paymentComplete($orderId): void {
