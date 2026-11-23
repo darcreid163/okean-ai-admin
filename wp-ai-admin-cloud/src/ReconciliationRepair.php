@@ -9,7 +9,7 @@ namespace WPAICloudGateway;
  * WooCommercePayments::settle().
  */
 final class ReconciliationRepair {
-    public static function repairMissingPaymentLedger(Store $store,array $policy,\\WC_Order $order): array {
+    public static function repairMissingPaymentLedger(Store $store,array $policy,\WC_Order $order): array {
         if (!$order->is_paid()) throw new Fault('repair_payment_not_confirmed',409);
         if (!str_starts_with((string)$order->get_payment_method(),'robokassa')) throw new Fault('repair_gateway_mismatch',409);
         if ((int)$order->get_customer_id()<=0) throw new Fault('repair_registered_customer_required',409);
