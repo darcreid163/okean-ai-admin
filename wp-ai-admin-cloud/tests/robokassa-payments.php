@@ -128,7 +128,7 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $GLOBALS['robokassaReconciliationOrders']=[$order,$renewal,$thirdOrder,$fourthOrder];
     $paymentsBefore=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_payments'))['n'];
     $refundsBefore=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_refunds'))['n'];
-    $report=\\WPAICloudGateway\\Reconciliation::report($store,$policy,100);
+    $report=\WPAICloudGateway\\Reconciliation::report($store,$policy,100);
     robokassaPaymentCheck($report['mode']==='read_only' && $report['mutations_performed']===0,'reconciliation must declare read-only mode');
     robokassaPaymentCheck($report['orders_scanned']===4 && $report['paid_robokassa_orders']===4,'reconciliation must inspect all supplied Robokassa orders');
     robokassaPaymentCheck($report['issue_count']===0,'valid payment/licence fixtures must reconcile cleanly: '.json_encode($report['issues']));
