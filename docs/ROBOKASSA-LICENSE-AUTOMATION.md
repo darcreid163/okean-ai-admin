@@ -1,6 +1,6 @@
 # Robokassa → WooCommerce → Cloud licence entitlement
 
-Status: implementation contract; automatic grants remain disabled until the atomic payment ledger and adapter pass the acceptance tests below.
+Status: implementation added on branch `codex/robokassa-paid-entitlements`; automated grants are still gated from public enablement. Automated test-shop acceptance and refund handling remain release blockers.
 
 ## Commercial catalogue (single source: config/plans.json)
 
@@ -20,16 +20,16 @@ WooCommerce product mapping is maintained in `commerce.products` in plans.json. 
 
 The Robokassa 1.9.2 archive was inspected. Its classic Result notification verifies `SignatureValue` with the configured Result password before accepting an invoice; ResultUrl2 validates an RS256 JWS using the bundled Robokassa certificate. The WooCommerce gateway calls the Woo order payment-completion lifecycle after a valid classic Result notification. The buyer-facing Success URL is not proof of payment and must never grant a licence.
 
-The adapter must listen to WooCommerce's verified payment-complete event and require all of:
-- order payment method is exactly `robokassa`;
+The Cloud adapter now listens to WooCommerce `woocommerce_payment_complete` and requires all of:
+- order payment method begins with the Robokassa gateway prefix (including its SBP method IDs);
 - WooCommerce reports the order paid;
 - order has a non-zero registered customer ID (guest orders must be linked to an account before checkout or held for support; do not auto-create an account from an unverified email);
 - exactly one supported WP AI Admin product is present, with quantity 1; reject mixed/unknown products and duplicate lines;
 - product ID and SKU match the catalogue mapping;
-- order currency is RUB and the paid order total equals the mapped price (including the defined tax/shipping policy);
-- a non-empty Robokassa transaction/payment reference is retained as evidence where available.
+- order currency is RUB; the signed classic ResultURL `OutSum` is checked against the immutable Woo order total before the Robokassa handler runs; the item gross total and order total must equal the mapped price; shipping, fees, discounts, mixed carts and multiple licence lines are rejected;
+- a Robokassa transaction reference is SHA-256 hashed and stored where ResultUrl2 provides it; order ID remains the primary idempotency key.
 
-The Robokassa gateway remains responsible for callback signature verification. The Cloud adapter must not duplicate or weaken Robokassa's callback validation and must not modify Robokassa credentials/settings.
+The Robokassa gateway remains responsible for callback signature verification. The adapter performs an additional preflight amount comparison for a correctly signed classic ResultURL. For Robokassa 1.9.2 ResultUrl2, it reacts only to the persisted `OK` state after the gateway's RS256 verifier has accepted the JWS; `HOLD` never grants a licence. The adapter does not modify Robokassa credentials/settings.
 
 ## Entitlement issuance
 
@@ -53,7 +53,7 @@ A paid licence must never be created through `ensureBound()`: that method intent
 
 ## Idempotency and atomicity (release blocker)
 
-Create a Cloud Store payment ledger with unique constraints on:
+The Cloud Store now creates an InnoDB payment ledger with unique constraints on:
 - gateway + Woo order ID;
 - gateway transaction reference (when present).
 
@@ -65,11 +65,11 @@ In the same PDO transaction as licence issuance and account plan update:
 5. persist the licence ID, mapped offer, start/end timestamps, amount/currency and evidence hashes;
 6. mark the payment granted.
 
-A failed transaction rolls back both the entitlement and payment claim. Concurrent duplicate callbacks must serialize on the unique payment key. A stale `processing` row must be reconciled from the Woo order and Robokassa transaction evidence; it must not be blindly replayed.
+A failed transaction rolls back both the entitlement and payment claim. The ledger insert, paid licence issue/account link and final `settled` marker execute in one Store transaction. Concurrent duplicate callbacks are fenced by the unique order key (and transaction hash where available). A committed `processing` row is treated as an error, never blindly replayed.
 
 The browser Success URL, a Woo order status changed manually by an administrator, and a customer-supplied receipt are not sufficient to issue a paid entitlement.
 
-## Refunds and chargebacks
+## Current implementation boundaries\n\n- `WooCommercePayments.php` implements classic ResultURL preflight, ResultUrl2 `OK` completion, registered-customer ownership, exact offer validation, one-time issue and same-plan calendar-term extension.\n- The paid-price catalogue must be explicitly approved; otherwise settlement fails closed.\n- Public Plans API still reports `payments_enabled=false`. No production sales switch was enabled.\n- Automated tests, test-shop end-to-end verification, refund/chargeback lifecycle and operational reconciliation tooling are not yet complete.\n\n## Refunds and chargebacks
 
 Do not revoke access on a refund request or a transient/pending refund status. On a confirmed full refund/chargeback, record the financial event and apply the defined operator policy (suspend/revoke paid licence or downgrade to Free). Partial refunds require a separately approved policy; do not silently alter expiry. Every transition must be idempotent and audited. Preserve payment and licence history.
 
@@ -90,4 +90,4 @@ Do not revoke access on a refund request or a transient/pending refund status. O
 
 ## Release gate
 
-The catalogue update alone does not enable payments. Keep the public payment entitlement endpoint disabled until the payment ledger, atomic grant method, Woo adapter, refund policy and tests above are implemented and verified on a staging/test shop.
+The catalogue update and adapter code do not enable public payments. Keep `payments_enabled=false` until the automated test matrix, refund/chargeback policy, operational reconciliation and test-shop end-to-end flow pass.
