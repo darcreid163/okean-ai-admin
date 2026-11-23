@@ -14,7 +14,7 @@ final class Store {
         if (!$this->mysql) { $db->exec('PRAGMA busy_timeout=10000'); $db->exec('PRAGMA journal_mode=WAL'); }
     }
     public function table(string $name): string {
-        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events'],true)) throw new Fault('invalid_table',503);
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','commerce_payments'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
@@ -126,6 +126,30 @@ final class Store {
         if (!$this->hasColumn('accounts','license_id')) throw new Fault('license_schema_incompatible',503);
         self::$licenseSchemaReady[$this]=true;
     }
+
+    /** Additive idempotency ledger for verified WooCommerce payments. */
+    public function ensureCommerceSchema(): void {
+        $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('commerce_payments').' (
+            gateway_order_id VARCHAR(64) NOT NULL PRIMARY KEY,
+            transaction_id VARCHAR(128) NOT NULL DEFAULT '',
+            owner VARCHAR(64) NOT NULL,
+            product_id INTEGER NOT NULL,
+            sku VARCHAR(64) NOT NULL,
+            plan VARCHAR(20) NOT NULL,
+            period VARCHAR(12) NOT NULL,
+            amount_rub INTEGER NOT NULL,
+            currency CHAR(3) NOT NULL,
+            status VARCHAR(20) NOT NULL,
+            license_id VARCHAR(32) NOT NULL DEFAULT '',
+            starts_at BIGINT NOT NULL DEFAULT 0,
+            expires_at BIGINT NOT NULL DEFAULT 0,
+            payload_hash CHAR(64) NOT NULL,
+            created_at BIGINT NOT NULL,
+            settled_at BIGINT NOT NULL DEFAULT 0
+        )'.$tail);
+    }
+
     private function hasColumn(string $table,string $column): bool {
         if ($this->mysql) {
             return (bool)$this->row('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?',[$this->prefix.$table,$column]);
