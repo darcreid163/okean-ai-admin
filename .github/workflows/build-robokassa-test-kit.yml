@@ -1,0 +1,91 @@
+name: Build Robokassa test kit (verified source)
+
+on:
+  push:
+    branches: ['test-artifacts/robokassa-kit-20261123']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fa95324e421d3f9ab5702fbf9773bdd3e7ec0780
+          path: native-source
+      - uses: actions/checkout@v4
+        with:
+          ref: a946993f2e596c699dc86c5f747c29dca146a487
+          path: cloud-source
+      - name: Verify exact source versions
+        run: |
+          set -euo pipefail
+          grep -Fq 'Version: 2.1.18' native-source/okean-ai-admin.php
+          grep -Fq "define('OAI_VERSION','2.1.18')" native-source/okean-ai-admin.php
+          grep -Fq "define('WPAI_CLOUD_VERSION', '0.3.13-dev')" cloud-source/wp-ai-admin-cloud/wp-ai-admin-cloud.php
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - name: Build Native ZIP
+        run: |
+          set -euo pipefail
+          mkdir -p dist/native/okean-ai-admin
+          cp -a native-source/okean-ai-admin.php native-source/includes native-source/starter-themes native-source/README.md native-source/README.txt native-source/LICENSE native-source/THIRD-PARTY.md native-source/BUILD-SIGNATURE.txt native-source/BUILD_SIGNATURE.txt dist/native/okean-ai-admin/
+          rm -f dist/native/okean-ai-admin/includes/class-oai-elementor-schema-save.php
+          test ! -e dist/native/okean-ai-admin/includes/class-oai-elementor-schema-save.php
+          (cd dist/native && zip -qr WPAI-Native-2.1.18-TEST.zip okean-ai-admin)
+          unzip -tq dist/native/WPAI-Native-2.1.18-TEST.zip
+          (cd dist/native && sha256sum WPAI-Native-2.1.18-TEST.zip > WPAI-Native-2.1.18-TEST.zip.sha256)
+      - name: Build Cloud Core ZIP
+        run: |
+          set -euo pipefail
+          python3 cloud-source/wp-ai-admin-cloud/tools/build-candidate.py --output dist/cloud-candidate
+          unzip -tq dist/cloud-candidate/wp-ai-admin-cloud-0.3.13-dev.zip
+          (cd dist/cloud-candidate && sha256sum -c wp-ai-admin-cloud-0.3.13-dev.zip.sha256)
+      - name: Assemble test package
+        run: |
+          set -euo pipefail
+          mkdir -p dist/package/WP-AI-Admin-Robokassa-Test-Kit
+          cp dist/native/WPAI-Native-2.1.18-TEST.zip dist/package/WP-AI-Admin-Robokassa-Test-Kit/
+          cp dist/cloud-candidate/wp-ai-admin-cloud-0.3.13-dev.zip dist/package/WP-AI-Admin-Robokassa-Test-Kit/WPAI-Cloud-Core-0.3.13-dev-TEST.zip
+          cp dist/cloud-candidate/PROVENANCE.json dist/package/WP-AI-Admin-Robokassa-Test-Kit/CLOUD-PROVENANCE.json
+          cat > dist/package/WP-AI-Admin-Robokassa-Test-Kit/INSTRUCTION-Robokassa-Test-Payments-WP-AI-Admin.txt <<'EOF'
+Инструкция по тестированию Robokassa — WP AI Admin
+
+Только тестовый режим. Не включать реальные платежи до завершения приемки.
+
+1. В кабинете Robokassa откройте Магазины → Настройки магазина → Технические настройки. Сгенерируйте тестовые Пароль #1 и Пароль #2. Укажите ResultURL, SuccessURL и FailURL, метод POST, алгоритм MD5 (сверьте параметры с настройками установленного модуля).
+2. В WordPress откройте WooCommerce → Настройки → Платежи → Robokassa (или /wp-admin/admin.php?page=robokassa_payment_main_rb). Включите метод оплаты, активируйте тестовый режим, укажите MerchantLogin и тестовые пароли в полях тестового режима. Не отправляйте пароли в чат и не сохраняйте их в репозитории.
+3. Выполните тестовый заказ тарифа Pro на 1 499 ₽/месяц через тестовую платежную страницу. Проверьте: заказ WooCommerce отмечен оплаченным; ResultURL callback принят; в Cloud Core создана запись payment ledger; entitlement тарифа создан для правильного владельца; Native получает нужный тариф и лимиты.
+4. Повторный callback не должен создавать второе начисление или продлевать entitlement повторно. Неуспешный/отмененный платеж не должен выдавать тариф.
+5. Для Robokassa WooCommerce 1.9.2 API-возврат в тестовом режиме отключен. Проверку возвратов выполнять отдельным согласованным тестовым сценарием.
+6. Сохраните номер заказа, время, статус callback, ledger reference и результат проверки entitlement. Замаскируйте персональные данные и секреты.
+
+Сверьте фактические callback URL, показанные установленным модулем:
+ResultURL: https://wpaiadmin.ru/?robokassa=result
+SuccessURL: https://wpaiadmin.ru/?robokassa=success
+FailURL: https://wpaiadmin.ru/?robokassa=fail
+
+Установочные архивы: WPAI-Native-2.1.18-TEST.zip и WPAI-Cloud-Core-0.3.13-dev-TEST.zip.
+EOF
+          (cd dist/package/WP-AI-Admin-Robokassa-Test-Kit && sha256sum *.zip > SHA256SUMS.txt)
+          (cd dist/package && zip -qr WP-AI-Admin-Robokassa-Test-Kit.zip WP-AI-Admin-Robokassa-Test-Kit)
+          unzip -tq dist/package/WP-AI-Admin-Robokassa-Test-Kit.zip
+          sha256sum dist/package/WP-AI-Admin-Robokassa-Test-Kit.zip > dist/package/WP-AI-Admin-Robokassa-Test-Kit.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WP-AI-Admin-Robokassa-Test-Kit
+          path: |
+            dist/native/WPAI-Native-2.1.18-TEST.zip
+            dist/native/WPAI-Native-2.1.18-TEST.zip.sha256
+            dist/cloud-candidate/wp-ai-admin-cloud-0.3.13-dev.zip
+            dist/cloud-candidate/wp-ai-admin-cloud-0.3.13-dev.zip.sha256
+            dist/cloud-candidate/PROVENANCE.json
+            dist/package/WP-AI-Admin-Robokassa-Test-Kit.zip
+            dist/package/WP-AI-Admin-Robokassa-Test-Kit.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
