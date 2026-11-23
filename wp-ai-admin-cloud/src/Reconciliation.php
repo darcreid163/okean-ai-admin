@@ -88,7 +88,7 @@ final class Reconciliation {
             }
 
             $licenseId=(string)($payment['license_id']??'');
-            $license=$licenseId!==''?$store->row('SELECT id,owner,plan,status,quota_scheme,expires_at FROM '.$store->table('licenses').' WHERE id=?',[$licenseId]):null;
+            $license=$licenseId!==''?$store->row('SELECT id,owner,plan,status,quota_scheme,expires_at,replaced_by FROM '.$store->table('licenses').' WHERE id=?',[$licenseId]):null;
             if (!$license) {
                 self::add($issues,'paid_order_license_missing',$orderId,'Cloud-платёж существует, но связанная лицензия не найдена.');
             } else {
@@ -98,7 +98,9 @@ final class Reconciliation {
                 if ((string)$license['plan']!==(string)$payment['plan'] || (string)$license['quota_scheme']!=='tariffs_v3') {
                     self::add($issues,'license_plan_mismatch',$orderId,'План или схема лицензии не совпадает с платёжной записью.');
                 }
-                if (in_array((string)$payment['status'],['settled','partially_refunded'],true) && !in_array((string)$license['status'],[Licenses::ACTIVE,Licenses::SUSPENDED],true)) {
+                if (in_array((string)$payment['status'],['settled','partially_refunded'],true)
+                    && !in_array((string)$license['status'],[Licenses::ACTIVE,Licenses::SUSPENDED],true)
+                    && empty($license['replaced_by'])) {
                     self::add($issues,'settled_payment_license_inactive',$orderId,'Оплаченный платёж числится действующим, но лицензия не active/suspended.');
                 }
                 if ((string)$payment['status']==='refunded' && (string)$license['status']===Licenses::ACTIVE) {
