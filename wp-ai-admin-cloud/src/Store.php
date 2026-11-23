@@ -14,7 +14,7 @@ final class Store {
         if (!$this->mysql) { $db->exec('PRAGMA busy_timeout=10000'); $db->exec('PRAGMA journal_mode=WAL'); }
     }
     public function table(string $name): string {
-        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','commerce_payments'],true)) throw new Fault('invalid_table',503);
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','commerce_payments','commerce_refunds'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
@@ -151,6 +151,20 @@ final class Store {
             ".$unique."
         )".$tail;
         $this->execute($sql);
+        // Separate idempotency ledger for Robokassa refund state transitions.
+        // The request ID is a gateway-issued opaque identifier; no credentials or raw payloads are stored.
+        $refundSql="CREATE TABLE IF NOT EXISTS ".$this->table('commerce_refunds')." (
+            request_id VARCHAR(128) NOT NULL PRIMARY KEY,
+            gateway_order_id VARCHAR(64) NOT NULL,
+            owner VARCHAR(64) NOT NULL,
+            license_id VARCHAR(32) NOT NULL DEFAULT '',
+            amount_rub INTEGER NOT NULL,
+            refund_kind VARCHAR(16) NOT NULL,
+            outcome VARCHAR(32) NOT NULL,
+            payload_hash CHAR(64) NOT NULL,
+            created_at BIGINT NOT NULL
+        )".$tail;
+        $this->execute($refundSql);
     }
 
     private function hasColumn(string $table,string $column): bool {
