@@ -59,10 +59,11 @@ try {
         v3Check(($v3['quota_status'][$slug]??null)===QuotaPolicy::QUOTA_APPROVED,'Target quota must be approved: '.$slug);
         v3Check(($v3['periods'][$slug]??null)===QuotaPolicy::DAY,'Target plan must be daily: '.$slug);
     }
-    foreach(['pro'=>2000,'business'=>5000,'businesspro'=>10000] as $slug=>$price)
-        v3Check(($v3['prices_rub_month'][$slug]??null)===$price,'Price mismatch: '.$slug);
-    v3Check(array_key_exists('daily',$v3['prices_rub_month'])&&$v3['prices_rub_month']['daily']===null,'Daily price must remain unset');
-    v3Check(($v3['prices_approved']??null)===false,'Prices must remain unapproved until Daily price is set');
+    foreach(['daily'=>899,'pro'=>1499,'business'=>3999,'businesspro'=>8999] as $slug=>$price)
+        v3Check(($v3['prices_rub_month'][$slug]??null)===$price,'Approved monthly price mismatch: '.$slug);
+    foreach(['daily'=>9999,'pro'=>16999,'business'=>46999,'businesspro'=>105999] as $slug=>$price)
+        v3Check(($v3['prices_rub_year'][$slug]??null)===$price,'Approved annual price mismatch: '.$slug);
+    v3Check(($v3['prices_approved']??null)===true,'Published prices must be approved before payment settlement is allowed');
 
     // Slugs stay stable; only the client-facing tariff names change.
     v3Check(QuotaPolicy::planLabel($policy,'business')==='PRO+','PRO+ label missing');
