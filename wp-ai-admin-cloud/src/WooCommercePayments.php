@@ -15,8 +15,33 @@ final class WooCommercePayments {
     public static function boot(): void {
         if (!class_exists('WooCommerce')) return;
         add_action('woocommerce_payment_complete', [self::class, 'paymentComplete'], 30, 1);
+        // Reject a correctly signed classic callback if its signed amount differs from the immutable Woo order total.
+        add_action('parse_request', [self::class, 'preflightClassicResult'], 0, 1);
         // Robokassa 1.9.2 ResultUrl2 stores a verified OK state but does not call payment_complete().
         add_action('woocommerce_after_order_object_save', [self::class, 'resultUrl2Complete'], 30, 2);
+    }
+
+    /**
+     * Robokassa 1.9.2 verifies the classic ResultURL signature but its
+     * notification handler does not compare OutSum with the Woo order total.
+     * Run before its parse_request handler and fail closed on a signed mismatch.
+     */
+    public static function preflightClassicResult($wp): void {
+        if (($_REQUEST['robokassa']??'')!=='result' || !function_exists('robokassa_payment_is_result_url2_request') || robokassa_payment_is_result_url2_request()) return;
+        if (!function_exists('robokassa_payment_is_valid_callback_signature') || !function_exists('robokassa_payment_get_callback_password')) return;
+        $request=wp_unslash($_REQUEST);
+        if (!robokassa_payment_is_valid_callback_signature($request,robokassa_payment_get_callback_password(2))) return;
+        $invoice=(string)($request['InvId']??'');
+        if ($invoice==='' || !ctype_digit($invoice) || (int)$invoice<=0) return;
+        $order=wc_get_order((int)$invoice);
+        if (!$order instanceof \WC_Order) return;
+        if (!str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX) || (string)$order->get_currency()!=='RUB') {
+            status_header(409); echo 'ORDER PAYMENT POLICY MISMATCH'; exit;
+        }
+        $signedAmount=(float)($request['OutSum']??-1);
+        if (!is_finite($signedAmount) || abs($signedAmount-(float)$order->get_total())>0.005) {
+            status_header(409); echo 'PAYMENT AMOUNT MISMATCH'; exit;
+        }
     }
 
     /**
@@ -59,6 +84,7 @@ final class WooCommercePayments {
         if ((string)$order->get_currency()!=='RUB') throw new Fault('payment_currency_mismatch',409);
         if ((int)$order->get_customer_id()<=0) throw new Fault('registered_customer_required',409);
         if ((string)$order->get_payment_method()==='' || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) throw new Fault('payment_gateway_mismatch',409);
+        if (($policy['prices_approved']??false)!==true || ($policy['schemes']['tariffs_v3']['prices_approved']??false)!==true) throw new Fault('paid_prices_not_approved',503);
         $catalog=(array)($policy['commerce']['products']??[]);
         if (!$catalog) throw new Fault('paid_product_catalog_unavailable',503);
 
