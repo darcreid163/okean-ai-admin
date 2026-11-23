@@ -294,4 +294,62 @@ final class WooCommercePayments {
             return ['settled'=>true,'idempotent'=>false,'license_id'=>(string)$license['id'],'expires_at'=>$expiresAt];
         });
     }
+    /**
+     * Apply a terminal Robokassa refund state to the Cloud payment ledger.
+     * The caller must be the post-GetState hook and supply the stored request.
+     * Partial refunds are recorded but never change an entitlement.
+     */
+    public static function refund(Store $store,array $policy,\\WC_Order $order,string $requestId,float $amount,bool $isFull): array {
+        if ($requestId==='' || strlen($requestId)>128 || !preg_match('/^[A-Za-z0-9_-]+$/D',$requestId)) throw new Fault('refund_request_id_invalid',409);
+        if (!is_finite($amount) || $amount<=0 || abs($amount-round($amount))>0.005) throw new Fault('refund_amount_invalid',409);
+        if ((string)$order->get_currency()!=='RUB' || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) throw new Fault('refund_payment_mismatch',409);
+        $owner=(string)(int)$order->get_customer_id();
+        if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
+        $store->ensureLicenseSchema();
+        $store->ensureCommerceSchema();
+        $now=time();
+        $amountRub=(int)round($amount);
+        $payloadHash=hash('sha256',implode('|',[(string)$order->get_id(),$owner,(string)$amountRub,$isFull?'full':'partial']));
+        return $store->transaction(function() use($store,$policy,$order,$requestId,$amountRub,$isFull,$owner,$payloadHash,$now): array {
+            $payment=$store->row('SELECT * FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?'.$store->lock(),[(string)$order->get_id()]);
+            if (!$payment || $payment['status']==='processing' || $payment['status']==='') throw new Fault('refund_paid_order_not_settled',409);
+            if ($payment['owner']!==$owner || $payment['currency']!=='RUB') throw new Fault('refund_payment_owner_mismatch',409);
+            $existing=$store->row('SELECT * FROM '.$store->table('commerce_refunds').' WHERE request_id=?'.$store->lock(),[$requestId]);
+            if ($existing) {
+                if ($existing['gateway_order_id']!==(string)$order->get_id() || !hash_equals((string)$existing['payload_hash'],$payloadHash)) throw new Fault('refund_replay_conflict',409);
+                return ['recorded'=>true,'idempotent'=>true,'refund_kind'=>$existing['refund_kind'],'outcome'=>$existing['outcome'],'entitlement_revoked'=>$existing['outcome']==='license_revoked'];
+            }
+
+            $kind=$isFull?'full':'partial';
+            $outcome='partial_recorded';
+            $revoked=false;
+            if ($isFull) {
+                $account=$store->row('SELECT license_id FROM '.$store->table('accounts').' WHERE owner=?'.$store->lock(),[$owner]);
+                $licenseId=(string)($payment['license_id']??'');
+                if ($account && $licenseId!=='' && (string)($account['license_id']??'')===$licenseId) {
+                    $license=$store->row('SELECT status FROM '.$store->table('licenses').' WHERE id=? AND owner=?'.$store->lock(),[$licenseId,$owner]);
+                    if ($license && in_array((string)$license['status'],[Licenses::ACTIVE,Licenses::SUSPENDED],true)) {
+                        Licenses::revoke($store,$policy,self::OPERATOR,$licenseId,$now);
+                        $outcome='license_revoked';
+                        $revoked=true;
+                    } else {
+                        $outcome='stale_payment_refund';
+                    }
+                } else {
+                    // A later renewal or another purchase now owns the account.
+                    // Never revoke that newer entitlement because an older order was refunded.
+                    $outcome='stale_payment_refund';
+                }
+                $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=? WHERE gateway_order_id=?',['refunded',(string)$order->get_id()]);
+            } else {
+                $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=? WHERE gateway_order_id=? AND status=?',['partially_refunded',(string)$order->get_id(),'settled']);
+            }
+
+            $store->execute('INSERT INTO '.$store->table('commerce_refunds').' (request_id,gateway_order_id,owner,license_id,amount_rub,refund_kind,outcome,payload_hash,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[
+                $requestId,(string)$order->get_id(),$owner,(string)($payment['license_id']??''),$amountRub,$kind,$outcome,$payloadHash,$now
+            ]);
+            return ['recorded'=>true,'idempotent'=>false,'refund_kind'=>$kind,'outcome'=>$outcome,'entitlement_revoked'=>$revoked];
+        });
+    }
+
 }
