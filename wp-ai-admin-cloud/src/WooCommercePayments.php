@@ -98,7 +98,7 @@ final class WooCommercePayments {
     public static function deferOrderRefundUntilAllRequestsTerminal($status,$orderId,$refundId) {
         if (!function_exists('wc_get_order')) return $status;
         $order=wc_get_order((int)$orderId);
-        if (!$order instanceof \\WC_Order || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) return $status;
+        if (!$order instanceof \WC_Order || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) return $status;
         $requests=$order->get_meta('_robokassa_refund_requests',true);
         if (!is_array($requests)) return $status;
         foreach ($requests as $request) {
