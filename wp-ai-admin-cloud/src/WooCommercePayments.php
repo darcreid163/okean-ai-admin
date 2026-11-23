@@ -79,6 +79,20 @@ final class WooCommercePayments {
         }
     }
 
+    private static function addCalendarTerm(int $timestamp,int $months): int {
+        $utc=new \DateTimeZone('UTC');
+        $date=(new \DateTimeImmutable('@'.$timestamp))->setTimezone($utc);
+        $year=(int)$date->format('Y');
+        $month=(int)$date->format('n')+$months;
+        $year+=intdiv($month-1,12);
+        $month=(($month-1)%12)+1;
+        $first=new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00',$year,$month),$utc);
+        $day=min((int)$date->format('j'),(int)$first->format('t'));
+        return $first->setDate($year,$month,$day)
+            ->setTime((int)$date->format('G'),(int)$date->format('i'),(int)$date->format('s'))
+            ->getTimestamp();
+    }
+
     public static function settle(Store $store, array $policy, \WC_Order $order): array {
         if (!$order->is_paid()) throw new Fault('payment_not_confirmed',409);
         if ((string)$order->get_currency()!=='RUB') throw new Fault('payment_currency_mismatch',409);
@@ -128,8 +142,8 @@ final class WooCommercePayments {
                 }
                 throw new Fault('payment_settlement_in_progress',503);
             }
-            $store->execute('INSERT INTO '.$store->table('commerce_payments').' (gateway_order_id,transaction_id,owner,product_id,sku,plan,period,amount_rub,currency,status,license_id,starts_at,expires_at,payload_hash,created_at,settled_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
-                (string)$order->get_id(),(string)$order->get_transaction_id(),$owner,(int)$offer['product_id'],(string)$offer['sku'],(string)$offer['plan'],(string)$offer['period'],(int)$offer['price_rub'],'RUB','processing','',0,0,hash('sha256',$order->get_id().'|'.$order->get_order_key().'|'.$order->get_total().'|'.$offer['sku']),$now,0
+            $store->execute('INSERT INTO '.$store->table('commerce_payments').' (gateway_order_id,transaction_hash,owner,product_id,sku,plan,period,amount_rub,currency,status,license_id,starts_at,expires_at,payload_hash,created_at,settled_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
+                (string)$order->get_id(),((string)$order->get_transaction_id()!==''?hash('sha256',(string)$order->get_transaction_id()):null),$owner,(int)$offer['product_id'],(string)$offer['sku'],(string)$offer['plan'],(string)$offer['period'],(int)$offer['price_rub'],'RUB','processing','',0,0,hash('sha256',$order->get_id().'|'.$order->get_order_key().'|'.$order->get_total().'|'.$offer['sku']),$now,0
             ]);
 
             $account=$store->row('SELECT * FROM '.$store->table('accounts').' WHERE owner=?'.$store->lock(),[$owner]);
@@ -140,11 +154,9 @@ final class WooCommercePayments {
                 if ($current && $current['status']===Licenses::ACTIVE && $current['plan']===(string)$offer['plan'] && $current['quota_scheme']==='tariffs_v3' && $current['expires_at']!==null) $currentExpiry=(int)$current['expires_at'];
             }
             $startsAt=max($now,$currentExpiry);
-            $base=(new \DateTimeImmutable('@'.$startsAt))->setTimezone(new \DateTimeZone('UTC'));
             $period=(string)$offer['period'];
-            if ($period==='month') $expiresAt=$base->modify('+1 month')->getTimestamp();
-            elseif ($period==='year') $expiresAt=$base->modify('+1 year')->getTimestamp();
-            else throw new Fault('paid_product_period_invalid',409);
+            if ($period!=='month' && $period!=='year') throw new Fault('paid_product_period_invalid',409);
+            $expiresAt=self::addCalendarTerm($startsAt,$period==='month'?1:12);
             if ($expiresAt<=$startsAt) throw new Fault('paid_license_expiry_invalid',503);
 
             $license=Licenses::issue($store,$policy,self::OPERATOR,$owner,(string)$offer['plan'],'tariffs_v3',$now,[
