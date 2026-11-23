@@ -2,6 +2,12 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__).'/src/WooCommercePayments.php';
+require_once dirname(__DIR__).'/src/Reconciliation.php';
+if (!class_exists('WooCommerce')) { class WooCommerce {} }
+$GLOBALS['robokassaReconciliationOrders']=[];
+if (!function_exists('wc_get_orders')) {
+    function wc_get_orders(array $args=[]): array { return $GLOBALS['robokassaReconciliationOrders']; }
+}
 
 if (!class_exists('WC_Order_Item_Product')) {
     class WC_Order_Item_Product {
@@ -112,6 +118,22 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     robokassaPaymentCheck($partialOne['refund_kind']==='full' && $partialOne['entitlement_revoked'],'cumulative confirmed refunds must revoke after reaching paid total');
     $fourthLicense=$store->row('SELECT status FROM '.$store->table('licenses').' WHERE id=?',[$fourth['license_id']]);
     robokassaPaymentCheck($fourthLicense['status']==='revoked','out-of-order partial completion did not revoke current licence');
+
+    // Read-only reconciliation must detect no inconsistencies in the valid
+    // fixture set and must not mutate either payment or refund ledgers.
+    $GLOBALS['robokassaRefundFixtureOrders'][$order->get_id()]=$order;
+    $GLOBALS['robokassaRefundFixtureOrders'][$renewal->get_id()]=$renewal;
+    $GLOBALS['robokassaRefundFixtureOrders'][$thirdOrder->get_id()]=$thirdOrder;
+    $GLOBALS['robokassaRefundFixtureOrders'][$fourthOrder->get_id()]=$fourthOrder;
+    $GLOBALS['robokassaReconciliationOrders']=[$order,$renewal,$thirdOrder,$fourthOrder];
+    $paymentsBefore=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_payments'))['n'];
+    $refundsBefore=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_refunds'))['n'];
+    $report=\\WPAICloudGateway\\Reconciliation::report($store,$policy,100);
+    robokassaPaymentCheck($report['mode']==='read_only' && $report['mutations_performed']===0,'reconciliation must declare read-only mode');
+    robokassaPaymentCheck($report['orders_scanned']===4 && $report['paid_robokassa_orders']===4,'reconciliation must inspect all supplied Robokassa orders');
+    robokassaPaymentCheck($report['issue_count']===0,'valid payment/licence fixtures must reconcile cleanly: '.json_encode($report['issues']));
+    robokassaPaymentCheck((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_payments'))['n']===$paymentsBefore,'reconciliation modified payment ledger');
+    robokassaPaymentCheck((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_refunds'))['n']===$refundsBefore,'reconciliation modified refund ledger');
 
     $badAmount=new WC_Order($baseOrderId+3,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1200)],1200.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-bad');
     try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$badAmount); throw new RuntimeException('Robokassa payment test failed: wrong amount accepted'); }
