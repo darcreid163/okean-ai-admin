@@ -137,13 +137,17 @@ final class WooCommercePayments {
             $existing=$store->row('SELECT * FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?'.$store->lock(),[(string)$order->get_id()]);
             if ($existing) {
                 if ($existing['status']==='settled') {
-                    if ($existing['owner']!==$owner || $existing['plan']!==$offer['plan'] || (int)$existing['product_id']!==(int)$offer['product_id']) throw new Fault('payment_order_replay_conflict',409);
+                    $transactionHash=(string)$order->get_transaction_id()!==''?hash('sha256',(string)$order->get_transaction_id()):null;
+                    $payloadHash=hash('sha256',$order->get_id().'|'.$order->get_order_key().'|'.$order->get_total().'|'.$offer['sku'].'|'.($transactionHash??''));
+                    if ($existing['owner']!==$owner || $existing['plan']!==$offer['plan'] || (int)$existing['product_id']!==(int)$offer['product_id'] || $existing['sku']!==$offer['sku'] || $existing['period']!==$offer['period'] || (int)$existing['amount_rub']!==(int)$offer['price_rub'] || $existing['currency']!=='RUB' || !hash_equals((string)$existing['payload_hash'],$payloadHash)) throw new Fault('payment_order_replay_conflict',409);
                     return ['settled'=>true,'idempotent'=>true,'license_id'=>$existing['license_id'],'expires_at'=>(int)$existing['expires_at']];
                 }
                 throw new Fault('payment_settlement_in_progress',503);
             }
+            $transactionHash=(string)$order->get_transaction_id()!==''?hash('sha256',(string)$order->get_transaction_id()):null;
+            $payloadHash=hash('sha256',$order->get_id().'|'.$order->get_order_key().'|'.$order->get_total().'|'.$offer['sku'].'|'.($transactionHash??''));
             $store->execute('INSERT INTO '.$store->table('commerce_payments').' (gateway_order_id,transaction_hash,owner,product_id,sku,plan,period,amount_rub,currency,status,license_id,starts_at,expires_at,payload_hash,created_at,settled_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
-                (string)$order->get_id(),((string)$order->get_transaction_id()!==''?hash('sha256',(string)$order->get_transaction_id()):null),$owner,(int)$offer['product_id'],(string)$offer['sku'],(string)$offer['plan'],(string)$offer['period'],(int)$offer['price_rub'],'RUB','processing','',0,0,hash('sha256',$order->get_id().'|'.$order->get_order_key().'|'.$order->get_total().'|'.$offer['sku']),$now,0
+                (string)$order->get_id(),$transactionHash,$owner,(int)$offer['product_id'],(string)$offer['sku'],(string)$offer['plan'],(string)$offer['period'],(int)$offer['price_rub'],'RUB','processing','',0,0,$payloadHash,$now,0
             ]);
 
             $account=$store->row('SELECT * FROM '.$store->table('accounts').' WHERE owner=?'.$store->lock(),[$owner]);
@@ -164,9 +168,10 @@ final class WooCommercePayments {
                 'activation_limit'=>(int)($offer['sites']??1),
                 'comment'=>'WooCommerce order #'.$order->get_id().' / Robokassa'
             ]);
-            $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=?,license_id=?,starts_at=?,expires_at=?,settled_at=? WHERE gateway_order_id=? AND status=?',[
+            $settled=$store->execute('UPDATE '.$store->table('commerce_payments').' SET status=?,license_id=?,starts_at=?,expires_at=?,settled_at=? WHERE gateway_order_id=? AND status=?',[
                 'settled',(string)$license['id'],$now,$expiresAt,$now,(string)$order->get_id(),'processing'
-            ]);
+            ])->rowCount();
+            if ($settled!==1) throw new Fault('payment_settlement_write_failed',503);
             return ['settled'=>true,'idempotent'=>false,'license_id'=>(string)$license['id'],'expires_at'=>$expiresAt];
         });
     }
