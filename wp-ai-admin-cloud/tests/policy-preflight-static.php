@@ -21,9 +21,10 @@ foreach(['free'=>[50,Policy::DAY],'daily'=>[500,Policy::DAY],'pro'=>[2000,Policy
     $next=Policy::window($t,strtotime('2026-10-22T00:00:00Z'));
     $ok($w['period']==='2026-10-21'&&$next['period']==='2026-10-22','UTC boundary '.$plan);
 }
-$refuse(fn()=>Policy::terms($p,['quota_scheme'=>Policy::CURRENT,'plan'=>'biznes']),'plan_unavailable');
+$refuse(fn()=>Policy::terms($p,['quota_scheme'=>Policy::CURRENT,'plan'=>'enterprise']),'plan_unavailable');
+$ok(!array_key_exists('legacy_plans',$p),'Retired monthly catalogue must not ship');
 $legacy=Policy::terms($p,['plan'=>'free','quota_scheme'=>Policy::LEGACY]);
-$ok($legacy['quota_scheme']===Policy::LEGACY&&$legacy['period_kind']===Policy::MONTH,'Legacy free plan not preserved');
+$ok($legacy['quota_scheme']===Policy::TARGET&&$legacy['period_kind']===Policy::DAY&&$legacy['limit']===50,'Retired legacy plan not transferred to the final daily catalogue');
 $items=Batch::items([['id'=>'1','tool'=>'wp.get_site','arguments'=>[]],['id'=>'2','tool'=>'woocommerce.update_product_sandbox','arguments'=>['id'=>42,'changes'=>['regular_price'=>'10']]]]);
 $ok($items[0]['tool']==='wp_get_site'&&$items[1]['tool']==='woocommerce_update_product_sandbox','Batch normalization wrong');
 $refuse(fn()=>Batch::items([]),'batch_item_limit');
@@ -43,6 +44,6 @@ $rest=file_get_contents($root.'/includes/class-wpai-cloud-rest.php');
 $ok(str_contains($admin,"if (!current_user_can('manage_options')) return;"),'Quota admin page lost manage_options gate');
 $ok(str_contains($admin,'check_admin_referer(\'wpai_gateway_\'.$action,\'wpai_gateway_nonce\');')&&str_contains($admin,"if (!is_ssl()) throw new Fault('https_required',403);"),'Quota admin action lost HTTPS/nonce protection');
 $ok(str_contains($admin,'$action===\'quota_reset\'')&&str_contains($admin,'$core->resetDailyQuota('),'Quota reset action is not wired to Cloud Core');
-$ok(str_contains($coreSource,"'manual_daily_quota_reset'")&&str_contains($coreSource,"'admin:'.$operator"),'Quota reset audit evidence missing');
+$ok(str_contains($coreSource,"'manual_daily_quota_reset'")&&str_contains($coreSource,'\'admin:\'.$operator'),'Quota reset audit evidence missing');
 $ok(!str_contains($gateway,'quota_reset')&&!str_contains($rest,'quota_reset'),'Manual quota reset leaked into public MCP/REST surface');
 echo "PASS $checks standalone release-guard assertions (no database required)\n";

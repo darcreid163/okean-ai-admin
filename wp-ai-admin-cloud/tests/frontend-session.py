@@ -169,13 +169,18 @@ class FrontendSession(unittest.TestCase):
         self.assertIn('2026-10-23T00:00:00Z', body)
         self.assertIn('Подключить автоматически', body)
 
-    def test_legacy_pro_retains_monthly_terms(self):
+    def test_retired_legacy_plan_resolves_to_final_daily_terms(self):
+        # Owner decision 16.11.2026: monthly accounting is retired. A stored
+        # legacy_monthly_v1 row resolves to the final daily catalogue at read
+        # time until the audited cutover rewrites it.
         status, _, body = self.request('/wpai-cloud/connect', 'wordpress_logged_in_fixture=validated-session; fixture_quota=legacy')
         self.assertEqual(status, 200)
         self.assertIn('<strong>PRO</strong>', body)
-        self.assertIn('Период учёта: месяц (UTC)', body)
-        self.assertIn('2026-11-01T00:00:00Z', body)
-        self.assertIn('Сохранены прежние месячные условия', body)
+        self.assertIn('Лимит: 2000', body)
+        self.assertIn('Период учёта: сутки (UTC)', body)
+        self.assertIn('2026-10-23T00:00:00Z', body)
+        self.assertNotIn('Период учёта: месяц', body)
+        self.assertNotIn('Сохранены прежние месячные условия', body)
         self.assertIn('Подключить автоматически', body)
 
     def test_preflight_does_not_register_or_navigate(self):

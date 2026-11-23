@@ -31,8 +31,6 @@ class WPAI_Cloud_Admin {
         try {
             $policy = \WPAICloudGateway\Settings::policy();
             $rows = array();
-            foreach ((array) ($policy['plans'] ?? array()) as $slug => $limit) $rows[] = array('tariffs_v2', $slug, (string) ($policy['periods'][$slug] ?? ''), $limit, 'approved');
-            foreach ((array) ($policy['legacy_plans'] ?? array()) as $slug => $limit) $rows[] = array('legacy_monthly_v1', $slug, 'calendar_month_utc', $limit, 'approved');
             $v3 = $policy['schemes']['tariffs_v3'] ?? null;
             if (is_array($v3)) foreach ($v3['plans'] as $slug => $limit) $rows[] = array('tariffs_v3', $slug, (string) ($v3['periods'][$slug] ?? ''), $limit, (string) ($v3['quota_status'][$slug] ?? ''));
             echo '<table class="widefat striped" style="max-width:900px"><thead><tr><th>Схема</th><th>План</th><th>Период</th><th>Лимит действий</th><th>Квота</th></tr></thead><tbody>';

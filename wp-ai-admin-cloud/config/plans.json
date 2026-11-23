@@ -1,7 +1,7 @@
 {
-  "version": "tariffs-v4-20261116",
+  "version": "tariffs-v5-20261116",
   "period": "per_plan_utc",
-  "status": "owner_approved_daily_quotas_prices_partially_approved_payments_not_implemented",
+  "status": "owner_approved_final_daily_quotas_and_prices_payments_not_implemented",
   "plans": {
     "free": 50,
     "daily": 500,
@@ -23,28 +23,21 @@
     "business": "calendar_day_utc",
     "businesspro": "calendar_day_utc"
   },
-  "legacy_plans": {
-    "free": 100,
-    "pro": 500,
-    "power": 2000,
-    "agency": 5000,
-    "scale": 10000
-  },
   "billing": "successful_single_tool_call",
   "batch": "successful_object_v1",
   "automatic_money_debits": false,
   "manual_refills": "owner_only_daily_quota_reset",
   "timezone": "UTC",
-  "default_scheme": "tariffs_v2",
-  "prices_approved": false,
+  "default_scheme": "tariffs_v3",
+  "prices_approved": true,
   "schemes": {
     "tariffs_v3": {
       "period": "calendar_day_utc",
-      "status": "owner_approved_daily_quotas_prices_partially_approved_payments_not_implemented",
-      "version_key_suffix": "V4",
+      "status": "owner_approved_final_daily_quotas_and_prices_payments_not_implemented",
+      "version_key_suffix": "V5",
       "all_tools": true,
       "automatic_money_debits": false,
-      "prices_approved": false,
+      "prices_approved": true,
       "plans": {
         "free": 50,
         "daily": 500,
@@ -75,7 +68,7 @@
       },
       "prices_rub_month": {
         "free": 0,
-        "daily": null,
+        "daily": 800,
         "pro": 2000,
         "business": 5000,
         "businesspro": 10000

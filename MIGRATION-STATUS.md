@@ -22,13 +22,12 @@ implied by these results.
 
 ## Current plans and licences
 
-- Target catalogue (`schemes.tariffs_v3`): Free **100 actions/UTC day**; Pro 2,000 ₽/month, PRO+ 5,000 ₽/month and PRO++ 10,000 ₽/month, each `requires_owner_approval` with a `null` limit. PRO+/PRO++ are display names for the stable slugs `business`/`businesspro`.
-- The active default remains the frozen `tariffs_v2` until a separately authorized account/tariff migration. Free is 100 actions/UTC day in both schemes.
-- Billable calls on a pending paid plan fail closed with `plan_quota_not_configured`; reads, verification, receipts, rollback and usage remain available. No paid limit is invented or carried over.
-- Cloud Core alone decides plan, licence, quota and balance. Licence keys are hash-only at rest, shown once, revocable and never trusted from Native input.
+- Final owner-approved catalogue (16 November 2026, policy `tariffs-v5-20261116`): Free **50 actions/UTC day**; Daily **800 ₽/month, 500 actions/UTC day**; Pro 2,000 ₽/month, PRO+ 5,000 ₽/month and PRO++ 10,000 ₽/month, each **2,000/5,000/10,000 actions/UTC day**. PRO+/PRO++ are display names for the stable slugs `business`/`businesspro`.
+- Monthly accounting is retired. `schemes.tariffs_v3` is the only active scheme and `default_scheme`; the `legacy_plans` block and the `power`/`agency`/`scale` slugs are no longer offered. Historical `legacy_monthly_v1`/`tariffs_v2` accounts and licences resolve to the equivalent final daily plan and are rewritten once by the idempotent, audited `Core::migrateRetiredSchemes()` cutover; unknown slugs are skipped and audited, never guessed. Historical monthly balances stay untouched for audit.
+- No paid limit is invented: all five quotas are owner-approved and `prices_approved` is `true`. Cloud Core alone decides plan, licence, quota and balance. Licence keys are hash-only at rest, shown once, revocable and never trusted from Native input.
 - No automatic payments, auto-renewal or money debits. Batch is enabled in the shipped catalogue as `successful_object_v1` (per successful object) for `cloud_site_batch_call`; an explicitly stored `wpai_gateway_batch_object_v1` option remains an operator kill switch. Scheduled `batch_create`/`batch_resume` stay gated until their receipt accounting is ready.
 
-See [the beta-readiness report](docs/BETA-READINESS-2026-11-14.md),
+See [the beta-readiness report](docs/BETA-READINESS-2026-11-16.md),
 [the licence registry](docs/LICENSE-REGISTRY.md) and
 [the mission brief](docs/OPEN-BETA-RELEASE-MISSION.md).
 

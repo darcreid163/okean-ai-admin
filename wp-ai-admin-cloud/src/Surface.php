@@ -179,7 +179,6 @@ final class Surface {
         echo '<h2>Обзор аккаунта</h2><p>Один аккаунт и один тариф для всех подключённых сайтов. Действия списываются из общего лимита аккаунта.</p><p>Тариф: <strong>'.esc_html(strtoupper($usage['plan'])).'</strong> · Лимит: '.esc_html($limitLabel).' · Использовано: '.(int)$usage['used'].' · В обработке: '.(int)$usage['reserved'].' · Осталось: '.esc_html($remainingLabel).'</p><p>Подключено сайтов: <strong>'.count($sites).'</strong>. В тестовом режиме доступно до '.Core::MAX_SITES.' регистраций на аккаунт; отдельная подписка для каждого сайта не требуется.</p>';
         $periodLabel=$usage['period_kind']===QuotaPolicy::DAY?'сутки':'месяц';
         echo '<p>Период учёта: '.esc_html($periodLabel).' (UTC). Следующий период: '.esc_html($usage['period_end_utc']).'. Неиспользованные действия не переносятся.</p>';
-        if ($usage['legacy_terms']) echo '<p>Сохранены прежние месячные условия. Перевод на новый тариф выполняется отдельно.</p>';
         if($sites){
             echo '<h2>Мои сайты</h2><table style="width:100%;border-collapse:collapse"><thead><tr><th>Сайт</th><th>Подключение</th><th>Действие</th></tr></thead><tbody>';
             foreach($sites as $s) {

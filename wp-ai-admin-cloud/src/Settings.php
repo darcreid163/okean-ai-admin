@@ -64,7 +64,7 @@ final class Settings {
         if ($batchOverride!==null) {
             $policy['batch']=in_array($batchOverride,[true,1,'1'],true)?BatchAccounting::POLICY:'disabled_until_receipt_accounting_contract';
         }
-        $policy['version']='tariffs-v3-'.substr(hash('sha256',Security::canonical([$policy,$rows??[]])),0,24);
+        $policy['version']='tariffs-v5-'.substr(hash('sha256',Security::canonical([$policy,$rows??[]])),0,24);
         QuotaPolicy::validate($policy);
         return $policy;
     }

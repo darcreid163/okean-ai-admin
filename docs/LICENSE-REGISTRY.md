@@ -54,9 +54,16 @@ used by the Gateway licence registry.
 
 - Automatic issuance: `Core::ensureAccount()` creates one current bound
   entitlement per account; `Core::setPlan()` replaces it atomically when the
-  plan or scheme changes. Historical accounts whose persisted plan does not
-  belong to its scheme (or is quarantined) keep their previous behaviour and
-  are not force-licensed.
+  plan or scheme changes. A historical account is normalised to the final daily
+  plan before issuance; an account whose persisted plan cannot be mapped
+  (unknown or quarantined) is not force-licensed and keeps its previous
+  behaviour.
+- Retired scheme transfer: `Licenses::migrateRetiredScheme()` rewrites a licence
+  that still carries `legacy_monthly_v1`/`tariffs_v2` to the equivalent final
+  daily plan and records a `scheme_retired` event. The audited
+  `Core::migrateRetiredSchemes()` cutover applies it to every stored licence, and
+  the billable path re-checks it so a stale licence cannot revert a migrated
+  account.
 - Manual issuance: operator, optional owner, plan, scheme, activation limit,
   start/expiry or duration, comment. The plan is validated against the scheme;
   a bound manual licence must be active and must not start in the future.
@@ -134,10 +141,11 @@ actions):
 The admin page also exposes issuance, activation, reissue, revoke, suspend and
 reactivate forms, a one-time key display and the latest 50 licences (including
 unbound ones). The issue form renders only plan/scheme pairs accepted by the
-catalogue, so PRO++ (`businesspro`) is offered under `tariffs_v3` and legacy
-plans under `legacy_monthly_v1` instead of producing `unknown_plan` after
-submission. The Native dashboard exposes the paired-site activation form and
-the signed usage refresh.
+catalogue: the single final scheme `tariffs_v3` offers Free, Daily, Pro, PRO+
+(`business`) and PRO++ (`businesspro`). Retired `legacy_monthly_v1`/`tariffs_v2`
+schemes and the `power`/`agency`/`scale` slugs are no longer offered, so the form
+cannot produce `unknown_plan` by submitting a retired pair. The Native dashboard
+exposes the paired-site activation form and the signed usage refresh.
 
 ## Tests
 

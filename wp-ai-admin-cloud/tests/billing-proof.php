@@ -149,7 +149,7 @@ $retry=$core->call($timeoutActor,$timeoutSite['id'],'wp_get_site',['shape'=>'unc
 bp($retry['reconciled']===true&&$transport->executions===$exec,'Reconciled request was redispatched');
 
 // --- 5. Quota boundaries at 0, 1, limit-1, exact limit and over-limit. ---
-$tight=$policy;$tight['plans']['free']=2;
+$tight=$policy;$tight['plans']['free']=2;$tight['schemes'][QuotaPolicy::TARGET]['plans']['free']=2;
 $boundaryCore=new Core($store,new Vault($vaultKey),$transport,$tight,new Signer(sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())));
 $boundaryCore->ensureAccount('b');
 $bSite=$boundaryCore->connect('b','https://billing-boundary.example.com','fixture-billing-credential-owner-b',$now);

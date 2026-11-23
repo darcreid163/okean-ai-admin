@@ -48,11 +48,11 @@ final class Licenses {
         if ($owner===''||$owner===null) $owner=null;
         else $owner=Security::identifier($owner,64);
         if ($scheme===null&&$owner!==null) {
-            // A bound manual licence defaults to the account's current scheme,
-            // so an operator cannot silently move the account to a different
-            // quota period by omitting the optional scheme field.
+            // A bound manual licence keeps the account's currently defined
+            // scheme, so an operator cannot silently move it. A retired or
+            // unknown persisted scheme falls back to the active catalogue.
             $existing=$store->row('SELECT quota_scheme FROM '.$store->table('accounts').' WHERE owner=?',[$owner]);
-            if ($existing&&is_string($existing['quota_scheme'])&&$existing['quota_scheme']!=='') $scheme=$existing['quota_scheme'];
+            if ($existing&&is_string($existing['quota_scheme'])&&isset($policy['schemes'][$existing['quota_scheme']])) $scheme=$existing['quota_scheme'];
         }
         $scheme=$scheme??QuotaPolicy::scheme($policy);
         if (!is_string($scheme)||$scheme===''||!QuotaPolicy::offers($policy,$scheme,$plan)) throw new Fault('unknown_plan',403);
@@ -137,13 +137,16 @@ final class Licenses {
         $owner=Security::identifier($owner,64);
         $siteId=Security::identifier($siteId,64);
         if (!preg_match(self::KEY_PATTERN,$key)) throw new Fault('license_invalid',403);
-        return $store->transaction(function() use($store,$owner,$key,$siteId,$now): array {
+        return $store->transaction(function() use($store,$policy,$owner,$key,$siteId,$now): array {
             $account=$store->row('SELECT * FROM '.$store->table('accounts').' WHERE owner=?'.$store->lock(),[$owner]);
             if (!$account||(int)$account['disabled']!==0) throw new Fault('account_unavailable',403);
             $license=$store->row('SELECT * FROM '.$store->table('licenses').' WHERE key_hash=?'.$store->lock(),[hash('sha256',$key)]);
             if (!$license) throw new Fault('license_invalid',403);
             $license=self::refreshExpiry($store,$license,$now);
             self::assertUsable($license,$owner,$now);
+            // A key issued under a retired scheme is transferred before its
+            // plan is applied, so activation can never restore monthly terms.
+            $license=self::migrateRetiredScheme($store,$policy,$license,$now);
             $site=$store->row('SELECT id,home FROM '.$store->table('sites').' WHERE id=? AND owner=? AND status=?',[$siteId,$owner,'active']);
             if (!$site) throw new Fault('site_unavailable',404);
             $activation=$store->row('SELECT * FROM '.$store->table('license_activations').' WHERE license_id=? AND site_id=?'.$store->lock(),[$license['id'],$siteId]);
@@ -298,6 +301,23 @@ final class Licenses {
     }
 
     /**
+     * Explicitly transfers a licence that still points at a retired quota
+     * scheme to the final daily plan. Called by the audited cutover and on the
+     * billable path, so a stale licence can never revert a migrated account.
+     */
+    public static function migrateRetiredScheme(Store $store,array $policy,array $license,int $now): array {
+        $scheme=(string)($license['quota_scheme']??'');
+        if (isset($policy['schemes'][$scheme])||!in_array($scheme,[QuotaPolicy::LEGACY,QuotaPolicy::CURRENT],true)) return $license;
+        $plan=QuotaPolicy::normalizePlan($scheme,(string)($license['plan']??''));
+        if ($plan===null) return $license;
+        $target=QuotaPolicy::scheme($policy);
+        if (!QuotaPolicy::offers($policy,$target,$plan)) return $license;
+        $changed=$store->execute('UPDATE '.$store->table('licenses').' SET plan=?,quota_scheme=?,sequence=sequence+1 WHERE id=? AND plan=? AND quota_scheme=?',[$plan,$target,(string)$license['id'],(string)$license['plan'],$scheme])->rowCount();
+        if ($changed===1) self::event($store,(string)$license['id'],(string)($license['owner']??''),'scheme_retired','system',['from_plan'=>(string)$license['plan'],'from_scheme'=>$scheme,'plan'=>$plan,'scheme'=>$target],$now);
+        return self::row($store,(string)$license['id']);
+    }
+
+    /**
      * Called on billable paths. A linked licence that is no longer usable is
      * downgraded to Free before quota terms are computed. Accounts without a
      * licence_id keep their historical plan untouched.
@@ -319,6 +339,7 @@ final class Licenses {
             return self::accountRow($store,$owner);
         }
         $license=self::refreshExpiry($store,$license,$now);
+        $license=self::migrateRetiredScheme($store,$policy,$license,$now);
         $usable=$license['status']===self::ACTIVE&&(int)$license['starts_at']<=$now;
         if (!$usable) {
             self::fallback($store,$policy,$account,$now,'license_'.$license['status']);

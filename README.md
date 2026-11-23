@@ -23,21 +23,21 @@ The old `wp-ai-cloud` pilot 0.1.0 and former bundled Cloud Core 0.3.6 are **not*
 
 ## Commercial contract
 
-The owner-approved final five-tier daily quota catalogue is merged in PR #206 (16 November 2026):
+The owner-approved final five-tier daily quota catalogue is shipped in the `tariffs-v5-20261116` policy (owner decision 16 November 2026):
 
 | Plan | Price | Approved quota | Quota period |
 |---|---:|---:|---|
 | Free | 0 ₽/month | 50 actions | UTC calendar day |
-| Daily | not set | 500 actions | UTC calendar day |
+| Daily | 800 ₽/month | 500 actions | UTC calendar day |
 | Pro | 2,000 ₽/month | 2,000 actions | UTC calendar day |
 | PRO+ | 5,000 ₽/month | 5,000 actions | UTC calendar day |
 | PRO++ | 10,000 ₽/month | 10,000 actions | UTC calendar day |
 
-Display names **PRO+** and **PRO++** map to the stable internal slugs `business` and `businesspro`. The other stable slugs are `free`, `daily` and `pro`. Slugs remain stable for persisted accounts, licences and API payloads. Daily price is deliberately unset pending a separate owner decision; existing Pro/PRO+/PRO++ monthly prices remain unchanged.
+Display names **PRO+** and **PRO++** map to the stable internal slugs `business` and `businesspro`. The other stable slugs are `free`, `daily` and `pro`. Slugs remain stable for persisted accounts, licences and API payloads. Monthly accounting is retired: every tariff counts per UTC day and all five quotas are owner-approved.
 
-Canonical server source: `wp-ai-admin-cloud/config/plans.json`. The five final daily quotas are present in the active `tariffs_v2` catalogue and target `schemes.tariffs_v3`; all reset at 00:00 UTC daily. `default_scheme` remains `tariffs_v2` for compatibility. Existing `legacy_monthly_v1` accounts retain historical monthly terms until an explicit audited transfer; no legacy account is silently migrated or repriced. Production activation of the updated catalogue still requires a separately verified Cloud Core deployment; see the 16 November readiness report.
+Canonical server source: `wp-ai-admin-cloud/config/plans.json`. `prices_approved` is `true`, and the single active scheme is `schemes.tariffs_v3`, which is also `default_scheme`; all five quotas reset at 00:00 UTC daily. The retired `legacy_monthly_v1`/`tariffs_v2` schemes, the `legacy_plans` block and the `power`/`agency`/`scale` plan slugs are no longer offered or assignable. Historical accounts and licences resolve to the equivalent final daily plan at read time and are rewritten once by the explicit, idempotent, audited `Core::migrateRetiredSchemes()` cutover (`quota_scheme_retired`, `plan_slug_retired`, licence `scheme_retired`); unknown slugs are skipped and audited as `quota_cutover_skipped` instead of being guessed. Historical monthly balances are preserved for audit; the current daily window starts at zero. Production activation of the updated catalogue still requires a separately verified Cloud Core deployment; see the 16 November readiness report.
 
-Cloud Core alone decides plan, licence, quota and balance; clients never submit their own plan, quota, account or licence identity. Licence keys use `wpai_lic_` plus 43 base64url characters, only SHA-256 is stored at rest, and the plaintext is shown once. The Native dashboard shows the server-signed plan label, licence prefix/status/activations and quota values, and never derives a different balance. Successful reads/Sandbox calls count; every successful Batch object is one action; failed calls/rollback/idempotent retry are not billed again. Batch is enabled in the shipped catalogue as `successful_object_v1`; an explicitly stored `wpai_gateway_batch_object_v1` option remains an operator kill switch. **Gateway Ledger is sole charging authority, no telemetry charging, no automatic payment debit.** The live v2→v3 account/tariff migration is not assumed complete.
+Cloud Core alone decides plan, licence, quota and balance; clients never submit their own plan, quota, account or licence identity. Licence keys use `wpai_lic_` plus 43 base64url characters, only SHA-256 is stored at rest, and the plaintext is shown once. The Native dashboard shows the server-signed plan label, licence prefix/status/activations and quota values, and never derives a different balance. Successful reads/Sandbox calls count; every successful Batch object is one action; failed calls/rollback/idempotent retry are not billed again. Batch is enabled in the shipped catalogue as `successful_object_v1`; an explicitly stored `wpai_gateway_batch_object_v1` option remains an operator kill switch. **Gateway Ledger is sole charging authority, no telemetry charging, no automatic payment debit.** The live account/tariff cutover is executed by the audited migration, not assumed complete by a docs change.
 
 ## Safe development and release
 

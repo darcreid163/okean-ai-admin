@@ -30,17 +30,19 @@ try {
     $balance=$store->row('SELECT * FROM '.$store->table('balances').' WHERE owner=? AND period=?',['owner1','2026-10']);
     $site=$store->row('SELECT * FROM '.$store->table('sites').' WHERE id=?',['reg_one']);
     $grant=$store->row('SELECT * FROM '.$store->table('oauth_grants').' WHERE id=?',['grant-one']);
-    migrationCheck($account!==null&&$account['quota_scheme']===QuotaPolicy::LEGACY,'Legacy account changed without consent');
+    migrationCheck($account!==null&&$account['quota_scheme']===QuotaPolicy::LEGACY,'Additive schema migration must not rewrite stored schemes');
     migrationCheck($balance!==null&&(int)$balance['used']===17&&(int)$balance['reserved']===3,'Historical balance reset');
     migrationCheck($site!==null&&$site['plugin_site_id']==='original-site'&&$site['installation_id']==='original-installation'&&$site['token_sealed']==='sealed-original','Site identity/token changed');
     migrationCheck($grant!==null&&$grant['owner']==='owner1'&&$grant['client']==='client-one'&&$grant['sites']==='["reg_one"]'&&(int)$grant['revoked']===0,'OAuth grant changed');
     $policy=json_decode((string)file_get_contents(dirname(__DIR__).'/config/plans.json'),true,32,JSON_THROW_ON_ERROR);
     QuotaPolicy::validate($policy);
+    // Retired monthly schemes resolve to the final daily catalogue at read time;
+    // the stored row itself is only rewritten by the explicit audited cutover.
     $legacy=QuotaPolicy::terms($policy,$account);
-    migrationCheck($legacy['limit']===100&&$legacy['period_kind']===QuotaPolicy::MONTH,'Legacy terms lost');
+    migrationCheck($legacy['limit']===50&&$legacy['period_kind']===QuotaPolicy::DAY&&$legacy['quota_scheme']===QuotaPolicy::TARGET,'Retired legacy terms were not transferred to the daily catalogue');
     $before=QuotaPolicy::window($legacy,strtotime('2026-10-31T23:59:59Z'));
     $after=QuotaPolicy::window($legacy,strtotime('2026-11-01T00:00:00Z'));
-    migrationCheck($before['period']==='2026-10'&&$before['next_period_at']===strtotime('2026-11-01T00:00:00Z')&&$after['period']==='2026-11','UTC monthly rollover failed');
+    migrationCheck($before['period']==='2026-10-31'&&$before['next_period_at']===strtotime('2026-11-01T00:00:00Z')&&$after['period']==='2026-11-01','UTC daily rollover failed');
     foreach(['free'=>[50,QuotaPolicy::DAY],'daily'=>[500,QuotaPolicy::DAY],'pro'=>[2000,QuotaPolicy::DAY],'business'=>[5000,QuotaPolicy::DAY],'businesspro'=>[10000,QuotaPolicy::DAY]] as $plan=>[$limit,$kind]){
         $terms=QuotaPolicy::terms($policy,['plan'=>$plan,'quota_scheme'=>QuotaPolicy::CURRENT]);
         migrationCheck($terms['limit']===$limit&&$terms['period_kind']===$kind,'Bad approved limit for '.$plan);
@@ -70,11 +72,35 @@ try {
     migrationCheck($legacyAlias['plan']==='biznes'&&(int)$legacyAlias['sequence']===1,'Legacy plan alias was rewritten');
     $aliasAudit=$store->row('SELECT COUNT(*) AS n FROM '.$store->table('audit').' WHERE event=?',['plan_alias_migrated']);
     migrationCheck((int)$aliasAudit['n']===2,'Alias migration audit trail incomplete');
+    // An unknown persisted slug is never guessed: the cutover must leave the
+    // row intact and raise one operator-visible flag instead of inventing terms.
+    $store->execute('INSERT INTO '.$store->table('accounts').' (owner,plan,quota_scheme) VALUES (?,?,?)',['alias-unknown','enterprise',QuotaPolicy::LEGACY]);
+    // Explicit owner-approved cutover (16.11.2026): retired monthly and
+    // pre-cutover schemes plus their retired plan slugs are transferred once,
+    // audited, and never rewrite historical balances.
+    $cutover=\WPAICloudGateway\Core::migrateRetiredSchemes($store,$policy,1790000000);
+    migrationCheck($cutover===4,'Retired-scheme cutover covered the wrong accounts');
+    $cutOwner1=$store->row('SELECT * FROM '.$store->table('accounts').' WHERE owner=?',['owner1']);
+    migrationCheck($cutOwner1['quota_scheme']===QuotaPolicy::TARGET&&$cutOwner1['plan']==='pro','Retired pre-cutover account was not normalised');
+    $cutLegacy=$store->row('SELECT * FROM '.$store->table('accounts').' WHERE owner=?',['alias-legacy']);
+    migrationCheck($cutLegacy['quota_scheme']===QuotaPolicy::TARGET&&$cutLegacy['plan']==='business','Retired legacy alias was not transferred to PRO+');
+    migrationCheck(QuotaPolicy::terms($policy,$cutLegacy)['limit']===5000,'Transferred legacy alias lost its PRO+ limit');
+    $afterCutover=$store->row('SELECT * FROM '.$store->table('balances').' WHERE owner=? AND period=?',['owner1','2026-10']);
+    migrationCheck((int)$afterCutover['used']===17&&(int)$afterCutover['reserved']===3,'Cutover rewrote a historical balance');
+    $retiredAudit=$store->row('SELECT COUNT(*) AS n FROM '.$store->table('audit').' WHERE event=?',['quota_scheme_retired']);
+    migrationCheck((int)$retiredAudit['n']===4,'Cutover audit trail incomplete');
+    $slugAudit=$store->row('SELECT COUNT(*) AS n FROM '.$store->table('audit').' WHERE event=?',['plan_slug_retired']);
+    migrationCheck((int)$slugAudit['n']===1,'Retired plan-slug audit trail incomplete');
+    $skipped=$store->row('SELECT * FROM '.$store->table('accounts').' WHERE owner=?',['alias-unknown']);
+    migrationCheck($skipped['plan']==='enterprise'&&$skipped['quota_scheme']===QuotaPolicy::LEGACY,'Unknown plan slug was guessed during cutover');
+    $skipAudit=$store->row('SELECT COUNT(*) AS n FROM '.$store->table('audit').' WHERE event=? AND owner=?',['quota_cutover_skipped','alias-unknown']);
+    migrationCheck((int)$skipAudit['n']===1,'Skipped cutover was not audited');
+    migrationCheck(\WPAICloudGateway\Core::migrateRetiredSchemes($store,$policy,1790000000)===0,'Retired-scheme cutover is not idempotent');
     $bad=$policy; $bad['plans']['pro']='500';
     try{QuotaPolicy::validate($bad);throw new RuntimeException('String limit incorrectly accepted');}
     catch(Fault $e){migrationCheck($e->reason==='invalid_plan_limit','Wrong quota validation fault');}
     echo 'PASS '.$checks.' v4 migration/UTC/identity assertions; driver='.($mysql?'mysql':'sqlite')."\n";
 } finally {
     foreach($tables as $name) $store->execute('DROP TABLE IF EXISTS '.$store->table($name));
-    if(!$mysql) foreach([$database,$database.'-wal',$database.'-shm'] as $file) if(is_file($file)) unlink($file);
+    if(!$mysql) { unset($store); $pdo=null; foreach([$database,$database.'-wal',$database.'-shm'] as $file) if(is_file($file)) @unlink($file); }
 }

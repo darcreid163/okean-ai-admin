@@ -82,7 +82,7 @@ class WPAI_Cloud_REST {
                 'prices_approved'=>(bool)($scheme['prices_approved']??false),
                 'automatic_money_debits'=>false);
         }
-        return self::response(array('items'=>$plans,'quota_scheme'=>(string)($policy['default_scheme']??'tariffs_v2'),'payments_enabled'=>false,
+        return self::response(array('items'=>$plans,'quota_scheme'=>(string)($policy['default_scheme']??'tariffs_v3'),'payments_enabled'=>false,
             'automatic_money_debits'=>false,'manual_refills'=>'deferred',
             'prices_approved'=>(bool)($policy['prices_approved']??false),'target'=>$target));
     }

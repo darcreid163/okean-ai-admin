@@ -81,8 +81,8 @@ $audit=$store->row('SELECT owner,site_id,event,request_key FROM '.$store->table(
 check($audit!==null && $audit['site_id']==='admin:9001' && $audit['request_key']===$period,'Manual daily reset audit is incomplete');
 rejects(fn()=>$core->resetDailyQuota('9001','missing-account',$now),'account_unavailable');
 $core->ensureAccount('legacy-reset');
-$core->setPlan('operator','legacy-reset','free',$now,WPAICloudGateway\QuotaPolicy::LEGACY);
-rejects(fn()=>$core->resetDailyQuota('9001','legacy-reset',$now),'daily_quota_reset_not_supported');
+$legacyReset=$core->resetDailyQuota('9001','legacy-reset',$now);
+check($legacyReset['reset']===true && $legacyReset['quota_scheme']===WPAICloudGateway\QuotaPolicy::TARGET && $legacyReset['limit']===100,'Every final tariff must support the owner daily reset');
 rejects(fn()=>$core->setPlan('operator','1','unlimited',$now),'unknown_plan');
 $core->revokeToken('1',hash('sha256',$read['access_token']),$now);
 rejects(fn()=>$core->authenticate($read['access_token'],$now),'invalid_or_expired_token');
@@ -210,4 +210,4 @@ foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])
 check($core->usage('duplicate',$now)['used']===1 && $core->usage('duplicate',$now)['reserved']===0 && count(file($executionLog))===1,'Concurrent duplicate action executed or charged more than once');
 putenv('CLOUD_TEST_TOKEN'); putenv('CLOUD_TEST_EXECUTION_LOG'); unlink($executionLog);
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
-if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
+if (!getenv('TEST_MYSQL_DSN')) { unset($store); $core=null; foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) @unlink($f); }

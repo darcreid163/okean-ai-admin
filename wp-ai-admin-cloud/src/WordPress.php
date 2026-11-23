@@ -48,6 +48,13 @@ final class WordPress {
             Core::migratePlanAliases($store,time());
             update_option('wpai_gateway_plan_alias_v1','1',false);
         }
+        // Owner decision 16.11.2026: monthly accounting is retired. Existing
+        // legacy_monthly_v1 / tariffs_v2 rows are transferred explicitly and
+        // audited; historical balances are untouched.
+        if ((string)get_option('wpai_gateway_quota_cutover_v1','')!=='1') {
+            Core::migrateRetiredSchemes($store,Settings::policy(),time());
+            update_option('wpai_gateway_quota_cutover_v1','1',false);
+        }
     }
     public static function statusPage(): void { Admin::page(); }
     public static function enable(): void {

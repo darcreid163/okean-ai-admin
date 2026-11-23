@@ -28,24 +28,15 @@ final class Admin {
      * unknown_plan after the operator has filled it in.
      */
     public static function licenseOffers(array $policy): array {
-        $plans=[];
-        foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $scheme){
-            $candidates=isset($policy['schemes'][$scheme]['plans'])&&is_array($policy['schemes'][$scheme]['plans'])
-                ? array_keys($policy['schemes'][$scheme]['plans'])
-                : ($scheme===QuotaPolicy::LEGACY?array_keys((array)($policy['legacy_plans']??[])):array_keys((array)($policy['plans']??[])));
-            foreach($candidates as $plan)if(QuotaPolicy::offers($policy,$scheme,(string)$plan))$plans[(string)$plan]=true;
-        }
         $offers=[];
-        foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $scheme){
-            foreach(array_keys($plans) as $plan){
-                if(!QuotaPolicy::offers($policy,$scheme,$plan))continue;
-                $offers[]=[
-                    'value'=>$scheme.'|'.$plan,
-                    'scheme'=>$scheme,
-                    'plan'=>$plan,
-                    'label'=>QuotaPolicy::planLabel($policy,$plan,$scheme).' — '.$scheme,
-                ];
-            }
+        foreach(array_keys((array)($policy['schemes'][QuotaPolicy::TARGET]['plans']??[])) as $plan){
+            if(!QuotaPolicy::offers($policy,QuotaPolicy::TARGET,$plan))continue;
+            $offers[]=[
+                'value'=>QuotaPolicy::TARGET.'|'.$plan,
+                'scheme'=>QuotaPolicy::TARGET,
+                'plan'=>$plan,
+                'label'=>QuotaPolicy::planLabel($policy,$plan,QuotaPolicy::TARGET).' — '.QuotaPolicy::TARGET,
+            ];
         }
         return $offers;
     }

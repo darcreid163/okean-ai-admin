@@ -26,12 +26,13 @@ final class Core {
         $account=$this->store->row('SELECT owner,plan,quota_scheme,license_id FROM '.$this->store->table('accounts').' WHERE owner=?',[$owner]);
         if ($account && empty($account['license_id'])) {
             $plan=(string)$account['plan']; $scheme=(string)$account['quota_scheme'];
-            // Historical accounts keep their previous entitlement when the
-            // persisted plan does not belong to its scheme (or is quarantined).
-            // Automatic issuance must never turn a working legacy account into
-            // a hard failure just because it has no licence yet.
-            if ($scheme!=='' && QuotaPolicy::offers($this->policy,$scheme,$plan) && empty($this->policy['incompatible_plans'][$scheme.'|'.$plan])) {
-                Licenses::ensureBound($this->store,$this->policy,$owner,$plan,$scheme,time());
+            // Historical accounts are normalised to the final daily catalogue.
+            // Unknown or mismatched slugs are left alone so automatic issuance
+            // never guesses a quota or turns a working account into a failure.
+            $targetPlan=QuotaPolicy::normalizePlan($scheme,$plan);
+            $targetScheme=QuotaPolicy::assignmentScheme($this->policy,$scheme);
+            if ($targetPlan!==null && QuotaPolicy::offers($this->policy,$targetScheme,$targetPlan) && empty($this->policy['incompatible_plans'][$targetScheme.'|'.$targetPlan])) {
+                Licenses::ensureBound($this->store,$this->policy,$owner,$targetPlan,$targetScheme,time());
             }
         }
     }
@@ -59,6 +60,50 @@ final class Core {
                     $store->audit($row['owner'],'','plan_alias_migrated',hash('sha256',$row['owner'].'|'.$scheme.'|'.$row['plan'].'|'.$target),$now);
                     ++$changed;
                 }
+            }
+            return $changed;
+        });
+    }
+    /**
+     * Explicit, audited cutover for retired quota schemes. Owner decision
+     * 16.11.2026 removed monthly accounting: stored legacy_monthly_v1 and
+     * tariffs_v2 rows are normalised to the single final daily catalogue and
+     * the retired plan slugs are transferred to the closest final plan.
+     * Historical balances are never rewritten and the update is idempotent.
+     * Returns the number of account and licence rows transferred.
+     */
+    public static function migrateRetiredSchemes(Store $store,array $policy,int $now): int {
+        // DDL must happen before the transaction: MySQL implicitly commits on
+        // CREATE TABLE and would otherwise break the cutover atomicity.
+        $store->ensureLicenseSchema();
+        $active=QuotaPolicy::scheme($policy);
+        return (int)$store->transaction(function() use($store,$policy,$now,$active): int {
+            $rows=$store->rows('SELECT owner,plan,quota_scheme FROM '.$store->table('accounts').' WHERE quota_scheme=? OR quota_scheme=? ORDER BY owner',[QuotaPolicy::LEGACY,QuotaPolicy::CURRENT]);
+            $changed=0;
+            foreach($rows as $row) {
+                $scheme=(string)$row['quota_scheme'];
+                $target=QuotaPolicy::normalizePlan($scheme,(string)$row['plan']);
+                // An unknown persisted slug is never guessed or silently
+                // reduced, and a plan the active catalogue does not offer is
+                // never written; both stay untouched and are flagged.
+                if($target===null || !QuotaPolicy::offers($policy,$active,$target)) {
+                    $store->audit($row['owner'],'','quota_cutover_skipped',hash('sha256',$row['owner'].'|'.$scheme.'|'.(string)$row['plan']),$now);
+                    continue;
+                }
+                $updated=$store->execute('UPDATE '.$store->table('accounts').' SET plan=?,quota_scheme=?,sequence=sequence+1 WHERE owner=? AND plan=? AND quota_scheme=?',[$target,$active,$row['owner'],$row['plan'],$scheme])->rowCount();
+                if($updated!==1) continue;
+                $store->audit($row['owner'],'','quota_scheme_retired',hash('sha256',$row['owner'].'|'.$scheme.'|'.$active),$now);
+                if($target!==(string)$row['plan']) $store->audit($row['owner'],'','plan_slug_retired',hash('sha256',$row['owner'].'|'.$row['plan'].'|'.$target),$now);
+                ++$changed;
+            }
+            // Licences are authoritative for the account's plan. A stale
+            // licence that still carries a retired scheme would otherwise
+            // revert the migrated account on the next billable call.
+            $licenses=$store->rows('SELECT * FROM '.$store->table('licenses').' WHERE quota_scheme=? OR quota_scheme=? ORDER BY id',[QuotaPolicy::LEGACY,QuotaPolicy::CURRENT]);
+            foreach($licenses as $license) {
+                $before=(string)$license['quota_scheme'];
+                $after=Licenses::migrateRetiredScheme($store,$policy,$license,$now);
+                if((string)$after['quota_scheme']!==$before) ++$changed;
             }
             return $changed;
         });
@@ -615,7 +660,8 @@ final class Core {
         $this->store->transaction(function() use($operator,$owner,$plan,$now,$scheme) {
             $this->account($owner,true,$now);
             $current=$this->store->row('SELECT plan,quota_scheme FROM '.$this->store->table('accounts').' WHERE owner=?',[$owner]);
-            $target=$scheme??(string)($current['quota_scheme']??QuotaPolicy::scheme($this->policy));
+            $target=$scheme??QuotaPolicy::assignmentScheme($this->policy,(string)($current['quota_scheme']??''));
+            $plan=QuotaPolicy::normalizePlan($target,$plan)??$plan;
             if(!QuotaPolicy::offers($this->policy,$target,$plan)) throw new Fault('unknown_plan',403);
             $this->store->execute('UPDATE '.$this->store->table('accounts').' SET plan=?,quota_scheme=?,sequence=sequence+1 WHERE owner=?',[$plan,$target,$owner]);
             Licenses::ensureBound($this->store,$this->policy,$owner,$plan,$target,$now,$operator);
