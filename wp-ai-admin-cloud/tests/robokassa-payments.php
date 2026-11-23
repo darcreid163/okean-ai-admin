@@ -61,6 +61,33 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $second=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$renewal);
     robokassaPaymentCheck((int)$second['expires_at']>(int)$first['expires_at'],'same-plan renewal must extend from the existing expiry');
 
+
+    // A confirmed full refund of the current order revokes only the matching
+    // current licence. Replays are idempotent and restore the account to Free.
+    $fullRefund=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$renewal,'rk_refund_full_'.$transactionSeed,1499.0,true);
+    robokassaPaymentCheck($fullRefund['entitlement_revoked']===true && $fullRefund['outcome']==='license_revoked','confirmed full refund must revoke current paid licence');
+    $account=$store->row('SELECT plan,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$owner]);
+    $revokedLicense=$store->row('SELECT status FROM '.$store->table('licenses').' WHERE id=?',[$second['license_id']]);
+    robokassaPaymentCheck($account['plan']==='free' && $account['license_id']===null && $revokedLicense['status']==='revoked','full refund must atomically fall back to Free');
+    $fullReplay=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$renewal,'rk_refund_full_'.$transactionSeed,1499.0,true);
+    robokassaPaymentCheck($fullReplay['idempotent']===true && $fullReplay['entitlement_revoked']===true,'duplicate full refund must be idempotent');
+
+    // Partial refunds are recorded but must never reduce or revoke the active plan.
+    $thirdOrder=new WC_Order($baseOrderId+5,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-third');
+    $third=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$thirdOrder);
+    $partial=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$thirdOrder,'rk_refund_partial_'.$transactionSeed,300.0,false);
+    robokassaPaymentCheck($partial['outcome']==='partial_recorded' && $partial['entitlement_revoked']===false,'partial refund must be ledger-only');
+    $activeAfterPartial=$store->row('SELECT plan,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$owner]);
+    robokassaPaymentCheck($activeAfterPartial['plan']==='pro' && $activeAfterPartial['license_id']===$third['license_id'],'partial refund changed active entitlement');
+    $partialReplay=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$thirdOrder,'rk_refund_partial_'.$transactionSeed,300.0,false);
+    robokassaPaymentCheck($partialReplay['idempotent']===true && $partialReplay['entitlement_revoked']===false,'duplicate partial refund must be idempotent');
+
+    // A delayed refund of an older replaced purchase must not revoke a newer order.
+    $stale=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$order,'rk_refund_stale_'.$transactionSeed,1499.0,true);
+    $activeAfterStale=$store->row('SELECT plan,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$owner]);
+    robokassaPaymentCheck($stale['outcome']==='stale_payment_refund' && !$stale['entitlement_revoked'],'old refunded order must be marked stale');
+    robokassaPaymentCheck($activeAfterStale['plan']==='pro' && $activeAfterStale['license_id']===$third['license_id'],'old refund revoked a newer purchase');
+
     $badAmount=new WC_Order($baseOrderId+3,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1200)],1200.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-bad');
     try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$badAmount); throw new RuntimeException('Robokassa payment test failed: wrong amount accepted'); }
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='paid_product_line_total_mismatch','wrong amount must fail closed'); }
