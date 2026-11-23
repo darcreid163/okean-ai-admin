@@ -78,6 +78,12 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     robokassaPaymentCheck($account['plan']==='free' && $account['license_id']===null && $revokedLicense['status']==='revoked','full refund must atomically fall back to Free');
     $fullReplay=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$renewal,'rk_refund_full_'.$transactionSeed,1499.0,true);
     robokassaPaymentCheck($fullReplay['idempotent']===true && $fullReplay['entitlement_revoked']===true,'duplicate full refund must be idempotent');
+    try {
+        \WPAICloudGateway\WooCommercePayments::refund($store,$policy,$order,'rk_refund_full_'.$transactionSeed,1499.0,true);
+        throw new RuntimeException('Robokassa payment test failed: conflicting refund request ID accepted');
+    } catch (\WPAICloudGateway\Fault $e) {
+        robokassaPaymentCheck($e->reason==='refund_replay_conflict','request ID reused for another order must be rejected');
+    }
 
     // Partial refunds are recorded but must never reduce or revoke the active plan.
     $thirdOrder=new WC_Order($baseOrderId+5,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-third');
