@@ -42,13 +42,16 @@ final class Reconciliation {
             $orderId=(string)$order->get_id();
             $seen[$orderId]=true;
             $checked++;
-            if (!$order->is_paid()) continue;
-            $paid++;
+            $isPaid=$order->is_paid();
+            if ($isPaid) $paid++;
 
             $payment=$store->row('SELECT * FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?',[$orderId]);
             if (!$payment) {
-                self::add($issues,'paid_order_missing_ledger',$orderId,'Заказ отмечен оплаченным, но записи в Cloud commerce_payments нет.');
+                if ($isPaid) self::add($issues,'paid_order_missing_ledger',$orderId,'Заказ отмечен оплаченным, но записи в Cloud commerce_payments нет.');
                 continue;
+            }
+            if (method_exists($order,'get_status') && $order->get_status()==='refunded' && (string)$payment['status']!=='refunded') {
+                self::add($issues,'woo_refund_cloud_status_mismatch',$orderId,'WooCommerce пометил заказ как возвращённый, но Cloud-платёж не имеет статуса refunded.');
             }
             if (($payment['status']??'')==='processing') {
                 self::add($issues,'payment_stuck_processing',$orderId,'Платёжная запись осталась в processing; требуется проверка транзакции.');
