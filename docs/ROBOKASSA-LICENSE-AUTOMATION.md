@@ -1,6 +1,6 @@
 # Robokassa → WooCommerce → Cloud licence entitlement
 
-Status: implementation added on branch `codex/robokassa-paid-entitlements`; automated grants are still gated from public enablement. Automated test-shop acceptance and refund handling remain release blockers.
+Status: payment issuance is implemented on `codex/robokassa-paid-entitlements`; confirmed refund handling is implemented on stacked draft `codex/robokassa-refund-lifecycle`. Public sales remain disabled pending CI, test-shop acceptance, chargeback handling and reconciliation.
 
 ## Commercial catalogue (single source: config/plans.json)
 
@@ -71,9 +71,32 @@ The browser Success URL, a Woo order status changed manually by an administrator
 
 ## Current implementation boundaries\n\n- `WooCommercePayments.php` implements classic ResultURL preflight, registered-customer ownership, exact offer validation, one-time issue and same-plan calendar-term extension. ResultUrl2 is not used to mark an order paid or grant a licence.
 - If the payment is already confirmed but Cloud settlement fails transiently, a bounded WP-Cron retry queue retries the entitlement without relying on Robokassa replaying a callback after WooCommerce has already marked the order paid. Permanent validation failures are surfaced for manual review; after 12 transient attempts the order is flagged for reconciliation.
-- `Settings::eligible()` now admits a normal WordPress user only while the authoritative Cloud licence registry shows an active, unexpired paid plan; administrators and explicitly approved beta users retain their existing access.\n- The paid-price catalogue must be explicitly approved; otherwise settlement fails closed.\n- Public Plans API still reports `payments_enabled=false`. No production sales switch was enabled.\n- Automated tests, test-shop end-to-end verification, refund/chargeback lifecycle and operational reconciliation tooling are not yet complete.\n\n## Refunds and chargebacks
+- `Settings::eligible()` now admits a normal WordPress user only while the authoritative Cloud licence registry shows an active, unexpired paid plan; administrators and explicitly approved beta users retain their existing access.\n- The paid-price catalogue must be explicitly approved; otherwise settlement fails closed.\n- Public Plans API still reports `payments_enabled=false`. No production sales switch was enabled.\n- Automated tests, test-shop end-to-end verification, confirmed refund lifecycle is implemented in a draft PR; chargeback lifecycle and operational reconciliation tooling are not yet complete.\n\n## Refund lifecycle
 
-Do not revoke access on a refund request or a transient/pending refund status. On a confirmed full refund/chargeback, record the financial event and apply the defined operator policy (suspend/revoke paid licence or downgrade to Free). Partial refunds require a separately approved policy; do not silently alter expiry. Every transition must be idempotent and audited. Preserve payment and licence history.
+The integrated adapter subscribes to `robokassa_refund_check_event` at priority 20, after the official Robokassa GetState handler at priority 10 has persisted the result. Only a request whose stored status is exactly `finished` is processed. Pending, canceled, failed and unconfirmed requests do not touch Cloud entitlements.
+
+Confirmed refunds are written to the additive `commerce_refunds` ledger, keyed by Robokassa `requestId`. The ledger stores order/customer/licence references, amount, refund kind, outcome and a payload hash; it never stores Robokassa credentials or raw callback data. Replays are idempotent; a reused request ID with different order or payload is rejected.
+
+The full-refund decision is based on the cumulative sum of *confirmed* refund amounts compared with the paid order amount, not WooCommerce's local `is_full` flag. This handles callbacks completing out of order and prevents a pending partial refund from making a later request look like a completed full refund.
+
+- Partial confirmed refund: record it; do not change licence status, expiry, quota or site limits.
+- Confirmed refunds whose cumulative total is below the paid amount: keep the licence active.
+- When confirmed refunds reach the full paid amount: revoke the licence only if that exact order's licence is still the account's current active/suspended entitlement. The Cloud account falls back to Free in the same database transaction.
+- If the refunded order's licence has already been replaced by a later purchase/renewal, record `stale_payment_refund` and preserve the newer entitlement.
+- Transient Cloud/database failures retry up to 12 times. Exhaustion creates an order note for manual reconciliation; it does not guess or revoke access.
+
+Chargeback/dispute events are **not implemented yet**. They must be integrated only from a verified terminal Robokassa/acquirer status, with an idempotent dispute ledger and a separate suspension/reinstatement policy. Do not infer a chargeback from a refund status or generic WooCommerce order status.
+
+## Refund and chargeback acceptance tests
+
+1. Pending, canceled and failed refund states do not alter a licence.
+2. Confirmed partial refund is recorded and leaves entitlement unchanged.
+3. Multiple confirmed partial refunds revoke only when their cumulative amount equals the original paid amount.
+4. Out-of-order refund callbacks produce the same final result as ordered callbacks.
+5. Duplicate `requestId` is idempotent; conflicting replay is rejected.
+6. A full refund of an old replaced order does not revoke a newer paid licence.
+7. Transient Cloud failure retries are bounded and end in a manual-review note.
+8. Chargeback tests are added only after a verified gateway dispute signal is selected and implemented.
 
 ## Acceptance tests (must pass before enabling sales)
 
@@ -86,7 +109,7 @@ Do not revoke access on a refund request or a transient/pending refund status. O
 7. Replayed Result notification and concurrent duplicate callbacks do not issue/extend twice.
 8. Monthly and annual term boundaries, leap year, month-end clamping and renewal extension are correct.
 9. A different-plan purchase follows the no-proration policy.
-10. Confirmed full refund/chargeback follows the approved revocation policy; pending/partial refund does not revoke.
+10. Confirmed cumulative full refund follows the revocation policy; pending/partial refund does not revoke. Chargeback handling remains a separate release gate.
 11. Robokassa settings and passwords are unchanged.
 12. No production payment is used for QA; run only with Robokassa test credentials/test mode and test orders.
 
