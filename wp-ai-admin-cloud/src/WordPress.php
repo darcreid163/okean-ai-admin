@@ -33,6 +33,7 @@ final class WordPress {
         add_filter('rest_pre_serve_request',[self::class,'emptyNotification'],10,4);
         add_action('wpai_gateway_pair_cleanup',static function($key){if(is_string($key)&&preg_match('/^wpai_pair_request_[a-f0-9]{64}$/D',$key))delete_option($key);});
         WooCommercePayments::boot();
+        ReconciliationAdmin::boot();
     }
     private static function migrate(): void {
         $store=self::database();
@@ -84,6 +85,12 @@ final class WordPress {
         Settings::account($owner);
         self::core()->ensureAccount($owner);
         return WooCommercePayments::refund(self::database(),Settings::policy(),$order,$requestId,$amount,$isFull);
+    }
+    /** Read-only operational comparison of WooCommerce orders and Cloud ledgers. */
+    public static function reconciliationReport(int $limit=500): array {
+        if (!self::ready()) throw new Fault('cloud_not_configured',503);
+        self::core();
+        return Reconciliation::report(self::database(),Settings::policy(),$limit);
     }
     public static function operatorCore(): Core { return self::core(); }
     public static function pairing(): Pairing { return new Pairing(self::core(),new Vault(Settings::keys()['vault']),new HttpsTransport()); }
