@@ -140,7 +140,7 @@ $targetPlans=$plansResponse['target']['items'];
 check(array_column($targetPlans,'actions_limit')===[50,500,2000,5000,10000],'Published target daily limits are wrong');
 check(array_column($targetPlans,'daily_actions')===[50,500,2000,5000,10000],'Target daily_actions projection is wrong');
 check($plansResponse['target']['paid_quotas_approved']===true,'All five owner-approved target quotas must be reported approved');
-check($plansResponse['target']['prices_approved']===false && $plansResponse['target']['items'][1]['price_rub_month']===null,'Daily price must remain unset');
+check($plansResponse['target']['prices_approved']===true && $plansResponse['target']['items'][1]['price_rub_month']===899,'Approved Daily monthly price must match the WooCommerce offer');
 check($plansResponse['quota_scheme']===QuotaPolicy::CURRENT,'Active default scheme changed unexpectedly');
 check($plansResponse['automatic_money_debits']===false,'Automatic debits unexpectedly active');
 $offerPolicy=Settings::catalogPolicy();
