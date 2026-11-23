@@ -73,6 +73,18 @@ final class WordPress {
         self::core()->ensureAccount($owner);
         return WooCommercePayments::settle(self::database(),Settings::policy(),$order);
     }
+    /**
+     * Process only a Robokassa refund whose official GetState result is persisted as finished.
+     * The payment owner is derived from the immutable WooCommerce customer ID.
+     */
+    public static function settleConfirmedWooRefund(\\WC_Order $order,string $requestId,float $amount,bool $isFull): array {
+        if (!self::ready()) throw new Fault('cloud_not_configured',503);
+        $owner=(string)(int)$order->get_customer_id();
+        if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
+        Settings::account($owner);
+        self::core()->ensureAccount($owner);
+        return WooCommercePayments::refund(self::database(),Settings::policy(),$order,$requestId,$amount,$isFull);
+    }
     public static function operatorCore(): Core { return self::core(); }
     public static function pairing(): Pairing { return new Pairing(self::core(),new Vault(Settings::keys()['vault']),new HttpsTransport()); }
     public static function operatorOwner(): string { return self::owner(); }
