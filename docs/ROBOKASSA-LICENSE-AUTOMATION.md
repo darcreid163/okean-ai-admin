@@ -77,7 +77,7 @@ The integrated adapter subscribes to `robokassa_refund_check_event` at priority 
 
 Confirmed refunds are written to the additive `commerce_refunds` ledger, keyed by Robokassa `requestId`. The ledger stores order/customer/licence references, amount in integer kopecks, refund kind, outcome and a payload hash; it never stores Robokassa credentials or raw callback data. Replays are idempotent; a reused request ID with different order or payload is rejected.
 
-The full-refund decision is based on the cumulative sum of *confirmed* refund amounts compared with the paid order amount, not WooCommerce's local `is_full` flag. This handles callbacks completing out of order and prevents a pending partial refund from making a later request look like a completed full refund.
+The full-refund decision is based on the cumulative sum of *confirmed* refund amounts compared with the paid order amount, not WooCommerce's local `is_full` flag. This handles callbacks completing out of order and prevents a pending partial refund from making a later request look like a completed full refund. WooCommerce's fully-refunded status is also deferred while any Robokassa refund request remains processing; when the confirmed cumulative amount finally reaches the paid total, the adapter sets the final refunded status.
 
 - Partial confirmed refund: record it; do not change licence status, expiry, quota or site limits.
 - Confirmed refunds whose cumulative total is below the paid amount: keep the licence active.
