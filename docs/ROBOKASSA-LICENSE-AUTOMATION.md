@@ -29,7 +29,7 @@ The Cloud adapter now listens to WooCommerce `woocommerce_payment_complete` and 
 - order currency is RUB; the signed classic ResultURL `OutSum` is checked against the immutable Woo order total before the Robokassa handler runs; the item gross total and order total must equal the mapped price; shipping, fees, discounts, mixed carts and multiple licence lines are rejected;
 - a Robokassa transaction reference is SHA-256 hashed and stored where ResultUrl2 provides it; order ID remains the primary idempotency key.
 
-The Robokassa gateway remains responsible for callback signature verification. The adapter performs an additional preflight amount comparison for a correctly signed classic ResultURL. For Robokassa 1.9.2 ResultUrl2, it reacts only to the persisted `OK` state after the gateway's RS256 verifier has accepted the JWS; `HOLD` never grants a licence. The adapter does not modify Robokassa credentials/settings.
+The Robokassa gateway remains responsible for callback signature verification. The adapter performs an additional preflight amount comparison for a correctly signed classic ResultURL. Robokassa 1.9.2 ResultUrl2 persists signed payment-state metadata but does not itself complete the WooCommerce payment; it is deliberately not treated as an entitlement trigger. A licence is granted only after the classic ResultURL handler has successfully called WooCommerce `payment_complete()`. The adapter does not modify Robokassa credentials/settings.
 
 ## Entitlement issuance
 
@@ -69,7 +69,7 @@ A failed transaction rolls back both the entitlement and payment claim. The ledg
 
 The browser Success URL, a Woo order status changed manually by an administrator, and a customer-supplied receipt are not sufficient to issue a paid entitlement.
 
-## Current implementation boundaries\n\n- `WooCommercePayments.php` implements classic ResultURL preflight, ResultUrl2 `OK` completion, registered-customer ownership, exact offer validation, one-time issue and same-plan calendar-term extension.
+## Current implementation boundaries\n\n- `WooCommercePayments.php` implements classic ResultURL preflight, registered-customer ownership, exact offer validation, one-time issue and same-plan calendar-term extension. ResultUrl2 is not used to mark an order paid or grant a licence.
 - `Settings::eligible()` now admits a normal WordPress user only while the authoritative Cloud licence registry shows an active, unexpired paid plan; administrators and explicitly approved beta users retain their existing access.\n- The paid-price catalogue must be explicitly approved; otherwise settlement fails closed.\n- Public Plans API still reports `payments_enabled=false`. No production sales switch was enabled.\n- Automated tests, test-shop end-to-end verification, refund/chargeback lifecycle and operational reconciliation tooling are not yet complete.\n\n## Refunds and chargebacks
 
 Do not revoke access on a refund request or a transient/pending refund status. On a confirmed full refund/chargeback, record the financial event and apply the defined operator policy (suspend/revoke paid licence or downgrade to Free). Partial refunds require a separately approved policy; do not silently alter expiry. Every transition must be idempotent and audited. Preserve payment and licence history.
