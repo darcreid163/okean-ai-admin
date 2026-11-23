@@ -35,7 +35,7 @@
   "automatic_money_debits": false,
   "manual_refills": "owner_only_daily_quota_reset",
   "timezone": "UTC",
-  "default_scheme": "tariffs_v3",
+  "default_scheme": "tariffs_v2",
   "prices_approved": true,
   "schemes": {
     "tariffs_v3": {
