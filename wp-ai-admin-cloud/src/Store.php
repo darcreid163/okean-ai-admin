@@ -130,6 +130,7 @@ final class Store {
     /** Additive idempotency ledger for verified WooCommerce payments. */
     public function ensureCommerceSchema(): void {
         $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        $unique=$this->mysql?'UNIQUE KEY transaction_hash (transaction_hash)':'UNIQUE (transaction_hash)';
         $this->execute('CREATE TABLE IF NOT EXISTS '.$this->table('commerce_payments').' (
             gateway_order_id VARCHAR(64) NOT NULL PRIMARY KEY,
             transaction_hash CHAR(64) NULL,
@@ -147,7 +148,7 @@ final class Store {
             payload_hash CHAR(64) NOT NULL,
             created_at BIGINT NOT NULL,
             settled_at BIGINT NOT NULL DEFAULT 0,
-            UNIQUE KEY transaction_hash (transaction_hash)
+            '.$unique.'
         )'.$tail);
     }
 
