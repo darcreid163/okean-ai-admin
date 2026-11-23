@@ -86,6 +86,21 @@ final class WordPress {
         self::core()->ensureAccount($owner);
         return WooCommercePayments::refund(self::database(),Settings::policy(),$order,$requestId,$amount,$isFull);
     }
+    /**
+     * Operator-approved recovery for a paid Robokassa order missing its Cloud payment row.
+     * The caller must already have enforced administrator capability, nonce and typed confirmation.
+     */
+    public static function repairPaidWooOrder(int $orderId): array {
+        if (!self::ready()) throw new Fault('cloud_not_configured',503);
+        if (!function_exists('wc_get_order')) throw new Fault('woocommerce_unavailable',503);
+        $order=wc_get_order($orderId);
+        if (!$order instanceof \\WC_Order) throw new Fault('repair_order_not_found',404);
+        $owner=(string)(int)$order->get_customer_id();
+        if ((int)$owner<=0) throw new Fault('repair_registered_customer_required',409);
+        Settings::account($owner);
+        self::core()->ensureAccount($owner);
+        return ReconciliationRepair::repairMissingPaymentLedger(self::database(),Settings::policy(),$order);
+    }
     /** Read-only operational comparison of WooCommerce orders and Cloud ledgers. */
     public static function reconciliationReport(int $limit=500): array {
         if (!self::ready()) throw new Fault('cloud_not_configured',503);
