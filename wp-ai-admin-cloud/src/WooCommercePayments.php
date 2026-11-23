@@ -299,7 +299,7 @@ final class WooCommercePayments {
      * The caller must be the post-GetState hook and supply the stored request.
      * Partial refunds are recorded but never change an entitlement.
      */
-    public static function refund(Store $store,array $policy,\\WC_Order $order,string $requestId,float $amount,bool $isFull): array {
+    public static function refund(Store $store,array $policy,\WC_Order $order,string $requestId,float $amount,bool $isFull): array {
         if ($requestId==='' || strlen($requestId)>128 || !preg_match('/^[A-Za-z0-9_-]+$/D',$requestId)) throw new Fault('refund_request_id_invalid',409);
         if (!is_finite($amount) || $amount<=0 || abs($amount-round($amount))>0.005) throw new Fault('refund_amount_invalid',409);
         if ((string)$order->get_currency()!=='RUB' || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) throw new Fault('refund_payment_mismatch',409);
