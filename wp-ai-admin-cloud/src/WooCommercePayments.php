@@ -100,7 +100,7 @@ final class WooCommercePayments {
     private static function processConfirmedRefund(int $orderId,string $requestId): void {
         if ($orderId<=0 || $requestId==='' || !function_exists('wc_get_order')) return;
         $order=wc_get_order($orderId);
-        if (!$order instanceof \\WC_Order || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) return;
+        if (!$order instanceof \WC_Order || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) return;
         $requests=$order->get_meta('_robokassa_refund_requests',true);
         if (!is_array($requests) || !isset($requests[$requestId]) || !is_array($requests[$requestId])) return;
         $request=$requests[$requestId];
@@ -120,7 +120,7 @@ final class WooCommercePayments {
                 $message='WP AI Admin: частичный возврат Robokassa подтверждён. Лицензия и доступ сохранены.';
             }
             self::refundNoteOnce($order,$requestId,$message);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             $meta='_wpai_cloud_refund_retry_count_'.$requestId;
             $attempt=(int)$order->get_meta($meta,true)+1;
             if ($attempt<=12) {
@@ -137,7 +137,7 @@ final class WooCommercePayments {
         }
     }
 
-    private static function refundNoteOnce(\\WC_Order $order,string $requestId,string $message): void {
+    private static function refundNoteOnce(\WC_Order $order,string $requestId,string $message): void {
         $meta='_wpai_cloud_refund_note_'.hash('sha256',$requestId);
         if ((string)$order->get_meta($meta,true)==='yes') return;
         $order->add_order_note($message);
