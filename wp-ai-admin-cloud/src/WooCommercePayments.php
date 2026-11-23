@@ -301,16 +301,17 @@ final class WooCommercePayments {
      */
     public static function refund(Store $store,array $policy,\WC_Order $order,string $requestId,float $amount,bool $isFull): array {
         if ($requestId==='' || strlen($requestId)>128 || !preg_match('/^[A-Za-z0-9_-]+$/D',$requestId)) throw new Fault('refund_request_id_invalid',409);
-        if (!is_finite($amount) || $amount<=0 || abs($amount-round($amount))>0.005) throw new Fault('refund_amount_invalid',409);
+        if (!is_finite($amount) || $amount<=0) throw new Fault('refund_amount_invalid',409);
+        $amountKopecks=(int)round($amount*100);
+        if ($amountKopecks<=0 || abs($amount-($amountKopecks/100))>0.00001) throw new Fault('refund_amount_invalid',409);
         if ((string)$order->get_currency()!=='RUB' || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) throw new Fault('refund_payment_mismatch',409);
         $owner=(string)(int)$order->get_customer_id();
         if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
         $store->ensureLicenseSchema();
         $store->ensureCommerceSchema();
         $now=time();
-        $amountRub=(int)round($amount);
-        $payloadHash=hash('sha256',implode('|',[(string)$order->get_id(),$owner,(string)$amountRub,$isFull?'full':'partial']));
-        return $store->transaction(function() use($store,$policy,$order,$requestId,$amountRub,$isFull,$owner,$payloadHash,$now): array {
+        $payloadHash=hash('sha256',implode('|',[(string)$order->get_id(),$owner,(string)$amountKopecks,$isFull?'full':'partial']));
+        return $store->transaction(function() use($store,$policy,$order,$requestId,$amountKopecks,$isFull,$owner,$payloadHash,$now): array {
             $payment=$store->row('SELECT * FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?'.$store->lock(),[(string)$order->get_id()]);
             if (!$payment || $payment['status']==='processing' || $payment['status']==='') throw new Fault('refund_paid_order_not_settled',409);
             if ($payment['owner']!==$owner || $payment['currency']!=='RUB') throw new Fault('refund_payment_owner_mismatch',409);
@@ -323,9 +324,9 @@ final class WooCommercePayments {
             // Determine a full refund from the cumulative confirmed amount, not
             // the gateway's local is_full flag. WooCommerce may include pending
             // refunds when it calculates that flag, and callbacks can finish out of order.
-            $confirmedBefore=(int)($store->row('SELECT COALESCE(SUM(amount_rub),0) AS total FROM '.$store->table('commerce_refunds').' WHERE gateway_order_id=?',[(string)$order->get_id()])['total']??0);
-            $confirmedTotal=$confirmedBefore+$amountRub;
-            $paidTotal=(int)$payment['amount_rub'];
+            $confirmedBefore=(int)($store->row('SELECT COALESCE(SUM(amount_kopecks),0) AS total FROM '.$store->table('commerce_refunds').' WHERE gateway_order_id=?',[(string)$order->get_id()])['total']??0);
+            $confirmedTotal=$confirmedBefore+$amountKopecks;
+            $paidTotal=(int)$payment['amount_rub']*100;
             if ($paidTotal<=0 || $confirmedTotal>$paidTotal) throw new Fault('refund_total_exceeds_payment',409);
             $isActuallyFull=$confirmedTotal===$paidTotal;
             $kind=$isActuallyFull?'full':'partial';
@@ -353,8 +354,8 @@ final class WooCommercePayments {
                 $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=? WHERE gateway_order_id=? AND status IN (?,?)',['partially_refunded',(string)$order->get_id(),'settled','partially_refunded']);
             }
 
-            $store->execute('INSERT INTO '.$store->table('commerce_refunds').' (request_id,gateway_order_id,owner,license_id,amount_rub,refund_kind,outcome,payload_hash,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[
-                $requestId,(string)$order->get_id(),$owner,(string)($payment['license_id']??''),$amountRub,$kind,$outcome,$payloadHash,$now
+            $store->execute('INSERT INTO '.$store->table('commerce_refunds').' (request_id,gateway_order_id,owner,license_id,amount_kopecks,refund_kind,outcome,payload_hash,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[
+                $requestId,(string)$order->get_id(),$owner,(string)($payment['license_id']??''),$amountKopecks,$kind,$outcome,$payloadHash,$now
             ]);
             return ['recorded'=>true,'idempotent'=>false,'refund_kind'=>$kind,'outcome'=>$outcome,'entitlement_revoked'=>$revoked];
         });
