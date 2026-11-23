@@ -33,7 +33,12 @@ final class Settings {
             INNER JOIN `{$licenses}` l ON l.id=a.license_id
             WHERE a.owner=%s AND a.disabled=0
             LIMIT 1";
-        $row=$wpdb->get_row($wpdb->prepare($sql,$owner),ARRAY_A);
+        try {
+            $row=$wpdb->get_row($wpdb->prepare($sql,$owner),ARRAY_A);
+        } catch (\\Throwable $e) {
+            // Missing/inaccessible Cloud licence tables must never grant access.
+            return false;
+        }
         if (!is_array($row) || ($row['status']??'')!==Licenses::ACTIVE || ($row['plan']??'')==='free') return false;
         $now=time();
         return (int)($row['starts_at']??0)<=$now
