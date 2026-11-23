@@ -320,10 +320,18 @@ final class WooCommercePayments {
                 return ['recorded'=>true,'idempotent'=>true,'refund_kind'=>$existing['refund_kind'],'outcome'=>$existing['outcome'],'entitlement_revoked'=>$existing['outcome']==='license_revoked'];
             }
 
-            $kind=$isFull?'full':'partial';
+            // Determine a full refund from the cumulative confirmed amount, not
+            // the gateway's local is_full flag. WooCommerce may include pending
+            // refunds when it calculates that flag, and callbacks can finish out of order.
+            $confirmedBefore=(int)($store->row('SELECT COALESCE(SUM(amount_rub),0) AS total FROM '.$store->table('commerce_refunds').' WHERE gateway_order_id=?',[(string)$order->get_id()])['total']??0);
+            $confirmedTotal=$confirmedBefore+$amountRub;
+            $paidTotal=(int)$payment['amount_rub'];
+            if ($paidTotal<=0 || $confirmedTotal>$paidTotal) throw new Fault('refund_total_exceeds_payment',409);
+            $isActuallyFull=$confirmedTotal===$paidTotal;
+            $kind=$isActuallyFull?'full':'partial';
             $outcome='partial_recorded';
             $revoked=false;
-            if ($isFull) {
+            if ($isActuallyFull) {
                 $account=$store->row('SELECT license_id FROM '.$store->table('accounts').' WHERE owner=?'.$store->lock(),[$owner]);
                 $licenseId=(string)($payment['license_id']??'');
                 if ($account && $licenseId!=='' && (string)($account['license_id']??'')===$licenseId) {
@@ -342,7 +350,7 @@ final class WooCommercePayments {
                 }
                 $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=? WHERE gateway_order_id=?',['refunded',(string)$order->get_id()]);
             } else {
-                $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=? WHERE gateway_order_id=? AND status=?',['partially_refunded',(string)$order->get_id(),'settled']);
+                $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=? WHERE gateway_order_id=? AND status IN (?,?)',['partially_refunded',(string)$order->get_id(),'settled','partially_refunded']);
             }
 
             $store->execute('INSERT INTO '.$store->table('commerce_refunds').' (request_id,gateway_order_id,owner,license_id,amount_rub,refund_kind,outcome,payload_hash,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[
