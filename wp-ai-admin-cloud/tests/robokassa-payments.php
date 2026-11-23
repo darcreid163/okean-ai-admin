@@ -27,9 +27,9 @@ if (!class_exists('WC_Order')) {
             private int $id,private int $customerId,private array $items,
             private float $total,private string $currency='RUB',
             private string $method='robokassa',private string $transaction='rk-op-test',
-            private array $meta=[]
+            private array $meta=[],private bool $paid=true
         ) {}
-        public function is_paid(): bool { return true; }
+        public function is_paid(): bool { return $this->paid; }
         public function get_currency(): string { return $this->currency; }
         public function get_customer_id(): int { return $this->customerId; }
         public function get_payment_method(): string { return $this->method; }
@@ -135,6 +135,28 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     robokassaPaymentCheck($report['issue_count']===0,'valid payment/licence fixtures must reconcile cleanly: '.json_encode($report['issues']));
     robokassaPaymentCheck((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_payments'))['n']===$paymentsBefore,'reconciliation modified payment ledger');
     robokassaPaymentCheck((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_refunds'))['n']===$refundsBefore,'reconciliation modified refund ledger');
+
+    // Operator repair is narrowly scoped to a paid Robokassa order with a
+    // transaction reference and no Cloud payment row. It uses canonical
+    // settlement and verifies the resulting payment and licence records.
+    $repairOrder=new WC_Order($baseOrderId+9,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-repair');
+    $repairResult=\\WPAICloudGateway\\ReconciliationRepair::repairMissingPaymentLedger($store,$policy,$repairOrder);
+    robokassaPaymentCheck($repairResult['repaired']===true && $repairResult['already_settled']===false,'approved repair must settle the missing paid order');
+    $repairPayment=$store->row('SELECT status,owner,plan,license_id FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?',[(string)$repairOrder->get_id()]);
+    $repairLicense=$store->row('SELECT owner,plan,quota_scheme FROM '.$store->table('licenses').' WHERE id=?',[$repairResult['license_id']]);
+    robokassaPaymentCheck($repairPayment && $repairPayment['status']==='settled' && $repairPayment['owner']===$owner && $repairPayment['plan']==='pro','repair must persist the exact Cloud payment identity');
+    robokassaPaymentCheck($repairLicense && $repairLicense['owner']===$owner && $repairLicense['plan']==='pro' && $repairLicense['quota_scheme']==='tariffs_v3','repair must verify the issued paid licence');
+
+    $emptyTransactionOrder=new WC_Order($baseOrderId+10,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','');
+    try { \\WPAICloudGateway\\ReconciliationRepair::repairMissingPaymentLedger($store,$policy,$emptyTransactionOrder); throw new RuntimeException('Robokassa payment test failed: repair accepted missing transaction reference'); }
+    catch (\\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='repair_transaction_reference_required','repair must require a Robokassa transaction reference'); }
+
+    $unpaidOrder=new WC_Order($baseOrderId+11,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-unpaid',[],false);
+    try { \\WPAICloudGateway\\ReconciliationRepair::repairMissingPaymentLedger($store,$policy,$unpaidOrder); throw new RuntimeException('Robokassa payment test failed: repair accepted unpaid order'); }
+    catch (\\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='repair_payment_not_confirmed','repair must reject unpaid order'); }
+
+    try { \\WPAICloudGateway\\ReconciliationRepair::repairMissingPaymentLedger($store,$policy,$repairOrder); throw new RuntimeException('Robokassa payment test failed: repair accepted an existing ledger row'); }
+    catch (\\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='repair_payment_ledger_exists','repair must not reissue an order already present in Cloud ledger'); }
 
     $badAmount=new WC_Order($baseOrderId+3,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1200)],1200.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-bad');
     try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$badAmount); throw new RuntimeException('Robokassa payment test failed: wrong amount accepted'); }
