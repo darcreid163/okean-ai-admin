@@ -149,14 +149,14 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
 
     $emptyTransactionOrder=new WC_Order($baseOrderId+10,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','');
     try { \WPAICloudGateway\ReconciliationRepair::repairMissingPaymentLedger($store,$policy,$emptyTransactionOrder); throw new RuntimeException('Robokassa payment test failed: repair accepted missing transaction reference'); }
-    catch (\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='repair_transaction_reference_required','repair must require a Robokassa transaction reference'); }
+    catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='repair_transaction_reference_required','repair must require a Robokassa transaction reference'); }
 
     $unpaidOrder=new WC_Order($baseOrderId+11,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-unpaid',[],false);
     try { \WPAICloudGateway\ReconciliationRepair::repairMissingPaymentLedger($store,$policy,$unpaidOrder); throw new RuntimeException('Robokassa payment test failed: repair accepted unpaid order'); }
-    catch (\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='repair_payment_not_confirmed','repair must reject unpaid order'); }
+    catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='repair_payment_not_confirmed','repair must reject unpaid order'); }
 
     try { \WPAICloudGateway\ReconciliationRepair::repairMissingPaymentLedger($store,$policy,$repairOrder); throw new RuntimeException('Robokassa payment test failed: repair accepted an existing ledger row'); }
-    catch (\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='repair_payment_ledger_exists','repair must not reissue an order already present in Cloud ledger'); }
+    catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='repair_payment_ledger_exists','repair must not reissue an order already present in Cloud ledger'); }
 
     $badAmount=new WC_Order($baseOrderId+3,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1200)],1200.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-bad');
     try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$badAmount); throw new RuntimeException('Robokassa payment test failed: wrong amount accepted'); }
