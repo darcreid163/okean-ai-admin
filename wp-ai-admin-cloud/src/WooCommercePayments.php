@@ -15,6 +15,7 @@ final class WooCommercePayments {
     public static function boot(): void {
         if (!class_exists('WooCommerce')) return;
         add_action('woocommerce_payment_complete', [self::class, 'paymentComplete'], 30, 1);
+        add_action('wpai_cloud_retry_paid_order', [self::class, 'retryPaidOrder'], 10, 1);
         // Reject a correctly signed classic callback if its signed amount differs from the immutable Woo order total.
         add_action('parse_request', [self::class, 'preflightClassicResult'], 0, 1);
     }
@@ -45,18 +46,93 @@ final class WooCommercePayments {
     public static function paymentComplete($orderId): void {
         if (!function_exists('wc_get_order')) return;
         $order=wc_get_order((int)$orderId);
-        if (!$order instanceof \WC_Order) return;
+        if (!$order instanceof \\WC_Order || !$order->is_paid()) return;
         $method=(string)$order->get_payment_method();
         if ($method==='' || !str_starts_with($method,self::GATEWAY_PREFIX)) return;
         try {
             WordPress::settlePaidWooOrder($order);
-        } catch (\Throwable $e) {
-            // Do not acknowledge a Result URL callback when entitlement settlement
-            // failed: Robokassa will retry, and the unique order ledger is idempotent.
-            $order->add_order_note('WP AI Admin: автоматическая активация лицензии не завершена. Платёж сохранён; сервер повторит обработку уведомления.');
-            error_log('WP AI Admin Cloud billing settlement failed for order '.$order->get_id().': '.get_class($e).' '.$e->getMessage());
-            throw new \RuntimeException('WP AI Admin paid entitlement settlement failed',0,$e);
+            self::clearRetryState($order);
+        } catch (\\Throwable $e) {
+            if (self::isPermanentFailure($e)) {
+                self::noteOnce($order,'permanent','WP AI Admin: платёж подтверждён, но лицензия не выдана. Заказ требует проверки администратором: '.self::safeReason($e));
+                error_log('WP AI Admin Cloud billing permanent rejection for order '.$order->get_id().': '.self::safeReason($e));
+                return;
+            }
+            self::scheduleRetry($order,60,$e);
         }
+    }
+
+    /** Durable retry for transient Cloud/database failures after Woo marks the order paid. */
+    public static function retryPaidOrder($orderId): void {
+        if (!function_exists('wc_get_order')) return;
+        $order=wc_get_order((int)$orderId);
+        if (!$order instanceof \\WC_Order || !$order->is_paid()) return;
+        if (!str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) return;
+        try {
+            WordPress::settlePaidWooOrder($order);
+            self::clearRetryState($order);
+            self::noteOnce($order,'recovered','WP AI Admin: лицензия успешно активирована после повторной проверки платежа.');
+        } catch (\\Throwable $e) {
+            if (self::isPermanentFailure($e)) {
+                self::noteOnce($order,'permanent','WP AI Admin: автоматическая активация остановлена; заказ требует проверки администратором: '.self::safeReason($e));
+                error_log('WP AI Admin Cloud billing permanent rejection for order '.$order->get_id().': '.self::safeReason($e));
+                return;
+            }
+            self::scheduleRetry($order,300,$e);
+        }
+    }
+
+    private static function scheduleRetry(\\WC_Order $order,int $delay,\\Throwable $error): void {
+        $attempt=(int)$order->get_meta('_wpai_cloud_entitlement_retry_count',true)+1;
+        if ($attempt>12) {
+            self::noteOnce($order,'exhausted','WP AI Admin: не удалось автоматически активировать лицензию после 12 попыток. Платёж сохранён; требуется ручная сверка.');
+            error_log('WP AI Admin Cloud billing retries exhausted for order '.$order->get_id().': '.self::safeReason($error));
+            return;
+        }
+        $order->update_meta_data('_wpai_cloud_entitlement_retry_count',$attempt);
+        $order->save_meta_data();
+        self::noteOnce($order,'retry','WP AI Admin: платёж принят. Активация лицензии временно задерживается; система повторит попытку автоматически.');
+        $args=[(int)$order->get_id()];
+        if (function_exists('wp_next_scheduled') && wp_next_scheduled('wpai_cloud_retry_paid_order',$args)) return;
+        if (function_exists('wp_schedule_single_event')) {
+            wp_schedule_single_event(time()+max(60,$delay),'wpai_cloud_retry_paid_order',$args);
+        } else {
+            error_log('WP AI Admin Cloud billing retry scheduler unavailable for order '.$order->get_id().': '.self::safeReason($error));
+        }
+    }
+
+    private static function clearRetryState(\\WC_Order $order): void {
+        if (method_exists($order,'delete_meta_data')) {
+            $order->delete_meta_data('_wpai_cloud_entitlement_retry_count');
+            $order->delete_meta_data('_wpai_cloud_entitlement_note_retry');
+            $order->delete_meta_data('_wpai_cloud_entitlement_note_permanent');
+            $order->delete_meta_data('_wpai_cloud_entitlement_note_exhausted');
+            $order->save_meta_data();
+        }
+    }
+
+    private static function noteOnce(\\WC_Order $order,string $key,string $message): void {
+        $meta='_wpai_cloud_entitlement_note_'.$key;
+        if ((string)$order->get_meta($meta,true)==='yes') return;
+        $order->add_order_note($message);
+        $order->update_meta_data($meta,'yes');
+        $order->save_meta_data();
+    }
+
+    private static function safeReason(\\Throwable $error): string {
+        return $error instanceof Fault ? preg_replace('/[^a-z0-9_]/i','', $error->reason) : 'temporary_settlement_error';
+    }
+
+    private static function isPermanentFailure(\\Throwable $error): bool {
+        if (!$error instanceof Fault) return false;
+        return in_array($error->reason,[
+            'payment_not_confirmed','payment_currency_mismatch','registered_customer_required',
+            'payment_gateway_mismatch','paid_prices_not_approved','unrecognized_paid_product',
+            'invalid_order_line','paid_product_quantity_invalid','paid_product_missing',
+            'paid_product_sku_mismatch','paid_product_line_total_mismatch','paid_order_total_mismatch',
+            'exactly_one_license_offer_required','order_adjustments_not_supported','paid_product_period_invalid',
+            'paid_license_expiry_invalid','payment_order_replay_conflict','cloud_account_unavailable',
+        ],true);
     }
 
     private static function addCalendarTerm(int $timestamp,int $months): int {
