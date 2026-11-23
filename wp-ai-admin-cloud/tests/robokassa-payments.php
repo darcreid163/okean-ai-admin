@@ -88,6 +88,17 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     robokassaPaymentCheck($stale['outcome']==='stale_payment_refund' && !$stale['entitlement_revoked'],'old refunded order must be marked stale');
     robokassaPaymentCheck($activeAfterStale['plan']==='pro' && $activeAfterStale['license_id']===$third['license_id'],'old refund revoked a newer purchase');
 
+    // Out-of-order partial callbacks are accumulated only after each is confirmed.
+    // The entitlement is revoked only when confirmed refunds sum to the paid total.
+    $fourthOrder=new WC_Order($baseOrderId+6,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-fourth');
+    $fourth=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$fourthOrder);
+    $partialOne=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$fourthOrder,'rk_refund_part1_'.$transactionSeed,300.0,false);
+    robokassaPaymentCheck($partialOne['refund_kind']==='partial' && !$partialOne['entitlement_revoked'],'first partial refund must not revoke');
+    $partialTwo=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$fourthOrder,'rk_refund_part2_'.$transactionSeed,1199.0,true);
+    robokassaPaymentCheck($partialTwo['refund_kind']==='full' && $partialTwo['entitlement_revoked'],'cumulative confirmed refunds must revoke after reaching paid total');
+    $fourthLicense=$store->row('SELECT status FROM '.$store->table('licenses').' WHERE id=?',[$fourth['license_id']]);
+    robokassaPaymentCheck($fourthLicense['status']==='revoked','out-of-order partial completion did not revoke current licence');
+
     $badAmount=new WC_Order($baseOrderId+3,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1200)],1200.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-bad');
     try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$badAmount); throw new RuntimeException('Robokassa payment test failed: wrong amount accepted'); }
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='paid_product_line_total_mismatch','wrong amount must fail closed'); }
