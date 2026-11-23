@@ -17,7 +17,7 @@ final class WordPress {
         return self::$store=new Store(new \PDO($dsn,DB_USER,DB_PASSWORD,[\PDO::ATTR_EMULATE_PREPARES=>false]),$wpdb->prefix.'wpai_gateway_');
     }
     private static function ready(): bool {
-        return Settings::enabled() && !class_exists('WPAICloud\\WordPress',false) && extension_loaded('curl') && extension_loaded('sodium') && extension_loaded('pdo_mysql');
+        return Settings::enabled() && !class_exists('WPAICloud\WordPress',false) && extension_loaded('curl') && extension_loaded('sodium') && extension_loaded('pdo_mysql');
     }
     private static function core(): Core {
         if (!self::ready()) throw new Fault('cloud_not_configured',503);
@@ -53,7 +53,7 @@ final class WordPress {
     public static function statusPage(): void { Admin::page(); }
     public static function enable(): void {
         if (defined('WP_AI_CLOUD_ENABLED') && WP_AI_CLOUD_ENABLED!==true) throw new Fault('gateway_disabled_in_wp_config',503);
-        if (class_exists('WPAICloud\\WordPress',false)) throw new Fault('separate_prototype_must_be_deactivated',503);
+        if (class_exists('WPAICloud\WordPress',false)) throw new Fault('separate_prototype_must_be_deactivated',503);
         foreach (['sodium','curl','pdo_mysql'] as $extension) if (!extension_loaded($extension)) throw new Fault($extension.'_required',503);
         Settings::prepareKeys(); self::migrate(); Settings::policy();
         update_option('wpai_gateway_enabled',true,false);
@@ -65,7 +65,7 @@ final class WordPress {
      * Settle a verified, paid Robokassa WooCommerce order into the Cloud licence registry.
      * The customer ID is the only accepted owner identity; guests fail closed.
      */
-    public static function settlePaidWooOrder(\\WC_Order $order): array {
+    public static function settlePaidWooOrder(\WC_Order $order): array {
         if (!self::ready()) throw new Fault('cloud_not_configured',503);
         $owner=(string)(int)$order->get_customer_id();
         if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
