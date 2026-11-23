@@ -122,6 +122,7 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='registered_customer_required','guest order must not receive a licence'); }
 
     // Unconfirmed/pending/canceled Robokassa states must not create refund ledger rows.
+    $unconfirmedBefore=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_refunds'))['n'];
     $pendingOrderId=$baseOrderId+7;
     $pendingOrder=new WC_Order($pendingOrderId,991,[],1499.0);
     $pendingOrder->set_meta('_robokassa_refund_requests',['pending-'.$transactionSeed=>['status'=>'processing','amount'=>1499.0,'is_full'=>true]]);
@@ -135,7 +136,7 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $GLOBALS['robokassaRefundFixtureOrders'][$canceledOrderId]=$canceledOrder;
     \WPAICloudGateway\WooCommercePayments::refundStatusChecked($canceledOrderId,'canceled-'.$transactionSeed);
     $unconfirmedRows=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_refunds'))['n'];
-    robokassaPaymentCheck($unconfirmedRows===0,'pending/canceled refunds must not be recorded or revoke access');
+    robokassaPaymentCheck($unconfirmedRows===$unconfirmedBefore,'pending/canceled refunds must not be recorded or revoke access');
 
     $monthEnd=(new ReflectionMethod(\WPAICloudGateway\WooCommercePayments::class,'addCalendarTerm'));
     $monthEnd->setAccessible(true);
