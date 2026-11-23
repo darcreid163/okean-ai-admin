@@ -94,7 +94,7 @@ final class WordPress {
         if (!self::ready()) throw new Fault('cloud_not_configured',503);
         if (!function_exists('wc_get_order')) throw new Fault('woocommerce_unavailable',503);
         $order=wc_get_order($orderId);
-        if (!$order instanceof \\WC_Order) throw new Fault('repair_order_not_found',404);
+        if (!$order instanceof \WC_Order) throw new Fault('repair_order_not_found',404);
         $owner=(string)(int)$order->get_customer_id();
         if ((int)$owner<=0) throw new Fault('repair_registered_customer_required',409);
         Settings::account($owner);
