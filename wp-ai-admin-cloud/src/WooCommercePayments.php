@@ -15,6 +15,26 @@ final class WooCommercePayments {
     public static function boot(): void {
         if (!class_exists('WooCommerce')) return;
         add_action('woocommerce_payment_complete', [self::class, 'paymentComplete'], 30, 1);
+        // Robokassa 1.9.2 ResultUrl2 stores a verified OK state but does not call payment_complete().
+        add_action('woocommerce_after_order_object_save', [self::class, 'resultUrl2Complete'], 30, 2);
+    }
+
+    /**
+     * ResultUrl2 in Robokassa 1.9.2 verifies RS256 and persists the operation
+     * state before saving the order. Its OK branch does not mark WooCommerce
+     * paid, so complete only that verified, server-persisted state here.
+     */
+    public static function resultUrl2Complete($order, $dataStore): void {
+        if (!$order instanceof \\WC_Order || $order->is_paid()) return;
+        $method=(string)$order->get_payment_method();
+        if ($method==='' || !str_starts_with($method,self::GATEWAY_PREFIX)) return;
+        if ((string)$order->get_meta('_robokassa_result2_state',true)!=='OK') return;
+        $operationKey=(string)$order->get_meta('_robokassa_operation_key',true);
+        $timestamp=(int)$order->get_meta('_robokassa_result2_timestamp',true);
+        if ($operationKey==='' || $timestamp<=0 || $timestamp>time()+300 || $timestamp<time()-(7*86400)) return;
+        // The ResultUrl2 verifier has already checked RS256, shop identity,
+        // timestamp and allowed state before writing these metadata fields.
+        $order->payment_complete($operationKey);
     }
 
     public static function paymentComplete($orderId): void {
@@ -55,14 +75,17 @@ final class WooCommercePayments {
                 if ((int)($offer['product_id']??0)===$productId || ($variationId>0 && (int)($offer['product_id']??0)===$variationId)) { $entry=$offer; break; }
             }
             if (!$entry || ($entry['plan']??'')==='free') throw new Fault('unrecognized_paid_product',409);
+            $product=$item->get_product();
+            if (!$product) throw new Fault('paid_product_missing',409);
             $sku=(string)($entry['sku']??'');
-            if ($sku==='' || (string)$item->get_product()->get_sku()!==$sku) throw new Fault('paid_product_sku_mismatch',409);
+            if ($sku==='' || (string)$product->get_sku()!==$sku) throw new Fault('paid_product_sku_mismatch',409);
             $lineExpected=(int)($entry['price_rub']??-1);
-            if ($lineExpected<=0 || abs((float)$item->get_total()-(float)$lineExpected)>0.00001) throw new Fault('paid_product_line_total_mismatch',409);
+            if ($lineExpected<=0 || abs(((float)$item->get_total()+(float)$item->get_total_tax())-(float)$lineExpected)>0.00001) throw new Fault('paid_product_line_total_mismatch',409);
             $expected+=(float)$lineExpected;
             $matched[]=$entry;
         }
         if (count($matched)!==1) throw new Fault('exactly_one_license_offer_required',409);
+        if (count($order->get_items('fee'))>0 || abs((float)$order->get_shipping_total())>0.00001 || abs((float)$order->get_discount_total())>0.00001) throw new Fault('order_adjustments_not_supported',409);
         $offer=$matched[0];
         if (abs((float)$order->get_total()-$expected)>0.00001) throw new Fault('paid_order_total_mismatch',409);
 
