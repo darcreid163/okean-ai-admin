@@ -16,6 +16,9 @@ final class WooCommercePayments {
         if (!class_exists('WooCommerce')) return;
         add_action('woocommerce_payment_complete', [self::class, 'paymentComplete'], 30, 1);
         add_action('wpai_cloud_retry_paid_order', [self::class, 'retryPaidOrder'], 10, 1);
+        // The official Robokassa GetState handler runs at priority 10; process its persisted terminal result afterwards.
+        add_action('robokassa_refund_check_event', [self::class, 'refundStatusChecked'], 20, 2);
+        add_action('wpai_cloud_retry_refund', [self::class, 'retryConfirmedRefund'], 10, 2);
         // Reject a correctly signed classic callback if its signed amount differs from the immutable Woo order total.
         add_action('parse_request', [self::class, 'preflightClassicResult'], 0, 1);
     }
@@ -80,6 +83,66 @@ final class WooCommercePayments {
             }
             self::scheduleRetry($order,300,$e);
         }
+    }
+
+    /**
+     * Runs after the official Robokassa GetState handler. Pending/canceled
+     * requests never change Cloud entitlements.
+     */
+    public static function refundStatusChecked($orderId,$requestId): void {
+        self::processConfirmedRefund((int)$orderId,(string)$requestId);
+    }
+
+    public static function retryConfirmedRefund($orderId,$requestId): void {
+        self::processConfirmedRefund((int)$orderId,(string)$requestId);
+    }
+
+    private static function processConfirmedRefund(int $orderId,string $requestId): void {
+        if ($orderId<=0 || $requestId==='' || !function_exists('wc_get_order')) return;
+        $order=wc_get_order($orderId);
+        if (!$order instanceof \\WC_Order || !str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) return;
+        $requests=$order->get_meta('_robokassa_refund_requests',true);
+        if (!is_array($requests) || !isset($requests[$requestId]) || !is_array($requests[$requestId])) return;
+        $request=$requests[$requestId];
+        if (($request['status']??'')!=='finished') return;
+        $amount=(float)($request['amount']??0);
+        $isFull=!empty($request['is_full']);
+        if (!is_finite($amount) || $amount<=0 || $amount>(float)$order->get_total()+0.005) return;
+        try {
+            $result=WordPress::settleConfirmedWooRefund($order,$requestId,$amount,$isFull);
+            $order->delete_meta_data('_wpai_cloud_refund_retry_count_'.$requestId);
+            $order->save_meta_data();
+            if ($result['entitlement_revoked']) {
+                $message='WP AI Admin: подтверждён полный возврат Robokassa; соответствующая лицензия отозвана, тариф аккаунта возвращён к Free.';
+            } elseif ($isFull) {
+                $message='WP AI Admin: полный возврат подтверждён, но лицензия уже не является текущей для этого платежа. Новая покупка не отключена; требуется сверка.';
+            } else {
+                $message='WP AI Admin: частичный возврат Robokassa подтверждён. Лицензия и доступ сохранены.';
+            }
+            self::refundNoteOnce($order,$requestId,$message);
+        } catch (\\Throwable $e) {
+            $meta='_wpai_cloud_refund_retry_count_'.$requestId;
+            $attempt=(int)$order->get_meta($meta,true)+1;
+            if ($attempt<=12) {
+                $order->update_meta_data($meta,$attempt);
+                $order->save_meta_data();
+                $args=[$orderId,$requestId];
+                if (!wp_next_scheduled('wpai_cloud_retry_refund',$args)) {
+                    wp_schedule_single_event(time()+min(3600,60*$attempt),'wpai_cloud_retry_refund',$args);
+                }
+            } else {
+                self::refundNoteOnce($order,$requestId,'WP AI Admin: возврат Robokassa подтверждён, но Cloud не смог обработать событие после 12 попыток. Лицензия не изменена; требуется ручная сверка.');
+            }
+            error_log('WP AI Admin Cloud refund processing failed for order '.$orderId.': '.self::safeReason($e));
+        }
+    }
+
+    private static function refundNoteOnce(\\WC_Order $order,string $requestId,string $message): void {
+        $meta='_wpai_cloud_refund_note_'.hash('sha256',$requestId);
+        if ((string)$order->get_meta($meta,true)==='yes') return;
+        $order->add_order_note($message);
+        $order->update_meta_data($meta,'yes');
+        $order->save_meta_data();
     }
 
     private static function scheduleRetry(\WC_Order $order,int $delay,\Throwable $error): void {
