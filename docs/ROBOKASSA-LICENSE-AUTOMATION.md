@@ -75,7 +75,7 @@ The browser Success URL, a Woo order status changed manually by an administrator
 
 The integrated adapter subscribes to `robokassa_refund_check_event` at priority 20, after the official Robokassa GetState handler at priority 10 has persisted the result. Only a request whose stored status is exactly `finished` is processed. Pending, canceled, failed and unconfirmed requests do not touch Cloud entitlements.
 
-Confirmed refunds are written to the additive `commerce_refunds` ledger, keyed by Robokassa `requestId`. The ledger stores order/customer/licence references, amount, refund kind, outcome and a payload hash; it never stores Robokassa credentials or raw callback data. Replays are idempotent; a reused request ID with different order or payload is rejected.
+Confirmed refunds are written to the additive `commerce_refunds` ledger, keyed by Robokassa `requestId`. The ledger stores order/customer/licence references, amount in integer kopecks, refund kind, outcome and a payload hash; it never stores Robokassa credentials or raw callback data. Replays are idempotent; a reused request ID with different order or payload is rejected.
 
 The full-refund decision is based on the cumulative sum of *confirmed* refund amounts compared with the paid order amount, not WooCommerce's local `is_full` flag. This handles callbacks completing out of order and prevents a pending partial refund from making a later request look like a completed full refund.
 
