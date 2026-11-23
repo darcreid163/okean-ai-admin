@@ -72,7 +72,7 @@ final class ReconciliationAdmin {
             $state=!empty($result['repaired'])?'repaired':'already_settled';
         } catch (Fault $e) {
             $state=sanitize_key($e->reason);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             $state='repair_unavailable';
         }
         $url=add_query_arg(['page'=>'wpai-cloud-reconciliation','repair_result'=>$state],admin_url('admin.php'));
