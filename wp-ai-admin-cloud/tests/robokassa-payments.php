@@ -19,7 +19,8 @@ if (!class_exists('WC_Order')) {
         public function __construct(
             private int $id,private int $customerId,private array $items,
             private float $total,private string $currency='RUB',
-            private string $method='robokassa',private string $transaction='rk-op-test'
+            private string $method='robokassa',private string $transaction='rk-op-test',
+            private array $meta=[]
         ) {}
         public function is_paid(): bool { return true; }
         public function get_currency(): string { return $this->currency; }
@@ -32,7 +33,13 @@ if (!class_exists('WC_Order')) {
         public function get_id(): int { return $this->id; }
         public function get_transaction_id(): string { return $this->transaction; }
         public function get_order_key(): string { return 'wc_order_test_'.$this->id; }
+        public function get_meta(string $key,bool $single=true): mixed { return $this->meta[$key]??''; }
+        public function set_meta(string $key,mixed $value): void { $this->meta[$key]=$value; }
     }
+}
+$GLOBALS['robokassaRefundFixtureOrders']=[];
+if (!function_exists('wc_get_order')) {
+    function wc_get_order($id) { return $GLOBALS['robokassaRefundFixtureOrders'][(int)$id]??false; }
 }
 
 function robokassaPaymentCheck(bool $ok,string $message): void {
@@ -107,6 +114,20 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $guest=new WC_Order($baseOrderId+4,0,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-guest');
     try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$guest); throw new RuntimeException('Robokassa payment test failed: guest order accepted'); }
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='registered_customer_required','guest order must not receive a licence'); }
+
+    // Unconfirmed/pending/canceled Robokassa states must not create refund ledger rows.
+    $pendingOrderId=$baseOrderId+7;
+    $pendingOrder=new WC_Order($pendingOrderId,991,[],1499.0);
+    $pendingOrder->set_meta('_robokassa_refund_requests',['pending-'.$transactionSeed=>['status'=>'processing','amount'=>1499.0,'is_full'=>true]]);
+    $GLOBALS['robokassaRefundFixtureOrders'][$pendingOrderId]=$pendingOrder;
+    \WPAICloudGateway\WooCommercePayments::refundStatusChecked($pendingOrderId,'pending-'.$transactionSeed);
+    $canceledOrderId=$baseOrderId+8;
+    $canceledOrder=new WC_Order($canceledOrderId,991,[],1499.0);
+    $canceledOrder->set_meta('_robokassa_refund_requests',['canceled-'.$transactionSeed=>['status'=>'canceled','amount'=>1499.0,'is_full'=>true]]);
+    $GLOBALS['robokassaRefundFixtureOrders'][$canceledOrderId]=$canceledOrder;
+    \WPAICloudGateway\WooCommercePayments::refundStatusChecked($canceledOrderId,'canceled-'.$transactionSeed);
+    $unconfirmedRows=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('commerce_refunds'))['n'];
+    robokassaPaymentCheck($unconfirmedRows===0,'pending/canceled refunds must not be recorded or revoke access');
 
     $monthEnd=(new ReflectionMethod(\WPAICloudGateway\WooCommercePayments::class,'addCalendarTerm'));
     $monthEnd->setAccessible(true);
