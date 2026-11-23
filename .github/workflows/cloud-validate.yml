@@ -42,6 +42,7 @@ jobs:
       - name: Source SHA and standalone policy contract
         run: |
           php tests/recovered-runtime-hashes.php
+          php tests/woocommerce-hpos-compatibility.php
           php tests/policy-preflight-static.php
           php tests/abilities-read-contract.php
           php tests/abilities-transport-boundary.php
