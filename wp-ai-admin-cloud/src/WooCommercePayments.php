@@ -108,8 +108,8 @@ final class WooCommercePayments {
             if (!$item instanceof \WC_Order_Item_Product) throw new Fault('invalid_order_line',409);
             $productId=(int)$item->get_product_id();
             $variationId=(int)$item->get_variation_id();
-            $quantity=(int)$item->get_quantity();
-            if ($quantity!==1) throw new Fault('paid_product_quantity_invalid',409);
+            $quantity=(float)$item->get_quantity();
+            if (!is_finite($quantity) || abs($quantity-1.0)>0.00001) throw new Fault('paid_product_quantity_invalid',409);
             $entry=null;
             foreach ($catalog as $offer) {
                 if ((int)($offer['product_id']??0)===$productId || ($variationId>0 && (int)($offer['product_id']??0)===$variationId)) { $entry=$offer; break; }
