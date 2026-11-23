@@ -32,6 +32,7 @@ final class WordPress {
         add_filter('rest_post_dispatch',[self::class,'secureRestHeaders'],10,3);
         add_filter('rest_pre_serve_request',[self::class,'emptyNotification'],10,4);
         add_action('wpai_gateway_pair_cleanup',static function($key){if(is_string($key)&&preg_match('/^wpai_pair_request_[a-f0-9]{64}$/D',$key))delete_option($key);});
+        WooCommercePayments::boot();
     }
     private static function migrate(): void {
         $store=self::database();
@@ -60,6 +61,18 @@ final class WordPress {
         catch (\Throwable $e) { update_option('wpai_gateway_enabled',false,false); throw $e; }
     }
     public static function oauth(): OAuth { return new OAuth(self::database(),self::core(),Settings::endpoint()); }
+    /**
+     * Settle a verified, paid Robokassa WooCommerce order into the Cloud licence registry.
+     * The customer ID is the only accepted owner identity; guests fail closed.
+     */
+    public static function settlePaidWooOrder(\\WC_Order $order): array {
+        if (!self::ready()) throw new Fault('cloud_not_configured',503);
+        $owner=(string)(int)$order->get_customer_id();
+        if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
+        Settings::account($owner);
+        self::core()->ensureAccount($owner);
+        return WooCommercePayments::settle(self::database(),Settings::policy(),$order);
+    }
     public static function operatorCore(): Core { return self::core(); }
     public static function pairing(): Pairing { return new Pairing(self::core(),new Vault(Settings::keys()['vault']),new HttpsTransport()); }
     public static function operatorOwner(): string { return self::owner(); }
