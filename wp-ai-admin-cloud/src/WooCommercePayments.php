@@ -25,7 +25,7 @@ final class WooCommercePayments {
      * paid, so complete only that verified, server-persisted state here.
      */
     public static function resultUrl2Complete($order, $dataStore): void {
-        if (!$order instanceof \\WC_Order || $order->is_paid()) return;
+        if (!$order instanceof \WC_Order || $order->is_paid()) return;
         $method=(string)$order->get_payment_method();
         if ($method==='' || !str_starts_with($method,self::GATEWAY_PREFIX)) return;
         if ((string)$order->get_meta('_robokassa_result2_state',true)!=='OK') return;
