@@ -41,7 +41,7 @@ final class ReconciliationAdmin {
             $report=WordPress::reconciliationReport($limit);
         } catch (Fault $e) {
             $report=['error'=>$e->reason];
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             $report=['error'=>'reconciliation_unavailable'];
         }
         nocache_headers();
