@@ -125,7 +125,7 @@ final class Reconciliation {
             // Resolve each ledger order directly so a recent-order scan limit
             // cannot mislabel an older, valid WooCommerce order as missing.
             $wooOrder=function_exists('wc_get_order')?wc_get_order((int)$orderId):false;
-            if (!$wooOrder instanceof \\WC_Order) {
+            if (!$wooOrder instanceof \WC_Order) {
                 self::add($issues,'cloud_payment_order_missing',$orderId,'Платёж есть в Cloud, но заказ с таким ID не найден в WooCommerce.');
             } elseif (!str_starts_with((string)$wooOrder->get_payment_method(),'robokassa')) {
                 self::add($issues,'cloud_payment_gateway_mismatch',$orderId,'Платёж Cloud привязан к заказу, который не использует Robokassa.');
