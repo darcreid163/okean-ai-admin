@@ -107,16 +107,25 @@ final class Reconciliation {
             if ($refundTotal>(int)$payment['amount_rub']*100) {
                 self::add($issues,'refund_total_exceeds_payment',$orderId,'Сумма подтверждённых возвратов превышает исходную сумму платежа.');
             }
-            if ($refundTotal>0 && $refundTotal<(int)$payment['amount_rub']*100 && !in_array((string)$payment['status'],['partially_refunded','refunded'],true)) {
+            $paidTotal=(int)$payment['amount_rub']*100;
+            if ($refundTotal>0 && $refundTotal<$paidTotal && !in_array((string)$payment['status'],['partially_refunded','refunded'],true)) {
                 self::add($issues,'refund_ledger_status_mismatch',$orderId,'В реестре есть возврат, но статус платежа не отражает частичный/полный возврат.');
+            }
+            if ($refundTotal===$paidTotal && $paidTotal>0 && (string)$payment['status']!=='refunded') {
+                self::add($issues,'full_refund_payment_status_mismatch',$orderId,'Сумма подтверждённых возвратов равна оплате, но статус Cloud-платежа не refunded.');
             }
         }
 
         $ledgerRows=$store->rows('SELECT gateway_order_id,status,owner,plan,amount_rub,license_id FROM '.$store->table('commerce_payments').' ORDER BY created_at DESC LIMIT '.$limit);
         foreach ($ledgerRows as $row) {
             $orderId=(string)$row['gateway_order_id'];
-            if (!isset($seen[$orderId])) {
-                self::add($issues,'cloud_payment_order_not_in_scan',$orderId,'Платёж есть в Cloud, но соответствующий заказ не попал в последние '.$limit.' заказов WooCommerce; проверьте старые заказы и окно отчёта.');
+            // Resolve each ledger order directly so a recent-order scan limit
+            // cannot mislabel an older, valid WooCommerce order as missing.
+            $wooOrder=function_exists('wc_get_order')?wc_get_order((int)$orderId):false;
+            if (!$wooOrder instanceof \\WC_Order) {
+                self::add($issues,'cloud_payment_order_missing',$orderId,'Платёж есть в Cloud, но заказ с таким ID не найден в WooCommerce.');
+            } elseif (!str_starts_with((string)$wooOrder->get_payment_method(),'robokassa')) {
+                self::add($issues,'cloud_payment_gateway_mismatch',$orderId,'Платёж Cloud привязан к заказу, который не использует Robokassa.');
             }
         }
 
