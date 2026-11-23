@@ -47,7 +47,11 @@ final class Reconciliation {
 
             $payment=$store->row('SELECT * FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?',[$orderId]);
             if (!$payment) {
-                if ($isPaid) self::add($issues,'paid_order_missing_ledger',$orderId,'Заказ отмечен оплаченным, но записи в Cloud commerce_payments нет.');
+                if ($isPaid) {
+                    $transactionId=method_exists($order,'get_transaction_id')?trim((string)$order->get_transaction_id()):'';
+                    $repairable=(int)$order->get_customer_id()>0 && $transactionId!=='';
+                    self::add($issues,'paid_order_missing_ledger',$orderId,'Заказ отмечен оплаченным, но записи в Cloud commerce_payments нет.',$repairable);
+                }
                 continue;
             }
             if (method_exists($order,'get_status') && $order->get_status()==='refunded' && (string)$payment['status']!=='refunded') {
@@ -150,7 +154,7 @@ final class Reconciliation {
         ];
     }
 
-    private static function add(array &$issues,string $code,string $orderId,string $message): void {
-        $issues[]=['code'=>$code,'order_id'=>$orderId,'message'=>$message];
+    private static function add(array &$issues,string $code,string $orderId,string $message,bool $repairable=false): void {
+        $issues[]=['code'=>$code,'order_id'=>$orderId,'message'=>$message,'repairable'=>$repairable];
     }
 }
