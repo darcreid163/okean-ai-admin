@@ -36,7 +36,7 @@ final class Admin {
             foreach($candidates as $plan)if(QuotaPolicy::offers($policy,$scheme,(string)$plan))$plans[(string)$plan]=true;
         }
         $offers=[];
-        foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $scheme){
+        foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET] as $scheme){
             foreach(array_keys($plans) as $plan){
                 if(!QuotaPolicy::offers($policy,$scheme,$plan))continue;
                 $offers[]=[
