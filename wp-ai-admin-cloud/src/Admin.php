@@ -29,10 +29,10 @@ final class Admin {
      */
     public static function licenseOffers(array $policy): array {
         $plans=[];
-        foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET,QuotaPolicy::LEGACY] as $scheme){
+        foreach([QuotaPolicy::CURRENT,QuotaPolicy::TARGET] as $scheme){
             $candidates=isset($policy['schemes'][$scheme]['plans'])&&is_array($policy['schemes'][$scheme]['plans'])
                 ? array_keys($policy['schemes'][$scheme]['plans'])
-                : ($scheme===QuotaPolicy::LEGACY?array_keys((array)($policy['legacy_plans']??[])):array_keys((array)($policy['plans']??[])));
+                : array_keys((array)($policy['plans']??[]));
             foreach($candidates as $plan)if(QuotaPolicy::offers($policy,$scheme,(string)$plan))$plans[(string)$plan]=true;
         }
         $offers=[];
