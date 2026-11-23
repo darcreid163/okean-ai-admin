@@ -46,13 +46,13 @@ final class WooCommercePayments {
     public static function paymentComplete($orderId): void {
         if (!function_exists('wc_get_order')) return;
         $order=wc_get_order((int)$orderId);
-        if (!$order instanceof \\WC_Order || !$order->is_paid()) return;
+        if (!$order instanceof \WC_Order || !$order->is_paid()) return;
         $method=(string)$order->get_payment_method();
         if ($method==='' || !str_starts_with($method,self::GATEWAY_PREFIX)) return;
         try {
             WordPress::settlePaidWooOrder($order);
             self::clearRetryState($order);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             if (self::isPermanentFailure($e)) {
                 self::noteOnce($order,'permanent','WP AI Admin: платёж подтверждён, но лицензия не выдана. Заказ требует проверки администратором: '.self::safeReason($e));
                 error_log('WP AI Admin Cloud billing permanent rejection for order '.$order->get_id().': '.self::safeReason($e));
@@ -66,13 +66,13 @@ final class WooCommercePayments {
     public static function retryPaidOrder($orderId): void {
         if (!function_exists('wc_get_order')) return;
         $order=wc_get_order((int)$orderId);
-        if (!$order instanceof \\WC_Order || !$order->is_paid()) return;
+        if (!$order instanceof \WC_Order || !$order->is_paid()) return;
         if (!str_starts_with((string)$order->get_payment_method(),self::GATEWAY_PREFIX)) return;
         try {
             WordPress::settlePaidWooOrder($order);
             self::clearRetryState($order);
             self::noteOnce($order,'recovered','WP AI Admin: лицензия успешно активирована после повторной проверки платежа.');
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             if (self::isPermanentFailure($e)) {
                 self::noteOnce($order,'permanent','WP AI Admin: автоматическая активация остановлена; заказ требует проверки администратором: '.self::safeReason($e));
                 error_log('WP AI Admin Cloud billing permanent rejection for order '.$order->get_id().': '.self::safeReason($e));
@@ -82,7 +82,7 @@ final class WooCommercePayments {
         }
     }
 
-    private static function scheduleRetry(\\WC_Order $order,int $delay,\\Throwable $error): void {
+    private static function scheduleRetry(\WC_Order $order,int $delay,\Throwable $error): void {
         $attempt=(int)$order->get_meta('_wpai_cloud_entitlement_retry_count',true)+1;
         if ($attempt>12) {
             self::noteOnce($order,'exhausted','WP AI Admin: не удалось автоматически активировать лицензию после 12 попыток. Платёж сохранён; требуется ручная сверка.');
@@ -101,7 +101,7 @@ final class WooCommercePayments {
         }
     }
 
-    private static function clearRetryState(\\WC_Order $order): void {
+    private static function clearRetryState(\WC_Order $order): void {
         if (method_exists($order,'delete_meta_data')) {
             $order->delete_meta_data('_wpai_cloud_entitlement_retry_count');
             $order->delete_meta_data('_wpai_cloud_entitlement_note_retry');
@@ -111,7 +111,7 @@ final class WooCommercePayments {
         }
     }
 
-    private static function noteOnce(\\WC_Order $order,string $key,string $message): void {
+    private static function noteOnce(\WC_Order $order,string $key,string $message): void {
         $meta='_wpai_cloud_entitlement_note_'.$key;
         if ((string)$order->get_meta($meta,true)==='yes') return;
         $order->add_order_note($message);
@@ -119,11 +119,11 @@ final class WooCommercePayments {
         $order->save_meta_data();
     }
 
-    private static function safeReason(\\Throwable $error): string {
+    private static function safeReason(\Throwable $error): string {
         return $error instanceof Fault ? preg_replace('/[^a-z0-9_]/i','', $error->reason) : 'temporary_settlement_error';
     }
 
-    private static function isPermanentFailure(\\Throwable $error): bool {
+    private static function isPermanentFailure(\Throwable $error): bool {
         if (!$error instanceof Fault) return false;
         return in_array($error->reason,[
             'payment_not_confirmed','payment_currency_mismatch','registered_customer_required',
