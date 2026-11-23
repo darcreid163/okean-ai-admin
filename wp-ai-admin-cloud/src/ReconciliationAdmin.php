@@ -33,7 +33,7 @@ final class ReconciliationAdmin {
     }
 
     public static function handle(): void {
-        if (!current_user_can('manage_options')) wp_die('Недостаточно прав.',403);
+        if (!current_user_can('manage_options')) wp_die('Недостаточно прав.','',['response'=>403]);
         check_admin_referer('wpai_cloud_reconcile');
         $limit=isset($_POST['limit'])?(int)$_POST['limit']:500;
         if (!in_array($limit,[100,250,500],true)) $limit=500;
