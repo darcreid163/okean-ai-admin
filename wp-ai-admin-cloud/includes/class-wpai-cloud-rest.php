@@ -69,6 +69,7 @@ class WPAI_Cloud_REST {
                     'monthly_actions'=>$period==='calendar_month_utc'?$limit:null,
                     'daily_actions'=>$period==='calendar_day_utc'?$limit:null,
                     'price_rub_month'=>$scheme['prices_rub_month'][$slug]??null,
+                    'price_rub_year'=>$scheme['prices_rub_year'][$slug]??null,
                     'all_tools'=>true,
                     'failed_actions_billable'=>0,'rollback_billable'=>0,'verify_billable'=>0);
             }
@@ -80,9 +81,12 @@ class WPAI_Cloud_REST {
             $target=array('items'=>$items,'quota_scheme'=>'tariffs_v3','all_tools'=>true,
                 'paid_quotas_approved'=>$paidStatuses!==[] && !in_array('requires_owner_approval',$paidStatuses,true),
                 'prices_approved'=>(bool)($scheme['prices_approved']??false),
-                'automatic_money_debits'=>false);
+                'automatic_money_debits'=>false,
+                'offers'=>(array)($policy['commerce']['products']??[]),
+                'currency'=>(string)($policy['commerce']['currency']??'RUB'),
+                'auto_renew'=>(bool)($policy['commerce']['auto_renew']??false));
         }
-        return self::response(array('items'=>$plans,'quota_scheme'=>(string)($policy['default_scheme']??'tariffs_v2'),'payments_enabled'=>false,
+        return self::response(array('items'=>$plans,'quota_scheme'=>(string)($policy['default_scheme']??'tariffs_v3'),'payments_enabled'=>false,
             'automatic_money_debits'=>false,'manual_refills'=>'deferred',
             'prices_approved'=>(bool)($policy['prices_approved']??false),'target'=>$target));
     }
