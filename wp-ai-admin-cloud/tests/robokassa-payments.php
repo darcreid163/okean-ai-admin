@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__).'/src/WooCommercePayments.php';
 require_once dirname(__DIR__).'/src/Reconciliation.php';
+require_once dirname(__DIR__).'/src/ReconciliationRepair.php';
 if (!class_exists('WooCommerce')) { class WooCommerce {} }
 $GLOBALS['robokassaReconciliationOrders']=[];
 if (!function_exists('wc_get_orders')) {
