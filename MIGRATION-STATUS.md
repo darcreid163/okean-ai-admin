@@ -1,3 +1,5 @@
+> **Current status notice — 2026-11-24:** This file's detailed entries below are historical snapshots and are not the current release/version/tariff authority. The authoritative repository inventory, exact PR stack, installed runtime facts, current security blockers and integration order are in [REPOSITORY-RECONCILIATION-2026-11-24.md](docs/REPOSITORY-RECONCILIATION-2026-11-24.md). In particular, the repository is PRIVATE; `main` is Native 2.1.17 + Cloud Core 0.3.13-dev; the site reports Native 2.1.18 + Cloud Core 0.3.13-dev; there is no single qualified integrated release SHA. Do not use historical quota or price values below for migration or sales configuration.
+
 # WP AI Admin — PUBLICATION BLOCKED (publication and installation)
 
 ## Version authority
