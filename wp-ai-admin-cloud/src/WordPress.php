@@ -371,7 +371,7 @@ final class WordPress {
             $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=?',['retry',0,0,(string)$order->get_id()]);
             try {
                 $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('WP AI Admin administrator licence email resend failed: '.get_class($e));
                 $sent=false;
             }
