@@ -16,7 +16,8 @@ final class LicenseDelivery {
     public static function create(Store $store,Vault $vault,\WC_Order $order,array $license,string $plan,int $now): void {
         $orderId=(string)$order->get_id();
         $owner=(string)(int)$order->get_customer_id();
-        $email=strtolower(trim((string)$order->get_billing_email()));
+        $user=function_exists('get_user_by')?get_user_by('id',(int)$owner):false;
+        $email=$user&&isset($user->user_email)?strtolower(trim((string)$user->user_email)):'';
         $key=$license['license_key']??null;
         $licenseId=(string)($license['id']??'');
         if ($orderId===''||$owner==='0'||$licenseId===''||!is_string($key)||!preg_match(Licenses::KEY_PATTERN,$key)||!is_email($email)) {
