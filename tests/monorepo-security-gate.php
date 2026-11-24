@@ -6,6 +6,9 @@
 declare(strict_types=1);
 $root=dirname(__DIR__);$issues=[];$php=static fn(string $f)=>is_file($root.'/'.$f)?file_get_contents($root.'/'.$f):'';
 $n=$php('okean-ai-admin.php');$c=$php('wp-ai-admin-cloud/wp-ai-admin-cloud.php');
+$nativeOauth=$php('includes/class-oai-mcp-oauth.php');$cloudOauth=$php('wp-ai-admin-cloud/src/OAuth.php');
+if(str_contains($nativeOauth,'offline_access')||str_contains($nativeOauth,'refresh_token'))$issues[]='Native OAuth must not advertise offline_access or issue/accept refresh tokens';
+if(str_contains($cloudOauth,'offline_access')||str_contains($cloudOauth,'refresh_token'))$issues[]='Cloud OAuth must not advertise offline_access or issue/accept refresh tokens';
 if(!str_contains($n,"define('OAI_VERSION','2.1.18')"))$issues[]='Native must be 2.1.18';
 if(!str_contains($c,"define('WPAI_CLOUD_VERSION', '0.3.13-dev')"))$issues[]='Unreleased Cloud candidate must be 0.3.13-dev; archived 0.3.11 remains immutable';
 if(!is_file($root.'/wp-ai-admin-cloud/config/plans.json'))$issues[]='Cloud quota policy missing';
