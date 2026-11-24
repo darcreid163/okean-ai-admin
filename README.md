@@ -8,7 +8,7 @@
 
 As explicitly directed by the maintainer, `darcreid163/okean-ai-admin` is the current **PRIVATE** single development repository with GitHub-hosted CI for both Native and Cloud. The current Cloud Core 0.3.13-dev source and synthetic tests are included in `wp-ai-admin-cloud/`. Production keys, credentials, accounts, private database snapshots and deployment configuration are prohibited.
 
-**Irreversible visibility warning:** all source committed to a public Git branch is publicly accessible. Making this repository private later does NOT retract clones, forks or historic downloads. This includes the 0.3.11 server algorithms. Treat this as an explicit temporary development exposure, not a secret-preserving mirror.
+**Irreversible visibility warning:** if any historical source or branch was publicly accessible, changing repository visibility does not retract existing clones, forks or downloads. Treat every public historical commit as disclosed; never place secrets or production data in Git history.
 
 ## Target repositories after release qualification
 
