@@ -184,7 +184,7 @@ final class WordPress {
         $owner=(string)(int)$order->get_customer_id();
         Settings::account($owner);
         self::core()->ensureAccount($owner);
-        return ReconciliationRepair::repairMissingPaymentLedger(self::database(),Settings::policy(),$order);
+        return ReconciliationRepair::repairMissingPaymentLedger(self::database(),Settings::policy(),$order,new Vault(Settings::keys()['vault']));
     }
     /** Read-only operational comparison of WooCommerce orders and Cloud ledgers. */
     public static function reconciliationReport(int $limit=500): array {
