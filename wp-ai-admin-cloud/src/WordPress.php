@@ -369,9 +369,14 @@ final class WordPress {
             $delivery=$store->row('SELECT owner,email_ciphertext,email_status FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
             if(!$delivery || $delivery['owner']!==(string)$order->get_customer_id() || $delivery['email_ciphertext']==='' || $delivery['email_status']==='revoked') throw new Fault('license_email_copy_unavailable',409);
             $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=?',['retry',0,0,(string)$order->get_id()]);
-            $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
+            try {
+                $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
+            } catch (\\Throwable $e) {
+                error_log('WP AI Admin administrator licence email resend failed: '.get_class($e));
+                $sent=false;
+            }
             $order->add_order_note($sent?'WP AI Admin: администратор повторно отправил письмо с лицензией на зарегистрированный адрес аккаунта.':'WP AI Admin: повторная отправка письма с лицензией не удалась; автоматические попытки продолжаются.');
-            if(!$sent) wp_schedule_single_event(time()+60,'wpai_cloud_retry_license_email',[(int)$order->get_id()]);
+            if(!$sent) self::queueOrExhaustLicenseEmail($order,$store);
             return ['sent'=>$sent,'order_id'=>(int)$order->get_id()];
         });
         foreach(['reissue'=>'REISSUE','revoke'=>'REVOKE','suspend'=>'SUSPEND','reactivate'=>'REACTIVATE'] as $action=>$confirmation) {
