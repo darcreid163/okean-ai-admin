@@ -330,6 +330,7 @@ final class WooCommercePayments {
         if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
         $store->ensureLicenseSchema();
         $store->ensureCommerceSchema();
+        $store->ensureLicenseDeliverySchema();
         $now=time();
         $payloadHash=hash('sha256',implode('|',[(string)$order->get_id(),$owner,(string)$amountKopecks,$isFull?'full':'partial']));
         return $store->transaction(function() use($store,$policy,$order,$requestId,$amountKopecks,$isFull,$owner,$payloadHash,$now): array {
@@ -371,6 +372,8 @@ final class WooCommercePayments {
                     $outcome='stale_payment_refund';
                 }
                 $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=? WHERE gateway_order_id=?',['refunded',(string)$order->get_id()]);
+                // A confirmed full refund must prevent any still-pending reveal or email delivery for this exact order.
+                $store->execute('UPDATE '.$store->table('license_deliveries').' SET reveal_ciphertext=?,email_ciphertext=?,email_status=?,email_started_at=? WHERE order_id=? AND owner=?',['','','revoked',0,(string)$order->get_id(),$owner]);
             } else {
                 $store->execute('UPDATE '.$store->table('commerce_payments').' SET status=? WHERE gateway_order_id=? AND status IN (?,?)',['partially_refunded',(string)$order->get_id(),'settled','partially_refunded']);
             }
