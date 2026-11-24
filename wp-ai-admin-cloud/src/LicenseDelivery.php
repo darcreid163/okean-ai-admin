@@ -14,7 +14,6 @@ final class LicenseDelivery {
 
     /** Must be called inside the same Store transaction as payment settlement and licence issuance. */
     public static function create(Store $store,Vault $vault,\WC_Order $order,array $license,string $plan,int $now): void {
-        $store->ensureLicenseDeliverySchema();
         $orderId=(string)$order->get_id();
         $owner=(string)(int)$order->get_customer_id();
         $email=strtolower(trim((string)$order->get_billing_email()));
