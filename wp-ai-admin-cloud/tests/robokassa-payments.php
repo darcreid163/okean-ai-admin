@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__).'/src/WooCommercePayments.php';
+require_once dirname(__DIR__).'/src/LicenseDelivery.php';
+if (!function_exists('is_email')) { function is_email(string $email): string|false { return filter_var($email,FILTER_VALIDATE_EMAIL)?$email:false; } }
 require_once dirname(__DIR__).'/src/Reconciliation.php';
 require_once dirname(__DIR__).'/src/ReconciliationRepair.php';
 if (!class_exists('WooCommerce')) { class WooCommerce {} }
@@ -39,6 +41,7 @@ if (!class_exists('WC_Order')) {
         public function get_total(): float { return $this->total; }
         public function get_id(): int { return $this->id; }
         public function get_transaction_id(): string { return $this->transaction; }
+        public function get_billing_email(): string { return 'buyer@example.com'; }
         public function get_order_key(): string { return 'wc_order_test_'.$this->id; }
         public function get_meta(string $key,bool $single=true): mixed { return $this->meta[$key]??''; }
         public function set_meta(string $key,mixed $value): void { $this->meta[$key]=$value; }
@@ -67,6 +70,16 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $license=$store->row('SELECT * FROM '.$store->table('licenses').' WHERE id=?',[$first['license_id']]);
     robokassaPaymentCheck($license!==null && $license['owner']===$owner && $license['plan']==='pro' && $license['quota_scheme']==='tariffs_v3','licence must be bound to the registered Woo customer');
     robokassaPaymentCheck($license['expires_at']!==null && (int)$license['expires_at']>(int)$license['starts_at'],'paid licence must have a finite expiry');
+    $delivery=$store->row('SELECT * FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
+    robokassaPaymentCheck($delivery!==null && $delivery['owner']===$owner && $delivery['license_id']===$first['license_id'],'paid settlement must create an order-scoped delivery row');
+    robokassaPaymentCheck($delivery['reveal_ciphertext']!=='' && $delivery['email_ciphertext']!=='' && !str_contains($delivery['reveal_ciphertext'],'wpai_lic_'),'delivery copies must be encrypted');
+    $deliveryVault=new \\WPAICloudGateway\\Vault(str_repeat('z',32));
+    $revealed=\\WPAICloudGateway\\LicenseDelivery::reveal($store,$deliveryVault,(string)$order->get_id(),$owner,time());
+    robokassaPaymentCheck(preg_match(\\WPAICloudGateway\\Licenses::KEY_PATTERN,$revealed)===1,'one-time reveal must return the generated key');
+    try { \\WPAICloudGateway\\LicenseDelivery::reveal($store,$deliveryVault,(string)$order->get_id(),$owner,time()); throw new RuntimeException('Robokassa payment test failed: reveal replay returned key'); }
+    catch (\\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='license_reveal_already_consumed','reveal replay must be rejected'); }
+    $consumed=$store->row('SELECT reveal_ciphertext,reveal_consumed,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
+    robokassaPaymentCheck($consumed['reveal_ciphertext']==='' && (int)$consumed['reveal_consumed']===1 && $consumed['email_ciphertext']!=='','reveal consumption must erase only its own encrypted copy');
 
     $duplicate=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$order);
     robokassaPaymentCheck($duplicate['idempotent']===true && $duplicate['license_id']===$first['license_id'],'replayed order must not issue or extend twice');
