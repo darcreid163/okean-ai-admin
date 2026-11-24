@@ -40,8 +40,8 @@ The Native and Cloud split repositories are not synchronized with the current mo
 - PR **#235** adds the lifecycle approval propagation on top of #232 (head `fa95324e421d3f9ab5702fbf9773bdd3e7ec0780`); the observed exact-head checks were successful.
 - PRs **#238 → #239 → #240 → #241 → #242 → #243 → #244 → #245** form a dependent Robokassa/licence-delivery stack. Do not merge them out of order or directly into main without first integrating the Native/lifecycle line and re-running exact-head CI.
 - PRs #243, #244 and #245 had successful observed CI checks on their respective heads. This does not qualify the combined Native + Cloud result.
-- PR **#242** had one failed latest-Imagick WordPress smoke job in the observed check set; investigate and rerun after reconciliation.
-- PR **#237** (Daily 800 tariff scheme) is not an approved integration candidate: its observed Cloud MySQL billing proof failed a parallel quota-limit assertion, and WordPress upgrade smoke failed with “Database table set changed”. Do not merge it as-is.
+- PR **#242** had one failed latest-Imagick WordPress smoke job: the concurrent media-creation fixture reported extra artifacts/operations and reconciliation-required outcomes (one winner, five denied requests, but two files/two attachments and one operation were observed). This is a real concurrency/cleanup regression to investigate, not an HPOS compatibility failure.
+- PR **#237** (Daily 800 tariff scheme) is not an approved integration candidate: its observed Cloud MySQL `billing-proof` failed because a parallel quota-limit race charged two concurrent calls where exactly one was expected; the WordPress upgrade smoke also failed with “Database table set changed”. Do not merge it as-is.
 - The latest PR #245 head is not the Native 2.1.18 line: its Native bootstrap remains 2.1.17. It therefore cannot be treated as the complete site-matching release candidate.
 
 ## Decisions and blockers
