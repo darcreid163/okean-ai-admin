@@ -24,8 +24,8 @@ final class LicenseDelivery {
             throw new Fault('license_delivery_identity_invalid',503);
         }
         $binding=self::binding($orderId,$owner,$licenseId);
-        $store->execute('INSERT INTO '.$store->table('license_deliveries').' (order_id,owner,license_id,plan,email,reveal_ciphertext,email_ciphertext,reveal_consumed,email_status,email_attempts,created_at,revealed_at,emailed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[
-            $orderId,$owner,$licenseId,$plan,$email,$vault->seal($key,$binding.':reveal'),$vault->seal($key,$binding.':email'),0,'pending',0,$now,null,null
+        $store->execute('INSERT INTO '.$store->table('license_deliveries').' (order_id,owner,license_id,plan,email,reveal_ciphertext,email_ciphertext,reveal_consumed,email_status,email_attempts,email_started_at,created_at,revealed_at,emailed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
+            $orderId,$owner,$licenseId,$plan,$email,$vault->seal($key,$binding.':reveal'),$vault->seal($key,$binding.':email'),0,'pending',0,0,$now,null,null
         ]);
     }
 
@@ -46,26 +46,44 @@ final class LicenseDelivery {
         });
     }
 
-    /** Send or retry the independent email copy. A successful send erases its ciphertext. */
+    /** Send or retry the independent email copy with a bounded concurrent-send lease. */
     public static function sendEmail(Store $store,Vault $vault,string $orderId): bool {
         $store->ensureLicenseDeliverySchema();
-        $row=$store->row('SELECT * FROM '.$store->table('license_deliveries').' WHERE order_id=?',[$orderId]);
-        if (!$row||$row['email_status']==='sent'||$row['email_ciphertext']==='') return false;
-        $owner=(string)$row['owner'];
-        $binding=self::binding($orderId,$owner,(string)$row['license_id']);
-        $key=$vault->open((string)$row['email_ciphertext'],$binding.':email');
-        $url=home_url('/license-key/'.rawurlencode($orderId).'/');
-        $subject='Ваш ключ лицензии WP AI Admin';
-        $message="Спасибо за покупку тарифа WP AI Admin.\n\nВаш ключ лицензии:\n".$key."\n\nАктивируйте его в плагине WP AI Admin → Тариф и лицензия.\nСтраница заказа: ".$url."\n";
-        $sent=wp_mail((string)$row['email'],$subject,$message,['Content-Type: text/plain; charset=UTF-8']);
+        $now=time();
+        $row=$store->transaction(function() use($store,$orderId,$now): ?array {
+            $current=$store->row('SELECT * FROM '.$store->table('license_deliveries').' WHERE order_id=?'.$store->lock(),[$orderId]);
+            if (!$current || $current['email_status']==='sent' || $current['email_ciphertext']==='' || (int)$current['email_attempts']>=12) return null;
+            if ($current['email_status']==='sending' && (int)$current['email_started_at']>$now-600) return null;
+            $updated=$store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=email_attempts+1,email_started_at=? WHERE order_id=? AND email_status<>?',[
+                'sending',$now,$orderId,'sent'
+            ])->rowCount();
+            if ($updated!==1) return null;
+            $current['email_attempts']=(int)$current['email_attempts']+1;
+            $current['email_started_at']=$now;
+            return $current;
+        });
+        if (!$row) return false;
+        $binding=self::binding($orderId,(string)$row['owner'],(string)$row['license_id']);
+        try {
+            $key=$vault->open((string)$row['email_ciphertext'],$binding.':email');
+            $url=home_url('/license-key/'.rawurlencode($orderId).'/');
+            $subject='Ваш ключ лицензии WP AI Admin';
+            $message="Спасибо за покупку тарифа WP AI Admin.\n\nВаш ключ лицензии:\n".$key."\n\nАктивируйте его в плагине WP AI Admin → Тариф и лицензия.\nСтраница заказа: ".$url."\n";
+            $sent=wp_mail((string)$row['email'],$subject,$message,['Content-Type: text/plain; charset=UTF-8']);
+        } catch (\Throwable $e) {
+            $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_started_at=? WHERE order_id=? AND email_status=?',[
+                'retry',0,$orderId,'sending'
+            ]);
+            throw $e;
+        }
         if ($sent) {
-            $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_ciphertext=?,email_status=?,emailed_at=? WHERE order_id=? AND email_status<>?',[
-                '', 'sent',time(),$orderId,'sent'
+            $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_ciphertext=?,email_status=?,email_started_at=?,emailed_at=? WHERE order_id=? AND email_status=?',[
+                '', 'sent',0,time(),$orderId,'sending'
             ]);
             return true;
         }
-        $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_attempts=email_attempts+1,email_status=? WHERE order_id=? AND email_status<>?',[
-            'retry',$orderId,'sent'
+        $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_started_at=? WHERE order_id=? AND email_status=?',[
+            'retry',0,$orderId,'sending'
         ]);
         return false;
     }
