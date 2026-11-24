@@ -14,7 +14,7 @@ final class Store {
         if (!$this->mysql) { $db->exec('PRAGMA busy_timeout=10000'); $db->exec('PRAGMA journal_mode=WAL'); }
     }
     public function table(string $name): string {
-        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','commerce_payments','commerce_refunds'],true)) throw new Fault('invalid_table',503);
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','commerce_payments','commerce_refunds','license_deliveries'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
@@ -165,6 +165,27 @@ final class Store {
             created_at BIGINT NOT NULL
         )".$tail;
         $this->execute($refundSql);
+    }
+
+    /** Durable encrypted one-time licence delivery records, separate from entitlement rows. */
+    public function ensureLicenseDeliverySchema(): void {
+        $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        $this->execute("CREATE TABLE IF NOT EXISTS ".$this->table('license_deliveries')." (
+            order_id VARCHAR(64) NOT NULL PRIMARY KEY,
+            owner VARCHAR(64) NOT NULL,
+            license_id VARCHAR(32) NOT NULL,
+            plan VARCHAR(20) NOT NULL,
+            email VARCHAR(254) NOT NULL,
+            reveal_ciphertext MEDIUMTEXT NOT NULL,
+            email_ciphertext MEDIUMTEXT NOT NULL,
+            reveal_consumed INTEGER NOT NULL DEFAULT 0,
+            email_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            email_attempts INTEGER NOT NULL DEFAULT 0,
+            created_at BIGINT NOT NULL,
+            revealed_at BIGINT NULL,
+            emailed_at BIGINT NULL
+        )".$tail);
+        $this->assertSchema(['license_deliveries']);
     }
 
     private function hasColumn(string $table,string $column): bool {
