@@ -181,10 +181,18 @@ final class Store {
             reveal_consumed INTEGER NOT NULL DEFAULT 0,
             email_status VARCHAR(20) NOT NULL DEFAULT 'pending',
             email_attempts INTEGER NOT NULL DEFAULT 0,
+            email_started_at BIGINT NOT NULL DEFAULT 0,
             created_at BIGINT NOT NULL,
             revealed_at BIGINT NULL,
             emailed_at BIGINT NULL
         )".$tail);
+        if (!$this->hasColumn('license_deliveries','email_started_at')) {
+            try { $this->execute('ALTER TABLE '.$this->table('license_deliveries').' ADD COLUMN email_started_at BIGINT NOT NULL DEFAULT 0'); }
+            catch (\\PDOException $e) {
+                $duplicate=$this->mysql?(int)($e->errorInfo[1]??0)===1060:str_contains(strtolower($e->getMessage()),'duplicate column name');
+                if (!$duplicate) throw $e;
+            }
+        }
         $this->assertSchema(['license_deliveries']);
     }
 
@@ -218,7 +226,7 @@ final class Store {
             'licenses'=>['id','key_hash','key_prefix','owner','plan','quota_scheme','status','activation_limit','activations','issued_at','starts_at','expires_at','activated_at','revoked_at','replaced_by','replaces','comment','issued_by','source','sequence'],
             'license_activations'=>['license_id','site_id','owner','home','status','activated_at','deactivated_at'],
             'license_events'=>['id','license_id','owner','event','actor','detail_hash','created_at'],
-            'license_deliveries'=>['order_id','owner','license_id','plan','email','reveal_ciphertext','email_ciphertext','reveal_consumed','email_status','email_attempts','created_at','revealed_at','emailed_at'],
+            'license_deliveries'=>['order_id','owner','license_id','plan','email','reveal_ciphertext','email_ciphertext','reveal_consumed','email_status','email_attempts','email_started_at','created_at','revealed_at','emailed_at'],
         ];
 
         if($this->mysql){
