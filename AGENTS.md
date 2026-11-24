@@ -1,6 +1,6 @@
 # WP AI Admin temporary monorepo agent rules
 
-- This repository is PUBLIC and temporarily contains a reviewed copy of Native 2.1.17 and Cloud Core 0.3.13-dev **source** (recovered 0.3.11 baseline). This is an explicit owner-driven CI arrangement, not a security boundary. Never publish real access tokens, OAuth secret keys, server key material, payment credentials, customer information, private WordPress backups or database exports.
+- This repository is PRIVATE and contains the canonical development copy: main currently has Native 2.1.17 and Cloud Core 0.3.13-dev **source** (recovered 0.3.11 baseline). This is an explicit owner-driven CI arrangement, not a security boundary. Never publish real access tokens, OAuth secret keys, server key material, payment credentials, customer information, private WordPress backups or database exports.
 - GitHub PRs must keep `permissions: contents: read` by default, use no privileged `pull_request_target` for untrusted code, and use synthetic database fixtures.
 - Runtime separation: `okean-ai-admin.php` + `includes/` = Native; `wp-ai-admin-cloud/` = exactly one Cloud 0.3.13-dev candidate derived from recovered 0.3.11. Old pilot `wp-ai-cloud/` and old ZIPs must not reappear in the current tree.
 - Native release archive must contain only Native files. Cloud production distribution must be exported separately and ultimately maintained in PRIVATE `wp-ai-admin-cloud-core`.
@@ -9,7 +9,7 @@
 - One issue/branch per change, exact-HEAD CI logs before merge, evidence-backed review. No force-push/branch deletion for unfinished PRs. Production deployment, account/tariff migration, release tags and repo visibility changes require separate explicit authorization.
 - Historic public disclosure cannot be reversed by making repo private; inspect exposures before release.
 
-## Shared open-beta mission
+## Current repository authority (2026-11-24)\n\n- Read `docs/REPOSITORY-RECONCILIATION-2026-11-24.md` before any cross-repository work. It is the current repository/branch/version authority and supersedes older dated repository statements.\n- Do not treat Native 2.1.18 or Robokassa/licence PR stacks as integrated until rebased/reconstructed together and exact-head Native + Cloud CI passes.\n- Keep `wp-ai-admin` and `wp-ai-admin-cloud-core` as historical publication snapshots until the release export gate; never sync them blindly. `universal-mcp-platform` is a separate product. `WP-AI-ADMIN-TEST` contains test artifacts only.\n- No branch deletion, force-push, visibility change, production deployment or payment/licence mutation without separate explicit approval.\n\n## Shared open-beta mission
 
 - Before any task, read `docs/OPEN-BETA-RELEASE-MISSION.md`. It is the canonical shared product/release brief for all coding, review, QA and release agents.
 - The mission covers the Open Beta acceptance scope for WordPress core, WooCommerce, Elementor, classic/block editor, classic themes and Woodmart; server-authoritative tariffs/quota ledger; plugin dashboard reconciliation; code audit; GitHub Actions; disposable virtual test environments; and periodic installable beta artifacts.
