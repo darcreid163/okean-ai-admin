@@ -31,7 +31,7 @@ require_once WPAI_CLOUD_DIR . 'includes/class-wpai-cloud-rest.php';
 require_once WPAI_CLOUD_DIR . 'includes/class-wpai-cloud-admin.php';
 
 register_activation_hook(__FILE__, array('WPAI_Cloud_DB', 'install'));
-register_activation_hook(__FILE__, static function (): void { add_rewrite_rule('^license-key/([0-9]+)/?
+register_activation_hook(__FILE__, static function (): void { add_rewrite_rule('^license-key/([0-9]+)/?$', 'index.php?wpai_license_order=$matches[1]', 'top'); flush_rewrite_rules(); });
 add_action('plugins_loaded', array('WPAI_Cloud_DB', 'maybe_upgrade'));
 add_action('rest_api_init', array('WPAI_Cloud_REST', 'register_routes'));
 add_action('admin_menu', array('WPAI_Cloud_Admin', 'register_menu'));
@@ -43,17 +43,4 @@ if (PHP_VERSION_ID < 80200) {
 
 // Gateway storage is separate from the preserved Cloud Core v1 schema.
 foreach (['Security','Transport','Store','Licenses','QuotaPolicy','BatchAccounting','AbilitiesPolicy','Core','Skills','Unsplash','MediaPolicy','Gateway','Settings','OAuth','Pairing','Sse','Surface','Admin','LicenseDelivery','WooCommercePayments','Reconciliation','ReconciliationRepair','ReconciliationAdmin','WordPress'] as $component) require_once WPAI_CLOUD_DIR . 'src/' . $component . '.php';
-\WPAICloudGateway\WordPress::boot(__FILE__);
-, 'index.php?wpai_license_order=$matches[1]', 'top'); flush_rewrite_rules(); });
-add_action('plugins_loaded', array('WPAI_Cloud_DB', 'maybe_upgrade'));
-add_action('rest_api_init', array('WPAI_Cloud_REST', 'register_routes'));
-add_action('admin_menu', array('WPAI_Cloud_Admin', 'register_menu'));
-
-if (PHP_VERSION_ID < 80200) {
-    add_action('admin_notices', static function () { echo '<div class="notice notice-error"><p>Gateway требует PHP 8.2 или новее. Cloud Core продолжает работать.</p></div>'; });
-    return;
-}
-
-// Gateway storage is separate from the preserved Cloud Core v1 schema.
-foreach (['Security','Transport','Store','Licenses','QuotaPolicy','BatchAccounting','AbilitiesPolicy','Core','Skills','Unsplash','MediaPolicy','Gateway','Settings','OAuth','Pairing','Sse','Surface','Admin','WooCommercePayments','Reconciliation','ReconciliationRepair','ReconciliationAdmin','WordPress'] as $component) require_once WPAI_CLOUD_DIR . 'src/' . $component . '.php';
 \WPAICloudGateway\WordPress::boot(__FILE__);
