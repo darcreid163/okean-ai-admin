@@ -218,6 +218,7 @@ final class Store {
             'licenses'=>['id','key_hash','key_prefix','owner','plan','quota_scheme','status','activation_limit','activations','issued_at','starts_at','expires_at','activated_at','revoked_at','replaced_by','replaces','comment','issued_by','source','sequence'],
             'license_activations'=>['license_id','site_id','owner','home','status','activated_at','deactivated_at'],
             'license_events'=>['id','license_id','owner','event','actor','detail_hash','created_at'],
+            'license_deliveries'=>['order_id','owner','license_id','plan','email','reveal_ciphertext','email_ciphertext','reveal_consumed','email_status','email_attempts','created_at','revealed_at','emailed_at'],
         ];
 
         if($this->mysql){
