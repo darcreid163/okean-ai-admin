@@ -82,3 +82,40 @@ The `secret-history-scan.yml` workflow with Gitleaks exists on the PR #232 integ
 - No merge based only on an earlier green run; checks must match the exact final head SHA.
 - Never copy secrets, payment credentials, customer data or production database snapshots into GitHub.
 - A private visibility setting does not retract any content previously published from a public repository.
+
+
+## Legacy draft PR disposition — checked 2026-11-24
+
+Old open drafts in the split repositories are not automatically part of the canonical release. Keep their history and compare unique changes before closing or porting them.
+
+### Public Native snapshot repository
+
+| PR | Finding | Disposition |
+|---|---|---|
+| #24 — durable Lifecycle principal | Its main implementation overlaps the canonical monorepo lifecycle line (#235). Its real-WordPress pairing-rotation test was missing from the monorepo and has been ported to canonical PR #248. | Keep draft until #248 passes and the remaining diff is confirmed duplicate; then close as superseded. |
+| #25 — WoodMart Header Builder / mega-menu | Contains a unique adapter not present in the canonical monorepo. It is a feature expansion, not a release blocker. | Defer. Do not merge while the project is in security/QA freeze. Revisit after commercial beta acceptance. |
+| #21 — Native 2.1.17 recovery | Historical recovery snapshot; main monorepo already has the 2.1.17 baseline and newer integration work. | Compare unique file deltas only; do not restore the old snapshot over the canonical tree. |
+| #20 — WooCommerce/Gutenberg test matrix | Main monorepo already contains commerce-block and WooCommerce lifecycle tests. | Compare test coverage and retain only missing assertions; close after parity is proven. |
+| #17 — sole-maintainer release audit | Dated 2026-10-21 and superseded by the 2026-11-24 repository/release reconciliation. | Archive as historical evidence; close after links are preserved. |
+| #6 — Elementor document executor/recovery | Adds substantial document executor, operation-binding, lease and external-editor race code that is not present in the current monorepo baseline. | Do not discard or merge blindly. Review as a separate P0/P1 safety workstream after the current release blockers; port only with a rebase and full regression matrix. |
+| #1 — Native MCP approval regression | Older real-WordPress test additions; coverage must be compared with current Native MCP/lifecycle tests. | Keep pending diff/coverage review; do not merge stale workflow changes wholesale. |
+
+### Private Cloud snapshot repository
+
+| PR | Finding | Disposition |
+|---|---|---|
+| #12 — recovered Cloud Core 0.3.11 archive | Historical recovery artifact; canonical monorepo contains Cloud Core 0.3.13-dev. | Keep as provenance only; never replace the current Cloud tree with 0.3.11. |
+| #8 — billing parity / sole-maintainer audit | Dated 2026-10-21 and superseded by current billing, tariff and release reconciliation. | Archive as historical evidence; close after preserving links. |
+| #14 — repository boundary documentation | New documentation-only PR marking this repository as a historical Cloud snapshot. | Await its exact-head CI before merge. |
+
+### Canonical monorepo security/lifecycle PRs
+
+- PR #246 (repository reconciliation documentation) is merged to `main`.
+- PR #247 (deny server-executable file writes) is merged into the Native lifecycle integration branch, not yet into `main`. Exact-head PHP lint, Gitleaks, Cloud contracts, package builds and all three WordPress smoke profiles passed.
+- PR #248 adds the real-WordPress lifecycle pairing-rotation regression on top of that branch. Its exact-head CI is still running; do not merge until all required jobs pass.
+- PR #242's previously failed latest-Imagick smoke job was rerun and passed. Retain the original concurrency failure as a flakiness signal for follow-up.
+- PR #237 remains blocked by the MySQL quota race and WordPress upgrade table-set mismatch. PR #245 remains the newer Daily 500 / tariffs-v5 candidate, subject to final owner-approved tariff contract and integration.
+
+### Branch and draft cleanup rule
+
+Do not bulk-delete or force-update old branches. After the corresponding code/test deltas have been compared and either ported or explicitly deferred, close superseded drafts with a short reason and preserve their PR links. Delete branches only after the final integration SHA is accepted and only if no audit, rollback or release provenance depends on them.
