@@ -81,13 +81,13 @@ final class WordPress {
         $result=WooCommercePayments::settle($store,Settings::policy(),$order,new Vault(Settings::keys()['vault']));
         $delivery=$store->row('SELECT email_status,email_attempts FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
         if ($delivery && $delivery['email_status']!=='sent') {
-            $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
-            if (!$sent) {
-                $attempt=(int)$delivery['email_attempts']+1;
-                if ($attempt<=12 && !wp_next_scheduled('wpai_cloud_retry_license_email',[(int)$order->get_id()])) {
-                    wp_schedule_single_event(time()+min(3600,60*$attempt),'wpai_cloud_retry_license_email',[(int)$order->get_id()]);
-                }
+            try {
+                $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
+            } catch (\Throwable $e) {
+                error_log('WP AI Admin licence email send failed: '.get_class($e));
+                $sent=false;
             }
+            if (!$sent) self::queueOrExhaustLicenseEmail($order,$store);
         }
         return $result;
     }
@@ -109,27 +109,45 @@ final class WordPress {
         } catch (\Throwable $e) { error_log('WP AI Admin licence link unavailable: '.get_class($e)); }
     }
 
+    private static function queueOrExhaustLicenseEmail(\\WC_Order $order,Store $store): void {
+        $row=$store->row('SELECT email_status,email_attempts,email_ciphertext,email_started_at FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
+        if (!$row || in_array($row['email_status'],['sent','revoked'],true) || $row['email_ciphertext']==='') return;
+        if ($row['email_status']==='sending' && (int)$row['email_started_at']>time()-600) return;
+        $attempts=(int)$row['email_attempts'];
+        if ($attempts>=12) {
+            if ((string)$order->get_meta('_wpai_license_email_exhausted',true)!=='yes') {
+                $order->add_order_note('WP AI Admin: не удалось отправить письмо с лицензией после 12 попыток. Зашифрованная копия сохранена; администратор может повторить отправку из Cloud API.');
+                $order->update_meta_data('_wpai_license_email_exhausted','yes');
+                $order->save_meta_data();
+            }
+            return;
+        }
+        $args=[(int)$order->get_id()];
+        if (!wp_next_scheduled('wpai_cloud_retry_license_email',$args)) {
+            wp_schedule_single_event(time()+min(3600,60*max(1,$attempts)),'wpai_cloud_retry_license_email',$args);
+        }
+    }
+
     public static function retryLicenseEmail($orderId): void {
         if (!function_exists('wc_get_order')) return;
         $order=wc_get_order((int)$orderId);
-        if (!$order instanceof \WC_Order || !$order->is_paid()) return;
+        if (!$order instanceof \\WC_Order || !$order->is_paid()) return;
         try {
             $store=self::database();
             $row=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
             if (!$row || in_array($row['email_status'],['sent','revoked'],true) || $row['email_ciphertext']==='') return;
             if ((int)$row['email_attempts']>=12) {
-                if ((string)$order->get_meta('_wpai_license_email_exhausted',true)!=='yes') {
-                    $order->add_order_note('WP AI Admin: не удалось отправить письмо с лицензией после 12 попыток. Зашифрованная копия сохранена; администратор может повторить отправку из Cloud API.');
-                    $order->update_meta_data('_wpai_license_email_exhausted','yes');
-                    $order->save_meta_data();
-                }
+                self::queueOrExhaustLicenseEmail($order,$store);
                 return;
             }
-            if (!LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id())) {
-                $attempt=(int)$row['email_attempts']+1;
-                if ($attempt<12) wp_schedule_single_event(time()+min(3600,60*$attempt),'wpai_cloud_retry_license_email',[(int)$order->get_id()]);
+            try {
+                $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
+            } catch (\\Throwable $e) {
+                error_log('WP AI Admin licence email retry failed: '.get_class($e));
+                $sent=false;
             }
-        } catch (\Throwable $e) { error_log('WP AI Admin licence email retry failed: '.get_class($e)); }
+            if (!$sent) self::queueOrExhaustLicenseEmail($order,$store);
+        } catch (\\Throwable $e) { error_log('WP AI Admin licence email retry failed: '.get_class($e)); }
     }
 
     public static function serveLicenseReveal(): void {
