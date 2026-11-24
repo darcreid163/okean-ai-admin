@@ -109,7 +109,7 @@ final class WordPress {
         } catch (\Throwable $e) { error_log('WP AI Admin licence link unavailable: '.get_class($e)); }
     }
 
-    private static function queueOrExhaustLicenseEmail(\\WC_Order $order,Store $store): void {
+    private static function queueOrExhaustLicenseEmail(\WC_Order $order,Store $store): void {
         $row=$store->row('SELECT email_status,email_attempts,email_ciphertext,email_started_at FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
         if (!$row || in_array($row['email_status'],['sent','revoked'],true) || $row['email_ciphertext']==='') return;
         if ($row['email_status']==='sending' && (int)$row['email_started_at']>time()-600) return;
@@ -131,7 +131,7 @@ final class WordPress {
     public static function retryLicenseEmail($orderId): void {
         if (!function_exists('wc_get_order')) return;
         $order=wc_get_order((int)$orderId);
-        if (!$order instanceof \\WC_Order || !$order->is_paid()) return;
+        if (!$order instanceof \WC_Order || !$order->is_paid()) return;
         try {
             $store=self::database();
             $row=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
@@ -142,12 +142,12 @@ final class WordPress {
             }
             try {
                 $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('WP AI Admin licence email retry failed: '.get_class($e));
                 $sent=false;
             }
             if (!$sent) self::queueOrExhaustLicenseEmail($order,$store);
-        } catch (\\Throwable $e) { error_log('WP AI Admin licence email retry failed: '.get_class($e)); }
+        } catch (\Throwable $e) { error_log('WP AI Admin licence email retry failed: '.get_class($e)); }
     }
 
     public static function serveLicenseReveal(): void {
