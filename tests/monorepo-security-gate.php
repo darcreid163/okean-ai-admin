@@ -1,6 +1,6 @@
 <?php
 /**
- * Public monorepo security boundary: one Native candidate + one current Cloud.
+ * Canonical monorepo security boundary: one Native candidate + one current Cloud.
  * This is a SOURCE gate, not the Native-only release export gate.
  */
 declare(strict_types=1);
