@@ -231,7 +231,7 @@ final class WooCommercePayments {
             ->getTimestamp();
     }
 
-    public static function settle(Store $store, array $policy, \WC_Order $order): array {
+    public static function settle(Store $store, array $policy, \WC_Order $order, Vault $vault): array {
         if (!$order->is_paid()) throw new Fault('payment_not_confirmed',409);
         if ((string)$order->get_currency()!=='RUB') throw new Fault('payment_currency_mismatch',409);
         if ((int)$order->get_customer_id()<=0) throw new Fault('registered_customer_required',409);
