@@ -36,7 +36,7 @@ require_once $root.'/includes/class-oai-security.php';
 $blocked=['functions.php','FUNCTIONS.PHP','template.phtml','archive.phar','payload.php.txt','legacy.inc','cgi-bin\\\\run.cgi','scripts\\\\run.sh'];
 foreach($blocked as $path){
     if(!OAI_Security::has_executable_extension($path))$issues[]='server-executable file extension allowed: '.$path;
-    $guard=OAI_Security::php_guard($path,"<?php $fn='system'; $fn('id');");
+    $guard=OAI_Security::php_guard($path,"<?php \$fn='system'; \$fn('id');");
     if(!empty($guard['ok']))$issues[]='file guard accepted executable target: '.$path;
 }
 foreach(['style.css','theme.json','readme.md'] as $path){
