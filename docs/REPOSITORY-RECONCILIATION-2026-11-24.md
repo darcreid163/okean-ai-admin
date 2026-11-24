@@ -106,13 +106,13 @@ Old open drafts in the split repositories are not automatically part of the cano
 |---|---|---|
 | #12 — recovered Cloud Core 0.3.11 archive | Historical recovery artifact; canonical monorepo contains Cloud Core 0.3.13-dev. | Keep as provenance only; never replace the current Cloud tree with 0.3.11. |
 | #8 — billing parity / sole-maintainer audit | Dated 2026-10-21 and superseded by current billing, tariff and release reconciliation. | Archive as historical evidence; close after preserving links. |
-| #14 — repository boundary documentation | New documentation-only PR marking this repository as a historical Cloud snapshot. | Await its exact-head CI before merge. |
+| #14 — repository boundary documentation | New documentation-only PR marking this repository as a historical Cloud snapshot. | Merged to Cloud repository main. Its six PHP jobs remained queued because the configured owner-controlled self-hosted `cloud-core` runner was unavailable; no Cloud code changed. |
 
 ### Canonical monorepo security/lifecycle PRs
 
 - PR #246 (repository reconciliation documentation) is merged to `main`.
 - PR #247 (deny server-executable file writes) is merged into the Native lifecycle integration branch, not yet into `main`. Exact-head PHP lint, Gitleaks, Cloud contracts, package builds and all three WordPress smoke profiles passed.
-- PR #248 adds the real-WordPress lifecycle pairing-rotation regression on top of that branch. Its exact-head CI is still running; do not merge until all required jobs pass.
+- PR #248 adds the real-WordPress lifecycle pairing-rotation regression on top of that branch. Its exact-head PHP lint, Cloud contracts, browser contracts, WordPress upgrade and Gitleaks checks passed; the three final WordPress smoke profiles were still running at the last check. Do not merge until all required jobs pass.
 - PR #242's previously failed latest-Imagick smoke job was rerun and passed. Retain the original concurrency failure as a flakiness signal for follow-up.
 - PR #237 remains blocked by the MySQL quota race and WordPress upgrade table-set mismatch. PR #245 remains the newer Daily 500 / tariffs-v5 candidate, subject to final owner-approved tariff contract and integration.
 
