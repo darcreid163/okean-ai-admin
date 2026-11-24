@@ -32,6 +32,19 @@ $scopes = OAI_Security::scopes();
 wflAssert(!empty($scopes[$scope]) && is_dir($scopes[$scope]), 'Child theme scope is unavailable');
 $name = 'wpai-file-lifecycle-' . bin2hex(random_bytes(8)) . '.txt';
 $full = realpath($scopes[$scope]) . DIRECTORY_SEPARATOR . $name;
+
+// PHP files must be rejected during sandbox planning, before any operation or
+// filesystem mutation is created. The guard is extension-based, not content-based.
+$blocked_name = 'wpai-file-write-blocked-' . bin2hex(random_bytes(8)) . '.php';
+$blocked_path = realpath($scopes[$scope]) . DIRECTORY_SEPARATOR . $blocked_name;
+$blocked_request = new WP_REST_Request('POST', '/okean-ai/v1/files/write');
+$blocked_request->set_param('scope', $scope);
+$blocked_request->set_param('path', $blocked_name);
+$blocked_request->set_param('content', "<?php \\$fn='system'; \\$fn('id');");
+$blocked_result = OAI_REST::files_write($blocked_request);
+wflAssert(is_wp_error($blocked_result) && $blocked_result->get_error_code() === 'oai_executable_file_denied',
+    'PHP file target was not rejected during sandbox planning');
+wflAssert(!file_exists($blocked_path), 'Rejected PHP file target created a filesystem artifact');
 $before = "original file bytes\n";
 $after = str_repeat('A', 3 * 1024 * 1024);
 $operation_id = 0;
