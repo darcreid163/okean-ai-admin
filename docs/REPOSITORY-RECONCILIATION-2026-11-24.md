@@ -112,7 +112,7 @@ Old open drafts in the split repositories are not automatically part of the cano
 
 - PR #246 (repository reconciliation documentation) is merged to `main`.
 - PR #247 (deny server-executable file writes) is merged into the Native lifecycle integration branch, not yet into `main`. Exact-head PHP lint, Gitleaks, Cloud contracts, package builds and all three WordPress smoke profiles passed.
-- PR #248 adds the real-WordPress lifecycle pairing-rotation regression on top of that branch. Its exact-head PHP lint, Cloud contracts, browser contracts, WordPress upgrade and Gitleaks checks passed; the three final WordPress smoke profiles were still running at the last check. Do not merge until all required jobs pass.
+- PR #247 (PHP executable file-write denial) is merged into the Native lifecycle integration branch; its exact-head PHP lint, Gitleaks, package-install, build, Cloud contracts and all three WordPress smoke profiles passed.\n- PR #235's updated exact head (including #247) passed all 17 non-cancelled checks.\n- PR #248 was closed as a duplicate stacked diff after its base SHA stayed stale. Its test changes were recreated cleanly in PR #250, which contains only the two lifecycle test files; exact-head CI is running. Do not merge #250 until every required job passes.
 - PR #242's previously failed latest-Imagick smoke job was rerun and passed. Retain the original concurrency failure as a flakiness signal for follow-up.
 - PR #237 remains blocked by the MySQL quota race and WordPress upgrade table-set mismatch. PR #245 remains the newer Daily 500 / tariffs-v5 candidate, subject to final owner-approved tariff contract and integration.
 
