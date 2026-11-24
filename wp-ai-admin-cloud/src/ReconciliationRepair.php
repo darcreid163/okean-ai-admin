@@ -9,7 +9,7 @@ namespace WPAICloudGateway;
  * WooCommercePayments::settle().
  */
 final class ReconciliationRepair {
-    public static function repairMissingPaymentLedger(Store $store,array $policy,\WC_Order $order): array {
+    public static function repairMissingPaymentLedger(Store $store,array $policy,\WC_Order $order,Vault $vault): array {
         if (!$order->is_paid()) throw new Fault('repair_payment_not_confirmed',409);
         if (!str_starts_with((string)$order->get_payment_method(),'robokassa')) throw new Fault('repair_gateway_mismatch',409);
         if ((int)$order->get_customer_id()<=0) throw new Fault('repair_registered_customer_required',409);
@@ -26,7 +26,7 @@ final class ReconciliationRepair {
         // Re-run the canonical payment settlement, not a bespoke licence grant.
         // It revalidates approved product, SKU, amount, currency, customer,
         // transaction identity and applies the same atomic idempotency rules.
-        $result=WooCommercePayments::settle($store,$policy,$order);
+        $result=WooCommercePayments::settle($store,$policy,$order,$vault);
         if (!empty($result['idempotent'])) {
             return ['repaired'=>false,'already_settled'=>true,'order_id'=>$orderId];
         }
