@@ -9,7 +9,11 @@
 - One issue/branch per change, exact-HEAD CI logs before merge, evidence-backed review. No force-push/branch deletion for unfinished PRs. Production deployment, account/tariff migration, release tags and repo visibility changes require separate explicit authorization.
 - Historic public disclosure cannot be reversed by making repo private; inspect exposures before release.
 
-## Current repository authority (2026-11-24)\n\n- Read `docs/REPOSITORY-RECONCILIATION-2026-11-24.md` before any cross-repository work. It is the current repository/branch/version authority and supersedes older dated repository statements.\n- Do not treat Native 2.1.18 or Robokassa/licence PR stacks as integrated until rebased/reconstructed together and exact-head Native + Cloud CI passes.\n- Keep `wp-ai-admin` and `wp-ai-admin-cloud-core` as historical publication snapshots until the release export gate; never sync them blindly. `universal-mcp-platform` is a separate product. `WP-AI-ADMIN-TEST` contains test artifacts only.\n- No branch deletion, force-push, visibility change, production deployment or payment/licence mutation without separate explicit approval.\n\n## Shared open-beta mission
+## Current repository authority (2026-11-24)
+
+- Read `docs/REPOSITORY-RECONCILIATION-2026-11-24.md` before any cross-repository work. It is the current repository/branch/version authority and supersedes older dated repository statements.\n- Do not treat Native 2.1.18 or Robokassa/licence PR stacks as integrated until rebased/reconstructed together and exact-head Native + Cloud CI passes.\n- Keep `wp-ai-admin` and `wp-ai-admin-cloud-core` as historical publication snapshots until the release export gate; never sync them blindly. `universal-mcp-platform` is a separate product. `WP-AI-ADMIN-TEST` contains test artifacts only.\n- No branch deletion, force-push, visibility change, production deployment or payment/licence mutation without separate explicit approval.
+
+## Shared open-beta mission
 
 - Before any task, read `docs/OPEN-BETA-RELEASE-MISSION.md`. It is the canonical shared product/release brief for all coding, review, QA and release agents.
 - The mission covers the Open Beta acceptance scope for WordPress core, WooCommerce, Elementor, classic/block editor, classic themes and Woodmart; server-authoritative tariffs/quota ledger; plugin dashboard reconciliation; code audit; GitHub Actions; disposable virtual test environments; and periodic installable beta artifacts.
