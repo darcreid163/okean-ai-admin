@@ -104,6 +104,8 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $account=$store->row('SELECT plan,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$owner]);
     $revokedLicense=$store->row('SELECT status FROM '.$store->table('licenses').' WHERE id=?',[$second['license_id']]);
     robokassaPaymentCheck($account['plan']==='free' && $account['license_id']===null && $revokedLicense['status']==='revoked','full refund must atomically fall back to Free');
+    $refundedDelivery=$store->row('SELECT reveal_ciphertext,email_ciphertext,email_status FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$renewal->get_id()]);
+    robokassaPaymentCheck($refundedDelivery['reveal_ciphertext']==='' && $refundedDelivery['email_ciphertext']==='' && $refundedDelivery['email_status']==='revoked','full refund must erase pending delivery secrets for the refunded order');
     $fullReplay=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$renewal,'rk_refund_full_'.$transactionSeed,1499.0,true);
     robokassaPaymentCheck($fullReplay['idempotent']===true && $fullReplay['entitlement_revoked']===true,'duplicate full refund must be idempotent');
     try {
