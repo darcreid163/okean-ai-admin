@@ -216,15 +216,15 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     // Mail transport failures must remain retryable and must never erase the
     // encrypted delivery copy. Exercise both wp_mail(false) and thrown errors.
     $mailFailureOrder=new WC_Order($baseOrderId+12,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-mail-failure');
-    $mailFailurePayment=\\WPAICloudGateway\\WooCommercePayments::settle($store,$policy,$mailFailureOrder,new \\WPAICloudGateway\\Vault(str_repeat('z',32)));
+    $mailFailurePayment=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$mailFailureOrder,new \WPAICloudGateway\Vault(str_repeat('z',32)));
     $GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>false,'throw'=>false];
-    robokassaPaymentCheck(\\WPAICloudGateway\\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'wp_mail false must return a retryable failure');
+    robokassaPaymentCheck(\WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'wp_mail false must return a retryable failure');
     $mailFailureRow=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailFailureOrder->get_id()]);
     robokassaPaymentCheck($mailFailureRow['email_status']==='retry' && (int)$mailFailureRow['email_attempts']===1 && $mailFailureRow['email_ciphertext']!=='','wp_mail false must preserve ciphertext and increment attempts');
 
     $GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>false,'throw'=>true];
     try {
-        \\WPAICloudGateway\\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id());
+        \WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id());
         throw new RuntimeException('Robokassa payment test failed: thrown mail transport error was swallowed by LicenseDelivery');
     } catch (RuntimeException $e) {
         robokassaPaymentCheck($e->getMessage()==='simulated mail transport failure','transport exception must be rethrown after restoring retry state');
@@ -236,10 +236,10 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     // attempt may consume the retained encrypted copy.
     $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=?',['retry',11,0,(string)$mailFailureOrder->get_id()]);
     $GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>false,'throw'=>false];
-    robokassaPaymentCheck(\\WPAICloudGateway\\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'twelfth failed delivery attempt must return false');
+    robokassaPaymentCheck(\WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'twelfth failed delivery attempt must return false');
     $exhaustedRow=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailFailureOrder->get_id()]);
     robokassaPaymentCheck($exhaustedRow['email_status']==='retry' && (int)$exhaustedRow['email_attempts']===12 && $exhaustedRow['email_ciphertext']!=='','twelfth failure must retain encrypted copy and reach the attempt limit');
-    robokassaPaymentCheck(\\WPAICloudGateway\\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'delivery must refuse a thirteenth attempt');
+    robokassaPaymentCheck(\WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'delivery must refuse a thirteenth attempt');
     $afterThirteenth=$store->row('SELECT email_attempts FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailFailureOrder->get_id()]);
     robokassaPaymentCheck((int)$afterThirteenth['email_attempts']===12,'attempt count must remain capped at twelve');
 }
