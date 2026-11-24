@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__).'/src/WooCommercePayments.php';
 require_once dirname(__DIR__).'/src/LicenseDelivery.php';
 if (!function_exists('is_email')) { function is_email(string $email): string|false { return filter_var($email,FILTER_VALIDATE_EMAIL)?$email:false; } }
+if (!function_exists('get_user_by')) { function get_user_by(string $field,mixed $value): object|false { return (string)$value==='991'?(object)['ID'=>991,'user_email'=>'buyer@example.com']:false; } }
 require_once dirname(__DIR__).'/src/Reconciliation.php';
 require_once dirname(__DIR__).'/src/ReconciliationRepair.php';
 if (!class_exists('WooCommerce')) { class WooCommerce {} }
