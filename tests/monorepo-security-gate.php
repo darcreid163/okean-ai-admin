@@ -1,6 +1,6 @@
 <?php
 /**
- * Public monorepo security boundary: one Native candidate + one current Cloud.
+ * Canonical monorepo security boundary: one Native candidate + one current Cloud.
  * This is a SOURCE gate, not the Native-only release export gate.
  */
 declare(strict_types=1);
@@ -30,5 +30,19 @@ foreach($it as $file){
     $content=file_get_contents($file->getPathname());if($content===false)continue;
     foreach($patterns as $i=>$pattern)if(preg_match($pattern,$content))$issues[]='credential-like pattern '.$i.' in '.$path;
 }
-if($issues){fwrite(STDERR,"PUBLIC SOURCE GATE FAILED\n".implode("\n",$issues)."\n");exit(1);}
-echo "PASS: single Native 2.1.18 / versioned Cloud 0.3.13-dev candidate, no old gateway, no archive or secret signatures\n";
+// Arbitrary PHP cannot be sandboxed with a deny-list of function names.
+if(!defined('ABSPATH'))define('ABSPATH',$root.'/');
+require_once $root.'/includes/class-oai-security.php';
+$blocked=['functions.php','FUNCTIONS.PHP','template.phtml','archive.phar','payload.php.txt','legacy.inc','cgi-bin\\\\run.cgi','scripts\\\\run.sh'];
+foreach($blocked as $path){
+    if(!OAI_Security::has_executable_extension($path))$issues[]='server-executable file extension allowed: '.$path;
+    $guard=OAI_Security::php_guard($path,"<?php \$fn='system'; \$fn('id');");
+    if(!empty($guard['ok']))$issues[]='file guard accepted executable target: '.$path;
+}
+foreach(['style.css','theme.json','readme.md'] as $path){
+    if(OAI_Security::has_executable_extension($path))$issues[]='safe file extension rejected: '.$path;
+    $guard=OAI_Security::php_guard($path,'body{color:red}');
+    if(empty($guard['ok']))$issues[]='file guard rejected non-executable target: '.$path;
+}
+if($issues){fwrite(STDERR,"MONOREPO SECURITY GATE FAILED\n".implode("\n",$issues)."\n");exit(1);}
+echo "PASS: single Native 2.1.18 / Cloud 0.3.13-dev candidate; executable file targets denied; no old gateway, archive or secret signatures\n";
