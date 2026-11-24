@@ -115,8 +115,8 @@ final class WordPress {
         if (!$order instanceof \WC_Order || !$order->is_paid()) return;
         try {
             $store=self::database();
-            $row=$store->row('SELECT email_status,email_attempts FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
-            if (!$row || $row['email_status']==='sent') return;
+            $row=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
+            if (!$row || in_array($row['email_status'],['sent','revoked'],true) || $row['email_ciphertext']==='') return;
             if ((int)$row['email_attempts']>=12) {
                 if ((string)$order->get_meta('_wpai_license_email_exhausted',true)!=='yes') {
                     $order->add_order_note('WP AI Admin: не удалось отправить письмо с лицензией после 12 попыток. Зашифрованная копия сохранена; администратор может повторить отправку из Cloud API.');
