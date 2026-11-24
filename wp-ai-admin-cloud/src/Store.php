@@ -188,7 +188,7 @@ final class Store {
         )".$tail);
         if (!$this->hasColumn('license_deliveries','email_started_at')) {
             try { $this->execute('ALTER TABLE '.$this->table('license_deliveries').' ADD COLUMN email_started_at BIGINT NOT NULL DEFAULT 0'); }
-            catch (\\PDOException $e) {
+            catch (\PDOException $e) {
                 $duplicate=$this->mysql?(int)($e->errorInfo[1]??0)===1060:str_contains(strtolower($e->getMessage()),'duplicate column name');
                 if (!$duplicate) throw $e;
             }
