@@ -1094,6 +1094,7 @@ frame.addEventListener('load',function(){
   if($type==='file_write'){
    $parts=explode(':',(string)$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400));
    $file=OAI_Security::resolve_path_for_write($parts[0],$parts[1]); if(is_wp_error($file))return $file;
+   if(OAI_Security::has_executable_extension($file))return new WP_Error('oai_executable_file_denied','Server-executable files cannot be written through the AI file sandbox',array('status'=>403));
    if(is_dir($file))return new WP_Error('oai_not_file','File target points to a directory',array('status'=>400));
   }
   return true;
