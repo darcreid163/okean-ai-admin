@@ -5,6 +5,9 @@ require_once dirname(__DIR__).'/src/WooCommercePayments.php';
 require_once dirname(__DIR__).'/src/LicenseDelivery.php';
 if (!function_exists('is_email')) { function is_email(string $email): string|false { return filter_var($email,FILTER_VALIDATE_EMAIL)?$email:false; } }
 if (!function_exists('get_user_by')) { function get_user_by(string $field,mixed $value): object|false { return (string)$value==='991'?(object)['ID'=>991,'user_email'=>'buyer@example.com']:false; } }
+$GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>true];
+if (!function_exists('wp_mail')) { function wp_mail($to,$subject,$message,$headers=[]): bool { $GLOBALS['licenseDeliveryMail']=['to'=>$to,'message'=>$message,'sent'=>$GLOBALS['licenseDeliveryMail']['sent']]; return (bool)$GLOBALS['licenseDeliveryMail']['sent']; } }
+if (!function_exists('home_url')) { function home_url(string $path=''): string { return 'https://wpaiadmin.test'.$path; } }
 require_once dirname(__DIR__).'/src/Reconciliation.php';
 require_once dirname(__DIR__).'/src/ReconciliationRepair.php';
 if (!class_exists('WooCommerce')) { class WooCommerce {} }
@@ -81,6 +84,10 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     catch (\\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='license_reveal_already_consumed','reveal replay must be rejected'); }
     $consumed=$store->row('SELECT reveal_ciphertext,reveal_consumed,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
     robokassaPaymentCheck($consumed['reveal_ciphertext']==='' && (int)$consumed['reveal_consumed']===1 && $consumed['email_ciphertext']!=='','reveal consumption must erase only its own encrypted copy');
+    robokassaPaymentCheck(\\WPAICloudGateway\\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$order->get_id())===true,'email delivery should succeed independently of reveal');
+    $mailed=$store->row('SELECT email_status,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
+    robokassaPaymentCheck($GLOBALS['licenseDeliveryMail']['to']==='buyer@example.com' && str_contains((string)$GLOBALS['licenseDeliveryMail']['message'],$revealed),'email must deliver the same key to the registered account email');
+    robokassaPaymentCheck($mailed['email_status']==='sent' && $mailed['email_ciphertext']==='','successful email must erase its encrypted copy');
 
     $duplicate=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$order);
     robokassaPaymentCheck($duplicate['idempotent']===true && $duplicate['license_id']===$first['license_id'],'replayed order must not issue or extend twice');
