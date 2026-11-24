@@ -1,12 +1,12 @@
 # WP AI Admin — единый основной репозиторий разработки
 
-**Current integrated candidate:** Native **2.1.17** (DB schema 24; build `2.1.17-usage-batch-v1-20261019`) + recovered Cloud Core **0.3.11** (Gateway schema 4); current **unreleased Cloud 0.3.13-dev** adds scoped Skills/Media, read-only Abilities metadata discovery, the hash-only licence registry and the final five-tier daily tariff policy (PR #206, merged). This branch is **not** an approved production release; Cloud deployment and account activation remain separate gates.
+**Current source status (2026-11-24):** this repository is PRIVATE and is the sole development monorepo. `main` currently contains Native **2.1.17** (DB schema 24) + Cloud Core **0.3.13-dev**. Native **2.1.18** and the Robokassa/one-time licence-delivery stack remain in open dependent PRs; no single integrated release candidate has passed final combined CI. The installed site reports Native **2.1.18** + Cloud Core **0.3.13-dev**, but installed file hashes have not been compared with repository artifacts. See the [current repository reconciliation](docs/REPOSITORY-RECONCILIATION-2026-11-24.md).
 
 [Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). [Актуальная готовность планов, квот и лицензий на 16 ноября](docs/BETA-READINESS-2026-11-16.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
 
 ## Один основной репозиторий до завершения проекта
 
-As explicitly directed by the maintainer, `darcreid163/okean-ai-admin` is the current **PUBLIC** single development repository with GitHub-hosted CI for both Native and Cloud. The current 0.3.11 Cloud source and synthetic tests are included in `wp-ai-admin-cloud/`. Production keys, credentials, accounts, private database snapshots and deployment configuration are prohibited.
+As explicitly directed by the maintainer, `darcreid163/okean-ai-admin` is the current **PRIVATE** single development repository with GitHub-hosted CI for both Native and Cloud. The current Cloud Core 0.3.13-dev source and synthetic tests are included in `wp-ai-admin-cloud/`. Production keys, credentials, accounts, private database snapshots and deployment configuration are prohibited.
 
 **Irreversible visibility warning:** all source committed to a public Git branch is publicly accessible. Making this repository private later does NOT retract clones, forks or historic downloads. This includes the 0.3.11 server algorithms. Treat this as an explicit temporary development exposure, not a secret-preserving mirror.
 
@@ -57,7 +57,7 @@ Cloud Gateway applies the same presentation contract to known Native metadata/ev
 
 Historical dated release notes are preserved as references, not active installation instructions.
 
-## Историческая точка проверки (22.10.2026)
+## Historical verification point (22.10.2026 — not current release status)
 
 Основная ветка — `main` этого репозитория. Проверенный при аудите SHA:
 `1fb3f98c1ec87013990e4f35c0c02e8e39c65556`. Native 2.1.17 и кандидат
