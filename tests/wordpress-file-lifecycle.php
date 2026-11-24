@@ -40,7 +40,7 @@ $blocked_path = realpath($scopes[$scope]) . DIRECTORY_SEPARATOR . $blocked_name;
 $blocked_request = new WP_REST_Request('POST', '/okean-ai/v1/files/write');
 $blocked_request->set_param('scope', $scope);
 $blocked_request->set_param('path', $blocked_name);
-$blocked_request->set_param('content', "<?php \\$fn='system'; \\$fn('id');");
+$blocked_request->set_param('content', "<?php \$fn='system'; \$fn('id');");
 $blocked_result = OAI_REST::files_write($blocked_request);
 wflAssert(is_wp_error($blocked_result) && $blocked_result->get_error_code() === 'oai_executable_file_denied',
     'PHP file target was not rejected during sandbox planning');
