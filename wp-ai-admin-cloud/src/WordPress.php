@@ -332,6 +332,22 @@ final class WordPress {
             self::owner();
             return self::core()->issueLicense((string)get_current_user_id(),$owner,$p['plan'],time(),$scheme,$options);
         });
+        $admin('/license-deliveries/(?P<order>[0-9]+)/resend',function($r) {
+            $p=self::body($r);
+            if(($p['confirm']??null)!=='RESEND') throw new Fault('license_email_resend_confirmation_required',409);
+            self::owner();
+            if(!function_exists('wc_get_order')) throw new Fault('woocommerce_unavailable',503);
+            $order=wc_get_order((int)$r['order']);
+            if(!$order instanceof \WC_Order || !$order->is_paid() || !str_starts_with((string)$order->get_payment_method(),'robokassa')) throw new Fault('license_email_order_unavailable',404);
+            $store=self::database();
+            $delivery=$store->row('SELECT owner,email_ciphertext,email_status FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
+            if(!$delivery || $delivery['email_ciphertext']==='' || $delivery['email_status']==='revoked') throw new Fault('license_email_copy_unavailable',409);
+            $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=?',['retry',0,0,(string)$order->get_id()]);
+            $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
+            $order->add_order_note($sent?'WP AI Admin: администратор повторно отправил письмо с лицензией на зарегистрированный адрес аккаунта.':'WP AI Admin: повторная отправка письма с лицензией не удалась; автоматические попытки продолжаются.');
+            if(!$sent) wp_schedule_single_event(time()+60,'wpai_cloud_retry_license_email',[(int)$order->get_id()]);
+            return ['sent'=>$sent,'order_id'=>(int)$order->get_id()];
+        });
         foreach(['reissue'=>'REISSUE','revoke'=>'REVOKE','suspend'=>'SUSPEND','reactivate'=>'REACTIVATE'] as $action=>$confirmation) {
             $admin('/licenses/(?P<id>lic_[a-f0-9]{24})/'.$action,function($r) use($action,$confirmation) {
                 $p=self::body($r);
