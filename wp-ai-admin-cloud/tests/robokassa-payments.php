@@ -69,7 +69,7 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $store->ensureCommerceSchema();
 
     $order=new WC_Order($baseOrderId+1,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-first');
-    $first=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$order,new \\WPAICloudGateway\\Vault(str_repeat('z',32)));
+    $first=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$order,new \WPAICloudGateway\Vault(str_repeat('z',32)));
     robokassaPaymentCheck($first['settled']===true && $first['idempotent']===false,'first verified order must issue a licence');
     $license=$store->row('SELECT * FROM '.$store->table('licenses').' WHERE id=?',[$first['license_id']]);
     robokassaPaymentCheck($license!==null && $license['owner']===$owner && $license['plan']==='pro' && $license['quota_scheme']==='tariffs_v3','licence must be bound to the registered Woo customer');
@@ -77,23 +77,23 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     $delivery=$store->row('SELECT * FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
     robokassaPaymentCheck($delivery!==null && $delivery['owner']===$owner && $delivery['license_id']===$first['license_id'],'paid settlement must create an order-scoped delivery row');
     robokassaPaymentCheck($delivery['reveal_ciphertext']!=='' && $delivery['email_ciphertext']!=='' && !str_contains($delivery['reveal_ciphertext'],'wpai_lic_'),'delivery copies must be encrypted');
-    $deliveryVault=new \\WPAICloudGateway\\Vault(str_repeat('z',32));
-    $revealed=\\WPAICloudGateway\\LicenseDelivery::reveal($store,$deliveryVault,(string)$order->get_id(),$owner,time());
-    robokassaPaymentCheck(preg_match(\\WPAICloudGateway\\Licenses::KEY_PATTERN,$revealed)===1,'one-time reveal must return the generated key');
-    try { \\WPAICloudGateway\\LicenseDelivery::reveal($store,$deliveryVault,(string)$order->get_id(),$owner,time()); throw new RuntimeException('Robokassa payment test failed: reveal replay returned key'); }
-    catch (\\WPAICloudGateway\\Fault $e) { robokassaPaymentCheck($e->reason==='license_reveal_already_consumed','reveal replay must be rejected'); }
+    $deliveryVault=new \WPAICloudGateway\Vault(str_repeat('z',32));
+    $revealed=\WPAICloudGateway\LicenseDelivery::reveal($store,$deliveryVault,(string)$order->get_id(),$owner,time());
+    robokassaPaymentCheck(preg_match(\WPAICloudGateway\Licenses::KEY_PATTERN,$revealed)===1,'one-time reveal must return the generated key');
+    try { \WPAICloudGateway\LicenseDelivery::reveal($store,$deliveryVault,(string)$order->get_id(),$owner,time()); throw new RuntimeException('Robokassa payment test failed: reveal replay returned key'); }
+    catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='license_reveal_already_consumed','reveal replay must be rejected'); }
     $consumed=$store->row('SELECT reveal_ciphertext,reveal_consumed,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
     robokassaPaymentCheck($consumed['reveal_ciphertext']==='' && (int)$consumed['reveal_consumed']===1 && $consumed['email_ciphertext']!=='','reveal consumption must erase only its own encrypted copy');
-    robokassaPaymentCheck(\\WPAICloudGateway\\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$order->get_id())===true,'email delivery should succeed independently of reveal');
+    robokassaPaymentCheck(\WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$order->get_id())===true,'email delivery should succeed independently of reveal');
     $mailed=$store->row('SELECT email_status,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
     robokassaPaymentCheck($GLOBALS['licenseDeliveryMail']['to']==='buyer@example.com' && str_contains((string)$GLOBALS['licenseDeliveryMail']['message'],$revealed),'email must deliver the same key to the registered account email');
     robokassaPaymentCheck($mailed['email_status']==='sent' && $mailed['email_ciphertext']==='','successful email must erase its encrypted copy');
 
-    $duplicate=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$order,new \\WPAICloudGateway\\Vault(str_repeat('z',32)));
+    $duplicate=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$order,new \WPAICloudGateway\Vault(str_repeat('z',32)));
     robokassaPaymentCheck($duplicate['idempotent']===true && $duplicate['license_id']===$first['license_id'],'replayed order must not issue or extend twice');
 
     $renewal=new WC_Order($baseOrderId+2,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-renewal');
-    $second=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$renewal,new \\WPAICloudGateway\\Vault(str_repeat('z',32)));
+    $second=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$renewal,new \WPAICloudGateway\Vault(str_repeat('z',32)));
     robokassaPaymentCheck((int)$second['expires_at']>(int)$first['expires_at'],'same-plan renewal must extend from the existing expiry');
 
 
@@ -115,7 +115,7 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
 
     // Partial refunds are recorded but must never reduce or revoke the active plan.
     $thirdOrder=new WC_Order($baseOrderId+5,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-third');
-    $third=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$thirdOrder,new \\WPAICloudGateway\\Vault(str_repeat('z',32)));
+    $third=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$thirdOrder,new \WPAICloudGateway\Vault(str_repeat('z',32)));
     $partial=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$thirdOrder,'rk_refund_partial_'.$transactionSeed,300.0,false);
     robokassaPaymentCheck($partial['outcome']==='partial_recorded' && $partial['entitlement_revoked']===false,'partial refund must be ledger-only');
     $activeAfterPartial=$store->row('SELECT plan,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$owner]);
@@ -132,7 +132,7 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     // Out-of-order partial callbacks are accumulated only after each is confirmed.
     // The entitlement is revoked only when confirmed refunds sum to the paid total.
     $fourthOrder=new WC_Order($baseOrderId+6,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-fourth');
-    $fourth=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$fourthOrder,new \\WPAICloudGateway\\Vault(str_repeat('z',32)));
+    $fourth=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$fourthOrder,new \WPAICloudGateway\Vault(str_repeat('z',32)));
     // The larger "final" request arrives first; its local full flag alone is insufficient.
     $partialTwo=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$fourthOrder,'rk_refund_part2_'.$transactionSeed,1198.75,true);
     robokassaPaymentCheck($partialTwo['refund_kind']==='partial' && !$partialTwo['entitlement_revoked'],'pending earlier refund means the later callback is not yet cumulatively full');
@@ -180,11 +180,11 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='repair_payment_ledger_exists','repair must not reissue an order already present in Cloud ledger'); }
 
     $badAmount=new WC_Order($baseOrderId+3,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1200)],1200.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-bad');
-    try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$badAmount,new \\WPAICloudGateway\\Vault(str_repeat('z',32))); throw new RuntimeException('Robokassa payment test failed: wrong amount accepted'); }
+    try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$badAmount,new \WPAICloudGateway\Vault(str_repeat('z',32))); throw new RuntimeException('Robokassa payment test failed: wrong amount accepted'); }
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='paid_product_line_total_mismatch','wrong amount must fail closed'); }
 
     $guest=new WC_Order($baseOrderId+4,0,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-guest');
-    try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$guest,new \\WPAICloudGateway\\Vault(str_repeat('z',32))); throw new RuntimeException('Robokassa payment test failed: guest order accepted'); }
+    try { \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$guest,new \WPAICloudGateway\Vault(str_repeat('z',32))); throw new RuntimeException('Robokassa payment test failed: guest order accepted'); }
     catch (\WPAICloudGateway\Fault $e) { robokassaPaymentCheck($e->reason==='registered_customer_required','guest order must not receive a licence'); }
 
     // Unconfirmed/pending/canceled Robokassa states must not create refund ledger rows.
