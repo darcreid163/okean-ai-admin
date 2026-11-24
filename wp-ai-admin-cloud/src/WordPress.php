@@ -376,10 +376,10 @@ final class WordPress {
         $store=self::database();
         $owner=(string)get_current_user_id();
         $payment=$store->row('SELECT status,owner,license_id FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?',[(string)$order->get_id()]);
-        $delivery=$store->row('SELECT plan,reveal_consumed FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),$owner]);
-        if (!$payment || $payment['status']!=='settled' || $payment['owner']!==$owner || !$delivery || $payment['license_id']==='') { status_header(404); exit('Заказ не найден.'); }
+        $delivery=$store->row('SELECT plan,license_id,reveal_consumed FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),$owner]);
+        if (!$payment || $payment['status']!=='settled' || $payment['owner']!==$owner || !$delivery || $payment['license_id']==='' || $payment['license_id']!==$delivery['license_id'] || !str_starts_with((string)$order->get_payment_method(),'robokassa')) { status_header(404); exit('Заказ не найден.'); }
         $key=null; $message='';
-        if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['wpai_reveal_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['wpai_reveal_nonce'])),'wpai_reveal_'.$orderId)) {
+        if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['wpai_reveal_nonce'],$_POST['wpai_order_key']) && hash_equals((string)$order->get_order_key(),(string)sanitize_text_field(wp_unslash($_POST['wpai_order_key']))) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['wpai_reveal_nonce'])),'wpai_reveal_'.$orderId)) {
             try { $key=LicenseDelivery::reveal($store,new Vault(Settings::keys()['vault']),(string)$orderId,$owner,time()); }
             catch (Fault $e) { $message=$e->reason==='license_reveal_already_consumed'?'Ключ уже был показан. Проверьте письмо с подтверждением покупки.':'Не удалось получить ключ.'; }
         }
@@ -387,7 +387,7 @@ final class WordPress {
         if ($key!==null) echo '<p>Сохраните ключ сейчас. Повторно показать его на этой странице нельзя.</p><p><code style="overflow-wrap:anywhere">'.esc_html($key).'</code></p><button type="button" onclick="navigator.clipboard.writeText(document.querySelector(\'code\').textContent)">Копировать ключ</button>';
         elseif ($message!=='') echo '<p>'.esc_html($message).'</p>';
         elseif ((int)$delivery['reveal_consumed']===1) echo '<p>Ключ уже был показан. Проверьте письмо с подтверждением покупки.</p>';
-        else echo '<p>Нажмите кнопку, чтобы показать ключ один раз.</p><form method="post">'.wp_nonce_field('wpai_reveal_'.$orderId,'wpai_reveal_nonce',true,false).'<button type="submit">Показать ключ один раз</button></form>';
+        else echo '<p>Нажмите кнопку, чтобы показать ключ один раз.</p><form method="post">'.wp_nonce_field('wpai_reveal_'.$orderId,'wpai_reveal_nonce',true,false).'<input type="hidden" name="wpai_order_key" value="'.esc_attr((string)$order->get_order_key()).'"><button type="submit">Показать ключ один раз</button></form>';
         echo '<p>Активируйте ключ в WP AI Admin → Тариф и лицензия.</p></main></body></html>';
         exit;
     }
