@@ -29,7 +29,9 @@ cp -R okean-ai-admin.php includes starter-themes README.txt "$WORK/site/wp-conte
 wp_test plugin activate okean-ai-admin
 # Run the complete live Native self-test against the freshly installed current schema.
 wp_test eval '$r=OAI_Platform::self_test(); if(!is_array($r)||($r["failed"]??-1)!==0){ fwrite(STDERR,wp_json_encode($r)); exit(1); } echo "PASS: Native runtime self-test ".$r["passed"]."/".$r["total"]."\\n";'
-# Exercise the durable administrator principal across MCP pairing identity rotation in real WordPress.\nOAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-lifecycle-principal.php"\n# Register the disposable Ability before the compatibility test; WordPress
+# Exercise the durable administrator principal across MCP pairing identity rotation in real WordPress.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-lifecycle-principal.php"
+# Register the disposable Ability before the compatibility test; WordPress
 # freezes the registry after wp_abilities_api_init.
 mkdir -p "$WORK/site/wp-content/mu-plugins"
 cp "$GITHUB_WORKSPACE/tests/fixtures/oai-abilities-mu.php" "$WORK/site/wp-content/mu-plugins/oai-abilities-mu.php"
