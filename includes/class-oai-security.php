@@ -129,7 +129,7 @@ class OAI_Security {
   // A regex deny-list cannot safely sandbox arbitrary PHP. Reject common
   // server-side handler extensions, including multi-extension names such as
   // payload.php.txt, before an operation is created and again at Apply.
-  $name=strtolower(basename(str_replace('\\\\','/',(string)$path)));
+  $name=strtolower(basename(str_replace('\\','/',(string)$path)));
   $parts=explode('.',$name);
   if(count($parts)<2)return false;
   array_shift($parts);
