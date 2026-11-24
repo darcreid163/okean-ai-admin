@@ -368,7 +368,8 @@ final class WordPress {
             $store=self::database();
             $delivery=$store->row('SELECT owner,email_ciphertext,email_status FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
             if(!$delivery || $delivery['owner']!==(string)$order->get_customer_id() || $delivery['email_ciphertext']==='' || $delivery['email_status']==='revoked') throw new Fault('license_email_copy_unavailable',409);
-            $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=?',['retry',0,0,(string)$order->get_id()]);
+            $reset=$store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=? AND (email_status<>? OR email_started_at<=?)',['retry',0,0,(string)$order->get_id(),'sending',time()-600])->rowCount();
+            if($reset!==1) throw new Fault('license_email_send_in_progress',409);
             try {
                 $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
             } catch (\Throwable $e) {
