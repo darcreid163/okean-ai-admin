@@ -69,7 +69,7 @@ rejects(fn()=>$core->call($readActor,$site['id'],'operation_apply',[],'read-only
 $expired=$oauth->approve('1',$auth,[$site['id']],$now);$expiredExchange=$exchange;$expiredExchange['code']=$expired;
 rejects(fn()=>$oauth->exchange($expiredExchange,$now+300,$eligible),'invalid_grant');
 $oauth->rate('fixture-ip',$now,2);$oauth->rate('fixture-ip',$now,2);rejects(fn()=>$oauth->rate('fixture-ip',$now,2),'oauth_rate_limit');
-check(!str_contains(Security::canonical($store->rows('SELECT * FROM '.$store->table('oauth_refresh'))),$tokenQ['refresh_token']),'Plaintext refresh token');
+check((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('oauth_refresh'))['n']===0,'A new OAuth grant persisted a refresh credential');
 check(!str_contains(Security::canonical($store->rows('SELECT * FROM '.$store->table('oauth_codes'))),$codeQ),'Plaintext authorization code');
 $parallelCode=$oauth->approve('1',$auth,[$site['id']],$now);$parallel=$exchange;$parallel['code']=$parallelCode;
 $before=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('tokens'))['n'];
