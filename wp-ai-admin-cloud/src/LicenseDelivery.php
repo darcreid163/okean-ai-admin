@@ -54,7 +54,7 @@ final class LicenseDelivery {
         $owner=(string)$row['owner'];
         $binding=self::binding($orderId,$owner,(string)$row['license_id']);
         $key=$vault->open((string)$row['email_ciphertext'],$binding.':email');
-        $url=function_exists('wc_get_endpoint_url')?wc_get_endpoint_url('license-key',$orderId,wc_get_page_permalink('myaccount')):home_url('/license-key/'.rawurlencode($orderId).'/');
+        $url=home_url('/license-key/'.rawurlencode($orderId).'/');
         $subject='Ваш ключ лицензии WP AI Admin';
         $message="Спасибо за покупку тарифа WP AI Admin.\n\nВаш ключ лицензии:\n".$key."\n\nАктивируйте его в плагине WP AI Admin → Тариф и лицензия.\nСтраница заказа: ".$url."\n";
         $sent=wp_mail((string)$row['email'],$subject,$message,['Content-Type: text/plain; charset=UTF-8']);
