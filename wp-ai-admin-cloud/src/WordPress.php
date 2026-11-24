@@ -116,7 +116,15 @@ final class WordPress {
         try {
             $store=self::database();
             $row=$store->row('SELECT email_status,email_attempts FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
-            if (!$row || $row['email_status']==='sent' || (int)$row['email_attempts']>=12) return;
+            if (!$row || $row['email_status']==='sent') return;
+            if ((int)$row['email_attempts']>=12) {
+                if ((string)$order->get_meta('_wpai_license_email_exhausted',true)!=='yes') {
+                    $order->add_order_note('WP AI Admin: не удалось отправить письмо с лицензией после 12 попыток. Зашифрованная копия сохранена; администратор может повторить отправку из Cloud API.');
+                    $order->update_meta_data('_wpai_license_email_exhausted','yes');
+                    $order->save_meta_data();
+                }
+                return;
+            }
             if (!LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id())) {
                 $attempt=(int)$row['email_attempts']+1;
                 if ($attempt<12) wp_schedule_single_event(time()+min(3600,60*$attempt),'wpai_cloud_retry_license_email',[(int)$order->get_id()]);
