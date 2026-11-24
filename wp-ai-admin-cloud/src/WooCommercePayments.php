@@ -271,7 +271,8 @@ final class WooCommercePayments {
         $now=time();
         $store->ensureLicenseSchema();
         $store->ensureCommerceSchema();
-        return $store->transaction(function() use($store,$policy,$order,$offer,$owner,$now): array {
+        $store->ensureLicenseDeliverySchema();
+        return $store->transaction(function() use($store,$policy,$order,$offer,$owner,$now,$vault): array {
             $existing=$store->row('SELECT * FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?'.$store->lock(),[(string)$order->get_id()]);
             if ($existing) {
                 if ($existing['status']==='settled') {
@@ -306,6 +307,7 @@ final class WooCommercePayments {
                 'activation_limit'=>(int)($offer['sites']??1),
                 'comment'=>'WooCommerce order #'.$order->get_id().' / Robokassa'
             ]);
+            LicenseDelivery::create($store,$vault,$order,$license,(string)$offer['plan'],$now);
             $settled=$store->execute('UPDATE '.$store->table('commerce_payments').' SET status=?,license_id=?,starts_at=?,expires_at=?,settled_at=? WHERE gateway_order_id=? AND status=?',[
                 'settled',(string)$license['id'],$now,$expiresAt,$now,(string)$order->get_id(),'processing'
             ])->rowCount();
