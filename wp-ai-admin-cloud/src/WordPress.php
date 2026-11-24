@@ -341,7 +341,7 @@ final class WordPress {
             if(!$order instanceof \WC_Order || !$order->is_paid() || !str_starts_with((string)$order->get_payment_method(),'robokassa')) throw new Fault('license_email_order_unavailable',404);
             $store=self::database();
             $delivery=$store->row('SELECT owner,email_ciphertext,email_status FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
-            if(!$delivery || $delivery['email_ciphertext']==='' || $delivery['email_status']==='revoked') throw new Fault('license_email_copy_unavailable',409);
+            if(!$delivery || $delivery['owner']!==(string)$order->get_customer_id() || $delivery['email_ciphertext']==='' || $delivery['email_status']==='revoked') throw new Fault('license_email_copy_unavailable',409);
             $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=?',['retry',0,0,(string)$order->get_id()]);
             $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
             $order->add_order_note($sent?'WP AI Admin: администратор повторно отправил письмо с лицензией на зарегистрированный адрес аккаунта.':'WP AI Admin: повторная отправка письма с лицензией не удалась; автоматические попытки продолжаются.');
