@@ -44,6 +44,6 @@ $rest=file_get_contents($root.'/includes/class-wpai-cloud-rest.php');
 $ok(str_contains($admin,"if (!current_user_can('manage_options')) return;"),'Quota admin page lost manage_options gate');
 $ok(str_contains($admin,'check_admin_referer(\'wpai_gateway_\'.$action,\'wpai_gateway_nonce\');')&&str_contains($admin,"if (!is_ssl()) throw new Fault('https_required',403);"),'Quota admin action lost HTTPS/nonce protection');
 $ok(str_contains($admin,'$action===\'quota_reset\'')&&str_contains($admin,'$core->resetDailyQuota('),'Quota reset action is not wired to Cloud Core');
-$ok(str_contains($coreSource,"'manual_daily_quota_reset'")&&str_contains($coreSource,"'admin:'.$operator"),'Quota reset audit evidence missing');
+$ok(str_contains($coreSource,"'manual_daily_quota_reset'")&&str_contains($coreSource,"'admin:'.\$operator"),'Quota reset audit evidence missing');
 $ok(!str_contains($gateway,'quota_reset')&&!str_contains($rest,'quota_reset'),'Manual quota reset leaked into public MCP/REST surface');
 echo "PASS $checks standalone release-guard assertions (no database required)\n";
