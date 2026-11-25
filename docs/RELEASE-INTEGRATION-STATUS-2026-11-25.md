@@ -31,9 +31,10 @@ The older Daily 800 RUB proposal in PR #237 is superseded. Issue #236 was closed
 - PR: [#253](https://github.com/darcreid163/okean-ai-admin/pull/253).
 - Base: `main` at `32fa28ca2edb3e66dbdc2c24fde09fe36e49237f`.
 - Branch: `codex/robokassa-paid-entitlements-reconciled`.
-- Exact HEAD: `8463e7258845824e4c3471c7220e46f7fe5419c8`.
-- PR remains OPEN, Draft and unmerged; GitHub reports mergeable. Mergeable does not mean release-approved.
-- Compare snapshot: 33 commits ahead, 0 behind; 38 changed files; 2,259 additions / 249 deletions.
+- Exact HEAD: `cbbe8f79cb0a4a814272bc3664991ece89126605`.
+- PR is OPEN, Draft and unmerged. GitHub reports mergeable; mergeable does not mean release-approved.
+- Compare snapshot: 34 commits ahead, 0 behind; 38 changed files; 2,268 additions / 249 deletions.
+- Latest commit updates release-status documentation and Robokassa issue #203 only; no Native/Cloud runtime source changed after tested code HEAD `8463e7258845824e4c3471c7220e46f7fe5419c8`.
 - No history rewrite or force-push was performed.
 
 Included:
@@ -50,23 +51,23 @@ Included:
 - WordPress.org-style `README.txt` and automated metadata/readme checks.
 - Deterministic Native ZIP builder, source-bound provenance and exact-artifact installation checks.
 
-## Exact-head automated qualification — PASS
+## Exact latest-head automated qualification — PASS
 
-All three workflows completed successfully on exact HEAD `8463e7258845824e4c3471c7220e46f7fe5419c8`:
+All three workflows completed successfully on exact HEAD `cbbe8f79cb0a4a814272bc3664991ece89126605`:
 
-- [Native validation #45586953318](https://github.com/darcreid163/okean-ai-admin/actions/runs/45586953318): **SUCCESS** — PHP 8.2/8.3/8.4; WordPress.org metadata/readme checks; pinned WordPress 7.0.6 + Elementor 4.3.3 + WooCommerce 11.1.2; latest compatibility; WooCommerce 11.3.0 HPOS; deterministic Native artifact; provenance/checksum verification; installation and boot of exact ZIP on WordPress 7.0.6 and latest.
-- [Cloud Core validation #45586953324](https://github.com/darcreid163/okean-ai-admin/actions/runs/45586953324): **SUCCESS** — PHP 8.2/8.3/8.4 contracts, browser contracts, WordPress 7.0.6/latest upgrade checks and Cloud artifact.
-- [Secret history scan #45586953674](https://github.com/darcreid163/okean-ai-admin/actions/runs/45586953674): **SUCCESS**.
+- [Native validation #45588124972](https://github.com/darcreid163/okean-ai-admin/actions/runs/45588124972): **SUCCESS** — PHP 8.2/8.3/8.4; WordPress.org metadata/readme checks; pinned WordPress 7.0.6 + Elementor 4.3.3 + WooCommerce 11.1.2; latest compatibility; WooCommerce 11.3.0 HPOS; deterministic Native artifact; provenance/checksum verification; installation and boot of exact ZIP on WordPress 7.0.6 and latest.
+- [Cloud Core validation #45588124838](https://github.com/darcreid163/okean-ai-admin/actions/runs/45588124838): **SUCCESS** — PHP 8.2/8.3/8.4 contracts, browser contracts, WordPress 7.0.6/latest upgrade checks and Cloud artifact.
+- [Secret history scan #45588124858](https://github.com/darcreid163/okean-ai-admin/actions/runs/45588124858): **SUCCESS**.
 
-Candidate artifacts (GitHub Actions artifacts, not signed/public releases; expire 23 February 2027):
-- Native `wp-ai-admin-2.1.18`, artifact ID `15009571029`, SHA-256 `b5d603ec1c3edca320192ceda35b52de7eae826c296a3c9cf393e30ce1b7d847`.
-- Cloud `wp-ai-admin-cloud-0.3.13-dev-candidate`, artifact ID `15008149974`, SHA-256 `b75d6ce05a721fa6f2fa12e1ff1532f20f078266c7ec05a7363e8fc6d7e1b366`.
+Candidate artifacts built from this exact HEAD (GitHub Actions artifacts, not signed/public releases; expire 23 February 2027):
+- Native `wp-ai-admin-2.1.18`, artifact ID `15010435702`, SHA-256 `16221931f2f94b0d2e84fe372cc53a99f356e8cf24f9c19743d9ef68489c4f4a`.
+- Cloud `wp-ai-admin-cloud-0.3.13-dev-candidate`, artifact ID `15008848511`, SHA-256 `70cdffc0b6b2d52a554be054a90703e38661d490f2cc59e9905dc6844a51e6a9`.
 
-The release job is skipped by design on a pull request. The Robokassa lifecycle runner uses WordPress/WooCommerce test doubles and disposable SQLite/MySQL stores. It is not an actual Robokassa gateway callback, checkout-browser or email-provider E2E.
+The release job is skipped by design on pull requests. The Robokassa lifecycle runner uses WordPress/WooCommerce test doubles and disposable SQLite/MySQL stores. It is not an actual Robokassa gateway callback, checkout-browser or email-provider E2E.
 
 ## Remaining release gates
 
-1. **Robokassa disposable-shop E2E:** local WooCommerce + HPOS + Robokassa Test Mode. Verify checkout, ResultURL callback, signature/amount rejection, duplicate/delayed notifications, order creation, key reveal/replay denial, registered email, Native activation, mail retry, full/partial refunds, approved repair and concurrency. The user previously reported the local test shop was temporarily unavailable; perform this only when it is accessible.
+1. **Robokassa disposable-shop E2E:** local WooCommerce + HPOS + Robokassa Test Mode. Verify checkout, ResultURL callback, signature/amount rejection, duplicate/delayed notifications, order creation, key reveal/replay denial, registered email, Native activation, mail retry, full/partial refunds, approved repair and concurrency. Automated runner coverage does not replace this real gateway/browser/email-provider test.
 2. **Two-owner security acceptance:** negative cross-owner/site access, forged site/tenant IDs, foreign grant/token, replay, revoke and quota non-charge.
 3. **Real ChatGPT OAuth lifecycle:** access-token expiry, supported reconnect/renewal without `offline_access`, scopes, consent and revoke.
 4. **Staging operation lifecycle:** backup, Read → Sandbox → Diff → Approval → Apply → Verify → Receipt/Proof → Rollback → Verify; then restore and verify identity, grants and quota.
@@ -76,8 +77,8 @@ The release job is skipped by design on a pull request. The Robokassa lifecycle 
 
 ## Safety and release disposition
 
-- Public payments remain disabled; the Cloud plans endpoint must continue reporting `payments_enabled=false` until all applicable acceptance gates pass.
-- Use only disposable local/staging systems and Robokassa Test Mode. Never put merchant credentials, customer PII, license keys or production tokens in chat, GitHub or CI logs.
+- Public payments remain disabled; Cloud plans must continue reporting `payments_enabled=false` until all applicable acceptance gates pass.
+- Use only disposable local/staging systems and Robokassa Test Mode. Never put merchant credentials, customer PII, licence keys or production tokens in chat, GitHub or CI logs.
 - No merge, tag, public release, production deployment, real payment, account/tariff migration or customer-data mutation is authorized by this candidate.
-- Do not close the payment workstream until actual Robokassa test-shop E2E evidence is recorded. Issue #203 tracks this gate and now names Robokassa, not YooKassa.
+- Do not close the payment workstream until actual Robokassa test-shop E2E evidence is recorded. Issue #203 tracks this gate and names Robokassa.
 - Historical branches and independent repositories remain untouched unless individually reconciled.
