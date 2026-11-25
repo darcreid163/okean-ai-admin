@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-/** Storage-free recovery guard for Cloud Core 0.3.11. */
+/** Storage-free guard for the final daily tariff catalogue and retired-scheme compatibility. */
 $root=dirname(__DIR__);
 foreach(['Security','BatchAccounting','QuotaPolicy','Core'] as $class) require_once $root.'/src/'.$class.'.php';
 use WPAICloudGateway\{BatchAccounting as Batch,QuotaPolicy as Policy,Core,Fault};
@@ -16,14 +16,15 @@ $ok(($p['automatic_money_debits']??null)===false,'Automatic money debit unexpect
 $ok(($p['batch']??'')===Batch::POLICY,'Production batch must be enabled');
 foreach(['free'=>[50,Policy::DAY],'daily'=>[500,Policy::DAY],'pro'=>[2000,Policy::DAY],'business'=>[5000,Policy::DAY],'businesspro'=>[10000,Policy::DAY]] as $plan=>$expected){
     $t=Policy::terms($p,['quota_scheme'=>Policy::CURRENT,'plan'=>$plan]);
-    $ok($t['limit']===$expected[0]&&$t['period_kind']===$expected[1],'Bad tariff '.$plan);
+    $ok($t['limit']===$expected[0]&&$t['period_kind']===$expected[1]&&$t['quota_scheme']===Policy::TARGET,'Bad final daily tariff '.$plan);
     $w=Policy::window($t,strtotime('2026-10-21T23:59:59Z'));
     $next=Policy::window($t,strtotime('2026-10-22T00:00:00Z'));
     $ok($w['period']==='2026-10-21'&&$next['period']==='2026-10-22','UTC boundary '.$plan);
 }
-$refuse(fn()=>Policy::terms($p,['quota_scheme'=>Policy::CURRENT,'plan'=>'biznes']),'plan_unavailable');
+$alias=Policy::terms($p,['quota_scheme'=>Policy::CURRENT,'plan'=>'biznes']);
+$ok($alias['limit']===5000&&$alias['quota_scheme']===Policy::TARGET,'Retired v2 alias did not resolve to the final PRO+ daily quota');
 $legacy=Policy::terms($p,['plan'=>'free','quota_scheme'=>Policy::LEGACY]);
-$ok($legacy['quota_scheme']===Policy::LEGACY&&$legacy['period_kind']===Policy::MONTH,'Legacy free plan not preserved');
+$ok($legacy['limit']===50&&$legacy['quota_scheme']===Policy::TARGET&&$legacy['period_kind']===Policy::DAY,'Retired monthly free plan did not resolve to final daily terms');
 $items=Batch::items([['id'=>'1','tool'=>'wp.get_site','arguments'=>[]],['id'=>'2','tool'=>'woocommerce.update_product_sandbox','arguments'=>['id'=>42,'changes'=>['regular_price'=>'10']]]]);
 $ok($items[0]['tool']==='wp_get_site'&&$items[1]['tool']==='woocommerce_update_product_sandbox','Batch normalization wrong');
 $refuse(fn()=>Batch::items([]),'batch_item_limit');
