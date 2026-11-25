@@ -286,7 +286,7 @@ try {
     set_error_handler(static function(int $severity,string $message) use (&$warnings): bool { $warnings[]=$message; return true; });
     try { $legacyUsage=$legacyCore->usage('lic-legacy-nolink',$now); }
     finally { restore_error_handler(); }
-    licCheck($legacyUsage['plan']==='pro'&&$legacyUsage['limit']===2000,'Historical account did not retain its Pro entitlement in the final daily catalogue');
+    licCheck($legacyUsage['plan']==='pro'&&$legacyUsage['limit']===500,'Historical account lost its existing Pro quota while the replacement tariff is pending');
     licCheck($warnings===[],'Historical account without licence schema emitted warnings: '.implode(' | ',$warnings));
     $legacyLicenceTables=(int)($mysql
         ? $legacyStore->row('SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$legacyPrefix.'licenses'])['n']
