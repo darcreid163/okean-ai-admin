@@ -22,6 +22,21 @@ $fixture=[
  'route'=>'/wp-json/okean-ai/v1/operations/1','text'=>'/various-choices',
  'keyed'=>['/srv/a/image.png'=>1,'/srv/b/image.png'=>2],
 ];
+$operationFixture=[
+ 'operation_id'=>'op_fixture','type'=>'elementor_widget_settings',
+ 'before_data'=>['integration'=>['api_key'=>'operation-before-key-should-not-leak','label'=>'Safe before']],
+ 'after_data'=>'{"integration":{"access_token":"operation-after-token-should-not-leak","label":"Safe after"}}',
+ 'diff_data'=>['changed'=>true,'before'=>['client_secret'=>'operation-diff-secret-should-not-leak'],'after'=>['label'=>'Safe diff']],
+ 'proof_hash'=>str_repeat('e',64),
+];
+$publicOperation=OAI_Security::public_evidence($operationFixture);
+$operationJson=json_encode($publicOperation,JSON_UNESCAPED_SLASHES);
+projectionAssert(strpos($operationJson,'operation-before-key-should-not-leak')===false&&strpos($operationJson,'operation-after-token-should-not-leak')===false&&strpos($operationJson,'operation-diff-secret-should-not-leak')===false,'Operation ledger projection leaked secret values');
+projectionAssert($publicOperation['before_data']['integration']['api_key']==='[REDACTED]'&&$publicOperation['before_data']['integration']['label']==='Safe before','Operation before snapshot redaction failed');
+$publicAfter=json_decode($publicOperation['after_data'],true);
+projectionAssert($publicAfter['integration']['access_token']==='[REDACTED]'&&$publicAfter['integration']['label']==='Safe after','Serialized operation after snapshot redaction failed');
+projectionAssert($publicOperation['proof_hash']===$operationFixture['proof_hash'],'Operation proof hash changed during public projection');
+
 $original=serialize($fixture);
 $public=OAI_Security::public_evidence($fixture);
 $json=json_encode($public,JSON_UNESCAPED_SLASHES);
