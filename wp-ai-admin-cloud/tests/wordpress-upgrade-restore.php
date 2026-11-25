@@ -138,7 +138,13 @@ if($phase==='seed') {
     if(WPAI_CLOUD_VERSION==='0.3.11') {
         cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeRows($store),$state['rows']),'Restored historical source altered retained rows');
     }
-    cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeOptions(),$state['options']),'Gateway keys/settings or sentinel changed');
+    $actualOptions=cloudUpgradeOptions();
+    if(WPAI_CLOUD_VERSION!=='0.3.11') {
+        $cutoverOption=$actualOptions['wpai_gateway_quota_cutover_v1']??null;
+        unset($actualOptions['wpai_gateway_quota_cutover_v1']);
+        cloudUpgradeAssert((string)$cutoverOption==='1','Daily quota cutover marker was not persisted exactly once');
+    }
+    cloudUpgradeAssert(cloudUpgradeSame($actualOptions,$state['options']),'Gateway keys/settings or sentinel changed outside the additive quota cutover marker');
     $actualTables=$wpdb->get_col('SHOW TABLES');
     $expectedTables=$state['tables'];
     if ($expectBatch) {
