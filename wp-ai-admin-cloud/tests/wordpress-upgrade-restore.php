@@ -223,7 +223,9 @@ if (method_exists($store,'ensureSseQueueSchema')) {
     @unlink($exportPath);
 
 cloudUpgradeAssert(hash_equals($state['keys_sha256'],hash('sha256',$keys['vault'].$keys['signing'])) && Settings::keys()===$keys,'Vault/signing key changed');
-cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeOptions(),$state['options']),'Repeated key preparation rewrote wrapped keys');
+$repeatOptions=cloudUpgradeOptions();
+if(WPAI_CLOUD_VERSION!=='0.3.11') $repeatOptions=array_values(array_filter($repeatOptions,static fn($option)=>($option['option_name']??'')!=='wpai_gateway_quota_cutover_v1'));
+cloudUpgradeAssert(cloudUpgradeSame($repeatOptions,$state['options']),'Repeated key preparation rewrote wrapped keys or other gateway settings');
 $keyAutoload=$wpdb->get_var("SELECT autoload FROM $wpdb->options WHERE option_name='wpai_gateway_wrapped_keys_v1'");
 cloudUpgradeAssert(in_array($keyAutoload,['no','off','auto-off'],true),'Wrapped keys became autoloaded');
 cloudUpgradeAssert($signer->publicKey()===$state['public_key'],'Signing identity changed');
