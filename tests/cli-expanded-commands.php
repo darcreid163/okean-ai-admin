@@ -3,7 +3,7 @@
  * Tier B slice 1: expanded read-only WP-CLI command registry.
  *
  * Verifies command resolution for two- and three-token commands, argument and
- * flag validation, every new handler, redaction of credential-like meta, and
+ * flag validation, every new handler, redaction of credential-like theme mods and meta, and
  * absence of PII in comment output. No WordPress, MySQL or network.
  *
  * Usage: php tests/cli-expanded-commands.php
@@ -220,7 +220,7 @@ check($r['redacted'] === true && $r['value']['access_token'] === '[REDACTED]' &&
 $r = ok_result('theme mod get missing_mod');
 check($r['exists'] === false && $r['value'] === null, 'theme mod get missing');
 $r = ok_result('theme mod list');
-check($r['count'] === 4 && $r['truncated'] === false, 'theme mod list');
+check($r['count'] === 6 && $r['truncated'] === false, 'theme mod list');
 check(isset($r['mods'][0]['name']) && !isset($r['mods'][0]['value']), 'theme mod list returns metadata only');
 
 $r = ok_result('post meta get 42 _wp_page_template');
