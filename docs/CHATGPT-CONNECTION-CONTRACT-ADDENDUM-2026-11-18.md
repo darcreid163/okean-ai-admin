@@ -2,7 +2,7 @@
 
 Recorded: 2026-11-18  
 Applies to candidate source: `f7b984d1ca224405428aa84726babf4c2bedf10f` and later commits on PR #232  
-Status: candidate qualification; **not a production approval**
+Status: candidate qualification; **not a production approval**. Strict no-refresh OAuth policy was approved on 2026-11-24 and implemented on the lifecycle branch by PR #251.
 
 ## 1. Relationship to the historical contract
 
@@ -14,7 +14,7 @@ Current candidate under PR #232:
 - Integration PR #232 is Draft and unmerged. Main is unchanged.
 - Current candidate packages are CI artifacts, not signed public releases.
 
-This addendum does not silently alter OAuth grant semantics, token lifetime, refresh eligibility, site selection, identity, credential storage, quota, or revocation behavior.
+The 2026-11-24 owner-approved OAuth decision explicitly supersedes the historical refresh eligibility described below: `offline_access` and refresh-token grants are disabled in both Native and Cloud Core. Other site-selection, identity, quota and revocation invariants remain unchanged.
 
 ## 2. Preserved connection and security invariants
 
