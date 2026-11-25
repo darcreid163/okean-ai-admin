@@ -138,7 +138,7 @@ class OAI_MCP_OAuth {
    echo wp_json_encode(array(
     'resource'=>rest_url('okean-ai/mcp'),
     'authorization_servers'=>array(untrailingslashit(home_url('/'))),
-    'scopes_supported'=>array('mcp:read','mcp:write','offline_access'),
+    'scopes_supported'=>array('mcp:read','mcp:write'),
     'bearer_methods_supported'=>array('header')
    ),JSON_UNESCAPED_SLASHES);
    exit;
@@ -151,10 +151,10 @@ class OAI_MCP_OAuth {
    'registration_endpoint'=>rest_url('okean-ai/v1/oauth/register'),
    'client_id_metadata_document_supported'=>true,
    'response_types_supported'=>array('code'),
-   'grant_types_supported'=>array('authorization_code','refresh_token'),
+   'grant_types_supported'=>array('authorization_code'),
    'code_challenge_methods_supported'=>array('S256'),
    'token_endpoint_auth_methods_supported'=>array('none'),
-   'scopes_supported'=>array('mcp:read','mcp:write','offline_access')
+   'scopes_supported'=>array('mcp:read','mcp:write')
   ),JSON_UNESCAPED_SLASHES);
   exit;
  }
@@ -246,9 +246,9 @@ class OAI_MCP_OAuth {
  }
 
  private static function normalize_scope($scope,$default_full=false){
-  $allowed=array('mcp:read','mcp:write','offline_access');
+  $allowed=array('mcp:read','mcp:write');
   $raw=trim((string)$scope);
-  if($raw==='' && $default_full) return 'mcp:read mcp:write offline_access';
+  if($raw==='' && $default_full) return 'mcp:read mcp:write';
   $tokens=preg_split('/\\s+/',$raw);
   $out=array();
   foreach($tokens as $token){
@@ -397,11 +397,11 @@ public static function register_client($req){
    'client_id'=>$client_id,
    'client_name'=>$name,
    'redirect_uris'=>$clean,
-   'grant_types'=>array('authorization_code','refresh_token'),
+   'grant_types'=>array('authorization_code'),
    'response_types'=>array('code'),
    'token_endpoint_auth_method'=>'none',
-   'scopes_supported'=>array('mcp:read','mcp:write','offline_access'),
-   'scope'=>'mcp:read mcp:write offline_access'
+   'scopes_supported'=>array('mcp:read','mcp:write'),
+   'scope'=>'mcp:read mcp:write'
   ),201);
 }
 public static function admin_post_authorize(){
@@ -573,8 +573,7 @@ public static function admin_post_authorize(){
   self::prune_credentials();
   $grant=sanitize_key((string)$req->get_param('grant_type'));
   if($grant==='authorization_code') return self::exchange_code($req);
-  if($grant==='refresh_token') return self::refresh($req);
-  return self::json_error('unsupported_grant_type','Only authorization_code and refresh_token are supported');
+  return self::json_error('unsupported_grant_type','Only authorization_code is supported');
  }
 
  private static function verify_pkce($verifier,$challenge){
@@ -615,18 +614,15 @@ public static function admin_post_authorize(){
   $scope=self::normalize_scope($scope,false);
   if($scope==='') return self::json_error('invalid_scope','Access token cannot be issued without a valid MCP scope',400);
   $access='oai_access_'.wp_generate_password(72,false,false);
-  $refresh='oai_refresh_'.wp_generate_password(72,false,false);
   global $wpdb;
   $ok=$wpdb->insert(self::tokens_table(),array(
    'access_hash'=>hash('sha256',$access),
-   'refresh_hash'=>hash('sha256',$refresh),
    'client_id'=>$client_id,
    'user_id'=>absint($user_id),
    'scope'=>$scope,
    'resource'=>$resource?:rest_url('okean-ai/mcp'),
    'created_at'=>current_time('mysql',true),
    'expires_at'=>gmdate('Y-m-d H:i:s',time()+3600),
-   'refresh_expires_at'=>gmdate('Y-m-d H:i:s',time()+30*DAY_IN_SECONDS),
    'revoked'=>0
   ));
   if(!$ok) return self::json_error('server_error','Could not issue access token',500);
@@ -634,29 +630,9 @@ public static function admin_post_authorize(){
    'access_token'=>$access,
    'token_type'=>'Bearer',
    'expires_in'=>3600,
-   'refresh_token'=>$refresh,
    'scope'=>$scope,
    'resource'=>$resource?:rest_url('okean-ai/mcp')
   ),200);
- }
-
- private static function refresh($req){
-  $refresh=(string)$req->get_param('refresh_token'); $client_id=sanitize_text_field((string)$req->get_param('client_id')); $resource=esc_url_raw((string)$req->get_param('resource'));
-  if($refresh===''||$client_id==='') return self::json_error('invalid_request','refresh_token and client_id are required');
-  global $wpdb;
-  $row=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::tokens_table().' WHERE refresh_hash=%s AND client_id=%s LIMIT 1',hash('sha256',$refresh),$client_id),ARRAY_A);
-  if(!$row || (int)$row['revoked']===1 || empty($row['refresh_expires_at']) || strtotime($row['refresh_expires_at'])<time()) return self::json_error('invalid_grant','Refresh token is invalid or expired');
-  $scope=self::normalize_scope($row['scope'],false);
-  if($scope==='') return self::json_error('invalid_grant','The refresh token is bound to an invalid or empty MCP scope; reconnect and authorize again');
-  $expected_resource=rest_url('okean-ai/mcp');
-  $stored_resource=(string)($row['resource']??'');
-  if($stored_resource==='' || !hash_equals($expected_resource,$stored_resource)) return self::json_error('invalid_grant','The refresh token is bound to an invalid MCP resource; reconnect and authorize again');
-  if($resource!=='' && !hash_equals($expected_resource,$resource)) return self::json_error('invalid_target','Token resource must be this MCP server');
-  $refresh_user=get_user_by('id',(int)$row['user_id']);
-  if(!$refresh_user || !user_can($refresh_user,'manage_options')) return self::json_error('invalid_grant','The WordPress administrator authorization is no longer valid; reconnect and approve again');
-  $claimed=$wpdb->query($wpdb->prepare('UPDATE '.self::tokens_table().' SET revoked=1 WHERE id=%d AND revoked=0',(int)$row['id']));
-  if($claimed!==1) return self::json_error('invalid_grant','Refresh token has already been rotated; reconnect and authorize again');
-  return self::issue_tokens((int)$row['user_id'],$client_id,$scope,(string)($row['resource']??rest_url('okean-ai/mcp')));
  }
 
  public static function authenticate_access_token($token){
