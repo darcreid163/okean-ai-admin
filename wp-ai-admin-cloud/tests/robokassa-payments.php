@@ -6,7 +6,7 @@ require_once dirname(__DIR__).'/src/LicenseDelivery.php';
 if (!function_exists('is_email')) { function is_email(string $email): string|false { return filter_var($email,FILTER_VALIDATE_EMAIL)?$email:false; } }
 if (!function_exists('get_user_by')) { function get_user_by(string $field,mixed $value): object|false { return (string)$value==='991'?(object)['ID'=>991,'user_email'=>'buyer@example.com']:false; } }
 $GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>true,'throw'=>false];
-if (!function_exists('wp_mail')) { function wp_mail($to,$subject,$message,$headers=[]): bool { if (!empty($GLOBALS['licenseDeliveryMail']['throw'])) throw new RuntimeException('simulated mail transport failure'); $GLOBALS['licenseDeliveryMail']=['to'=>$to,'message'=>$message,'sent'=>$GLOBALS['licenseDeliveryMail']['sent'],'throw'=>false]; return (bool)$GLOBALS['licenseDeliveryMail']['sent']; } }
+if (!function_exists('wp_mail')) { function wp_mail($to,$subject,$message,$headers=[]): bool { if (!empty($GLOBALS['licenseDeliveryMail']['throw'])) throw new RuntimeException('simulated mail transport failure'); $before=$GLOBALS['licenseDeliveryMail']['before']??null; if(is_callable($before))$before($to,$subject,$message); $GLOBALS['licenseDeliveryMail']=['to'=>$to,'message'=>$message,'sent'=>$GLOBALS['licenseDeliveryMail']['sent'],'throw'=>false]; return (bool)$GLOBALS['licenseDeliveryMail']['sent']; } }
 if (!function_exists('home_url')) { function home_url(string $path=''): string { return 'https://wpaiadmin.test'.$path; } }
 require_once dirname(__DIR__).'/src/Reconciliation.php';
 require_once dirname(__DIR__).'/src/ReconciliationRepair.php';
@@ -231,6 +231,32 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     }
     $mailExceptionRow=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailFailureOrder->get_id()]);
     robokassaPaymentCheck($mailExceptionRow['email_status']==='retry' && (int)$mailExceptionRow['email_attempts']===2 && $mailExceptionRow['email_ciphertext']!=='','transport exception must preserve encrypted key and increment attempts');
+
+    // A full refund must not commit while wp_mail is already dispatching the
+    // key. The confirmed refund is retried after the send lease reaches a
+    // terminal state, so no key email can be sent after the refund commits.
+    $mailRaceOrder=new WC_Order($baseOrderId+13,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-mail-refund-race');
+    \WPAICloudGateway\WooCommercePayments::settle($store,$policy,$mailRaceOrder,$deliveryVault);
+    $raceRefundFailure=null;
+    $raceRequestId='rk-refund-race-'.$transactionSeed;
+    $GLOBALS['licenseDeliveryMail']=[
+        'to'=>null,'message'=>null,'sent'=>true,'throw'=>false,
+        'before'=>static function() use($store,$policy,$mailRaceOrder,$raceRequestId,&$raceRefundFailure): void {
+            try {
+                \WPAICloudGateway\WooCommercePayments::refund($store,$policy,$mailRaceOrder,$raceRequestId,1499.0,true);
+            } catch (\WPAICloudGateway\Fault $e) {
+                $raceRefundFailure=$e->reason;
+            }
+        },
+    ];
+    robokassaPaymentCheck(\WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailRaceOrder->get_id())===true,'email dispatch must complete before a concurrent full refund can commit');
+    robokassaPaymentCheck($raceRefundFailure==='license_delivery_email_in_progress','full refund must defer while the order key email is in flight');
+    $racePaymentBefore=$store->row('SELECT status FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?',[(string)$mailRaceOrder->get_id()]);
+    $raceDeliveryBefore=$store->row('SELECT email_status,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailRaceOrder->get_id()]);
+    robokassaPaymentCheck($racePaymentBefore['status']==='settled' && $raceDeliveryBefore['email_status']==='sent' && $raceDeliveryBefore['email_ciphertext']==='','deferred refund must leave completed email delivery consistent until retry');
+    $raceRefund=\WPAICloudGateway\WooCommercePayments::refund($store,$policy,$mailRaceOrder,$raceRequestId,1499.0,true);
+    $raceDeliveryAfter=$store->row('SELECT email_status,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailRaceOrder->get_id()]);
+    robokassaPaymentCheck($raceRefund['entitlement_revoked']===true && $raceDeliveryAfter['email_status']==='revoked' && $raceDeliveryAfter['email_ciphertext']==='','retry must revoke the entitlement and keep delivery secrets erased');
 
     // The twelfth attempt is terminal for automatic delivery; no thirteenth
     // attempt may consume the retained encrypted copy.
