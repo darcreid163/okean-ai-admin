@@ -202,8 +202,10 @@ $core->revokeToken('recovery',hash('sha256',$recoverToken['access_token']),$now)
 rejects(fn()=>$core->call($recoverActor,$recoverSite['id'],'operation_get_receipt',[],'revoked-free',$now),'invalid_or_expired_token');
 
 // Ten independent processes compete for three slots using the same real DB and production transaction code.
-$core->ensureAccount('parallel'); $pSite=$core->connect('parallel','https://parallel.example.com','fixture-site-admin-token-parallel',$now);
-$pToken=$core->mint('parallel',[$pSite['id']],['mcp:read'],$now);
+// The account entitlement must be issued under the same three-slot policy as each worker.
+$parallelCore=fixtureCore($store,$transport,3);
+$parallelCore->ensureAccount('parallel'); $pSite=$parallelCore->connect('parallel','https://parallel.example.com','fixture-site-admin-token-parallel',$now);
+$pToken=$parallelCore->mint('parallel',[$pSite['id']],['mcp:read'],$now);
 $extensionDir=(string)ini_get('extension_dir');
 // Windows distributes php.ini with a relative extension_dir. Worker processes
 // change cwd, so resolve it once against the PHP binary they are launched with.
