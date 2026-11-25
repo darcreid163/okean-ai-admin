@@ -42,7 +42,7 @@ $GLOBALS['post_meta'] = array(
         '_wp_page_template' => array('default'),
         '_elementor_data' => array('[{"id":"a"}]'),
         '_wp_old_slug' => array('old-page'),
-        'integration_settings' => array('api_key' => 'post-api-key-should-not-leak', 'label' => 'Public integration'),
+        'integration_settings' => array(array('api_key' => 'post-api-key-should-not-leak', 'label' => 'Public integration')),
     ),
     43 => array(),
 );
@@ -54,7 +54,7 @@ $GLOBALS['user_meta'] = array(
         'nickname' => array('admin'),
         'session_tokens' => array('{"abc":"secret"}'),
         'api_key' => array('sk-should-not-leak'),
-        'integration_settings' => array('access_token' => 'user-token-should-not-leak', 'label' => 'Public profile'),
+        'integration_settings' => array(array('access_token' => 'user-token-should-not-leak', 'label' => 'Public profile')),
     ),
 );
 
