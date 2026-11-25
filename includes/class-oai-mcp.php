@@ -700,7 +700,7 @@ class OAI_MCP {
   }
   if(class_exists('OAI_Security')){
    if(is_wp_error($out))return self::response($id,null,OAI_Security::public_evidence(array('code'=>-32000,'message'=>$out->get_error_message(),'data'=>$out->get_error_data())));
-   $metadata_tools=array('wp_get_site','wp_health','wp_diagnostics','system_manifest','system_capabilities','system_security_status','wp_list_operations','operation_get','operation_status','operation_diff','operation_verify','verify_operation','operation_proof','proof_operation','operation_get_receipt','batch_receipt','batch_proof');
+   $metadata_tools=array('wp_get_site','wp_health','wp_diagnostics','system_manifest','system_security_status','wp_list_operations','operation_get','operation_status','operation_diff','operation_verify','verify_operation','operation_proof','proof_operation','operation_get_receipt','batch_receipt','batch_proof');
    if(in_array($name,$metadata_tools,true)||(is_array($out)&&isset($out['operation_id'],$out['type'])))$out=OAI_Security::public_evidence($out);
   }
   return self::tool_result($id,$out);
