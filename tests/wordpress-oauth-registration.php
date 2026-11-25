@@ -26,11 +26,26 @@ $bad=[
 ];
 foreach($bad as [$payload,$ip]) oauthRegAssert(oauthRegStatus(oauthRegRequest($payload,$ip))===400,'Invalid OAuth client metadata was accepted: '.$payload['client_name']);
 
-// The existing per-IP limit remains active (20/minute).
-$rateIp='198.51.100.30';
-for($i=0;$i<20;$i++) oauthRegAssert(oauthRegStatus(oauthRegRequest(['client_name'=>'Rate fixture','redirect_uris'=>[]],$rateIp))===400,'Unexpected response before OAuth registration rate threshold');
-$rateResponse=oauthRegRequest(['client_name'=>'Rate fixture','redirect_uris'=>[]],$rateIp);
-oauthRegAssert(oauthRegStatus($rateResponse)===429,'OAuth registration per-IP rate limit was not enforced');
+// The existing per-IP limit remains active (20 per fixed 60-second window).
+// Keep all 21 requests inside one window. CI can start this fixture immediately
+// before a wall-clock minute boundary; if that happens, restart with a fresh IP
+// instead of incorrectly treating the new window as a limiter regression.
+$rateResponse=null;
+for($windowAttempt=0;$windowAttempt<3;$windowAttempt++){
+ $rateWindow=(int)floor(time()/60);
+ $rateIp='198.51.100.'.random_int(1,254);
+ $windowChanged=false;
+ for($i=0;$i<20;$i++){
+  if((int)floor(time()/60)!==$rateWindow){$windowChanged=true;break;}
+  oauthRegAssert(oauthRegStatus(oauthRegRequest(['client_name'=>'Rate fixture','redirect_uris'=>[]],$rateIp))===400,'Unexpected response before OAuth registration rate threshold');
+ }
+ if($windowChanged || (int)floor(time()/60)!==$rateWindow) continue;
+ $candidate=oauthRegRequest(['client_name'=>'Rate fixture','redirect_uris'=>[]],$rateIp);
+ if((int)floor(time()/60)!==$rateWindow) continue;
+ $rateResponse=$candidate;
+ break;
+}
+oauthRegAssert($rateResponse!==null && oauthRegStatus($rateResponse)===429,'OAuth registration per-IP rate limit was not enforced within one fixed window');
 
 // Verify retention rules. Expired codes and fully expired credentials are pruned;
 // a live refresh token and a revoked row inside its retention window survive.

@@ -33,7 +33,6 @@ pmAssert(isset($m[1]) && version_compare($m[1], '8.2', '>='), 'Plugin header: Re
 
 // README.txt must exist and have WP.org structure.
 $readmeFile = ABSPATH . 'wp-content/plugins/okean-ai-admin/README.txt';
-// Fallback: source tree location when the runner copies tests/ but not the plugin root.
 if (!file_exists($readmeFile)) {
     $readmeFile = dirname($pluginFile) . '/README.txt';
 }
@@ -41,6 +40,7 @@ pmAssert(file_exists($readmeFile), 'README.txt not found alongside plugin file')
 $readme = file_get_contents($readmeFile);
 
 pmAssert((bool)preg_match('/^===\s+\S/m',              $readme), 'README.txt: missing === Plugin Name === header');
+pmAssert((bool)preg_match('/^Tags\s*:/mi',              $readme), 'README.txt: missing Tags metadata');
 pmAssert((bool)preg_match('/Requires at least\s*:/i',  $readme), 'README.txt: missing Requires at least (issue #144)');
 pmAssert((bool)preg_match('/Tested up to\s*:/i',       $readme), 'README.txt: missing Tested up to (issue #144)');
 pmAssert((bool)preg_match('/Requires PHP\s*:/i',       $readme), 'README.txt: missing Requires PHP (issue #144)');
@@ -49,6 +49,11 @@ pmAssert((bool)preg_match('/== Description ==/i',      $readme), 'README.txt: mi
 pmAssert((bool)preg_match('/== Installation ==/i',     $readme), 'README.txt: missing == Installation == section');
 pmAssert((bool)preg_match('/== Changelog ==/i',        $readme), 'README.txt: missing == Changelog == section');
 pmAssert((bool)preg_match('/== Frequently Asked Questions ==/i', $readme), 'README.txt: missing == FAQ == section');
+
+// WordPress.org directory metadata permits no more than five comma-separated tags.
+preg_match('/^Tags\s*:\s*(.*)$/mi', $readme, $tagsMatch);
+$tags = isset($tagsMatch[1]) ? array_values(array_filter(array_map('trim', explode(',', $tagsMatch[1])))) : array();
+pmAssert(count($tags) <= 5, 'README.txt: WordPress.org supports at most five tags; found ' . count($tags));
 
 // Stable tag must match the plugin Version.
 preg_match('/^\s*\*?\s*Version\s*:\s*([\d.]+)/im', $header, $verMatch);

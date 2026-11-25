@@ -2,7 +2,7 @@
 declare(strict_types=1);
 // Core tests load source classes without WordPress plugin bootstrap.
 if (!defined('WPAI_CLOUD_VERSION')) define('WPAI_CLOUD_VERSION','0.3.13-dev');
-foreach (['Security','Transport','Store','Licenses','QuotaPolicy','BatchAccounting','AbilitiesPolicy','Core','Skills','Unsplash','MediaPolicy','Gateway'] as $name) require_once dirname(__DIR__).'/src/'.$name.'.php';
+foreach (['Security','Transport','Store','Licenses','QuotaPolicy','BatchAccounting','AbilitiesPolicy','Core','Skills','Unsplash','MediaPolicy','Gateway','Reconciliation','ReconciliationRepair'] as $name) require_once dirname(__DIR__).'/src/'.$name.'.php';
 
 final class FakeTransport implements \WPAICloudGateway\Transport {
     public int $executions=0;
@@ -24,6 +24,8 @@ function fixtureStore(string $database): \WPAICloudGateway\Store {
 function fixtureCore(\WPAICloudGateway\Store $store,FakeTransport $transport,int $limit=100,?string $key=null): \WPAICloudGateway\Core {
     $policy=json_decode(file_get_contents(dirname(__DIR__).'/config/plans.json'),true);
     $policy['plans']['free']=$limit;
+    // Accounts are issued under the final daily scheme; mirror the fixture override there.
+    $policy['schemes'][\WPAICloudGateway\QuotaPolicy::TARGET]['plans']['free']=$limit;
     $pair=sodium_crypto_sign_keypair();
     return new \WPAICloudGateway\Core($store,new \WPAICloudGateway\Vault($key??str_repeat('k',32)),$transport,$policy,new \WPAICloudGateway\Signer(sodium_crypto_sign_secretkey($pair)));
 }

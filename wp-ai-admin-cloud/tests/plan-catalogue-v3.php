@@ -35,17 +35,16 @@ try {
     QuotaPolicy::validate($policy);
     $now=1790942400;
 
-    // Frozen v2 default: no existing account changes scheme on upgrade.
-    v3Check(($policy['default_scheme']??null)===QuotaPolicy::CURRENT,'Default scheme is not the frozen v2');
-    v3Check(QuotaPolicy::scheme($policy)===QuotaPolicy::CURRENT,'Scheme resolver ignored the default');
+    // Final catalogue: the owner-approved daily scheme is the only active one.
+    v3Check(($policy['default_scheme']??null)===QuotaPolicy::TARGET,'Default scheme is not the final v3 catalogue');
+    v3Check(QuotaPolicy::scheme($policy)===QuotaPolicy::TARGET,'Scheme resolver ignored the final daily default');
     v3Check(($policy['automatic_money_debits']??null)===false,'Automatic money debits enabled');
     v3Check(($policy['batch']??null)===\WPAICloudGateway\BatchAccounting::POLICY,'Production batch must be enabled');
     foreach(['free'=>50,'daily'=>500,'pro'=>2000,'business'=>5000,'businesspro'=>10000] as $slug=>$limit)
         v3Check(($policy['plans'][$slug]??null)===$limit,'Final v2 limit mismatch: '.$slug);
     foreach(['free','daily','pro','business','businesspro'] as $slug)
         v3Check(($policy['periods'][$slug]??null)===QuotaPolicy::DAY,'Final v2 period mismatch: '.$slug);
-    foreach(['free'=>100,'pro'=>500,'power'=>2000,'agency'=>5000,'scale'=>10000] as $slug=>$limit)
-        v3Check(($policy['legacy_plans'][$slug]??null)===$limit,'Legacy monthly limit changed: '.$slug);
+    v3Check(!array_key_exists('legacy_plans',$policy),'Retired monthly catalogue must not ship');
 
     // Target scheme: all five final quotas are owner-approved and daily UTC.
     $v3=$policy['schemes'][QuotaPolicy::TARGET]??null;
@@ -59,10 +58,12 @@ try {
         v3Check(($v3['quota_status'][$slug]??null)===QuotaPolicy::QUOTA_APPROVED,'Target quota must be approved: '.$slug);
         v3Check(($v3['periods'][$slug]??null)===QuotaPolicy::DAY,'Target plan must be daily: '.$slug);
     }
-    foreach(['pro'=>2000,'business'=>5000,'businesspro'=>10000] as $slug=>$price)
+    foreach(['free'=>0,'daily'=>899,'pro'=>1499,'business'=>3999,'businesspro'=>8999] as $slug=>$price)
         v3Check(($v3['prices_rub_month'][$slug]??null)===$price,'Price mismatch: '.$slug);
-    v3Check(array_key_exists('daily',$v3['prices_rub_month'])&&$v3['prices_rub_month']['daily']===null,'Daily price must remain unset');
-    v3Check(($v3['prices_approved']??null)===false,'Prices must remain unapproved until Daily price is set');
+    foreach(['daily'=>9999,'pro'=>16999,'business'=>46999,'businesspro'=>105999] as $slug=>$price)
+        v3Check(($v3['prices_rub_year'][$slug]??null)===$price,'Approved annual price mismatch: '.$slug);
+    v3Check(($v3['prices_approved']??null)===true,'Final owner-approved prices must be approved');
+    v3Check(($policy['prices_approved']??null)===true,'Top-level price approval must be final');
 
     // Slugs stay stable; only the client-facing tariff names change.
     v3Check(QuotaPolicy::planLabel($policy,'business')==='PRO+','PRO+ label missing');
@@ -73,20 +74,21 @@ try {
     v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'free'),'v3 free not offered');
     v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'daily'),'v3 Daily not offered');
     v3Check(QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'businesspro'),'v3 businesspro not offered');
-    v3Check(!QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'power'),'v3 leaked a legacy plan');
-    v3Check(QuotaPolicy::offers($policy,QuotaPolicy::CURRENT,'businesspro'),'v2 must offer businesspro');
+    v3Check(!QuotaPolicy::offers($policy,QuotaPolicy::TARGET,'power'),'v3 leaked a retired legacy plan');
+    v3Check(!QuotaPolicy::offers($policy,QuotaPolicy::CURRENT,'businesspro'),'Retired v2 scheme is still offered');
     v3Check(!QuotaPolicy::offers($policy,QuotaPolicy::CURRENT,'biznes'),'Retired alias is still offered on v2');
-    v3Check(QuotaPolicy::offers($policy,QuotaPolicy::LEGACY,'scale'),'Legacy scale missing');
+    v3Check(!QuotaPolicy::offers($policy,QuotaPolicy::LEGACY,'scale'),'Retired monthly plan is still offered');
 
-    // Terms: legacy stays monthly, v2 stays daily, and every v3 tariff is daily/approved.
-    $legacy=QuotaPolicy::terms($policy,['plan'=>'pro','quota_scheme'=>QuotaPolicy::LEGACY]);
-    v3Check($legacy['limit']===500&&$legacy['period_kind']===QuotaPolicy::MONTH&&$legacy['quota_scheme']===QuotaPolicy::LEGACY,'Legacy terms changed');
+    // Retired monthly and pre-cutover schemas resolve to the final daily
+    // catalogue. Every effective tariff is daily and owner-approved.
+    $retired=QuotaPolicy::terms($policy,['plan'=>'pro','quota_scheme'=>QuotaPolicy::LEGACY]);
+    v3Check($retired['limit']===2000&&$retired['period_kind']===QuotaPolicy::DAY&&$retired['quota_scheme']===QuotaPolicy::TARGET,'Retired legacy terms were not transferred to the daily catalogue');
     $v2=QuotaPolicy::terms($policy,['plan'=>'free','quota_scheme'=>QuotaPolicy::CURRENT]);
-    v3Check($v2['limit']===50&&$v2['period_kind']===QuotaPolicy::DAY&&$v2['quota_scheme']===QuotaPolicy::CURRENT,'v2 Free terms wrong');
+    v3Check($v2['limit']===50&&$v2['period_kind']===QuotaPolicy::DAY&&$v2['quota_scheme']===QuotaPolicy::TARGET,'Pre-cutover v2 Free terms wrong');
     $v2Daily=QuotaPolicy::terms($policy,['plan'=>'daily','quota_scheme'=>QuotaPolicy::CURRENT]);
-    v3Check($v2Daily['limit']===500&&$v2Daily['period_kind']===QuotaPolicy::DAY,'v2 Daily terms wrong');
+    v3Check($v2Daily['limit']===500&&$v2Daily['period_kind']===QuotaPolicy::DAY,'Pre-cutover v2 Daily terms wrong');
     $v2BusinessPro=QuotaPolicy::terms($policy,['plan'=>'businesspro','quota_scheme'=>QuotaPolicy::CURRENT]);
-    v3Check($v2BusinessPro['limit']===10000&&$v2BusinessPro['period_kind']===QuotaPolicy::DAY,'v2 PRO++ terms wrong');
+    v3Check($v2BusinessPro['limit']===10000&&$v2BusinessPro['period_kind']===QuotaPolicy::DAY,'Pre-cutover v2 PRO++ terms wrong');
     $free=QuotaPolicy::terms($policy,['plan'=>'free','quota_scheme'=>QuotaPolicy::TARGET]);
     v3Check($free['limit']===50&&$free['period_kind']===QuotaPolicy::DAY&&$free['quota_status']===QuotaPolicy::QUOTA_APPROVED,'v3 Free terms wrong');
     $daily=QuotaPolicy::terms($policy,['plan'=>'daily','quota_scheme'=>QuotaPolicy::TARGET]);
@@ -102,7 +104,7 @@ try {
     v3Check($dailyWindow['period_end_utc']===gmdate('Y-m-d\\TH:i:s\\Z',$dailyWindow['next_period_at']),'Daily quota reset metadata is not UTC');
     v3Rejects(fn()=>QuotaPolicy::terms($policy,['plan'=>'enterprise','quota_scheme'=>QuotaPolicy::TARGET]),'plan_unavailable');
     v3Rejects(fn()=>QuotaPolicy::terms($policy,['plan'=>'free','quota_scheme'=>'tariffs_v9']),'plan_unavailable');
-    v3Rejects(fn()=>QuotaPolicy::terms($policy,['plan'=>'business','quota_scheme'=>QuotaPolicy::LEGACY]),'plan_unavailable');
+    v3Check(QuotaPolicy::terms($policy,['plan'=>'agency','quota_scheme'=>QuotaPolicy::LEGACY])['limit']===5000,'Retired scheme lost the PRO+ limit');
 
     // Persisted plan versions merge additively. A stale/incompatible row or an
     // extra row must not invalidate the whole gateway with a 503.
@@ -125,13 +127,12 @@ try {
     $mergeBase['schemes'][QuotaPolicy::TARGET]['quota_status']['pro']=QuotaPolicy::QUOTA_PENDING;
     $merged=QuotaPolicy::mergePlanVersions($mergeBase,$rows);
     QuotaPolicy::validate($merged);
-    v3Check(($merged['legacy_plans']['free']??null)===111,'Compatible legacy override was not applied');
-    v3Check(($merged['legacy_plans']['gold']??null)===900,'Extra legacy plan row was dropped');
-    v3Check(!array_key_exists('broken',$merged['legacy_plans']),'Incompatible plan row was applied');
-    v3Check(isset($merged['incompatible_plans']['legacy_monthly_v1|broken']),'Incompatible row was not quarantined');
-    v3Check(isset($merged['incompatible_plans']['legacy_monthly_v1|pro']),'Incompatible known plan was not quarantined');
-    v3Rejects(fn()=>QuotaPolicy::terms($merged,['plan'=>'pro','quota_scheme'=>QuotaPolicy::LEGACY]),'plan_unavailable');
-    v3Check(QuotaPolicy::terms($merged,['plan'=>'agency','quota_scheme'=>QuotaPolicy::LEGACY])['limit']===5000,'Unaffected legacy plan was quarantined');
+    v3Check(!array_key_exists('legacy_plans',$merged),'Retired monthly rows leaked into the catalogue');
+    v3Check(!isset($merged['incompatible_plans']['legacy_monthly_v1|broken']),'Retired monthly rows must be ignored, not quarantined');
+    v3Check(!isset($merged['incompatible_plans']['legacy_monthly_v1|pro']),'Retired monthly rows must be ignored, not quarantined');
+    v3Check(QuotaPolicy::terms($merged,['plan'=>'pro','quota_scheme'=>QuotaPolicy::LEGACY])['limit']===1234,'Retired scheme did not resolve to the merged daily quota');
+    v3Rejects(fn()=>QuotaPolicy::terms($merged,['plan'=>'enterprise','quota_scheme'=>QuotaPolicy::LEGACY]),'plan_unavailable');
+    v3Check(QuotaPolicy::terms($merged,['plan'=>'agency','quota_scheme'=>QuotaPolicy::LEGACY])['limit']===5000,'Retired scheme lost the PRO+ limit after merge');
     v3Check(($merged['plans']['free']??null)===50,'A persisted v2 row rewrote the final v2 catalogue');
     v3Check(($merged['schemes'][QuotaPolicy::TARGET]['plans']['pro']??null)===1234,'Approved DB override was not applied to a pending catalogue quota');
     v3Check(($merged['schemes'][QuotaPolicy::TARGET]['quota_status']['pro']??null)===QuotaPolicy::QUOTA_APPROVED,'Approved status missing');
@@ -148,6 +149,8 @@ try {
     v3Rejects(fn()=>QuotaPolicy::validate($badV2),'invalid_plan_limit');
     $badPeriod=$policy; $badPeriod['periods']['pro']=QuotaPolicy::MONTH;
     v3Rejects(fn()=>QuotaPolicy::validate($badPeriod),'invalid_quota_policy');
+    $badLegacy=$policy; $badLegacy['legacy_plans']=['free'=>100];
+    v3Rejects(fn()=>QuotaPolicy::validate($badLegacy),'invalid_quota_policy');
     $badDefault=$policy; $badDefault['default_scheme']='tariffs_v9';
     v3Rejects(fn()=>QuotaPolicy::validate($badDefault),'invalid_quota_policy');
 
@@ -183,9 +186,10 @@ try {
     $pair=sodium_crypto_sign_keypair();
     $core=new Core($store,new \WPAICloudGateway\Vault(str_repeat('k',32)),$transport,$pendingPolicy,new \WPAICloudGateway\Signer(sodium_crypto_sign_secretkey($pair)));
     $core->ensureAccount('assign');
-    $core->setPlan('operator','assign','business',$now,QuotaPolicy::CURRENT);
+    v3Rejects(fn()=>$core->setPlan('operator','assign','business',$now,QuotaPolicy::CURRENT),'unknown_plan');
+    $core->setPlan('operator','assign','business',$now);
     $assigned=$store->row('SELECT plan,quota_scheme FROM '.$store->table('accounts').' WHERE owner=?',['assign']);
-    v3Check($assigned['plan']==='business'&&$assigned['quota_scheme']===QuotaPolicy::CURRENT,'v2 plan assignment failed');
+    v3Check($assigned['plan']==='business'&&$assigned['quota_scheme']===QuotaPolicy::TARGET,'Default plan assignment did not use the final daily catalogue');
     $core->setPlan('operator','assign','businesspro',$now,QuotaPolicy::TARGET);
     $assigned=$store->row('SELECT plan,quota_scheme FROM '.$store->table('accounts').' WHERE owner=?',['assign']);
     v3Check($assigned['plan']==='businesspro'&&$assigned['quota_scheme']===QuotaPolicy::TARGET,'v3 plan assignment failed');
@@ -195,8 +199,14 @@ try {
     v3Rejects(fn()=>$core->setPlan('operator','assign','power',$now,QuotaPolicy::CURRENT),'unknown_plan');
     $core->ensureAccount('legacy-assign');
     $store->execute('UPDATE '.$store->table('accounts').' SET plan=?,quota_scheme=? WHERE owner=?',['free',QuotaPolicy::LEGACY,'legacy-assign']);
-    $core->setPlan('operator','legacy-assign','pro',$now,QuotaPolicy::LEGACY);
+    v3Rejects(fn()=>$core->setPlan('operator','legacy-assign','pro',$now,QuotaPolicy::LEGACY),'unknown_plan');
     v3Rejects(fn()=>$core->setPlan('operator','legacy-assign','business',$now,QuotaPolicy::LEGACY),'unknown_plan');
+    $cutover=Core::migrateRetiredSchemes($store,$policy,$now);
+    v3Check($cutover>=1,'Retired quota schemes were not transferred');
+    v3Check(Core::migrateRetiredSchemes($store,$policy,$now)===0,'Retired-scheme transfer is not idempotent');
+    $transferred=$store->row('SELECT plan,quota_scheme FROM '.$store->table('accounts').' WHERE owner=?',['legacy-assign']);
+    v3Check($transferred['quota_scheme']===QuotaPolicy::TARGET,'Retired account was not normalised to the daily catalogue');
+    v3Check((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('audit').' WHERE event=?',['quota_scheme_retired'])['n']>=1,'Retired-scheme audit trail missing');
 
     // Fail-closed dispatch: an unapproved paid quota blocks only billable calls.
     $core->ensureAccount('gate');

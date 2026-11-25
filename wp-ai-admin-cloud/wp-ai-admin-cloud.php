@@ -11,6 +11,15 @@
 
 if (!defined('ABSPATH')) exit;
 
+// Cloud Core consumes WooCommerce order objects for Robokassa settlement and
+// refund lifecycle processing. Declare HPOS compatibility before WooCommerce
+// initializes its feature compatibility checks; all order access uses WC APIs.
+add_action('before_woocommerce_init', static function (): void {
+    if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+    }
+});
+
 define('WPAI_CLOUD_VERSION', '0.3.13-dev');
 define('WPAI_CLOUD_DB_VERSION', '2');
 define('WPAI_CLOUD_DIR', plugin_dir_path(__FILE__));
@@ -22,6 +31,7 @@ require_once WPAI_CLOUD_DIR . 'includes/class-wpai-cloud-rest.php';
 require_once WPAI_CLOUD_DIR . 'includes/class-wpai-cloud-admin.php';
 
 register_activation_hook(__FILE__, array('WPAI_Cloud_DB', 'install'));
+register_activation_hook(__FILE__, static function (): void { add_rewrite_rule('^license-key/([0-9]+)/?$', 'index.php?wpai_license_order=$matches[1]', 'top'); flush_rewrite_rules(); });
 add_action('plugins_loaded', array('WPAI_Cloud_DB', 'maybe_upgrade'));
 add_action('rest_api_init', array('WPAI_Cloud_REST', 'register_routes'));
 add_action('admin_menu', array('WPAI_Cloud_Admin', 'register_menu'));
@@ -32,5 +42,5 @@ if (PHP_VERSION_ID < 80200) {
 }
 
 // Gateway storage is separate from the preserved Cloud Core v1 schema.
-foreach (['Security','Transport','Store','Licenses','QuotaPolicy','BatchAccounting','AbilitiesPolicy','Core','Skills','Unsplash','MediaPolicy','Gateway','Settings','OAuth','Pairing','Sse','Surface','Admin','WordPress'] as $component) require_once WPAI_CLOUD_DIR . 'src/' . $component . '.php';
+foreach (['Security','Transport','Store','Licenses','QuotaPolicy','BatchAccounting','AbilitiesPolicy','Core','Skills','Unsplash','MediaPolicy','Gateway','Settings','OAuth','Pairing','Sse','Surface','Admin','LicenseDelivery','WooCommercePayments','Reconciliation','ReconciliationRepair','ReconciliationAdmin','WordPress'] as $component) require_once WPAI_CLOUD_DIR . 'src/' . $component . '.php';
 \WPAICloudGateway\WordPress::boot(__FILE__);

@@ -97,7 +97,7 @@ try {
     $legacyLink=$store->row('SELECT license_id FROM '.$store->table('accounts').' WHERE owner=?',['lic-legacy-compatible'])['license_id'];
     licCheck($legacyLink!==null,'Compatible legacy plan did not receive an automatic licence');
     $legacyLicence=licFind($core->allLicenses(),(string)$legacyLink);
-    licCheck($legacyLicence['plan']==='pro'&&$legacyLicence['quota_scheme']===QuotaPolicy::LEGACY,'Legacy automatic licence changed the plan');
+    licCheck($legacyLicence['plan']==='pro'&&$legacyLicence['quota_scheme']===QuotaPolicy::TARGET,'Legacy automatic licence was not migrated to the final daily scheme');
     $core->ensureAccount('lic-scheme-default');
     $core->setPlan($operator,'lic-scheme-default','free',$now,QuotaPolicy::TARGET);
     $schemeDefault=$core->issueLicense($operator,'lic-scheme-default','pro',$now);
@@ -137,7 +137,7 @@ try {
     licRejects(fn()=>$core->issueLicense($operator,$ownerA,'pro',$now,QuotaPolicy::TARGET,['status'=>'suspended']),'invalid_license_status');
     licRejects(fn()=>$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['status'=>'active']),'invalid_license_status');
     licRejects(fn()=>$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['status'=>'bogus']),'invalid_license_status');
-    licRejects(fn()=>$core->issueLicense($operator,$ownerA,'business',$now,QuotaPolicy::CURRENT,['starts_at'=>$now+3600]),'invalid_license_dates');
+    licRejects(fn()=>$core->issueLicense($operator,$ownerA,'pro',$now,QuotaPolicy::TARGET,['starts_at'=>$now+3600]),'invalid_license_dates');
     $future=$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['starts_at'=>$now+3600]);
     licCheck($future['status']===Licenses::UNUSED,'Future-dated unbound licence must stay unused');
     licRejects(fn()=>$core->activateLicense($ownerA,(string)$future['license_key'],$siteA['id'],$now+2),'license_not_started');
@@ -199,13 +199,13 @@ try {
 
     /* ------------------------------------------------- plan assignment lineage --- */
 
-    $core->setPlan($operator,$ownerA,'business',$now+20,QuotaPolicy::CURRENT);
+    $core->setPlan($operator,$ownerA,'business',$now+20,QuotaPolicy::TARGET);
     $account=$store->row('SELECT plan,quota_scheme,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$ownerA]);
-    licCheck($account['plan']==='business'&&$account['quota_scheme']===QuotaPolicy::CURRENT,'Plan assignment did not persist');
+    licCheck($account['plan']==='business'&&$account['quota_scheme']===QuotaPolicy::TARGET,'Plan assignment did not persist');
     $business=licFind($core->allLicenses(),(string)$account['license_id']);
     $businessId=(string)$business['id'];
     licCheck($business['source']===Licenses::SOURCE_AUTOMATIC&&$business['status']===Licenses::ACTIVE,'Plan assignment did not issue an automatic licence');
-    licCheck($business['plan']==='business'&&$business['quota_scheme']===QuotaPolicy::CURRENT,'Automatic licence carries the wrong plan');
+    licCheck($business['plan']==='business'&&$business['quota_scheme']===QuotaPolicy::TARGET,'Automatic licence carries the wrong plan');
     $superseded=licFind($core->allLicenses(),$reissuedId);
     licCheck($superseded['status']===Licenses::REPLACED&&$superseded['replaced_by']===$businessId,'Previous licence was not retired by plan assignment');
     $usage=$core->usage($ownerA,$now+20);
@@ -230,7 +230,7 @@ try {
     $reactivated=$core->reactivateLicense($operator,$businessId,$now+40);
     licCheck($reactivated['reactivated']===true&&$reactivated['status']===Licenses::ACTIVE,'Reactivate state is wrong');
     $account=$store->row('SELECT plan,quota_scheme,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$ownerA]);
-    licCheck($account['plan']==='business'&&$account['quota_scheme']===QuotaPolicy::CURRENT&&$account['license_id']===$businessId,'Reactivate did not restore the licence plan');
+    licCheck($account['plan']==='business'&&$account['quota_scheme']===QuotaPolicy::TARGET&&$account['license_id']===$businessId,'Reactivate did not restore the licence plan');
     licCheck($core->usage($ownerA,$now+40)['limit']===5000,'Reactivated account lost its paid quota');
 
     $revoked=$core->revokeLicense($operator,$businessId,$now+50);
@@ -260,7 +260,7 @@ try {
 
     /* --------------------------------------------------------------- expiry --- */
 
-    $expiring=$core->issueLicense($operator,$ownerB,'business',$now,QuotaPolicy::CURRENT,['expires_at'=>$now+120,'activation_limit'=>1]);
+    $expiring=$core->issueLicense($operator,$ownerB,'business',$now,QuotaPolicy::TARGET,['expires_at'=>$now+120,'activation_limit'=>1]);
     $expiringId=(string)$expiring['id'];
     licCheck($store->row('SELECT plan FROM '.$store->table('accounts').' WHERE owner=?',[$ownerB])['plan']==='business','Bound manual licence did not apply its plan');
     licCheck($core->usage($ownerB,$now+60)['limit']===5000,'Bound manual licence quota is wrong');
@@ -286,7 +286,7 @@ try {
     set_error_handler(static function(int $severity,string $message) use (&$warnings): bool { $warnings[]=$message; return true; });
     try { $legacyUsage=$legacyCore->usage('lic-legacy-nolink',$now); }
     finally { restore_error_handler(); }
-    licCheck($legacyUsage['plan']==='pro'&&$legacyUsage['limit']===500,'Historical account lost its plan/quota');
+    licCheck($legacyUsage['plan']==='pro'&&$legacyUsage['limit']===null&&($legacyUsage['quota_status']??null)===QuotaPolicy::QUOTA_PENDING,'Historical Pro plan must be retained while an unapproved replacement quota remains fail-closed');
     licCheck($warnings===[],'Historical account without licence schema emitted warnings: '.implode(' | ',$warnings));
     $legacyLicenceTables=(int)($mysql
         ? $legacyStore->row('SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$legacyPrefix.'licenses'])['n']

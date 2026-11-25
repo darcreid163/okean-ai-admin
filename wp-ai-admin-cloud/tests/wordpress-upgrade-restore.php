@@ -38,11 +38,13 @@ final class CloudUpgradeTransport implements Transport {
         return ['jsonrpc'=>'2.0','id'=>$request['id'],'result'=>['content'=>[['type'=>'text','text'=>'synthetic retained read']],'isError'=>false]];
     }
 }
-function cloudUpgradeRows(Store $store): array {
+function cloudUpgradeRows(Store $store,array $only=[]): array {
     $rows=[];
     // Authentication legitimately increments rate counters; retained business,
     // credential and audit rows must remain byte-for-byte equivalent.
-    foreach(['accounts','balances','sites','tokens','requests','batch_steps','audit','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access'] as $name) {
+    $names=['accounts','balances','sites','tokens','requests','batch_steps','audit','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access'];
+    if($only!==[]) $names=array_values(array_intersect($names,$only));
+    foreach($names as $name) {
         $items=array_map([Security::class,'canonical'],$store->rows('SELECT * FROM '.$store->table($name)));
         sort($items,SORT_STRING); $rows[$name]=$items;
     }
@@ -50,7 +52,7 @@ function cloudUpgradeRows(Store $store): array {
 }
 function cloudUpgradeOptions(): array {
     global $wpdb;
-    return $wpdb->get_results("SELECT option_name,option_value,autoload FROM $wpdb->options WHERE option_name IN ('wpai_gateway_enabled','wpai_gateway_wrapped_keys_v1','wpai_gateway_db_version','wpai_gateway_batch_object_v1','wpai_cloud_upgrade_sentinel') ORDER BY option_name",ARRAY_A);
+    return $wpdb->get_results("SELECT option_name,option_value,autoload FROM $wpdb->options WHERE option_name IN ('wpai_gateway_enabled','wpai_gateway_wrapped_keys_v1','wpai_gateway_db_version','wpai_gateway_batch_object_v1','wpai_gateway_quota_cutover_v1','wpai_cloud_upgrade_sentinel') ORDER BY option_name",ARRAY_A);
 }
 // Real WP REST callbacks and database, with explicit fixture TLS context. This
 // does not stand in for external HTTPS, browser consent or ChatGPT acceptance.
@@ -105,12 +107,12 @@ if($phase==='seed') {
     $registered=cloudUpgradeRest('/wpai-cloud/v1/oauth/register',['client_name'=>'Synthetic upgrade client','redirect_uris'=>['https://example.invalid/oauth/callback']]);
     cloudUpgradeAssert($registered->get_status()===201,'DCR REST handler failed');
     $client=$registered->get_data(); $verifier=str_repeat('v',64);
-    $query=['client_id'=>$client['client_id'],'redirect_uri'=>$client['redirect_uris'][0],'response_type'=>'code','resource'=>Settings::endpoint(),'scope'=>'mcp:read mcp:write offline_access','code_challenge'=>Security::b64(hash('sha256',$verifier,true)),'code_challenge_method'=>'S256','state'=>'synthetic-upgrade-state'];
+    $query=['client_id'=>$client['client_id'],'redirect_uri'=>$client['redirect_uris'][0],'response_type'=>'code','resource'=>Settings::endpoint(),'scope'=>'mcp:read mcp:write','code_challenge'=>Security::b64(hash('sha256',$verifier,true)),'code_challenge_method'=>'S256','state'=>'synthetic-upgrade-state'];
     $auth=$oauth->authorization($query); $code=$oauth->approve('1',$auth,[$site['id']],$now);
     $exchange=cloudUpgradeRest('/wpai-cloud/v1/oauth/token',['grant_type'=>'authorization_code','client_id'=>$client['client_id'],'code'=>$code,'redirect_uri'=>$query['redirect_uri'],'code_verifier'=>$verifier,'resource'=>Settings::endpoint()],true);
     cloudUpgradeAssert($exchange->get_status()===200,'Code exchange REST handler failed');
     $token=$exchange->get_data();
-    cloudUpgradeAssert(isset($token['access_token'],$token['refresh_token']),'OAuth credentials missing');
+    cloudUpgradeAssert(isset($token['access_token']) && !isset($token['refresh_token']),'OAuth must issue only a short-lived access token');
     $revoked=$core->mint('1',[$site['id']],['mcp:read'],$now);
     $core->revokeToken('1',hash('sha256',$revoked['access_token']),$now);
     $otherToken=$core->mint((string)$other,[$siteB['id']],['mcp:read'],$now);
@@ -129,8 +131,23 @@ if($phase==='seed') {
     cloudUpgradeAssert(file_put_contents($snapshot,Security::canonical($state))!==false,'Cannot persist private fixture snapshot');
 } else {
     $state=json_decode(file_get_contents($snapshot),true,512,JSON_THROW_ON_ERROR);
-    cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeRows($store),$state['rows']),'Retained ledger/site/OAuth rows changed');
-    cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeOptions(),$state['options']),'Gateway keys/settings or sentinel changed');
+    $retained=['balances','sites','tokens','requests','batch_steps','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access'];
+    // The daily cutover changes the account and audit rows only; all retained
+    // payment-independent ledgers, credentials, sites and OAuth rows stay exact.
+    cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeRows($store,$retained),array_intersect_key($state['rows'],array_flip($retained))),'Retained ledger/site/OAuth rows changed');
+    if(WPAI_CLOUD_VERSION==='0.3.11') {
+        cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeRows($store),$state['rows']),'Restored historical source altered retained rows');
+    }
+    $actualOptions=cloudUpgradeOptions();
+    if(WPAI_CLOUD_VERSION!=='0.3.11') {
+        $cutoverOption=null;
+        foreach($actualOptions as $option) {
+            if(($option['option_name']??'')==='wpai_gateway_quota_cutover_v1') $cutoverOption=(string)($option['option_value']??'');
+        }
+        $actualOptions=array_values(array_filter($actualOptions,static fn($option)=>($option['option_name']??'')!=='wpai_gateway_quota_cutover_v1'));
+        cloudUpgradeAssert($cutoverOption==='1','Daily quota cutover marker was not persisted exactly once');
+    }
+    cloudUpgradeAssert(cloudUpgradeSame($actualOptions,$state['options']),'Gateway keys/settings or sentinel changed outside the additive quota cutover marker');
     $actualTables=$wpdb->get_col('SHOW TABLES');
     $expectedTables=$state['tables'];
     if ($expectBatch) {
@@ -206,7 +223,9 @@ if (method_exists($store,'ensureSseQueueSchema')) {
     @unlink($exportPath);
 
 cloudUpgradeAssert(hash_equals($state['keys_sha256'],hash('sha256',$keys['vault'].$keys['signing'])) && Settings::keys()===$keys,'Vault/signing key changed');
-cloudUpgradeAssert(cloudUpgradeSame(cloudUpgradeOptions(),$state['options']),'Repeated key preparation rewrote wrapped keys');
+$repeatOptions=cloudUpgradeOptions();
+if(WPAI_CLOUD_VERSION!=='0.3.11') $repeatOptions=array_values(array_filter($repeatOptions,static fn($option)=>($option['option_name']??'')!=='wpai_gateway_quota_cutover_v1'));
+cloudUpgradeAssert(cloudUpgradeSame($repeatOptions,$state['options']),'Repeated key preparation rewrote wrapped keys or other gateway settings');
 $keyAutoload=$wpdb->get_var("SELECT autoload FROM $wpdb->options WHERE option_name='wpai_gateway_wrapped_keys_v1'");
 cloudUpgradeAssert(in_array($keyAutoload,['no','off','auto-off'],true),'Wrapped keys became autoloaded');
 cloudUpgradeAssert($signer->publicKey()===$state['public_key'],'Signing identity changed');
@@ -230,9 +249,24 @@ $expectedUsage=$state['usage'];
 // byte-equivalent.
 $batchAvailable=$currentUsage['batch_available']??null;
 unset($currentUsage['policy_version'],$currentUsage['batch_available'],$expectedUsage['policy_version'],$expectedUsage['batch_available']);
-cloudUpgradeAssert($transport->executions===0 && cloudUpgradeSame($currentUsage,$expectedUsage),'Uncertain replay executed or altered quota/terms');
+if(WPAI_CLOUD_VERSION==='0.3.11') {
+    cloudUpgradeAssert($transport->executions===0 && cloudUpgradeSame($currentUsage,$expectedUsage),'Restored historical source altered quota/terms');
+} else {
+    // The retired monthly account is transferred once to the final daily
+    // catalogue. Historical monthly balances remain unchanged for audit.
+    $historicBalance=$store->row('SELECT used,reserved FROM '.$store->table('balances').' WHERE owner=? AND period=?',['1',(string)$expectedUsage['period']]);
+    cloudUpgradeAssert($historicBalance!==null && (int)$historicBalance['used']===(int)$expectedUsage['used'] && (int)$historicBalance['reserved']===(int)$expectedUsage['reserved'],'Cutover rewrote the historical monthly balance');
+    cloudUpgradeAssert($currentUsage['plan']==='pro' && $currentUsage['quota_scheme']==='tariffs_v3' && $currentUsage['period_kind']==='calendar_day_utc' && $currentUsage['legacy_terms']===false,'Retired account was not transferred to the final daily catalogue');
+    cloudUpgradeAssert($currentUsage['limit']===2000 && $currentUsage['used']===0 && $currentUsage['reserved']===0 && $currentUsage['remaining']===2000,'Cutover did not start the final PRO daily window');
+    foreach(['period','period_start_utc','period_end_utc','next_period_at','quota_scheme','period_kind','legacy_terms','limit','used','reserved','remaining'] as $key) unset($currentUsage[$key],$expectedUsage[$key]);
+    cloudUpgradeAssert($transport->executions===0 && cloudUpgradeSame($currentUsage,$expectedUsage),'Cutover altered unrelated usage metadata');
+}
+cloudUpgradeAssert($transport->executions===0,'Uncertain replay executed');
 cloudUpgradeAssert($batchAvailable===$expectBatch,'Usage Batch availability does not match the installed source');
-$policyPrefix=WPAI_CLOUD_VERSION==='0.3.11'?'tariffs-v2-':'tariffs-v3-';
+$cutoverAccount=$store->row('SELECT plan,quota_scheme FROM '.$store->table('accounts')." WHERE owner='1'");
+if(WPAI_CLOUD_VERSION==='0.3.11') cloudUpgradeAssert($cutoverAccount['plan']==='pro' && $cutoverAccount['quota_scheme']==='legacy_monthly_v1','Historical source altered the retired account');
+else cloudUpgradeAssert($cutoverAccount['plan']==='pro' && $cutoverAccount['quota_scheme']==='tariffs_v3','Retired account was not transferred once');
+$policyPrefix=WPAI_CLOUD_VERSION==='0.3.11'?'tariffs-v2-':'tariffs-v5-';
 cloudUpgradeAssert(str_starts_with($core->usage('1',$state['now'])['policy_version'],$policyPrefix),'Quota policy version does not match the installed source');
 $health=rest_do_request(new WP_REST_Request('GET','/wpai-cloud/v1/health'))->get_data();
 cloudUpgradeAssert($health['configured']===true && $health['oauth']===true && $health['version']===WPAI_CLOUD_VERSION,'Health REST handler failed');
@@ -242,11 +276,11 @@ $sites=cloudUpgradeMcp($state['token']['access_token'],'tools/call',['name'=>'cl
 $list=json_decode($sites->get_data()['result']['content'][0]['text']??'null',true);
 cloudUpgradeAssert($sites->get_status()===200 && is_array($list) && array_column($list,'id')===[$state['site']['id']],'MCP site consent isolation failed');
 if(in_array($phase,['repeat','upgraded-again'],true)) {
-    $refresh=['grant_type'=>'refresh_token','client_id'=>$state['client']['client_id'],'resource'=>Settings::endpoint(),'refresh_token'=>$state['token']['refresh_token']];
+    $refresh=['grant_type'=>'refresh_token','client_id'=>$state['client']['client_id'],'resource'=>Settings::endpoint(),'refresh_token'=>'synthetic-legacy-refresh-token'];
     $rejected=cloudUpgradeRest('/wpai-cloud/v1/oauth/token',$refresh,true);
     cloudUpgradeAssert($rejected->get_status()===400 && ($rejected->get_data()['error']??'')==='unsupported_grant_type','Legacy refresh token remained usable after strict OAuth cutover');
     cloudUpgradeAssert(WordPress::authenticateHeader('Bearer '.$state['token']['access_token'])['site_ids']===[$state['site']['id']],'Rejecting a legacy refresh token invalidated the still-live access token');
     update_option('wpai_cloud_upgrade_sentinel','after-upgrade',false);
     $store->execute('UPDATE '.$store->table('balances')." SET used=used+11 WHERE owner='1'");
 }
-echo 'PASS: Cloud '.$phase.' wrapped keys/signature, site/OAuth isolation, REST/MCP, legacy quota, cached receipt and uncertain replay'."\n";
+echo 'PASS: Cloud '.$phase.' wrapped keys/signature, site/OAuth isolation, REST/MCP, daily quota cutover, cached receipt and uncertain replay'."\n";

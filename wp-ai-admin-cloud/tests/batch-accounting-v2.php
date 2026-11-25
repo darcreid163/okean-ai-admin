@@ -19,7 +19,7 @@ try {
 $transport=new FakeTransport();
 $policy=json_decode((string)file_get_contents(dirname(__DIR__).'/config/plans.json'),true,32,JSON_THROW_ON_ERROR);
 batchCheck(($policy['batch']??null)===BatchAccounting::POLICY,'Shipped catalogue does not enable Batch');
-$policy['plans']['free']=4;
+$policy['schemes'][QuotaPolicy::TARGET]['plans']['free']=4;
 $policy['batch']=BatchAccounting::POLICY;QuotaPolicy::validate($policy);
 $pair=sodium_crypto_sign_keypair();
 $core=new Core($store,new Vault(str_repeat('k',32)),$transport,$policy,new Signer(sodium_crypto_sign_secretkey($pair)));
@@ -102,5 +102,5 @@ batchReject(fn()=>BatchAccounting::items([['id'=>'one','tool'=>'woocommerce_upda
 echo 'PASS '.$checks.' Batch v2 receipt/idempotency/tenant/uncertain/quota assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
 } finally {
     foreach(['audit','batch_steps','requests','balances','oauth_access','oauth_refresh','oauth_grants','oauth_codes','oauth_clients','oauth_rate','tokens','sites','accounts','rate'] as $name) $store->execute('DROP TABLE IF EXISTS '.$store->table($name));
-    if(!getenv('TEST_MYSQL_DSN')) foreach([$database,$database.'-wal',$database.'-shm'] as $file)if(is_file($file))unlink($file);
+    if(!getenv('TEST_MYSQL_DSN')) { unset($store); $pdo=null; foreach([$database,$database.'-wal',$database.'-shm'] as $file)if(is_file($file))@unlink($file); }
 }

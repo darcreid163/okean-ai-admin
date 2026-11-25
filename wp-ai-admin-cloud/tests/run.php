@@ -103,8 +103,8 @@ $audit=$store->row('SELECT owner,site_id,event,request_key FROM '.$store->table(
 check($audit!==null && $audit['site_id']==='admin:9001' && $audit['request_key']===$period,'Manual daily reset audit is incomplete');
 rejects(fn()=>$core->resetDailyQuota('9001','missing-account',$now),'account_unavailable');
 $core->ensureAccount('legacy-reset');
-$core->setPlan('operator','legacy-reset','free',$now,WPAICloudGateway\QuotaPolicy::LEGACY);
-rejects(fn()=>$core->resetDailyQuota('9001','legacy-reset',$now),'daily_quota_reset_not_supported');
+$legacyReset=$core->resetDailyQuota('9001','legacy-reset',$now);
+check($legacyReset['reset']===true && $legacyReset['quota_scheme']===WPAICloudGateway\QuotaPolicy::TARGET && $legacyReset['limit']===100,'Retired account must support owner daily reset after cutover');
 rejects(fn()=>$core->setPlan('operator','1','unlimited',$now),'unknown_plan');
 $core->revokeToken('1',hash('sha256',$read['access_token']),$now);
 rejects(fn()=>$core->authenticate($read['access_token'],$now),'invalid_or_expired_token');
@@ -202,8 +202,10 @@ $core->revokeToken('recovery',hash('sha256',$recoverToken['access_token']),$now)
 rejects(fn()=>$core->call($recoverActor,$recoverSite['id'],'operation_get_receipt',[],'revoked-free',$now),'invalid_or_expired_token');
 
 // Ten independent processes compete for three slots using the same real DB and production transaction code.
-$core->ensureAccount('parallel'); $pSite=$core->connect('parallel','https://parallel.example.com','fixture-site-admin-token-parallel',$now);
-$pToken=$core->mint('parallel',[$pSite['id']],['mcp:read'],$now);
+// The account entitlement must be issued under the same three-slot policy as each worker.
+$parallelCore=fixtureCore($store,$transport,3);
+$parallelCore->ensureAccount('parallel'); $pSite=$parallelCore->connect('parallel','https://parallel.example.com','fixture-site-admin-token-parallel',$now);
+$pToken=$parallelCore->mint('parallel',[$pSite['id']],['mcp:read'],$now);
 $extensionDir=(string)ini_get('extension_dir');
 // Windows distributes php.ini with a relative extension_dir. Worker processes
 // change cwd, so resolve it once against the PHP binary they are launched with.
@@ -405,5 +407,7 @@ $stillActiveOtherTenant=$core->authenticate($ownerTwoToken['access_token'],$now+
 $oauth->binding($stillActiveOtherTenant,$now+10);
 check($stillActiveOtherTenant['owner']==='2' && $stillActiveOtherTenant['site_ids']===[$other['id']],'Suspending one owner affected another tenant');
 
+require __DIR__.'/robokassa-payments.php';
+runRobokassaPaymentsTests($store,$core);
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
-if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
+if (!getenv('TEST_MYSQL_DSN')) { unset($store); $core=null; foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) @unlink($f); }
