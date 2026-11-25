@@ -97,7 +97,7 @@ try {
     $legacyLink=$store->row('SELECT license_id FROM '.$store->table('accounts').' WHERE owner=?',['lic-legacy-compatible'])['license_id'];
     licCheck($legacyLink!==null,'Compatible legacy plan did not receive an automatic licence');
     $legacyLicence=licFind($core->allLicenses(),(string)$legacyLink);
-    licCheck($legacyLicence['plan']==='pro'&&$legacyLicence['quota_scheme']===QuotaPolicy::LEGACY,'Legacy automatic licence changed the plan');
+    licCheck($legacyLicence['plan']==='pro'&&$legacyLicence['quota_scheme']===QuotaPolicy::TARGET,'Legacy automatic licence was not migrated to the final daily scheme');
     $core->ensureAccount('lic-scheme-default');
     $core->setPlan($operator,'lic-scheme-default','free',$now,QuotaPolicy::TARGET);
     $schemeDefault=$core->issueLicense($operator,'lic-scheme-default','pro',$now);
