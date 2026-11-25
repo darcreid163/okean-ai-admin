@@ -1,14 +1,24 @@
-# Repository boundaries — reviewed 2026-11-18
+# Repository boundaries — current state 2026-11-24
 
-| Repository | Current access | Role |
-|---|---|---|
-| `darcreid163/okean-ai-admin` | PUBLIC | Unified Native 2.1.18 / Cloud 0.3.13-dev candidate, hosted CI; public source exposure is intentional and must not contain secrets |
-| `darcreid163/wp-ai-admin` | PUBLIC | Native-only public release destination, recovery PR #21 |
-| `darcreid163/wp-ai-admin-cloud-core` | PRIVATE | Final private Cloud-only release destination, recovery PR #12 |
-| `darcreid163/universal-mcp-platform` | PRIVATE | Separate product, no release dependency |
+The current authority is [REPOSITORY-RECONCILIATION-2026-11-24.md](REPOSITORY-RECONCILIATION-2026-11-24.md). This file is a short policy summary.
 
-This public combined source **does disclose** Cloud Core logic and implementation details. The repository has not been proven secret-free by a complete history/artifact scan. Pattern searches on the indexed default-branch code found no matches for selected common secret markers, but that is not a clean bill of health. Any suspected credential must be revoked/rotated first. Later visibility changes cannot retract clones, public forks, cached commit views, PR references or downloaded artifacts.
+| Repository | Visibility | Role | Current rule |
+|---|---|---|---|
+| `darcreid163/okean-ai-admin` | PRIVATE | Canonical Native + Cloud development monorepo | All active WP AI Admin development and integration PRs target this repository |
+| `darcreid163/wp-ai-admin` | PUBLIC | Historical Native-only publication snapshot (README reports 2.1.16) | Do not use as development source; export only after release qualification |
+| `darcreid163/wp-ai-admin-cloud-core` | PRIVATE | Historical Cloud-only snapshot (README describes 0.3.6) | Do not use as development source; export only after release qualification |
+| `darcreid163/universal-mcp-platform` | PRIVATE | Independent future product | Keep separate; no source synchronization |
+| `darcreid163/WP-AI-ADMIN-TEST` | PRIVATE | Robokassa test-kit artifacts | Test evidence only; no production data or credentials |
 
-Current Cloud candidate is `0.3.13-dev` under `wp-ai-admin-cloud`, derived from the SHA-pinned 0.3.11 recovery archive. The recovery hash gate now explicitly allows three changed historical paths (Core, Gateway, bootstrap), while all 17 other historical files remain SHA-identical. Added candidate modules are qualified separately. Historic duplicate pilots 0.1.0, 0.3.6 and committed ZIPs are removed in the branch working tree, not purged from Git history.
+## Release export boundary
 
-**Build/export fences:** separate PHP/WordPress/Gateway CI; only Native files in Native ZIP; Cloud-to-private export only after staging passes; no auto-deploy/no automatic payment. No release or branch cleanup without checking unique work. Secrets and production data must not enter public Actions logs. Historical branches are retained until each branch's unique commits, associated PR status and release evidence are reviewed; do not mass-delete by age.
+- Native distribution contains only Native plugin files and its approved public documentation.
+- Cloud distribution is exported separately to the private Cloud repository.
+- Do not copy branches or files between repositories by name/version alone. Compare source, tests, contracts and exact commit SHAs.
+- Do not delete old repositories, branches, PRs, tags or history as a cleanup shortcut.
+- Do not change repository visibility as part of code reconciliation.
+- Publicly disclosed Git history cannot be made private retroactively.
+
+## Integrated release gate
+
+The Native 2.1.18 integration and lifecycle PRs, Robokassa/licence delivery stack, tariff contract, OAuth policy, PHP file-write restrictions, both CI suites and artifact install tests must be reconciled on one exact SHA before exporting either release repository.
