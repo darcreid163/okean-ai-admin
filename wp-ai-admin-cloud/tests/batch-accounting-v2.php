@@ -102,5 +102,5 @@ batchReject(fn()=>BatchAccounting::items([['id'=>'one','tool'=>'woocommerce_upda
 echo 'PASS '.$checks.' Batch v2 receipt/idempotency/tenant/uncertain/quota assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
 } finally {
     foreach(['audit','batch_steps','requests','balances','oauth_access','oauth_refresh','oauth_grants','oauth_codes','oauth_clients','oauth_rate','tokens','sites','accounts','rate'] as $name) $store->execute('DROP TABLE IF EXISTS '.$store->table($name));
-    if(!getenv('TEST_MYSQL_DSN')) foreach([$database,$database.'-wal',$database.'-shm'] as $file)if(is_file($file))unlink($file);
+    if(!getenv('TEST_MYSQL_DSN')) { unset($store); $pdo=null; foreach([$database,$database.'-wal',$database.'-shm'] as $file)if(is_file($file))@unlink($file); }
 }
