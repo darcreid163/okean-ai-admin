@@ -8,7 +8,18 @@ Current candidate (unreleased):
 - WP AI Admin native: **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`)
 - WP AI Admin Cloud Core: **0.3.13-dev** (Gateway schema 4, derived from the recovered 0.3.11 baseline)
 
-This candidate is not an approved production release. The current Draft integration is PR [#232](https://github.com/darcreid163/okean-ai-admin/pull/232). Native 2.1.18, Cloud Store/key-preservation changes (#226/#224) and SSE close-race hardening are integrated in the release branch; exact-head CI passed at `5ae4e9d9f478e289b7cae954d94de5350b3b61ad` (Native [44478492524](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492524), Cloud [44478492520](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492520)); the all-ref secret history scan [44478492445](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492445) also passed after reviewing 1,855 commits. These are CI results for the current candidate only; the Actions artifacts are not signed public releases. External OAuth expiry, two-owner acceptance, staging and artifact freeze remain outstanding. See [#40](https://github.com/darcreid163/okean-ai-admin/issues/40) and [the 18 November release control](docs/RELEASE-CONTROL-2026-11-18.md).
+This candidate is not an approved production release. The active Draft integration is PR [#253](https://github.com/darcreid163/okean-ai-admin/pull/253), branch `codex/robokassa-paid-entitlements-reconciled`, based on `main`. Its recorded HEAD is `ea7d9c89d308694e025a3419c66d62c334419c39`. PR #232 and the CI evidence recorded for it are historical and are not the current release authority.
+
+The active PR consolidates the approved daily tariff catalogue, Robokassa settlement and refund lifecycle, licence issuance/delivery, reconciliation, HPOS compatibility, OAuth refresh-grant restrictions and deterministic Native packaging. The implementation is present, but the real disposable-shop payment/email/activation E2E and other manual release gates below remain outstanding. Automated test doubles do not establish live gateway qualification.
+
+Exact-HEAD CI for `ea7d9c89d308694e025a3419c66d62c334419c39` completed successfully on 25 November 2026:
+- Native validation [45593426866](https://github.com/darcreid163/okean-ai-admin/actions/runs/45593426866): **SUCCESS**.
+- Cloud Core validation [45593426801](https://github.com/darcreid163/okean-ai-admin/actions/runs/45593426801): **SUCCESS**.
+- Secret history scan [45593426752](https://github.com/darcreid163/okean-ai-admin/actions/runs/45593426752): **SUCCESS**.
+
+These runs qualify the exact PR #253 HEAD for the configured CI suites only. They do not constitute a completed penetration test, independent security review, real Robokassa/email-provider E2E, production approval or public release. The PR remains Draft/open/unmerged. The former PR #232 reference and its earlier CI run IDs are retained only in Git history, not as current candidate evidence.
+
+The previous release-control documents [#40](https://github.com/darcreid163/okean-ai-admin/issues/40), [the 18 November release control](docs/RELEASE-CONTROL-2026-11-18.md) and [the documentation index](docs/README.md) are supporting/historical records; where their candidate or CI details differ, the current PR #253 description and exact-HEAD workflow runs above are authoritative.
 
 Quota and per-object Batch accounting are implemented in Cloud Core, but production activation/account migration is a separate gate. Automatic money debits and auto-renewal remain disabled. Do not represent this candidate as a self-service paid service: payment-to-license fulfillment is not qualified.
 
