@@ -509,12 +509,14 @@ class OAI_REST {
  }
  public static function site(){ $theme=wp_get_theme(); return array('name'=>get_bloginfo('name'),'description'=>get_bloginfo('description'),'url'=>home_url('/'),'wp_version'=>get_bloginfo('version'),'php_version'=>PHP_VERSION,'theme'=>$theme->get('Name').' '.$theme->get('Version'),'woocommerce'=>class_exists('WooCommerce'),'elementor'=>defined('ELEMENTOR_VERSION')?ELEMENTOR_VERSION:null,'memory_limit'=>ini_get('memory_limit')); }
  public static function plugins(){ require_once ABSPATH.'wp-admin/includes/plugin.php'; $out=array(); foreach(get_plugins() as $file=>$p){$out[]=array('plugin'=>$file,'name'=>$p['Name'],'version'=>$p['Version'],'active'=>is_plugin_active($file));} return $out; }
+ private static function redact_elementor_data($data){return OAI_Read::option_value('_elementor_data',$data);}
  private static function elementor_meta($id){
   $data=get_post_meta($id,'_elementor_data',true); $edit=get_post_meta($id,'_elementor_edit_mode',true); $template=get_post_meta($id,'_elementor_template_type',true);
   $raw=is_string($data)?$data:wp_json_encode($data); $decoded=null; $valid=false; $nodes=0; $widget_types=array();
+  $redacted=false;
   if($raw!==''){ $decoded=json_decode($raw,true); $valid=(json_last_error()===JSON_ERROR_NONE && is_array($decoded)); }
-  if($valid){ $walk=function($node) use (&$walk,&$nodes,&$widget_types){ if(!is_array($node))return; if(isset($node['id']))$nodes++; if(isset($node['widgetType'])){$t=(string)$node['widgetType']; if(!isset($widget_types[$t]))$widget_types[$t]=0; $widget_types[$t]++;} foreach($node as $v){if(is_array($v))$walk($v);} }; $walk($decoded); }
-  return array('elementor_data_present'=>$raw!=='','elementor_data_bytes'=>strlen($raw),'elementor_data_valid_json'=>$valid,'elementor_edit_mode'=>$edit,'elementor_template_type'=>$template,'elementor_node_count'=>$nodes,'elementor_widget_types'=>$widget_types,'elementor_data'=>$decoded);
+  if($valid){ $safe=self::redact_elementor_data($decoded);$decoded=$safe['value'];$redacted=$safe['redacted'];$walk=function($node) use (&$walk,&$nodes,&$widget_types){ if(!is_array($node))return; if(isset($node['id']))$nodes++; if(isset($node['widgetType'])){$t=(string)$node['widgetType']; if(!isset($widget_types[$t]))$widget_types[$t]=0; $widget_types[$t]++;} foreach($node as $v){if(is_array($v))$walk($v);} }; $walk($decoded); }
+  return array('elementor_data_present'=>$raw!=='','elementor_data_bytes'=>strlen($raw),'elementor_data_valid_json'=>$valid,'elementor_edit_mode'=>$edit,'elementor_template_type'=>$template,'elementor_node_count'=>$nodes,'elementor_widget_types'=>$widget_types,'elementor_data_redacted'=>$redacted,'elementor_data'=>$decoded);
  }
  private static function content_row($p,$mode='summary',$opts=array()){
   $a=array('id'=>$p->ID,'type'=>$p->post_type,'status'=>$p->post_status,'title'=>get_the_title($p),'slug'=>$p->post_name,'modified'=>$p->post_modified,'permalink'=>get_permalink($p));
@@ -539,6 +541,7 @@ class OAI_REST {
   $id=absint($req['id']); $p=get_post($id); if(!$p)return new WP_Error('oai_not_found','Content not found',array('status'=>404));
   $data=get_post_meta($id,'_elementor_data',true); $raw=is_string($data)?$data:wp_json_encode($data); $decoded=json_decode((string)$raw,true);
   if(json_last_error()!==JSON_ERROR_NONE || !is_array($decoded))return new WP_Error('oai_elementor_data','Elementor data is missing or invalid',array('status'=>404));
+  $decoded=self::redact_elementor_data($decoded)['value'];
   $find=(string)$req->get_param('find'); $class=(string)$req->get_param('class'); $widget=(string)$req->get_param('widget'); $limit=min(50,max(1,absint($req->get_param('limit')?:10)));
   if($find==='' && $class==='' && $widget==='')return new WP_Error('oai_query','Specify find, class or widget',array('status'=>400));
   $matches=array();
@@ -620,6 +623,8 @@ class OAI_REST {
   $id=absint($req['id']); $widget_id=sanitize_text_field((string)$req['widget_id']); $p=get_post($id); if(!$p)return new WP_Error('oai_not_found','Content not found',array('status'=>404));
   $data=get_post_meta($id,'_elementor_data',true); $raw=is_string($data)?$data:wp_json_encode($data); $decoded=json_decode((string)$raw,true);
   if(json_last_error()!==JSON_ERROR_NONE || !is_array($decoded))return new WP_Error('oai_elementor_data','Elementor data is missing or invalid',array('status'=>404));
+  // Keep the full tree internal; only the settings object crosses this read boundary.
+
   $found=null;
   $walk=function($node,$path=array(),$ancestors=array()) use (&$walk,&$found,$widget_id){
    if($found!==null || !is_array($node))return;
@@ -631,6 +636,7 @@ class OAI_REST {
   }; $walk($decoded);
   if($found===null)return new WP_Error('oai_elementor_node','Elementor node not found',array('status'=>404));
   $node=$found['node']; $settings=isset($node['settings'])&&is_array($node['settings'])?$node['settings']:array();
+  $safe_settings=OAI_Read::option_value('_elementor_settings',$settings);$settings=$safe_settings['value'];
   $html=isset($settings['html'])?(string)$settings['html']:'';
   $view=sanitize_key((string)($req->get_param('view')?:'full'));
   if(!in_array($view,array('full','outline','html_range'),true))return new WP_Error('oai_elementor_view','Invalid widget view',array('status'=>400));
@@ -647,7 +653,7 @@ class OAI_REST {
    $max=max(100,min(20000,absint($req->get_param('max_chars')?:12000)));
    $slice=implode("\n",array_slice($lines,$start-1,$end-$start+1)); $base['html']=mb_substr($slice,0,$max); $base['truncated']=mb_strlen($slice)>$max; $base['total_lines']=$total; $base['start_line']=$start; $base['end_line']=min($end,$total);return $base;
   }
-  return array('id'=>$id,'type'=>$p->post_type,'title'=>get_the_title($p),'permalink'=>get_permalink($p),'widget_id'=>$widget_id,'path'=>$found['path'],'ancestors'=>$found['ancestors'],'elType'=>$node['elType']??null,'widgetType'=>$node['widgetType']??null,'settings'=>$settings,'html'=>$html,'html_bytes'=>strlen($html));
+  return array('id'=>$id,'type'=>$p->post_type,'title'=>get_the_title($p),'permalink'=>get_permalink($p),'widget_id'=>$widget_id,'path'=>$found['path'],'ancestors'=>$found['ancestors'],'elType'=>$node['elType']??null,'widgetType'=>$node['widgetType']??null,'settings'=>$settings,'settings_redacted'=>$safe_settings['redacted'],'html'=>$html,'html_bytes'=>strlen($html));
  }
  public static function content_meta($req){$id=absint($req['id']); $p=get_post($id); if(!$p)return new WP_Error('oai_not_found','Content not found',array('status'=>404)); $em=self::elementor_meta($id); unset($em['elementor_data']); $all=get_post_meta($id); $elementor_related=array(); foreach($all as $k=>$v){if(stripos($k,'elementor')!==false)$elementor_related[$k]=array('present'=>true,'bytes'=>strlen(wp_json_encode($v)));} return array('id'=>$id,'type'=>$p->post_type,'title'=>get_the_title($p),'permalink'=>get_permalink($p),'elementor'=>$em,'elementor_related_meta'=>$elementor_related,'all_meta_keys'=>array_keys($all));}
  public static function preview($req){
