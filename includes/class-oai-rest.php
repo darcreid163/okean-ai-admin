@@ -541,7 +541,7 @@ class OAI_REST {
   $id=absint($req['id']); $p=get_post($id); if(!$p)return new WP_Error('oai_not_found','Content not found',array('status'=>404));
   $data=get_post_meta($id,'_elementor_data',true); $raw=is_string($data)?$data:wp_json_encode($data); $decoded=json_decode((string)$raw,true);
   if(json_last_error()!==JSON_ERROR_NONE || !is_array($decoded))return new WP_Error('oai_elementor_data','Elementor data is missing or invalid',array('status'=>404));
-  $decoded=self::redact_elementor_data($decoded)['value'];
+  $safe_data=self::redact_elementor_data($decoded);$decoded=$safe_data['value'];
   $find=(string)$req->get_param('find'); $class=(string)$req->get_param('class'); $widget=(string)$req->get_param('widget'); $limit=min(50,max(1,absint($req->get_param('limit')?:10)));
   if($find==='' && $class==='' && $widget==='')return new WP_Error('oai_query','Specify find, class or widget',array('status'=>400));
   $matches=array();
@@ -587,7 +587,7 @@ class OAI_REST {
     }
   }
   if($content_matches)$matches=array_merge($matches,$content_matches);
-  return array('id'=>$id,'type'=>$p->post_type,'title'=>get_the_title($p),'permalink'=>get_permalink($p),'query'=>array('find'=>$find,'class'=>$class,'widget'=>$widget,'limit'=>$limit),'elementor_data_bytes'=>strlen((string)$raw),'matches_found'=>count($matches),'matches'=>$matches,'search_fallback_used'=>!empty($content_matches));
+  return array('id'=>$id,'type'=>$p->post_type,'title'=>get_the_title($p),'permalink'=>get_permalink($p),'query'=>array('find'=>$find,'class'=>$class,'widget'=>$widget,'limit'=>$limit),'elementor_data_bytes'=>strlen((string)$raw),'elementor_data_redacted'=>$safe_data['redacted'],'matches_found'=>count($matches),'matches'=>$matches,'search_fallback_used'=>!empty($content_matches));
  }
  public static function elementor_tree($req){
   $id=absint($req['id']); $p=get_post($id); if(!$p)return new WP_Error('oai_not_found','Content not found',array('status'=>404));
