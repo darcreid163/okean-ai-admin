@@ -1,16 +1,14 @@
 # WP AI Admin — единый основной репозиторий разработки
 
-**Current integrated candidate:** Native **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`) + Cloud Core **0.3.13-dev** (Gateway Store schema 4, recovered 0.3.11 baseline). The current combined candidate, including Native 2.1.18, Cloud Store atomic SSE/index hardening, Cloud key preservation and SSE close-race protection, passed exact-head Native and Cloud CI on exact current candidate head `8b5e3c944f2e5fb56b1d7bbb0494f025a8742000` (Native run [44299756727](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756727), Cloud run [44299756819](https://github.com/darcreid163/okean-ai-admin/actions/runs/44299756819)). Both workflows passed. Native artifact SHA-256: `ec99ac2065b9dd6a74184e7108d28b934559df8df18562668991558c4881dd94`; Cloud artifact SHA-256: `c56b2a80436250fa1aaa27d1380212aac62f49ed7e3d4377fad9a1a6de6f2c7c`. These are expiring Actions artifacts, not signed releases. PR [#232](https://github.com/darcreid163/okean-ai-admin/pull/232) remains Draft and is not merged. **This is not an approved production release.**
+**Current source status (2026-11-24):** this repository is PRIVATE and is the sole development monorepo. `main` currently contains Native **2.1.17** (DB schema 24) + Cloud Core **0.3.13-dev**. Native **2.1.18** and the Robokassa/one-time licence-delivery stack remain in open dependent PRs; no single integrated release candidate has passed final combined CI. The installed site reports Native **2.1.18** + Cloud Core **0.3.13-dev**, but installed file hashes have not been compared with repository artifacts. See the [current repository reconciliation](docs/REPOSITORY-RECONCILIATION-2026-11-24.md).
 
-**Current release blockers and authoritative status:** [Release Control — 18 November 2026](docs/RELEASE-CONTROL-2026-11-18.md) and [canonical tracker #40](https://github.com/darcreid163/okean-ai-admin/issues/40). [Documentation index](docs/README.md). [Repository security audit](docs/REPOSITORY-SECURITY-AUDIT-2026-11-18.md) records current public visibility and scan limitations. Cloud Store and key-preservation work are integrated into PR #232; source PRs #226/#224 are superseded, not merged. Live OAuth expiry, two-owner isolation, staging acceptance and artifact freeze are still required.
-
-[Текущий контракт подключения](docs/CHATGPT-CONNECTION-CONTRACT-ADDENDUM-2026-11-18.md) — дополнение для Native 2.1.18 / Cloud 0.3.13-dev. Исторические аудиты и документы с датами сохранены как архивные свидетельства, а не как актуальный статус.  [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). [Актуальная готовность планов, квот и лицензий на 16 ноября](docs/BETA-READINESS-2026-11-16.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
+[Таблица возможностей Native и Cloud на 23 октября](docs/CAPABILITIES-2026-10-23.md) — реализация, новые функции и условия установки. [Что осталось до установки на рабочие сайты](docs/PRE-INSTALL-CHECKLIST-2026-10-23.md). [Актуальная готовность планов, квот и лицензий на 16 ноября](docs/BETA-READINESS-2026-11-16.md). Актуальный контроль выпуска: [#40](https://github.com/darcreid163/okean-ai-admin/issues/40).
 
 ## Один основной репозиторий до завершения проекта
 
-As explicitly directed by the maintainer, `darcreid163/okean-ai-admin` is the current **PUBLIC** single development repository with GitHub-hosted CI for both Native and Cloud. The current 0.3.11 Cloud source and synthetic tests are included in `wp-ai-admin-cloud/`. Production keys, credentials, accounts, private database snapshots and deployment configuration are prohibited.
+As explicitly directed by the maintainer, `darcreid163/okean-ai-admin` is the current **PRIVATE** single development repository with GitHub-hosted CI for both Native and Cloud. The current Cloud Core 0.3.13-dev source and synthetic tests are included in `wp-ai-admin-cloud/`. Production keys, credentials, accounts, private database snapshots and deployment configuration are prohibited.
 
-**Irreversible visibility warning:** all source committed to a public Git branch is publicly accessible. Making this repository private later does NOT retract clones, forks or historic downloads. This includes the 0.3.11 server algorithms. Treat this as an explicit temporary development exposure, not a secret-preserving mirror.
+**Irreversible visibility warning:** if any historical source or branch was publicly accessible, changing repository visibility does not retract existing clones, forks or downloads. Treat every public historical commit as disclosed; never place secrets or production data in Git history.
 
 ## Target repositories after release qualification
 
@@ -59,11 +57,7 @@ Cloud Gateway applies the same presentation contract to known Native metadata/ev
 
 Historical dated release notes are preserved as references, not active installation instructions.
 
-## Uninstall и сохранность данных
-
-По умолчанию удаление плагина сохраняет локальную историю операций, аудит, OAuth-подключения, pairing и настройки лицензии. На панели WP AI Admin можно отдельно включить **«Разрешить удаление локальных данных при удалении плагина»**. Только при этом явном согласии `uninstall.php` удаляет allowlist таблиц и настроек WP AI Admin. Деактивация и обновление данные не удаляют; страницы, товары, медиафайлы, пользователи и данные других плагинов не затрагиваются. В Multisite согласие проверяется отдельно для каждого сайта.
-
-## Историческая точка проверки (22.10.2026)
+## Historical verification point (22.10.2026 — not current release status)
 
 Основная ветка — `main` этого репозитория. Проверенный при аудите SHA:
 `1fb3f98c1ec87013990e4f35c0c02e8e39c65556`. Native 2.1.17 и кандидат
