@@ -75,7 +75,7 @@ usageCheck(($projection['envelope']['key_id']??null)===$core->signingKeyId(),'Pr
 usageCheck(($projection['site_url']??null)===$homeA&&($projection['site_id']??null)===$siteA['id'],'Projection site binding changed');
 usageCheck($claims['contract_version']===1&&$claims['issuer']==='okean-cloud-gateway'&&$claims['audience']==='wp-ai-admin-native','Projection claims contract changed');
 usageCheck($claims['site_url']===$homeA&&$claims['site_id']===$siteA['id']&&$claims['account_id']==='1','Projection claim binding changed');
-usageCheck($claims['plan']==='free'&&$claims['quota_scheme']==='tariffs_v2'&&$claims['period_kind']==='calendar_day_utc','Projection tariff claims changed');
+usageCheck($claims['plan']==='free'&&$claims['quota_scheme']==='tariffs_v3'&&$claims['period_kind']==='calendar_day_utc','Projection tariff claims changed');
 usageCheck($claims['timezone']==='UTC'&&$claims['period']===gmdate('Y-m-d',$now),'Projection period is not the UTC calendar day');
 usageCheck($claims['issued_at']===$now&&$claims['expires_at']===$now+300,'Projection freshness window changed');
 usageCheck($claims['policy_version']===$policy['version'],'Projection policy version mismatch');
