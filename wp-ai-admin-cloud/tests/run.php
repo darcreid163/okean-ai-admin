@@ -97,14 +97,14 @@ $period=gmdate('Y-m-d',$now);
 $store->execute('UPDATE '.$store->table('balances').' SET used=?,reserved=? WHERE owner=? AND period=?',[7,2,'1',$period]);
 $manualReset=$core->resetDailyQuota('9001','1',$now);
 check($manualReset['reset']===true && $manualReset['previous_used']===7 && $manualReset['used']===0,'Manual daily reset did not clear used units');
-check($manualReset['reserved']===2 && $manualReset['remaining']===98,'Manual daily reset must preserve reservations in remaining quota');
+check($manualReset['reserved']===2 && $manualReset['remaining']===48,'Manual daily reset must preserve reservations in remaining quota');
 check($core->usage('2',$now)['used']===0,'Manual daily reset affected another tenant');
 $audit=$store->row('SELECT owner,site_id,event,request_key FROM '.$store->table('audit').' WHERE owner=? AND event=? ORDER BY created_at DESC LIMIT 1',['1','manual_daily_quota_reset']);
 check($audit!==null && $audit['site_id']==='admin:9001' && $audit['request_key']===$period,'Manual daily reset audit is incomplete');
 rejects(fn()=>$core->resetDailyQuota('9001','missing-account',$now),'account_unavailable');
 $core->ensureAccount('legacy-reset');
-$core->setPlan('operator','legacy-reset','free',$now,WPAICloudGateway\QuotaPolicy::LEGACY);
-rejects(fn()=>$core->resetDailyQuota('9001','legacy-reset',$now),'daily_quota_reset_not_supported');
+$legacyReset=$core->resetDailyQuota('9001','legacy-reset',$now);
+check($legacyReset['reset']===true && $legacyReset['quota_scheme']===WPAICloudGateway\QuotaPolicy::TARGET && $legacyReset['limit']===50,'Retired account must support owner daily reset after cutover');
 rejects(fn()=>$core->setPlan('operator','1','unlimited',$now),'unknown_plan');
 $core->revokeToken('1',hash('sha256',$read['access_token']),$now);
 rejects(fn()=>$core->authenticate($read['access_token'],$now),'invalid_or_expired_token');
@@ -408,4 +408,4 @@ check($stillActiveOtherTenant['owner']==='2' && $stillActiveOtherTenant['site_id
 require __DIR__.'/robokassa-payments.php';
 runRobokassaPaymentsTests($store,$core);
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
-if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
+if (!getenv('TEST_MYSQL_DSN')) { unset($store); $core=null; foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) @unlink($f); }
