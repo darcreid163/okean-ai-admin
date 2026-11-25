@@ -82,3 +82,40 @@ The `secret-history-scan.yml` workflow with Gitleaks exists on the PR #232 integ
 - No merge based only on an earlier green run; checks must match the exact final head SHA.
 - Never copy secrets, payment credentials, customer data or production database snapshots into GitHub.
 - A private visibility setting does not retract any content previously published from a public repository.
+
+
+## Legacy draft PR disposition — checked 2026-11-24
+
+Old open drafts in the split repositories are not automatically part of the canonical release. Keep their history and compare unique changes before closing or porting them.
+
+### Public Native snapshot repository
+
+| PR | Finding | Disposition |
+|---|---|---|
+| #24 — durable Lifecycle principal | The implementation overlaps the canonical monorepo lifecycle line (#235), but the authorization gates are not byte-equivalent: the split draft requires creator/snapshot evidence more broadly, while the monorepo branch has explicit legacy recovery exceptions. Its real-WordPress pairing-rotation test was missing and has been ported to canonical PR #248. | Do not close as a pure duplicate. Review the authorization-gate semantic differences and legacy recovery threat model; retain only the safe policy, then close or archive with an explicit disposition. |
+| #25 — WoodMart Header Builder / mega-menu | Contains a unique adapter not present in the canonical monorepo. It is a feature expansion, not a release blocker. | Defer. Do not merge while the project is in security/QA freeze. Revisit after commercial beta acceptance. |
+| #21 — Native 2.1.17 recovery | Historical recovery snapshot; main monorepo already has the 2.1.17 baseline and newer integration work. | Compare unique file deltas only; do not restore the old snapshot over the canonical tree. |
+| #20 — WooCommerce/Gutenberg test matrix | Main monorepo already contains commerce-block and WooCommerce lifecycle tests. | Compare test coverage and retain only missing assertions; close after parity is proven. |
+| #17 — sole-maintainer release audit | Dated 2026-10-21 and superseded by the 2026-11-24 repository/release reconciliation. | Archive as historical evidence; close after links are preserved. |
+| #6 — Elementor document executor/recovery | Adds substantial document executor, operation-binding, lease and external-editor race code that is not present in the current monorepo baseline. | Do not discard or merge blindly. Review as a separate P0/P1 safety workstream after the current release blockers; port only with a rebase and full regression matrix. |
+| #1 — Native MCP approval regression | Older real-WordPress test additions; coverage must be compared with current Native MCP/lifecycle tests. | Keep pending diff/coverage review; do not merge stale workflow changes wholesale. |
+
+### Private Cloud snapshot repository
+
+| PR | Finding | Disposition |
+|---|---|---|
+| #12 — recovered Cloud Core 0.3.11 archive | Historical recovery artifact; canonical monorepo contains Cloud Core 0.3.13-dev. | Keep as provenance only; never replace the current Cloud tree with 0.3.11. |
+| #8 — billing parity / sole-maintainer audit | Dated 2026-10-21 and superseded by current billing, tariff and release reconciliation. | Archive as historical evidence; close after preserving links. |
+| #14 — repository boundary documentation | New documentation-only PR marking this repository as a historical Cloud snapshot. | Merged to Cloud repository main. Its six PHP jobs remained queued because the configured owner-controlled self-hosted `cloud-core` runner was unavailable; no Cloud code changed. |
+
+### Canonical monorepo security/lifecycle PRs
+
+- PR #246 (repository reconciliation documentation) is merged to `main`.
+- PR #247 (deny server-executable file writes) is merged into the Native lifecycle integration branch, not yet into `main`. Exact-head PHP lint, Gitleaks, Cloud contracts, package builds and all three WordPress smoke profiles passed.
+- PR #247 (PHP executable file-write denial) is merged into the Native lifecycle integration branch; its exact-head PHP lint, Gitleaks, package-install, build, Cloud contracts and all three WordPress smoke profiles passed.\n- PR #235's updated exact head (including #247) passed all 17 non-cancelled checks.\n- PR #248 was closed as a duplicate stacked diff after its base SHA stayed stale. Its test changes were recreated cleanly in PR #250, which contains only the two lifecycle test files; exact-head CI is running. Do not merge #250 until every required job passes.
+- PR #242's previously failed latest-Imagick smoke job was rerun and passed. Retain the original concurrency failure as a flakiness signal for follow-up.
+- PR #237 remains blocked by the MySQL quota race and WordPress upgrade table-set mismatch. PR #245 remains the newer Daily 500 / tariffs-v5 candidate, subject to final owner-approved tariff contract and integration.
+
+### Branch and draft cleanup rule
+
+Do not bulk-delete or force-update old branches. After the corresponding code/test deltas have been compared and either ported or explicitly deferred, close superseded drafts with a short reason and preserve their PR links. Delete branches only after the final integration SHA is accepted and only if no audit, rollback or release provenance depends on them.
