@@ -61,7 +61,7 @@ namespace {
             'id'=>'widget1',
             'elType'=>'widget',
             'widgetType'=>'html',
-            'settings'=>['access_token'=>'elementor-widget-token-should-not-leak','label'=>'Public widget setting','html'=>'<p>Public HTML</p>'],
+            'settings'=>['access_token'=>'elementor-widget-token-should-not-leak','clientSecret'=>'elementor-client-secret-should-not-leak','label'=>'Public widget setting','html'=>'<p>Public HTML</p>'],
         ]],
     ]];
     $GLOBALS['elementor_meta'] = [42 => ['_elementor_data'=>wp_json_encode($tree),'_elementor_edit_mode'=>'builder','_elementor_template_type'=>'wp-page']];
@@ -80,7 +80,7 @@ namespace {
         'Content detail must report that Elementor data was redacted');
 
     $widget = \OAI_REST::elementor_node(new TestRequest(['id'=>42,'widget_id'=>'widget1']));
-    $assert($widget['settings']['access_token']==='[REDACTED]' && $widget['settings']['label']==='Public widget setting',
+    $assert($widget['settings']['access_token']==='[REDACTED]' && $widget['settings']['clientSecret']==='[REDACTED]' && $widget['settings']['label']==='Public widget setting',
         'Elementor widget read must redact nested access tokens');
     $assert($widget['settings_redacted']===true && $widget['html']==='<p>Public HTML</p>',
         'Elementor widget read must report redaction and preserve public HTML');
