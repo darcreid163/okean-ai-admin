@@ -137,7 +137,7 @@ try {
     licRejects(fn()=>$core->issueLicense($operator,$ownerA,'pro',$now,QuotaPolicy::TARGET,['status'=>'suspended']),'invalid_license_status');
     licRejects(fn()=>$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['status'=>'active']),'invalid_license_status');
     licRejects(fn()=>$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['status'=>'bogus']),'invalid_license_status');
-    licRejects(fn()=>$core->issueLicense($operator,$ownerA,'pro',$now,QuotaPolicy::LEGACY,['starts_at'=>$now+3600]),'invalid_license_dates');
+    licRejects(fn()=>$core->issueLicense($operator,$ownerA,'pro',$now,QuotaPolicy::TARGET,['starts_at'=>$now+3600]),'invalid_license_dates');
     $future=$core->issueLicense($operator,null,'pro',$now,QuotaPolicy::TARGET,['starts_at'=>$now+3600]);
     licCheck($future['status']===Licenses::UNUSED,'Future-dated unbound licence must stay unused');
     licRejects(fn()=>$core->activateLicense($ownerA,(string)$future['license_key'],$siteA['id'],$now+2),'license_not_started');
