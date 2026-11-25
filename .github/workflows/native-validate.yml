@@ -55,6 +55,8 @@ jobs:
         run: php tests/elementor-schema-save-gap-repro.php
       - name: Elementor single-source
         run: php tests/elementor-single-source.php
+      - name: Elementor read-boundary secret redaction
+        run: php tests/elementor-read-secret-redaction.php
       - name: WooCommerce stock
         run: php tests/woocommerce-stock-rounding.php
       - name: Option normalization
