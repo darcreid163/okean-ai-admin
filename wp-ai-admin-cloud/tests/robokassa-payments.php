@@ -5,8 +5,8 @@ require_once dirname(__DIR__).'/src/WooCommercePayments.php';
 require_once dirname(__DIR__).'/src/LicenseDelivery.php';
 if (!function_exists('is_email')) { function is_email(string $email): string|false { return filter_var($email,FILTER_VALIDATE_EMAIL)?$email:false; } }
 if (!function_exists('get_user_by')) { function get_user_by(string $field,mixed $value): object|false { return (string)$value==='991'?(object)['ID'=>991,'user_email'=>'buyer@example.com']:false; } }
-$GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>true];
-if (!function_exists('wp_mail')) { function wp_mail($to,$subject,$message,$headers=[]): bool { $GLOBALS['licenseDeliveryMail']=['to'=>$to,'message'=>$message,'sent'=>$GLOBALS['licenseDeliveryMail']['sent']]; return (bool)$GLOBALS['licenseDeliveryMail']['sent']; } }
+$GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>true,'throw'=>false];
+if (!function_exists('wp_mail')) { function wp_mail($to,$subject,$message,$headers=[]): bool { if (!empty($GLOBALS['licenseDeliveryMail']['throw'])) throw new RuntimeException('simulated mail transport failure'); $GLOBALS['licenseDeliveryMail']=['to'=>$to,'message'=>$message,'sent'=>$GLOBALS['licenseDeliveryMail']['sent'],'throw'=>false]; return (bool)$GLOBALS['licenseDeliveryMail']['sent']; } }
 if (!function_exists('home_url')) { function home_url(string $path=''): string { return 'https://wpaiadmin.test'.$path; } }
 require_once dirname(__DIR__).'/src/Reconciliation.php';
 require_once dirname(__DIR__).'/src/ReconciliationRepair.php';
@@ -212,4 +212,34 @@ function runRobokassaPaymentsTests(\WPAICloudGateway\Store $store,\WPAICloudGate
     robokassaPaymentCheck(gmdate('Y-m-d H:i:s',$monthEnd->invoke(null,$jan31,1))==='2027-02-28 12:34:56','month-end calendar clamp');
     $leap=strtotime('2024-02-29T12:00:00Z');
     robokassaPaymentCheck(gmdate('Y-m-d H:i:s',$monthEnd->invoke(null,$leap,12))==='2025-02-28 12:00:00','leap-day annual clamp');
+
+    // Mail transport failures must remain retryable and must never erase the
+    // encrypted delivery copy. Exercise both wp_mail(false) and thrown errors.
+    $mailFailureOrder=new WC_Order($baseOrderId+12,991,[new WC_Order_Item_Product(296,'WPAI-PRO-1M',1499)],1499.0,'RUB','robokassa','rk-op-'.$transactionSeed.'-mail-failure');
+    $mailFailurePayment=\WPAICloudGateway\WooCommercePayments::settle($store,$policy,$mailFailureOrder,new \WPAICloudGateway\Vault(str_repeat('z',32)));
+    $GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>false,'throw'=>false];
+    robokassaPaymentCheck(\WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'wp_mail false must return a retryable failure');
+    $mailFailureRow=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailFailureOrder->get_id()]);
+    robokassaPaymentCheck($mailFailureRow['email_status']==='retry' && (int)$mailFailureRow['email_attempts']===1 && $mailFailureRow['email_ciphertext']!=='','wp_mail false must preserve ciphertext and increment attempts');
+
+    $GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>false,'throw'=>true];
+    try {
+        \WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id());
+        throw new RuntimeException('Robokassa payment test failed: thrown mail transport error was swallowed by LicenseDelivery');
+    } catch (RuntimeException $e) {
+        robokassaPaymentCheck($e->getMessage()==='simulated mail transport failure','transport exception must be rethrown after restoring retry state');
+    }
+    $mailExceptionRow=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailFailureOrder->get_id()]);
+    robokassaPaymentCheck($mailExceptionRow['email_status']==='retry' && (int)$mailExceptionRow['email_attempts']===2 && $mailExceptionRow['email_ciphertext']!=='','transport exception must preserve encrypted key and increment attempts');
+
+    // The twelfth attempt is terminal for automatic delivery; no thirteenth
+    // attempt may consume the retained encrypted copy.
+    $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=?',['retry',11,0,(string)$mailFailureOrder->get_id()]);
+    $GLOBALS['licenseDeliveryMail']=['to'=>null,'message'=>null,'sent'=>false,'throw'=>false];
+    robokassaPaymentCheck(\WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'twelfth failed delivery attempt must return false');
+    $exhaustedRow=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailFailureOrder->get_id()]);
+    robokassaPaymentCheck($exhaustedRow['email_status']==='retry' && (int)$exhaustedRow['email_attempts']===12 && $exhaustedRow['email_ciphertext']!=='','twelfth failure must retain encrypted copy and reach the attempt limit');
+    robokassaPaymentCheck(\WPAICloudGateway\LicenseDelivery::sendEmail($store,$deliveryVault,(string)$mailFailureOrder->get_id())===false,'delivery must refuse a thirteenth attempt');
+    $afterThirteenth=$store->row('SELECT email_attempts FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$mailFailureOrder->get_id()]);
+    robokassaPaymentCheck((int)$afterThirteenth['email_attempts']===12,'attempt count must remain capped at twelve');
 }
