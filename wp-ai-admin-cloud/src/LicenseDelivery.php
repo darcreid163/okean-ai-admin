@@ -74,7 +74,9 @@ final class LicenseDelivery {
             $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_started_at=? WHERE order_id=? AND email_status=?',[
                 'retry',0,$orderId,'sending'
             ]);
-            throw $e;
+            // Mail transport failure is independent of the already-settled payment.
+            // Return a retryable result instead of leaking the exception into settlement.
+            return false;
         }
         if ($sent) {
             $store->execute('UPDATE '.$store->table('license_deliveries').' SET email_ciphertext=?,email_status=?,email_started_at=?,emailed_at=? WHERE order_id=? AND email_status=?',[
