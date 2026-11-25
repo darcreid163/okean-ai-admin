@@ -286,7 +286,7 @@ try {
     set_error_handler(static function(int $severity,string $message) use (&$warnings): bool { $warnings[]=$message; return true; });
     try { $legacyUsage=$legacyCore->usage('lic-legacy-nolink',$now); }
     finally { restore_error_handler(); }
-    licCheck($legacyUsage['plan']==='pro'&&$legacyUsage['limit']===500,'Historical account lost its existing Pro quota while the replacement tariff is pending');
+    licCheck($legacyUsage['plan']==='pro'&&$legacyUsage['limit']===null&&($legacyUsage['quota_status']??null)===QuotaPolicy::QUOTA_PENDING,'Historical Pro plan must be retained while an unapproved replacement quota remains fail-closed');
     licCheck($warnings===[],'Historical account without licence schema emitted warnings: '.implode(' | ',$warnings));
     $legacyLicenceTables=(int)($mysql
         ? $legacyStore->row('SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$legacyPrefix.'licenses'])['n']
