@@ -30,7 +30,7 @@ $GLOBALS['theme_mods'] = array(
     'background_color' => '#ffffff',
     'custom_css' => 'body{color:red}',
     'api_key' => 'sk-should-not-leak',
-    'oauth_settings' => array('access_token' => 'access-token-should-not-leak', 'client_name' => 'Public app'),
+    'oauth_settings' => array('access_token' => 'access-token-should-not-leak', 'pwd' => 'nested-pwd-should-not-leak', 'client_name' => 'Public app'),
     'nav_menu_locations' => array('primary' => 3),
 );
 $GLOBALS['posts'] = array(
@@ -218,7 +218,7 @@ check($r['value'] === 'body{color:red}', 'theme mod get css');
 $r = ok_result('theme mod get api_key');
 check($r['redacted'] === true && $r['value'] === '[REDACTED]' && $r['value_sha256'] === null, 'theme mod API key must be redacted without a secret hash');
 $r = ok_result('theme mod get oauth_settings');
-check($r['redacted'] === true && $r['value']['access_token'] === '[REDACTED]' && $r['value']['client_name'] === 'Public app', 'nested theme mod access token must be redacted while preserving safe settings');
+check($r['redacted'] === true && $r['value']['access_token'] === '[REDACTED]' && $r['value']['pwd'] === '[REDACTED]' && $r['value']['client_name'] === 'Public app', 'nested theme mod access token and pwd must be redacted while preserving safe settings');
 $r = ok_result('theme mod get missing_mod');
 check($r['exists'] === false && $r['value'] === null, 'theme mod get missing');
 $r = ok_result('theme mod list');
