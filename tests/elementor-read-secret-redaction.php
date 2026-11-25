@@ -86,8 +86,8 @@ namespace {
         'Elementor widget read must report redaction and preserve public HTML');
 
     $find = \OAI_REST::elementor_find(new TestRequest(['id'=>42,'find'=>'access_token']));
-    $assert(!str_contains(json_encode($find), 'elementor-widget-token-should-not-leak'),
-        'Elementor search must not return secret values');
+    $assert(!str_contains(json_encode($find), 'elementor-widget-token-should-not-leak') && $find['elementor_data_redacted']===true,
+        'Elementor search must not return secret values and must report redaction');
 
     $container = \OAI_Elementor::container(42,'container1');
     $assert($container['settings']['api_key']==='[REDACTED]' && $container['settings_redacted']===true,
