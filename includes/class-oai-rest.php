@@ -1253,7 +1253,7 @@ frame.addEventListener('load',function(){
   $data=array('operation_id'=>$op,'status'=>'pending','type'=>$type,'target'=>$target,'before_data'=>wp_json_encode($exists?$before:null,JSON_PRESERVE_ZERO_FRACTION),'after_data'=>wp_json_encode($after,JSON_PRESERVE_ZERO_FRACTION),'meta_data'=>wp_json_encode(array_merge($meta,array('rollback_descriptor'=>OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists)))),JSON_PRESERVE_ZERO_FRACTION),'diff_data'=>wp_json_encode($diff),'phase'=>'awaiting_approval','workspace_id'=>isset($meta['workspace_id'])?$meta['workspace_id']:null,'rollback_data'=>wp_json_encode(OAI_Lifecycle::descriptor($type,$target,$exists?$before:null,array('before_exists'=>$exists))),'risk'=>OAI_Operations::risk($type,$target),'created_at'=>$now,'expires_at'=>$expiry);
   $id=OAI_DB::insert($data); if(is_wp_error($id))return $id; $row=OAI_DB::get($id); OAI_Audit::log('created',$row); return self::row($id);
  }
- private static function row($id){$r=OAI_DB::get($id); if(!$r)return null; foreach(array('before_data','after_data','applied_data','meta_data','diff_data','rollback_data') as $k){if(array_key_exists($k,$r))$r[$k]=json_decode($r[$k],true);} return OAI_Security::public_evidence(OAI_Lifecycle::decorate($r));}
+ private static function row($id){$r=OAI_DB::get($id); if(!$r)return null; foreach(array('before_data','after_data','applied_data','meta_data','diff_data','rollback_data') as $k){if(array_key_exists($k,$r))$r[$k]=json_decode($r[$k],true);} $row=OAI_Lifecycle::decorate($r);return class_exists('OAI_Security')?OAI_Security::public_evidence($row):$row;}
  public static function sandbox_action($req){
   $id=absint($req['id']);
   $path=$req->get_route();
