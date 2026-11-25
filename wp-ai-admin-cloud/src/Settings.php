@@ -20,7 +20,29 @@ final class Settings {
     public static function eligible(string $owner): bool {
         $user=get_user_by('id',(int)$owner);
         if(!$user||!user_can($user,'read'))return false;
-        return user_can($user,'manage_options')||in_array((int)$owner,get_option('wpai_gateway_beta_users',[]),true);
+        if (user_can($user,'manage_options') || in_array((int)$owner,get_option('wpai_gateway_beta_users',[]),true)) return true;
+
+        // Public paid customers must be able to provision sites after checkout.
+        // The entitlement is read from the authoritative Cloud licence registry;
+        // a Free/non-expiring baseline alone never grants paid-customer access.
+        global $wpdb;
+        $accounts=$wpdb->prefix.'wpai_gateway_accounts';
+        $licenses=$wpdb->prefix.'wpai_gateway_licenses';
+        $sql="SELECT l.plan,l.status,l.starts_at,l.expires_at
+            FROM `{$accounts}` a
+            INNER JOIN `{$licenses}` l ON l.id=a.license_id
+            WHERE a.owner=%s AND a.disabled=0
+            LIMIT 1";
+        try {
+            $row=$wpdb->get_row($wpdb->prepare($sql,$owner),ARRAY_A);
+        } catch (\Throwable $e) {
+            // Missing/inaccessible Cloud licence tables must never grant access.
+            return false;
+        }
+        if (!is_array($row) || ($row['status']??'')!==Licenses::ACTIVE || ($row['plan']??'')==='free') return false;
+        $now=time();
+        return (int)($row['starts_at']??0)<=$now
+            && ($row['expires_at']===null || (int)$row['expires_at']>$now);
     }
     public static function enabled(): bool {
         if(defined('WP_AI_CLOUD_ENABLED'))return WP_AI_CLOUD_ENABLED===true;
@@ -70,7 +92,7 @@ final class Settings {
         if ($batchOverride!==null) {
             $policy['batch']=in_array($batchOverride,[true,1,'1'],true)?BatchAccounting::POLICY:'disabled_until_receipt_accounting_contract';
         }
-        $policy['version']='tariffs-v3-'.substr(hash('sha256',Security::canonical([$policy,$rows??[]])),0,24);
+        $policy['version']='tariffs-v5-'.substr(hash('sha256',Security::canonical([$policy,$rows??[]])),0,24);
         QuotaPolicy::validate($policy);
         return $policy;
     }

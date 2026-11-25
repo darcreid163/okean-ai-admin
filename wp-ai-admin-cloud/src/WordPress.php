@@ -32,6 +32,13 @@ final class WordPress {
         add_filter('rest_post_dispatch',[self::class,'secureRestHeaders'],10,3);
         add_filter('rest_pre_serve_request',[self::class,'emptyNotification'],10,4);
         add_action('wpai_gateway_pair_cleanup',static function($key){if(is_string($key)&&preg_match('/^wpai_pair_request_[a-f0-9]{64}$/D',$key))delete_option($key);});
+        add_action('wpai_cloud_retry_license_email',[self::class,'retryLicenseEmail'],10,1);
+        add_action('woocommerce_thankyou',[self::class,'renderLicenseLink'],40,1);
+        add_action('init',[self::class,'registerLicenseRewrite']);
+        add_filter('query_vars',[self::class,'licenseQueryVars']);
+        add_action('template_redirect',[self::class,'serveLicenseReveal'],1);
+        WooCommercePayments::boot();
+        ReconciliationAdmin::boot();
     }
     private static function migrate(): void {
         $store=self::database();
@@ -55,6 +62,13 @@ final class WordPress {
             Core::migratePlanAliases($store,time());
             update_option('wpai_gateway_plan_alias_v1','1',false);
         }
+        // Owner decision 16.11.2026: monthly accounting is retired. Existing
+        // legacy_monthly_v1 / tariffs_v2 rows are transferred explicitly and
+        // audited; historical balances are untouched.
+        if ((string)get_option('wpai_gateway_quota_cutover_v1','')!=='1') {
+            Core::migrateRetiredSchemes($store,Settings::policy(),time());
+            update_option('wpai_gateway_quota_cutover_v1','1',false);
+        }
     }
     public static function statusPage(): void { Admin::page(); }
     public static function enable(): void {
@@ -67,6 +81,161 @@ final class WordPress {
         catch (\Throwable $e) { update_option('wpai_gateway_enabled',false,false); throw $e; }
     }
     public static function oauth(): OAuth { return new OAuth(self::database(),self::core(),Settings::endpoint()); }
+    /**
+     * Settle a verified, paid Robokassa WooCommerce order into the Cloud licence registry.
+     * The customer ID is the only accepted owner identity; guests fail closed.
+     */
+    public static function settlePaidWooOrder(\WC_Order $order): array {
+        if (!self::ready()) throw new Fault('cloud_not_configured',503);
+        $owner=(string)(int)$order->get_customer_id();
+        if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
+        Settings::account($owner);
+        self::core()->ensureAccount($owner);
+        $store=self::database();
+        $result=WooCommercePayments::settle($store,Settings::policy(),$order,new Vault(Settings::keys()['vault']));
+        $delivery=$store->row('SELECT email_status,email_attempts FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
+        if ($delivery && $delivery['email_status']!=='sent') {
+            try {
+                $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
+            } catch (\Throwable $e) {
+                error_log('WP AI Admin licence email send failed: '.get_class($e));
+                $sent=false;
+            }
+            if (!$sent) self::queueOrExhaustLicenseEmail($order,$store);
+        }
+        return $result;
+    }
+    public static function registerLicenseRewrite(): void {
+        add_rewrite_rule('^license-key/([0-9]+)/?$', 'index.php?wpai_license_order=$matches[1]', 'top');
+    }
+    public static function licenseQueryVars(array $vars): array { $vars[]='wpai_license_order'; return $vars; }
+
+    public static function renderLicenseLink($orderId): void {
+        if (!function_exists('wc_get_order')) return;
+        $order=wc_get_order((int)$orderId);
+        if (!$order instanceof \WC_Order || !$order->is_paid() || (int)$order->get_customer_id()!==get_current_user_id()) return;
+        try {
+            $store=self::database();
+            $row=$store->row('SELECT email_status FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)get_current_user_id()]);
+            if (!$row) return;
+            $url=home_url('/license-key/'.(int)$order->get_id().'/');
+            echo '<p class="woocommerce-info">Оплата подтверждена. <a href="'.esc_url($url).'">Открыть страницу получения ключа лицензии</a></p>';
+        } catch (\Throwable $e) { error_log('WP AI Admin licence link unavailable: '.get_class($e)); }
+    }
+
+    private static function queueOrExhaustLicenseEmail(\WC_Order $order,Store $store): void {
+        $row=$store->row('SELECT email_status,email_attempts,email_ciphertext,email_started_at FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
+        if (!$row || in_array($row['email_status'],['sent','revoked'],true) || $row['email_ciphertext']==='') return;
+        if ($row['email_status']==='sending' && (int)$row['email_started_at']>time()-600) return;
+        $attempts=(int)$row['email_attempts'];
+        if ($attempts>=12) {
+            if ((string)$order->get_meta('_wpai_license_email_exhausted',true)!=='yes') {
+                $order->add_order_note('WP AI Admin: не удалось отправить письмо с лицензией после 12 попыток. Зашифрованная копия сохранена; администратор может повторить отправку из Cloud API.');
+                $order->update_meta_data('_wpai_license_email_exhausted','yes');
+                $order->save_meta_data();
+            }
+            return;
+        }
+        $args=[(int)$order->get_id()];
+        if (!wp_next_scheduled('wpai_cloud_retry_license_email',$args)) {
+            wp_schedule_single_event(time()+min(3600,60*max(1,$attempts)),'wpai_cloud_retry_license_email',$args);
+        }
+    }
+
+    public static function retryLicenseEmail($orderId): void {
+        if (!function_exists('wc_get_order')) return;
+        $order=wc_get_order((int)$orderId);
+        if (!$order instanceof \WC_Order || !$order->is_paid()) return;
+        try {
+            $store=self::database();
+            $row=$store->row('SELECT email_status,email_attempts,email_ciphertext FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),(string)$order->get_customer_id()]);
+            if (!$row || in_array($row['email_status'],['sent','revoked'],true) || $row['email_ciphertext']==='') return;
+            if ((int)$row['email_attempts']>=12) {
+                self::queueOrExhaustLicenseEmail($order,$store);
+                return;
+            }
+            try {
+                $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
+            } catch (\Throwable $e) {
+                error_log('WP AI Admin licence email retry failed: '.get_class($e));
+                $sent=false;
+            }
+            if (!$sent) self::queueOrExhaustLicenseEmail($order,$store);
+        } catch (\Throwable $e) { error_log('WP AI Admin licence email retry failed: '.get_class($e)); }
+    }
+
+    public static function serveLicenseReveal(): void {
+        $orderId=get_query_var('wpai_license_order');
+        if (!$orderId) return;
+        nocache_headers();
+        header('Cache-Control: no-store, private, max-age=0');
+        header('Pragma: no-cache');
+        header('Referrer-Policy: no-referrer');
+        header('X-Content-Type-Options: nosniff');
+        if (!is_user_logged_in() || !is_ssl()) { auth_redirect(); exit; }
+        if (!function_exists('wc_get_order')) { status_header(503); exit('Сервис заказов недоступен.'); }
+        $order=wc_get_order((int)$orderId);
+        if (!$order instanceof \WC_Order || !$order->is_paid() || (int)$order->get_customer_id()!==get_current_user_id()) { status_header(404); exit('Заказ не найден.'); }
+        $store=self::database();
+        $owner=(string)get_current_user_id();
+        $payment=$store->row('SELECT status,owner,license_id FROM '.$store->table('commerce_payments').' WHERE gateway_order_id=?',[(string)$order->get_id()]);
+        $delivery=$store->row('SELECT plan,license_id,reveal_consumed FROM '.$store->table('license_deliveries').' WHERE order_id=? AND owner=?',[(string)$order->get_id(),$owner]);
+        if (!$payment || $payment['status']!=='settled' || $payment['owner']!==$owner || !$delivery || $payment['license_id']==='' || $payment['license_id']!==$delivery['license_id'] || !str_starts_with((string)$order->get_payment_method(),'robokassa')) { status_header(404); exit('Заказ не найден.'); }
+        $key=null; $message='';
+        if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['wpai_reveal_nonce'],$_POST['wpai_order_key']) && is_string($_POST['wpai_order_key']) && hash_equals((string)$order->get_order_key(),(string)sanitize_text_field(wp_unslash($_POST['wpai_order_key']))) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['wpai_reveal_nonce'])),'wpai_reveal_'.$orderId)) {
+            try { $key=LicenseDelivery::reveal($store,new Vault(Settings::keys()['vault']),(string)$orderId,$owner,time()); }
+            catch (Fault $e) { $message=$e->reason==='license_reveal_already_consumed'?'Ключ уже был показан. Проверьте письмо с подтверждением покупки.':'Не удалось получить ключ.'; }
+        }
+        status_header(200);
+        echo '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ключ лицензии WP AI Admin</title><body><main style="max-width:680px;margin:10vh auto;padding:24px;font:16px sans-serif"><h1>Ваш ключ лицензии</h1><p>Тариф: '.esc_html((string)$delivery['plan']).'</p>';
+        if ($key!==null) echo '<p>Сохраните ключ сейчас. Повторно показать его на этой странице нельзя.</p><p><code style="overflow-wrap:anywhere">'.esc_html($key).'</code></p><button type="button" onclick="navigator.clipboard.writeText(document.querySelector(\'code\').textContent)">Копировать ключ</button>';
+        elseif ($message!=='') echo '<p>'.esc_html($message).'</p>';
+        elseif ((int)$delivery['reveal_consumed']===1) echo '<p>Ключ уже был показан. Проверьте письмо с подтверждением покупки.</p>';
+        else echo '<p>Нажмите кнопку, чтобы показать ключ один раз.</p><form method="post">'.wp_nonce_field('wpai_reveal_'.$orderId,'wpai_reveal_nonce',true,false).'<input type="hidden" name="wpai_order_key" value="'.esc_attr((string)$order->get_order_key()).'"><button type="submit">Показать ключ один раз</button></form>';
+        echo '<p>Активируйте ключ в WP AI Admin → Тариф и лицензия.</p></main></body></html>';
+        exit;
+    }
+
+    /**
+     * Process only a Robokassa refund whose official GetState result is persisted as finished.
+     * The payment owner is derived from the immutable WooCommerce customer ID.
+     */
+    /**
+     * Process only a Robokassa refund whose official GetState result is persisted as finished.
+     * The payment owner is derived from the immutable WooCommerce customer ID.
+     */
+    public static function settleConfirmedWooRefund(\WC_Order $order,string $requestId,float $amount,bool $isFull): array {
+        if (!self::ready()) throw new Fault('cloud_not_configured',503);
+        $owner=(string)(int)$order->get_customer_id();
+        if ((int)$owner<=0) throw new Fault('registered_customer_required',409);
+        Settings::account($owner);
+        self::core()->ensureAccount($owner);
+        return WooCommercePayments::refund(self::database(),Settings::policy(),$order,$requestId,$amount,$isFull);
+    }
+    /**
+     * Operator-approved recovery for a paid Robokassa order missing its Cloud payment row.
+     * The caller must already have enforced administrator capability, nonce and typed confirmation.
+     */
+    public static function repairPaidWooOrder(int $orderId): array {
+        if (!self::ready()) throw new Fault('cloud_not_configured',503);
+        if (!function_exists('wc_get_order')) throw new Fault('woocommerce_unavailable',503);
+        $order=wc_get_order($orderId);
+        if (!$order instanceof \WC_Order) throw new Fault('repair_order_not_found',404);
+        if (!$order->is_paid()) throw new Fault('repair_payment_not_confirmed',409);
+        if (!str_starts_with((string)$order->get_payment_method(),'robokassa')) throw new Fault('repair_gateway_mismatch',409);
+        if ((int)$order->get_customer_id()<=0) throw new Fault('repair_registered_customer_required',409);
+        if (trim((string)$order->get_transaction_id())==='') throw new Fault('repair_transaction_reference_required',409);
+        $owner=(string)(int)$order->get_customer_id();
+        Settings::account($owner);
+        self::core()->ensureAccount($owner);
+        return ReconciliationRepair::repairMissingPaymentLedger(self::database(),Settings::policy(),$order,new Vault(Settings::keys()['vault']));
+    }
+    /** Read-only operational comparison of WooCommerce orders and Cloud ledgers. */
+    public static function reconciliationReport(int $limit=500): array {
+        if (!self::ready()) throw new Fault('cloud_not_configured',503);
+        self::core();
+        return Reconciliation::report(self::database(),Settings::policy(),$limit);
+    }
     public static function operatorCore(): Core { return self::core(); }
     public static function operatorStore(): Store { self::core(); return self::database(); }
     /** Read-only CLI/operator check; deliberately skips migration and all upstream HTTP calls. */
@@ -214,6 +383,28 @@ final class WordPress {
             if(isset($p['comment'])) { if(!is_string($p['comment'])) throw new Fault('invalid_license_comment'); $options['comment']=$p['comment']; }
             self::owner();
             return self::core()->issueLicense((string)get_current_user_id(),$owner,$p['plan'],time(),$scheme,$options);
+        });
+        $admin('/license-deliveries/(?P<order>[0-9]+)/resend',function($r) {
+            $p=self::body($r);
+            if(($p['confirm']??null)!=='RESEND') throw new Fault('license_email_resend_confirmation_required',409);
+            self::owner();
+            if(!function_exists('wc_get_order')) throw new Fault('woocommerce_unavailable',503);
+            $order=wc_get_order((int)$r['order']);
+            if(!$order instanceof \WC_Order || !$order->is_paid() || !str_starts_with((string)$order->get_payment_method(),'robokassa')) throw new Fault('license_email_order_unavailable',404);
+            $store=self::database();
+            $delivery=$store->row('SELECT owner,email_ciphertext,email_status FROM '.$store->table('license_deliveries').' WHERE order_id=?',[(string)$order->get_id()]);
+            if(!$delivery || $delivery['owner']!==(string)$order->get_customer_id() || $delivery['email_ciphertext']==='' || $delivery['email_status']==='revoked') throw new Fault('license_email_copy_unavailable',409);
+            $reset=$store->execute('UPDATE '.$store->table('license_deliveries').' SET email_status=?,email_attempts=?,email_started_at=? WHERE order_id=? AND (email_status<>? OR email_started_at<=?)',['retry',0,0,(string)$order->get_id(),'sending',time()-600])->rowCount();
+            if($reset!==1) throw new Fault('license_email_send_in_progress',409);
+            try {
+                $sent=LicenseDelivery::sendEmail($store,new Vault(Settings::keys()['vault']),(string)$order->get_id());
+            } catch (\Throwable $e) {
+                error_log('WP AI Admin administrator licence email resend failed: '.get_class($e));
+                $sent=false;
+            }
+            $order->add_order_note($sent?'WP AI Admin: администратор повторно отправил письмо с лицензией на зарегистрированный адрес аккаунта.':'WP AI Admin: повторная отправка письма с лицензией не удалась; автоматические попытки продолжаются.');
+            if(!$sent) self::queueOrExhaustLicenseEmail($order,$store);
+            return ['sent'=>$sent,'order_id'=>(int)$order->get_id()];
         });
         foreach(['reissue'=>'REISSUE','revoke'=>'REVOKE','suspend'=>'SUSPEND','reactivate'=>'REACTIVATE'] as $action=>$confirmation) {
             $admin('/licenses/(?P<id>lic_[a-f0-9]{24})/'.$action,function($r) use($action,$confirmation) {

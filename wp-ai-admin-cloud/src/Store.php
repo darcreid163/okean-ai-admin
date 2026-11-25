@@ -14,7 +14,7 @@ final class Store {
         if (!$this->mysql) { $db->exec('PRAGMA busy_timeout=10000'); $db->exec('PRAGMA journal_mode=WAL'); }
     }
     public function table(string $name): string {
-        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','sse_sessions','sse_queue'],true)) throw new Fault('invalid_table',503);
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','commerce_payments','commerce_refunds','license_deliveries','sse_sessions','sse_queue'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
@@ -334,6 +334,81 @@ final class Store {
         if (!$this->hasColumn('accounts','license_id')) throw new Fault('license_schema_incompatible',503);
         self::$licenseSchemaReady[$this]=true;
     }
+    public function ensureCommerceSchema(): void {
+        $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        $unique=$this->mysql?'UNIQUE KEY transaction_hash (transaction_hash)':'UNIQUE (transaction_hash)';
+        $sql="CREATE TABLE IF NOT EXISTS ".$this->table('commerce_payments')." (
+            gateway_order_id VARCHAR(64) NOT NULL PRIMARY KEY,
+            transaction_hash CHAR(64) NULL,
+            owner VARCHAR(64) NOT NULL,
+            product_id INTEGER NOT NULL,
+            sku VARCHAR(64) NOT NULL,
+            plan VARCHAR(20) NOT NULL,
+            period VARCHAR(12) NOT NULL,
+            amount_rub INTEGER NOT NULL,
+            currency CHAR(3) NOT NULL,
+            status VARCHAR(20) NOT NULL,
+            license_id VARCHAR(32) NOT NULL DEFAULT '',
+            starts_at BIGINT NOT NULL DEFAULT 0,
+            expires_at BIGINT NOT NULL DEFAULT 0,
+            payload_hash CHAR(64) NOT NULL,
+            created_at BIGINT NOT NULL,
+            settled_at BIGINT NOT NULL DEFAULT 0,
+            ".$unique."
+        )".$tail;
+        $this->execute($sql);
+        // Separate idempotency ledger for Robokassa refund state transitions.
+        // The request ID is an opaque gateway identifier; no credentials or raw payloads are stored.
+        $refundSql="CREATE TABLE IF NOT EXISTS ".$this->table('commerce_refunds')." (
+            request_id VARCHAR(128) NOT NULL PRIMARY KEY,
+            gateway_order_id VARCHAR(64) NOT NULL,
+            owner VARCHAR(64) NOT NULL,
+            license_id VARCHAR(32) NOT NULL DEFAULT '',
+            amount_kopecks INTEGER NOT NULL,
+            refund_kind VARCHAR(16) NOT NULL,
+            outcome VARCHAR(32) NOT NULL,
+            payload_hash CHAR(64) NOT NULL,
+            created_at BIGINT NOT NULL
+        )".$tail;
+        $this->execute($refundSql);
+    }
+
+    /** Durable encrypted one-time licence delivery records, separate from entitlement rows. */
+    public function ensureLicenseDeliverySchema(): void {
+        $tail=$this->mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin':'';
+        $this->execute("CREATE TABLE IF NOT EXISTS ".$this->table('license_deliveries')." (
+            order_id VARCHAR(64) NOT NULL PRIMARY KEY,
+            owner VARCHAR(64) NOT NULL,
+            license_id VARCHAR(32) NOT NULL,
+            plan VARCHAR(20) NOT NULL,
+            email VARCHAR(254) NOT NULL,
+            reveal_ciphertext MEDIUMTEXT NOT NULL,
+            email_ciphertext MEDIUMTEXT NOT NULL,
+            reveal_consumed INTEGER NOT NULL DEFAULT 0,
+            email_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            email_attempts INTEGER NOT NULL DEFAULT 0,
+            email_started_at BIGINT NOT NULL DEFAULT 0,
+            created_at BIGINT NOT NULL,
+            revealed_at BIGINT NULL,
+            emailed_at BIGINT NULL
+        )".$tail);
+        if (!$this->hasColumn('license_deliveries','email_started_at')) {
+            try { $this->execute('ALTER TABLE '.$this->table('license_deliveries').' ADD COLUMN email_started_at BIGINT NOT NULL DEFAULT 0'); }
+            catch (\PDOException $e) {
+                $duplicate=$this->mysql?(int)($e->errorInfo[1]??0)===1060:str_contains(strtolower($e->getMessage()),'duplicate column name');
+                if (!$duplicate) throw $e;
+            }
+        }
+        $this->assertSchema(['license_deliveries']);
+    }
+
+    /** Check for an existing optional schema table without creating it. */
+    public function hasTable(string $name): bool {
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events','commerce_payments','commerce_refunds','license_deliveries','sse_sessions','sse_queue'],true)) throw new Fault('invalid_table',503);
+        $physical=$this->prefix.$name;
+        if ($this->mysql) return $this->row('SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$physical])!==null;
+        return $this->row("SELECT name FROM sqlite_master WHERE type='table' AND name=?",[$physical])!==null;
+    }
     private function hasColumn(string $table,string $column): bool {
         if ($this->mysql) {
             return (bool)$this->row('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?',[$this->prefix.$table,$column]);
@@ -364,6 +439,7 @@ final class Store {
             'licenses'=>['id','key_hash','key_prefix','owner','plan','quota_scheme','status','activation_limit','activations','issued_at','starts_at','expires_at','activated_at','revoked_at','replaced_by','replaces','comment','issued_by','source','sequence'],
             'license_activations'=>['license_id','site_id','owner','home','status','activated_at','deactivated_at'],
             'license_events'=>['id','license_id','owner','event','actor','detail_hash','created_at'],
+            'license_deliveries'=>['order_id','owner','license_id','plan','email','reveal_ciphertext','email_ciphertext','reveal_consumed','email_status','email_attempts','email_started_at','created_at','revealed_at','emailed_at'],
         ];
 
         if($this->mysql){

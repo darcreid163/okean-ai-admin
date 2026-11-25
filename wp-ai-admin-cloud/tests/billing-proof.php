@@ -149,7 +149,7 @@ $retry=$core->call($timeoutActor,$timeoutSite['id'],'wp_get_site',['shape'=>'unc
 bp($retry['reconciled']===true&&$transport->executions===$exec,'Reconciled request was redispatched');
 
 // --- 5. Quota boundaries at 0, 1, limit-1, exact limit and over-limit. ---
-$tight=$policy;$tight['plans']['free']=2;
+$tight=$policy;$tight['plans']['free']=2;$tight['schemes'][QuotaPolicy::TARGET]['plans']['free']=2;
 $boundaryCore=new Core($store,new Vault($vaultKey),$transport,$tight,new Signer(sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())));
 $boundaryCore->ensureAccount('b');
 $bSite=$boundaryCore->connect('b','https://billing-boundary.example.com','fixture-billing-credential-owner-b',$now);
@@ -206,17 +206,31 @@ bp($transport->executions===$execAfter,'Request with an unrecorded settlement wa
 
 // --- 8. Parallel calls at used = limit - 1 (MySQL row locks only). ---
 if(getenv('TEST_MYSQL_DSN')){
-    $par=$policy;$par['plans']['free']=2;
+    $par=$policy;$par['plans']['free']=2;$par['schemes'][QuotaPolicy::TARGET]['plans']['free']=2;
     $parCore=new Core($store,new Vault($vaultKey),$transport,$par,new Signer(sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())));
     $parCore->ensureAccount('p');
     $pSite=$parCore->connect('p','https://billing-parallel.example.com','fixture-billing-credential-owner-p',$now);
     $parCore->call($parCore->authenticate($parCore->mint('p',[$pSite['id']],['mcp:read'],$now)['access_token'],$now),$pSite['id'],'wp_get_site',[],'parallel-warm',$now);
     $parToken=$parCore->mint('p',[$pSite['id']],['mcp:read'],$now)['access_token'];
     $config=base64_encode(json_encode(['dsn'=>getenv('TEST_MYSQL_DSN'),'user'=>getenv('TEST_MYSQL_USER'),'pass'=>getenv('TEST_MYSQL_PASSWORD'),'prefix'=>$prefix,'vault'=>$vaultKey,'policy'=>$par,'token'=>$parToken,'site'=>$pSite['id'],'now'=>$now],JSON_THROW_ON_ERROR));
-    $results=[];
+    // Start both workers before collecting either result so the test really
+    // exercises concurrent database reservations rather than sequential calls.
+    if(!function_exists('proc_open')) throw new RuntimeException('proc_open is required for the MySQL concurrency proof');
+    $workers=[];
     foreach(['par-a','par-b'] as $key){
-        $cmd=escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/billing-parallel-worker.php').' '.escapeshellarg($config).' '.escapeshellarg($key);
-        $out=shell_exec($cmd);
+        $pipes=[];
+        $process=proc_open([PHP_BINARY,__DIR__.'/billing-parallel-worker.php',$config,$key],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
+        if(!is_resource($process)) throw new RuntimeException('Cannot start parallel billing worker '.$key);
+        fclose($pipes[0]);
+        $workers[$key]=['process'=>$process,'stdout'=>$pipes[1],'stderr'=>$pipes[2]];
+    }
+    $results=[];
+    foreach($workers as $key=>$worker){
+        $out=stream_get_contents($worker['stdout']);
+        $err=stream_get_contents($worker['stderr']);
+        fclose($worker['stdout']); fclose($worker['stderr']);
+        $exit=proc_close($worker['process']);
+        if($exit!==0) throw new RuntimeException('Parallel billing worker '.$key.' failed: '.trim((string)$err));
         $results[$key]=json_decode((string)$out,true);
     }
     $ok=array_filter($results,static fn($r)=>is_array($r)&&($r['ok']??false)===true);

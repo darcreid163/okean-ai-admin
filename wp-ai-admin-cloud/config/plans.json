@@ -1,7 +1,7 @@
 {
-  "version": "tariffs-v4-20261116",
+  "version": "tariffs-v5-20261123",
   "period": "per_plan_utc",
-  "status": "owner_approved_daily_quotas_prices_partially_approved_payments_not_implemented",
+  "status": "owner_approved_quotas_and_prices_payment_adapter_in_development",
   "plans": {
     "free": 50,
     "daily": 500,
@@ -23,28 +23,21 @@
     "business": "calendar_day_utc",
     "businesspro": "calendar_day_utc"
   },
-  "legacy_plans": {
-    "free": 100,
-    "pro": 500,
-    "power": 2000,
-    "agency": 5000,
-    "scale": 10000
-  },
   "billing": "successful_single_tool_call",
   "batch": "successful_object_v1",
   "automatic_money_debits": false,
   "manual_refills": "owner_only_daily_quota_reset",
   "timezone": "UTC",
-  "default_scheme": "tariffs_v2",
-  "prices_approved": false,
+  "default_scheme": "tariffs_v3",
+  "prices_approved": true,
   "schemes": {
     "tariffs_v3": {
       "period": "calendar_day_utc",
-      "status": "owner_approved_daily_quotas_prices_partially_approved_payments_not_implemented",
-      "version_key_suffix": "V4",
+      "status": "owner_approved_daily_quotas_and_prices_payment_adapter_in_development",
+      "version_key_suffix": "V5",
       "all_tools": true,
       "automatic_money_debits": false,
-      "prices_approved": false,
+      "prices_approved": true,
       "plans": {
         "free": 50,
         "daily": 500,
@@ -75,11 +68,107 @@
       },
       "prices_rub_month": {
         "free": 0,
-        "daily": null,
-        "pro": 2000,
-        "business": 5000,
-        "businesspro": 10000
+        "daily": 899,
+        "pro": 1499,
+        "business": 3999,
+        "businesspro": 8999
+      },
+      "prices_rub_year": {
+        "daily": 9999,
+        "pro": 16999,
+        "business": 46999,
+        "businesspro": 105999
       }
     }
+  },
+  "commerce": {
+    "currency": "RUB",
+    "gateway": "robokassa",
+    "auto_renew": false,
+    "billing_term": "calendar_month_utc_or_calendar_year_utc",
+    "renewal": "extend_from_max(now,current_paid_expiry)",
+    "products": [
+      {
+        "product_id": 62,
+        "sku": "WPAI-FREE-LIFETIME",
+        "plan": "free",
+        "period": "lifetime",
+        "duration": null,
+        "price_rub": 0,
+        "sites": 1
+      },
+      {
+        "product_id": 522,
+        "sku": "WPAI-DAILY-1M",
+        "plan": "daily",
+        "period": "month",
+        "duration": 1,
+        "price_rub": 899,
+        "sites": 1
+      },
+      {
+        "product_id": 523,
+        "sku": "WPAI-DAILY-1Y",
+        "plan": "daily",
+        "period": "year",
+        "duration": 12,
+        "price_rub": 9999,
+        "sites": 1
+      },
+      {
+        "product_id": 296,
+        "sku": "WPAI-PRO-1M",
+        "plan": "pro",
+        "period": "month",
+        "duration": 1,
+        "price_rub": 1499,
+        "sites": 1
+      },
+      {
+        "product_id": 524,
+        "sku": "WPAI-PRO-1Y",
+        "plan": "pro",
+        "period": "year",
+        "duration": 12,
+        "price_rub": 16999,
+        "sites": 1
+      },
+      {
+        "product_id": 165,
+        "sku": "WPAI-PROPLUS-1M",
+        "plan": "business",
+        "period": "month",
+        "duration": 1,
+        "price_rub": 3999,
+        "sites": 5
+      },
+      {
+        "product_id": 525,
+        "sku": "WPAI-PROPLUS-1Y",
+        "plan": "business",
+        "period": "year",
+        "duration": 12,
+        "price_rub": 46999,
+        "sites": 5
+      },
+      {
+        "product_id": 166,
+        "sku": "WPAI-PROPLUSPLUS-1M",
+        "plan": "businesspro",
+        "period": "month",
+        "duration": 1,
+        "price_rub": 8999,
+        "sites": 50
+      },
+      {
+        "product_id": 526,
+        "sku": "WPAI-PROPLUSPLUS-1Y",
+        "plan": "businesspro",
+        "period": "year",
+        "duration": 12,
+        "price_rub": 105999,
+        "sites": 50
+      }
+    ]
   }
 }

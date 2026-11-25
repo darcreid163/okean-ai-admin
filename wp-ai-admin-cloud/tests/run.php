@@ -405,5 +405,7 @@ $stillActiveOtherTenant=$core->authenticate($ownerTwoToken['access_token'],$now+
 $oauth->binding($stillActiveOtherTenant,$now+10);
 check($stillActiveOtherTenant['owner']==='2' && $stillActiveOtherTenant['site_ids']===[$other['id']],'Suspending one owner affected another tenant');
 
+require __DIR__.'/robokassa-payments.php';
+runRobokassaPaymentsTests($store,$core);
 echo 'PASS '.$checks.' assertions; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."; concurrency=10 workers/3 slots; client V1 verifier=accepted\n";
 if (!getenv('TEST_MYSQL_DSN')) { foreach([$database,$database.'-shm',$database.'-wal'] as $f) if(file_exists($f)) unlink($f); }
