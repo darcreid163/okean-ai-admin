@@ -51,6 +51,7 @@ class OAI_Security {
   $key=preg_replace('/([a-z0-9])([A-Z])/','$1_$2',$key);
   $key=strtolower($key);
   if(preg_match('/(?:^|[_-])(?:sha256|proof_hash)(?:$|[_-])/',$key))return false;
+  if(preg_match('/(?:_supported|_enabled|_required|_present|_valid|_ttl|_count|_expires_at|_status)$/',$key))return false;
   return (bool)preg_match('/(^|[_-])(token|secret|password|passwd|pass|pwd|salt|nonce|api[_-]?key|private[_-]?key|auth[_-]?key|cookie|signature|credential|session)([_-]|$)/',$key);
  }
  private static function evidence_text($text,$key,&$changed){
