@@ -25,7 +25,7 @@ function fixtureCore(\WPAICloudGateway\Store $store,FakeTransport $transport,int
     $policy=json_decode(file_get_contents(dirname(__DIR__).'/config/plans.json'),true);
     $policy['plans']['free']=$limit;
     // Accounts are issued under the final daily scheme; mirror the fixture override there.
-    $policy['schemes'][\\WPAICloudGateway\\QuotaPolicy::TARGET]['plans']['free']=$limit;
+    $policy['schemes'][\WPAICloudGateway\QuotaPolicy::TARGET]['plans']['free']=$limit;
     $pair=sodium_crypto_sign_keypair();
     return new \WPAICloudGateway\Core($store,new \WPAICloudGateway\Vault($key??str_repeat('k',32)),$transport,$policy,new \WPAICloudGateway\Signer(sodium_crypto_sign_secretkey($pair)));
 }
