@@ -4,10 +4,10 @@ namespace WPAICloudGateway;
 
 final class Surface {
     public static function resourceMetadata(): array {
-        return ['resource'=>Settings::endpoint(),'resource_name'=>'WP AI Admin','authorization_servers'=>[home_url('/wpai-cloud')],'scopes_supported'=>['mcp:read','mcp:write','offline_access'],'bearer_methods_supported'=>['header']];
+        return ['resource'=>Settings::endpoint(),'resource_name'=>'WP AI Admin','authorization_servers'=>[home_url('/wpai-cloud')],'scopes_supported'=>['mcp:read','mcp:write'],'bearer_methods_supported'=>['header']];
     }
     public static function authorizationMetadata(): array {
-        return ['issuer'=>home_url('/wpai-cloud'),'authorization_endpoint'=>home_url('/wpai-cloud/oauth/authorize'),'token_endpoint'=>rest_url('wpai-cloud/v1/oauth/token'),'registration_endpoint'=>rest_url('wpai-cloud/v1/oauth/register'),'revocation_endpoint'=>rest_url('wpai-cloud/v1/oauth/revoke'),'response_types_supported'=>['code'],'grant_types_supported'=>['authorization_code','refresh_token'],'code_challenge_methods_supported'=>['S256'],'token_endpoint_auth_methods_supported'=>['none'],'scopes_supported'=>['mcp:read','mcp:write','offline_access'],'client_id_metadata_document_supported'=>false];
+        return ['issuer'=>home_url('/wpai-cloud'),'authorization_endpoint'=>home_url('/wpai-cloud/oauth/authorize'),'token_endpoint'=>rest_url('wpai-cloud/v1/oauth/token'),'registration_endpoint'=>rest_url('wpai-cloud/v1/oauth/register'),'revocation_endpoint'=>rest_url('wpai-cloud/v1/oauth/revoke'),'response_types_supported'=>['code'],'grant_types_supported'=>['authorization_code'],'code_challenge_methods_supported'=>['S256'],'token_endpoint_auth_methods_supported'=>['none'],'scopes_supported'=>['mcp:read','mcp:write'],'client_id_metadata_document_supported'=>false];
     }
     public static function metadataUrl(): string { return substr(Settings::endpoint(),0,-4).'/.well-known/oauth-protected-resource/mcp'; }
     public static function challenge(): string { return 'Bearer resource_metadata="'.self::metadataUrl().'", scope="mcp:read"'; }
