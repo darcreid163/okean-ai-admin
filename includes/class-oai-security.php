@@ -9,7 +9,7 @@ class OAI_Security {
   $changed=false;$out=self::evidence_value($value,'',$changed);
   if($changed&&((is_array($out)&&!array_is_list($out))||$out instanceof stdClass)){
    $projection=array(
-   'redacted'=>true,'reason'=>'server_filesystem_paths','stored_evidence_modified'=>false,
+   'redacted'=>true,'reason'=>'sensitive_values_and_server_filesystem_paths','stored_evidence_modified'=>false,
    'hashes_attest'=>'original_evidence','canonical_payload_available'=>false
    );
    if(is_array($out))$out['_wpai_projection']=$projection;else$out->_wpai_projection=$projection;
@@ -27,6 +27,7 @@ class OAI_Security {
     // Preserve distinct path-keyed entries after redaction.
     if($public_name!==$name)$public_name.=':'.substr(hash('sha256',$name),0,12);
     while(array_key_exists($public_name,$out)){$changed=true;$public_name.=':';}
+    if(is_string($name)&&self::sensitive_evidence_key($name)){$changed=true;$out[$public_name]='[REDACTED]';continue;}
     $out[$public_name]=self::evidence_value($item,(string)$name,$changed);
    }return $out;
   }
@@ -44,6 +45,14 @@ class OAI_Security {
    }
   }
   return self::evidence_text($value,$key,$changed);
+ }
+ private static function sensitive_evidence_key($key){
+  $key=(string)$key;
+  $key=preg_replace('/([a-z0-9])([A-Z])/','$1_$2',$key);
+  $key=strtolower($key);
+  if(preg_match('/(?:^|[_-])(?:sha256|proof_hash)(?:$|[_-])/',$key))return false;
+  if(preg_match('/(?:_supported|_enabled|_required|_present|_valid|_ttl|_count|_expires_at|_status)$/',$key))return false;
+  return (bool)preg_match('/(^|[_-])(token|secret|password|passwd|pass|pwd|salt|nonce|api[_-]?key|private[_-]?key|auth[_-]?key|cookie|signature|credential|session)([_-]|$)/',$key);
  }
  private static function evidence_text($text,$key,&$changed){
   $original=$text;$roots=array();

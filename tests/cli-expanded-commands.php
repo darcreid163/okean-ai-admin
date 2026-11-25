@@ -3,7 +3,7 @@
  * Tier B slice 1: expanded read-only WP-CLI command registry.
  *
  * Verifies command resolution for two- and three-token commands, argument and
- * flag validation, every new handler, redaction of credential-like meta, and
+ * flag validation, every new handler, redaction of credential-like theme mods and meta, and
  * absence of PII in comment output. No WordPress, MySQL or network.
  *
  * Usage: php tests/cli-expanded-commands.php
@@ -29,6 +29,8 @@ $GLOBALS['theme_mods'] = array(
     'custom_logo' => 12,
     'background_color' => '#ffffff',
     'custom_css' => 'body{color:red}',
+    'api_key' => 'sk-should-not-leak',
+    'oauth_settings' => array('access_token' => 'access-token-should-not-leak', 'pwd' => 'nested-pwd-should-not-leak', 'client_name' => 'Public app'),
     'nav_menu_locations' => array('primary' => 3),
 );
 $GLOBALS['posts'] = array(
@@ -40,6 +42,7 @@ $GLOBALS['post_meta'] = array(
         '_wp_page_template' => array('default'),
         '_elementor_data' => array('[{"id":"a"}]'),
         '_wp_old_slug' => array('old-page'),
+        'integration_settings' => array(array('api_key' => 'post-api-key-should-not-leak', 'label' => 'Public integration')),
     ),
     43 => array(),
 );
@@ -51,6 +54,7 @@ $GLOBALS['user_meta'] = array(
         'nickname' => array('admin'),
         'session_tokens' => array('{"abc":"secret"}'),
         'api_key' => array('sk-should-not-leak'),
+        'integration_settings' => array(array('access_token' => 'user-token-should-not-leak', 'label' => 'Public profile')),
     ),
 );
 
@@ -143,7 +147,7 @@ class OAI_Permission_Resolver {
     public static function resolve($resolved) { return array('allowed' => true, 'capability' => 'edit_posts'); }
 }
 
-foreach (array('class-oai-argument-parser.php', 'class-oai-command-normalizer.php', 'class-oai-command-registry.php', 'class-oai-wp-cli-execution.php') as $file) {
+foreach (array('class-oai-argument-parser.php', 'class-oai-command-normalizer.php', 'class-oai-command-registry.php', 'class-oai-read.php', 'class-oai-wp-cli-execution.php') as $file) {
     require dirname(__DIR__) . '/includes/' . $file;
 }
 
@@ -211,21 +215,27 @@ $r = ok_result('theme mod get custom_logo');
 check($r['exists'] === true && $r['value'] === 12, 'theme mod get scalar');
 $r = ok_result('theme mod get custom_css');
 check($r['value'] === 'body{color:red}', 'theme mod get css');
+$r = ok_result('theme mod get api_key');
+check($r['redacted'] === true && $r['value'] === '[REDACTED]' && $r['value_sha256'] === null, 'theme mod API key must be redacted without a secret hash');
+$r = ok_result('theme mod get oauth_settings');
+check($r['redacted'] === true && $r['value']['access_token'] === '[REDACTED]' && $r['value']['pwd'] === '[REDACTED]' && $r['value']['client_name'] === 'Public app', 'nested theme mod access token and pwd must be redacted while preserving safe settings');
 $r = ok_result('theme mod get missing_mod');
 check($r['exists'] === false && $r['value'] === null, 'theme mod get missing');
 $r = ok_result('theme mod list');
-check($r['count'] === 4 && $r['truncated'] === false, 'theme mod list');
+check($r['count'] === 6 && $r['truncated'] === false, 'theme mod list');
 check(isset($r['mods'][0]['name']) && !isset($r['mods'][0]['value']), 'theme mod list returns metadata only');
 
 $r = ok_result('post meta get 42 _wp_page_template');
 check($r['exists'] === true && $r['value'] === 'default' && $r['redacted'] === false, 'post meta get value');
 $r = ok_result('post meta get 42 _wp_old_slug');
 check($r['exists'] === true && $r['value'] === 'old-page', 'post meta get legacy key is not redacted');
+$r = ok_result('post meta get 42 integration_settings');
+check($r['redacted'] === true && $r['value']['api_key'] === '[REDACTED]' && $r['value']['label'] === 'Public integration' && $r['value_sha256'] === null, 'nested post meta API key must be redacted without a secret hash');
 rejects(fn() => run('post meta get 999 _thumbnail_id'), 'oai_post_not_found');
 rejects(fn() => run('post meta get 42'), 'oai_cli_args');
 
 $r = ok_result('post meta list 42');
-check($r['count'] === 4 && $r['values_returned'] === false, 'post meta list returns keys only');
+check($r['count'] === 5 && $r['values_returned'] === false, 'post meta list returns keys only');
 check(is_array($r['keys']) && isset($r['keys'][0]['key']), 'post meta list shape');
 
 $r = ok_result('post-type list');
@@ -243,10 +253,12 @@ $r = ok_result('user meta get 1 session_tokens');
 check($r['redacted'] === true && $r['value'] === null, 'session meta must be redacted');
 $r = ok_result('user meta get 1 api_key');
 check($r['redacted'] === true && $r['value'] === null, 'api key meta must be redacted');
+$r = ok_result('user meta get 1 integration_settings');
+check($r['redacted'] === true && $r['value']['access_token'] === '[REDACTED]' && $r['value']['label'] === 'Public profile', 'nested user meta access token must be redacted while preserving safe values');
 rejects(fn() => run('user meta get 404 nickname'), 'oai_user_not_found');
 
 $r = ok_result('user meta list 1');
-check($r['count'] === 3 && $r['values_returned'] === false, 'user meta list returns keys only');
+check($r['count'] === 4 && $r['values_returned'] === false, 'user meta list returns keys only');
 $redacted_keys = array_column($r['keys'], 'redacted', 'key');
 check($redacted_keys['session_tokens'] === true && $redacted_keys['nickname'] === false, 'user meta list flags redacted keys');
 

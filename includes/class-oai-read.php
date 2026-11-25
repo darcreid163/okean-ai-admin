@@ -12,10 +12,11 @@ if (!defined('ABSPATH')) exit;
  */
 class OAI_Read {
  private static function sensitive_option($key){
-  $key=strtolower((string)$key);
+  $key=preg_replace('/([a-z0-9])([A-Z])/','$1_$2',(string)$key);
+  $key=strtolower($key);
   $deny=array('oai_api_token','oai_bearer_token','oai_agent_secret','oai_client_secret','oai_license_signature','oai_agent_key_hash','oai_license');
   if(in_array($key,$deny,true))return true;
-  return (bool)preg_match('/(^|[_\-])(token|secret|password|passwd|api[_\-]?key|private[_\-]?key|auth[_\-]?key|cookie|nonce|signature|credential|hash)([_\-]|$)/i',$key);
+  return (bool)preg_match('/(^|[_\-])(token|secret|password|passwd|pass|pwd|salt|session|api[_\-]?key|private(?:[_\-]?key)?|auth[_\-]?key|cookie|nonce|signature|credentials?|hash)([_\-]|$)/i',$key);
  }
  private static function redact_nested($value,&$redacted,$depth=0){
   if($depth>12){$redacted=true;return '[REDACTED]';}
