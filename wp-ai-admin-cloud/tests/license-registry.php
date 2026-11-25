@@ -199,13 +199,13 @@ try {
 
     /* ------------------------------------------------- plan assignment lineage --- */
 
-    $core->setPlan($operator,$ownerA,'business',$now+20,QuotaPolicy::CURRENT);
+    $core->setPlan($operator,$ownerA,'business',$now+20,QuotaPolicy::TARGET);
     $account=$store->row('SELECT plan,quota_scheme,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$ownerA]);
-    licCheck($account['plan']==='business'&&$account['quota_scheme']===QuotaPolicy::CURRENT,'Plan assignment did not persist');
+    licCheck($account['plan']==='business'&&$account['quota_scheme']===QuotaPolicy::TARGET,'Plan assignment did not persist');
     $business=licFind($core->allLicenses(),(string)$account['license_id']);
     $businessId=(string)$business['id'];
     licCheck($business['source']===Licenses::SOURCE_AUTOMATIC&&$business['status']===Licenses::ACTIVE,'Plan assignment did not issue an automatic licence');
-    licCheck($business['plan']==='business'&&$business['quota_scheme']===QuotaPolicy::CURRENT,'Automatic licence carries the wrong plan');
+    licCheck($business['plan']==='business'&&$business['quota_scheme']===QuotaPolicy::TARGET,'Automatic licence carries the wrong plan');
     $superseded=licFind($core->allLicenses(),$reissuedId);
     licCheck($superseded['status']===Licenses::REPLACED&&$superseded['replaced_by']===$businessId,'Previous licence was not retired by plan assignment');
     $usage=$core->usage($ownerA,$now+20);
@@ -230,7 +230,7 @@ try {
     $reactivated=$core->reactivateLicense($operator,$businessId,$now+40);
     licCheck($reactivated['reactivated']===true&&$reactivated['status']===Licenses::ACTIVE,'Reactivate state is wrong');
     $account=$store->row('SELECT plan,quota_scheme,license_id FROM '.$store->table('accounts').' WHERE owner=?',[$ownerA]);
-    licCheck($account['plan']==='business'&&$account['quota_scheme']===QuotaPolicy::CURRENT&&$account['license_id']===$businessId,'Reactivate did not restore the licence plan');
+    licCheck($account['plan']==='business'&&$account['quota_scheme']===QuotaPolicy::TARGET&&$account['license_id']===$businessId,'Reactivate did not restore the licence plan');
     licCheck($core->usage($ownerA,$now+40)['limit']===5000,'Reactivated account lost its paid quota');
 
     $revoked=$core->revokeLicense($operator,$businessId,$now+50);
@@ -260,7 +260,7 @@ try {
 
     /* --------------------------------------------------------------- expiry --- */
 
-    $expiring=$core->issueLicense($operator,$ownerB,'business',$now,QuotaPolicy::CURRENT,['expires_at'=>$now+120,'activation_limit'=>1]);
+    $expiring=$core->issueLicense($operator,$ownerB,'business',$now,QuotaPolicy::TARGET,['expires_at'=>$now+120,'activation_limit'=>1]);
     $expiringId=(string)$expiring['id'];
     licCheck($store->row('SELECT plan FROM '.$store->table('accounts').' WHERE owner=?',[$ownerB])['plan']==='business','Bound manual licence did not apply its plan');
     licCheck($core->usage($ownerB,$now+60)['limit']===5000,'Bound manual licence quota is wrong');
