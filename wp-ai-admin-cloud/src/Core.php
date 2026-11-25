@@ -73,11 +73,13 @@ final class Core {
      * Returns the number of account and licence rows transferred.
      */
     public static function migrateRetiredSchemes(Store $store,array $policy,int $now): int {
-        // DDL must happen before the transaction: MySQL implicitly commits on
-        // CREATE TABLE and would otherwise break the cutover atomicity.
-        $store->ensureLicenseSchema();
+        // Licence schema is optional on historical installations. Migrate it
+        // only when it already exists; the quota cutover must not create new
+        // tables or change the database table set as a side effect.
+        $hasLicenses=$store->hasTable('licenses');
+        if($hasLicenses) $store->ensureLicenseSchema();
         $active=QuotaPolicy::scheme($policy);
-        return (int)$store->transaction(function() use($store,$policy,$now,$active): int {
+        return (int)$store->transaction(function() use($store,$policy,$now,$active,$hasLicenses): int {
             $rows=$store->rows('SELECT owner,plan,quota_scheme FROM '.$store->table('accounts').' WHERE quota_scheme=? OR quota_scheme=? ORDER BY owner',[QuotaPolicy::LEGACY,QuotaPolicy::CURRENT]);
             $changed=0;
             foreach($rows as $row) {
@@ -99,11 +101,13 @@ final class Core {
             // Licences are authoritative for the account's plan. A stale
             // licence that still carries a retired scheme would otherwise
             // revert the migrated account on the next billable call.
-            $licenses=$store->rows('SELECT * FROM '.$store->table('licenses').' WHERE quota_scheme=? OR quota_scheme=? ORDER BY id',[QuotaPolicy::LEGACY,QuotaPolicy::CURRENT]);
-            foreach($licenses as $license) {
-                $before=(string)$license['quota_scheme'];
-                $after=Licenses::migrateRetiredScheme($store,$policy,$license,$now);
-                if((string)$after['quota_scheme']!==$before) ++$changed;
+            if($hasLicenses) {
+                $licenses=$store->rows('SELECT * FROM '.$store->table('licenses').' WHERE quota_scheme=? OR quota_scheme=? ORDER BY id',[QuotaPolicy::LEGACY,QuotaPolicy::CURRENT]);
+                foreach($licenses as $license) {
+                    $before=(string)$license['quota_scheme'];
+                    $after=Licenses::migrateRetiredScheme($store,$policy,$license,$now);
+                    if((string)$after['quota_scheme']!==$before) ++$changed;
+                }
             }
             return $changed;
         });
