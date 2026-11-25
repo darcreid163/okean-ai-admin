@@ -140,9 +140,12 @@ if($phase==='seed') {
     }
     $actualOptions=cloudUpgradeOptions();
     if(WPAI_CLOUD_VERSION!=='0.3.11') {
-        $cutoverOption=$actualOptions['wpai_gateway_quota_cutover_v1']??null;
-        unset($actualOptions['wpai_gateway_quota_cutover_v1']);
-        cloudUpgradeAssert((string)$cutoverOption==='1','Daily quota cutover marker was not persisted exactly once');
+        $cutoverOption=null;
+        foreach($actualOptions as $option) {
+            if(($option['option_name']??'')==='wpai_gateway_quota_cutover_v1') $cutoverOption=(string)($option['option_value']??'');
+        }
+        $actualOptions=array_values(array_filter($actualOptions,static fn($option)=>($option['option_name']??'')!=='wpai_gateway_quota_cutover_v1'));
+        cloudUpgradeAssert($cutoverOption==='1','Daily quota cutover marker was not persisted exactly once');
     }
     cloudUpgradeAssert(cloudUpgradeSame($actualOptions,$state['options']),'Gateway keys/settings or sentinel changed outside the additive quota cutover marker');
     $actualTables=$wpdb->get_col('SHOW TABLES');
