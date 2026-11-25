@@ -351,6 +351,15 @@ final class WooCommercePayments {
             $paidTotal=(int)$payment['amount_rub']*100;
             if ($paidTotal<=0 || $confirmedTotal>$paidTotal) throw new Fault('refund_total_exceeds_payment',409);
             $isActuallyFull=$confirmedTotal===$paidTotal;
+            if ($isActuallyFull) {
+                // Do not commit a full refund while the order-scoped key email is
+                // actively being dispatched outside the transaction. The retry
+                // worker will re-enter after the bounded send lease completes.
+                $delivery=$store->row('SELECT email_status,email_started_at FROM '.$store->table('license_deliveries').' WHERE order_id=?'.$store->lock(),[(string)$order->get_id()]);
+                if ($delivery && $delivery['email_status']==='sending' && (int)$delivery['email_started_at']>$now-600) {
+                    throw new Fault('license_delivery_email_in_progress',503);
+                }
+            }
             $kind=$isActuallyFull?'full':'partial';
             $outcome='partial_recorded';
             $revoked=false;
