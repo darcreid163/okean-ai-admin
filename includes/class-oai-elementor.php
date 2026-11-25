@@ -162,6 +162,7 @@ class OAI_Elementor {
     }
    }
   }catch(Throwable $e){$out['warning']=$e->getMessage();}
+  $safe=OAI_Read::option_value('_elementor_globals',$out);$out=$safe['value'];$out['redacted']=$safe['redacted'];
   return $out;
  }
 
@@ -174,7 +175,8 @@ class OAI_Elementor {
   $ref=self::find_node(absint($post_id),sanitize_text_field((string)$node_id));if(is_wp_error($ref))return $ref;
   $el=(string)($ref['node']['elType']??'');
   if(!in_array($el,array('container','e-flexbox'),true))return new WP_Error('oai_elementor_container','Elementor container/e-flexbox node required',array('status'=>422,'elType'=>$el));
-  return array('post_id'=>absint($post_id),'node_id'=>(string)$node_id,'elType'=>$el,'path'=>$ref['path'],'settings'=>is_array($ref['node']['settings']??null)?$ref['node']['settings']:array(),'allowed_layout_settings'=>self::container_layout_keys());
+  $settings=is_array($ref['node']['settings']??null)?$ref['node']['settings']:array();$safe=OAI_Read::option_value('_elementor_settings',$settings);
+  return array('post_id'=>absint($post_id),'node_id'=>(string)$node_id,'elType'=>$el,'path'=>$ref['path'],'settings'=>$safe['value'],'settings_redacted'=>$safe['redacted'],'allowed_layout_settings'=>self::container_layout_keys());
  }
  public static function page_layout($post_id){
   $post_id=absint($post_id);$p=get_post($post_id);if(!$p||$p->post_type!=='page')return new WP_Error('oai_page','Page not found',array('status'=>404));
