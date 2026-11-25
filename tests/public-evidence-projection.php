@@ -10,6 +10,7 @@ $fixture=[
  'hash'=>str_repeat('a',64),'proof_hash'=>str_repeat('b',64),'sha256'=>str_repeat('c',64),'verified'=>true,'phase'=>'after',
  'credentials'=>['api_key'=>'public-evidence-api-key-should-not-leak','accessToken'=>'public-evidence-token-should-not-leak','label'=>'Safe sibling'],
  'password_hash'=>'public-evidence-password-hash-should-not-leak',
+ 'security_status'=>['refresh_token_supported'=>false,'api_key_required'=>true,'access_token_present'=>false,'signature_valid'=>true],
  'verification'=>['file'=>ABSPATH.'wp-content/uploads/image.png','old_file'=>'/legacy-mount/tenant/image.png',
   'windows'=>'C:\\PrivateTenant\\image.png','unc'=>'\\\\private-server\\share\\image.png',
   'file_uri'=>'file:///legacy-mount/private-image.png',
@@ -47,6 +48,7 @@ projectionAssert($public['hash']===$fixture['hash']&&$public['verified']===true&
 projectionAssert($public['proof_hash']===$fixture['proof_hash']&&$public['sha256']===$fixture['sha256'],'Proof and SHA-256 integrity fields changed');
 projectionAssert($public['credentials']['api_key']==='[REDACTED]'&&$public['credentials']['accessToken']==='[REDACTED]'&&$public['credentials']['label']==='Safe sibling','Nested credentials were not redacted or safe siblings were lost');
 projectionAssert($public['password_hash']==='[REDACTED]','Password hash value was not redacted');
+projectionAssert($public['security_status']===['refresh_token_supported'=>false,'api_key_required'=>true,'access_token_present'=>false,'signature_valid'=>true],'OAuth/security capability status flags were incorrectly redacted');
 projectionAssert(strpos($json,'public-evidence-api-key-should-not-leak')===false&&strpos($json,'serialized-secret-should-not-leak')===false,'Secret value remained in public evidence JSON');
 projectionAssert($public['malformed']['proof']==='[invalid serialized evidence]','Malformed serialized proof disclosed its raw body');
 projectionAssert(serialize($fixture)===$original,'Original evidence modified');
