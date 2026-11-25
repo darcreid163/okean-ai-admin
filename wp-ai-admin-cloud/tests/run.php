@@ -232,7 +232,7 @@ foreach($workers as [$handle,$pipes]) { $out=trim(stream_get_contents($pipes[1])
 check($core->usage('duplicate',$now)['used']===1 && $core->usage('duplicate',$now)['reserved']===0 && count(file($executionLog))===1,'Concurrent duplicate action executed or charged more than once');
 putenv('CLOUD_TEST_TOKEN'); putenv('CLOUD_TEST_EXECUTION_LOG'); unlink($executionLog);
 
-// OAuth tenant-binding and refresh-token replay contract.
+// OAuth tenant-binding and strict no-refresh contract.
 require_once dirname(__DIR__).'/src/OAuth.php';
 $oauth=new WPAICloudGateway\OAuth($store,$core,'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp');
 $oauthClient=$oauth->register(['client_name'=>'Tenant isolation fixture','redirect_uris'=>['https://client.example.invalid/callback']],$now);
@@ -243,7 +243,7 @@ $authorization=$oauth->authorization([
     'redirect_uri'=>'https://client.example.invalid/callback',
     'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
     'response_type'=>'code',
-    'scope'=>'mcp:read offline_access',
+    'scope'=>'mcp:read',
     'code_challenge'=>$challenge,
     'code_challenge_method'=>'S256',
     'state'=>'tenant-isolation-state',
@@ -259,33 +259,22 @@ $oauthToken=$oauth->exchange([
     'code'=>$oauthCode,'redirect_uri'=>'https://client.example.invalid/callback',
     'code_verifier'=>$verifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
 ],$now,fn($owner)=>$owner==='1');
-check(isset($oauthToken['access_token'],$oauthToken['refresh_token']),'OAuth offline grant did not issue both credentials');
+check(isset($oauthToken['access_token']) && !isset($oauthToken['refresh_token']),'OAuth issued a forbidden refresh credential');
 $oauthActor=$core->authenticate($oauthToken['access_token'],$now);
 $oauth->binding($oauthActor,$now);
 check($oauthActor['owner']==='1' && $oauthActor['site_ids']===[$site['id']],'OAuth grant owner/site binding changed');
-$refreshed=$oauth->exchange([
-    'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
-    'refresh_token'=>$oauthToken['refresh_token'],
-    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
-],$now+60,fn($owner)=>$owner==='1');
-check(isset($refreshed['access_token'],$refreshed['refresh_token']),'Refresh did not rotate credentials');
-rejects(fn()=>$core->authenticate($oauthToken['access_token'],$now+60),'invalid_or_expired_token');
-$refreshedActor=$core->authenticate($refreshed['access_token'],$now+60);
-$oauth->binding($refreshedActor,$now+60);
-check($refreshedActor['owner']==='1' && $refreshedActor['site_ids']===[$site['id']],'Refresh changed owner/site binding');
-rejects(fn()=>$oauth->exchange([
-    'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
-    'refresh_token'=>$oauthToken['refresh_token'],
-    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
-],$now+120,fn($owner)=>$owner==='1'),'invalid_grant');
-rejects(fn()=>$oauth->binding($refreshedActor,$now+120),'invalid_or_expired_token');
+$legacyRefresh=['grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],'refresh_token'=>'legacy-refresh-token','resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp'];
+rejects(fn()=>$oauth->exchange($legacyRefresh,$now+60,fn($owner)=>$owner==='1'),'unsupported_grant_type');
+$stillActive=$core->authenticate($oauthToken['access_token'],$now+60);
+$oauth->binding($stillActive,$now+60);
+rejects(fn()=>$oauth->exchange($legacyRefresh,$now+120,fn($owner)=>$owner==='1'),'unsupported_grant_type');
 $otherOAuth=$oauth->register(['client_name'=>'Second tenant client','redirect_uris'=>['https://other-client.example.invalid/callback']],$now);
 $otherVerifier=str_repeat('w',64);
 $otherAuth=$oauth->authorization([
     'client_id'=>$otherOAuth['client_id'],
     'redirect_uri'=>'https://other-client.example.invalid/callback',
     'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
-    'response_type'=>'code','scope'=>'mcp:read offline_access',
+    'response_type'=>'code','scope'=>'mcp:read',
     'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$otherVerifier,true)),
     'code_challenge_method'=>'S256','state'=>'second-tenant-state',
 ]);
@@ -303,7 +292,7 @@ $otherToken=$oauth->exchange([
 $otherActor=$core->authenticate($otherToken['access_token'],$now);
 $oauth->binding($otherActor,$now);
 check($otherActor['owner']==='2' && $otherActor['site_ids']===[$other['id']],'Second tenant OAuth grant crossed owner/site boundary');
-$oauth->revoke($otherToken['refresh_token'],$otherOAuth['client_id']);
+$oauth->revoke($otherToken['access_token'],$otherOAuth['client_id']);
 rejects(fn()=>$oauth->binding($otherActor,$now),'invalid_or_expired_token');
 
 
@@ -315,9 +304,9 @@ $foreignClient=$oauth->register([
 ],$now);
 rejects(fn()=>$oauth->exchange([
     'grant_type'=>'refresh_token','client_id'=>$foreignClient['client_id'],
-    'refresh_token'=>$oauthToken['refresh_token'],
+    'refresh_token'=>'foreign-client-legacy-refresh-token',
     'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
-],$now+90,fn($owner)=>true),'invalid_grant');
+],$now+90,fn($owner)=>true),'unsupported_grant_type');
 rejects(fn()=>$oauth->exchange([
     'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
     'code'=>$oauthCode,'redirect_uri'=>'https://client.example.invalid/callback',
@@ -362,27 +351,12 @@ rejects(fn()=>$oauth->exchange([
     'code_verifier'=>$expiredVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
 ],$now+300,fn($owner)=>true),'invalid_grant');
 
-// Expired refresh credentials cannot be used even when the account is active.
-$expiryVerifier=str_repeat('x',64);
-$expiryAuth=$oauth->authorization([
-    'client_id'=>$oauthClient['client_id'],
-    'redirect_uri'=>'https://client.example.invalid/callback',
-    'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
-    'response_type'=>'code','scope'=>'mcp:read offline_access',
-    'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$expiryVerifier,true)),
-    'code_challenge_method'=>'S256','state'=>'expired-refresh-state',
-]);
-$expiryCode=$oauth->approve('1',$expiryAuth,[$site['id']],$now);
-$expiryToken=$oauth->exchange([
-    'grant_type'=>'authorization_code','client_id'=>$oauthClient['client_id'],
-    'code'=>$expiryCode,'redirect_uri'=>'https://client.example.invalid/callback',
-    'code_verifier'=>$expiryVerifier,'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
-],$now,fn($owner)=>$owner==='1');
+// Legacy refresh credentials are rejected regardless of age or account state.
 rejects(fn()=>$oauth->exchange([
     'grant_type'=>'refresh_token','client_id'=>$oauthClient['client_id'],
-    'refresh_token'=>$expiryToken['refresh_token'],
+    'refresh_token'=>'expired-legacy-refresh-token',
     'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
-],$now+2592000,fn($owner)=>true),'invalid_grant');
+],$now+2592000,fn($owner)=>true),'unsupported_grant_type');
 
 
 // Account suspension must atomically invalidate outstanding OAuth codes,
@@ -392,7 +366,7 @@ $ownerTwoAuth=$oauth->authorization([
     'client_id'=>$otherOAuth['client_id'],
     'redirect_uri'=>'https://other-client.example.invalid/callback',
     'resource'=>'https://gateway.example.com/wp-json/wpai-cloud/v1/mcp',
-    'response_type'=>'code','scope'=>'mcp:read offline_access',
+    'response_type'=>'code','scope'=>'mcp:read',
     'code_challenge'=>WPAICloudGateway\Security::b64(hash('sha256',$ownerTwoVerifier,true)),
     'code_challenge_method'=>'S256','state'=>'suspension-control-tenant',
 ]);
@@ -405,7 +379,7 @@ $ownerTwoToken=$oauth->exchange([
 $ownerTwoActor=$core->authenticate($ownerTwoToken['access_token'],$now);
 $oauth->binding($ownerTwoActor,$now);
 // A foreign OAuth client cannot revoke another client's live grant.
-$oauth->revoke($ownerTwoToken['refresh_token'],$oauthClient['client_id']);
+$oauth->revoke($ownerTwoToken['access_token'],$oauthClient['client_id']);
 $stillActiveAfterWrongClientRevoke=$core->authenticate($ownerTwoToken['access_token'],$now);
 $oauth->binding($stillActiveAfterWrongClientRevoke,$now);
 

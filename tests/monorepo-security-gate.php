@@ -1,11 +1,14 @@
 <?php
 /**
- * Public monorepo security boundary: one Native candidate + one current Cloud.
+ * Canonical monorepo security boundary: one Native candidate + one current Cloud.
  * This is a SOURCE gate, not the Native-only release export gate.
  */
 declare(strict_types=1);
 $root=dirname(__DIR__);$issues=[];$php=static fn(string $f)=>is_file($root.'/'.$f)?file_get_contents($root.'/'.$f):'';
 $n=$php('okean-ai-admin.php');$c=$php('wp-ai-admin-cloud/wp-ai-admin-cloud.php');
+$nativeOauth=$php('includes/class-oai-mcp-oauth.php');$cloudOauth=$php('wp-ai-admin-cloud/src/OAuth.php');
+if(str_contains($nativeOauth,'offline_access')||str_contains($nativeOauth,'refresh_token'))$issues[]='Native OAuth must not advertise offline_access or issue/accept refresh tokens';
+if(str_contains($cloudOauth,'offline_access')||str_contains($cloudOauth,'refresh_token'))$issues[]='Cloud OAuth must not advertise offline_access or issue/accept refresh tokens';
 if(!str_contains($n,"define('OAI_VERSION','2.1.18')"))$issues[]='Native must be 2.1.18';
 if(!str_contains($c,"define('WPAI_CLOUD_VERSION', '0.3.13-dev')"))$issues[]='Unreleased Cloud candidate must be 0.3.13-dev; archived 0.3.11 remains immutable';
 if(!is_file($root.'/wp-ai-admin-cloud/config/plans.json'))$issues[]='Cloud quota policy missing';
@@ -30,5 +33,19 @@ foreach($it as $file){
     $content=file_get_contents($file->getPathname());if($content===false)continue;
     foreach($patterns as $i=>$pattern)if(preg_match($pattern,$content))$issues[]='credential-like pattern '.$i.' in '.$path;
 }
-if($issues){fwrite(STDERR,"PUBLIC SOURCE GATE FAILED\n".implode("\n",$issues)."\n");exit(1);}
-echo "PASS: single Native 2.1.18 / versioned Cloud 0.3.13-dev candidate, no old gateway, no archive or secret signatures\n";
+// Arbitrary PHP cannot be sandboxed with a deny-list of function names.
+if(!defined('ABSPATH'))define('ABSPATH',$root.'/');
+require_once $root.'/includes/class-oai-security.php';
+$blocked=['functions.php','FUNCTIONS.PHP','template.phtml','archive.phar','payload.php.txt','legacy.inc','cgi-bin\\\\run.cgi','scripts\\\\run.sh'];
+foreach($blocked as $path){
+    if(!OAI_Security::has_executable_extension($path))$issues[]='server-executable file extension allowed: '.$path;
+    $guard=OAI_Security::php_guard($path,"<?php \$fn='system'; \$fn('id');");
+    if(!empty($guard['ok']))$issues[]='file guard accepted executable target: '.$path;
+}
+foreach(['style.css','theme.json','readme.md'] as $path){
+    if(OAI_Security::has_executable_extension($path))$issues[]='safe file extension rejected: '.$path;
+    $guard=OAI_Security::php_guard($path,'body{color:red}');
+    if(empty($guard['ok']))$issues[]='file guard rejected non-executable target: '.$path;
+}
+if($issues){fwrite(STDERR,"MONOREPO SECURITY GATE FAILED\n".implode("\n",$issues)."\n");exit(1);}
+echo "PASS: single Native 2.1.18 / Cloud 0.3.13-dev candidate; executable file targets denied; no old gateway, archive or secret signatures\n";

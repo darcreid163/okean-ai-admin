@@ -10,6 +10,10 @@ This document is the release-gate checklist for moving WP AI Admin from approved
 
 Exact current commits, CI runs and installed-build hashes are tracked in issue [#40](https://github.com/darcreid163/okean-ai-admin/issues/40). The roadmap to closed beta is `docs/RELEASE-PLAN-2026-11-05.md`.
 
+## OAuth policy update — 25 November 2026
+
+The owner-approved strict no-refresh policy is implemented by PR #251 and merged into the lifecycle integration branch (merge commit `a7e1ffc9`). Native and Cloud Core reject `offline_access`, issue no refresh tokens, and reject `refresh_token` grants. The user must complete a fresh Authorization Code + PKCE consent after the 3600-second access token expires. PR #251 exact-head Native and Cloud CI passed before merge; the merged lifecycle branch and the documentation changes in this branch still require exact-head CI. This change is not yet on `main` and is not deployed to production.
+
 ## Release principle
 
 Public release is blocked by safety, isolation, reproducibility, onboarding or rollback failures. New feature count is secondary until all P0 gates are closed.
@@ -55,7 +59,7 @@ Account A must be unable to:
 - substitute or tamper with `site_id`;
 - use a revoked site registration;
 - use an expired/revoked/replayed OAuth token;
-- reuse a refresh token after rotation;
+- attempt a `refresh_token` grant (must be rejected with `unsupported_grant_type`);
 - reuse another owner’s idempotency key to obtain data or mutate state;
 - fetch another owner’s operations, receipts, proof or logs;
 - exceed granted OAuth scopes;
@@ -69,10 +73,13 @@ Required result: deny-by-default on every boundary, with stable sanitized errors
 Confirm from a clean external ChatGPT account:
 - DCR succeeds;
 - authorization-code + PKCE S256 succeeds;
+- `offline_access` is not advertised or accepted;
+- no refresh token is issued or persisted, and `refresh_token` grant is rejected;
+- after real access-token expiry, the user must complete fresh consent without a reconnect loop;
 - exact resource audience is enforced;
 - explicit site selection is required;
 - unselected site access is denied;
-- refresh rotation works;
+- `offline_access` is absent/rejected, no refresh token is issued, and fresh Authorization Code + PKCE consent is required after access-token expiry;
 - revoke works;
 - reconnect does not silently expand old grants;
 - `tools/list` / site catalog remains stable enough for the client;
@@ -289,7 +296,7 @@ A release candidate is publishable only when:
 - proof/receipt path projection and historical evidence cleanup;
 - WordPress upgrade 23→24, paired code/database/uploads restore and identity preservation;
 - tenant isolation, canonical URL ownership, token TTL/revoke/disconnect/multi-site grants;
-- OAuth PKCE/refresh/replay/concurrency/privacy and HTTP discovery metadata;
+- OAuth PKCE, strict no-refresh behavior, refresh-grant rejection, replay/concurrency/privacy and HTTP discovery metadata;
 - Gateway Ledger quota/idempotency/month rollover/reconciliation; Batch single-charge semantics;
 - sealed credential and reconciliation-evidence tamper resistance;
 - JSON-RPC/MCP protocol and HTTP transport boundaries, request-size and no-store/nosniff hardening;

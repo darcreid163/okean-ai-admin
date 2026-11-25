@@ -125,14 +125,25 @@ class OAI_Security {
   if(in_array(strtolower($name),array('wp-config.php','.htaccess','.user.ini'),true))return new WP_Error('oai_path_denied','Sensitive file denied',array('status'=>403));
   return $candidate;
  }
+ public static function has_executable_extension($path){
+  // A regex deny-list cannot safely sandbox arbitrary PHP. Reject common
+  // server-side handler extensions, including multi-extension names such as
+  // payload.php.txt, before an operation is created and again at Apply.
+  $name=strtolower(basename(str_replace('\\','/',(string)$path)));
+  $parts=explode('.',$name);
+  if(count($parts)<2)return false;
+  array_shift($parts);
+  $blocked=array('php','php3','php4','php5','php7','php8','phtml','pht','phar','phps','inc','cgi','fcgi','pl','py','sh','asp','aspx','jsp','jspx','shtml');
+  foreach($parts as $extension){
+   if(in_array($extension,$blocked,true))return true;
+  }
+  return false;
+ }
  public static function php_guard($path,$content){
-  if(strtolower(pathinfo($path,PATHINFO_EXTENSION))!=='php')return array('ok'=>true,'checks'=>array());
-  $checks=array();
-  $checks['opening_tag']=(strpos($content,'<?php')===0);
-  $checks['dangerous_functions']=(preg_match('/\b(eval|assert|shell_exec|passthru|system|proc_open|popen|exec)\s*\(/i',$content)!==1);
-  try { @token_get_all($content,TOKEN_PARSE); $checks['php_lint']=true; } catch (Throwable $e) { $checks['php_lint']=false; $checks['php_error']=$e->getMessage(); }
-  $ok=$checks['opening_tag'] && $checks['dangerous_functions'] && $checks['php_lint'];
-  return array('ok'=>$ok,'checks'=>$checks);
+  if(self::has_executable_extension($path)){
+   return array('ok'=>false,'checks'=>array('executable_extension'=>false));
+  }
+  return array('ok'=>true,'checks'=>array('executable_extension'=>true));
  }
 }
 

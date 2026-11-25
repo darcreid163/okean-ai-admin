@@ -11,7 +11,7 @@ final class OAuth {
         if (!is_array($redirects)||!array_is_list($redirects)||!$redirects||count($redirects)>5||!is_string($name)||strlen($name)>100||trim($name)==='') throw new Fault('invalid_client_metadata');
         if (($input['token_endpoint_auth_method']??'none')!=='none') throw new Fault('unsupported_client_auth_method');
         if (!is_array($input['grant_types']??[]) || !is_array($input['response_types']??[])) throw new Fault('invalid_client_metadata');
-        if (array_diff($input['grant_types']??['authorization_code','refresh_token'],['authorization_code','refresh_token']) || array_diff($input['response_types']??['code'],['code'])) throw new Fault('unsupported_client_grant');
+        if (array_diff($input['grant_types']??['authorization_code'],['authorization_code']) || array_diff($input['response_types']??['code'],['code'])) throw new Fault('unsupported_client_grant');
         foreach($redirects as $uri) {
             if(!is_string($uri)||strlen($uri)>2048||preg_match('/[\x00-\x20]/',$uri)) throw new Fault('invalid_redirect_uri');
             $p=parse_url($uri);$loopback=($p['scheme']??'')==='http'&&in_array($p['host']??'',['127.0.0.1','[::1]'],true);
@@ -20,7 +20,7 @@ final class OAuth {
         if((int)$this->store->row('SELECT COUNT(*) AS n FROM '.$this->store->table('oauth_clients'))['n']>=10000) throw new Fault('client_registration_limit',429);
         $id='client_'.bin2hex(random_bytes(16));
         $this->store->execute('INSERT INTO '.$this->store->table('oauth_clients').' (id,name,redirects,created_at) VALUES (?,?,?,?)',[$id,$name,Security::canonical(array_values(array_unique($redirects))),$now]);
-        return ['client_id'=>$id,'client_id_issued_at'=>$now,'client_name'=>$name,'redirect_uris'=>$redirects,'token_endpoint_auth_method'=>'none','grant_types'=>['authorization_code','refresh_token'],'response_types'=>['code']];
+        return ['client_id'=>$id,'client_id_issued_at'=>$now,'client_name'=>$name,'redirect_uris'=>$redirects,'token_endpoint_auth_method'=>'none','grant_types'=>['authorization_code'],'response_types'=>['code']];
     }
     private function client(string $id): array {
         $row=$this->store->row('SELECT * FROM '.$this->store->table('oauth_clients').' WHERE id=?',[$id]);
@@ -35,7 +35,7 @@ final class OAuth {
         if($p['state']===''||strlen($p['state'])>512)throw new Fault('state_required');
         $scope=$p['scope']??'mcp:read';if(!is_string($scope))throw new Fault('invalid_scope');
         $scopes=array_values(array_unique(explode(' ',$scope)));sort($scopes);
-        if(!in_array('mcp:read',$scopes,true)||array_diff($scopes,['mcp:read','mcp:write','offline_access']))throw new Fault('invalid_scope');
+        if(!in_array('mcp:read',$scopes,true)||array_diff($scopes,['mcp:read','mcp:write']))throw new Fault('invalid_scope');
         return ['client_id'=>$p['client_id'],'client_name'=>$client['name'],'redirect_uri'=>$p['redirect_uri'],'resource'=>$this->resource,'challenge'=>$p['code_challenge'],'scopes'=>$scopes,'state'=>$p['state']];
     }
     public function approve(string $owner,array $auth,array $sites,int $now): string {
@@ -60,11 +60,6 @@ final class OAuth {
         $token=$this->core->mint($grant['owner'],$sites,array_values(array_intersect($scopes,['mcp:read','mcp:write'])),$now);
         $this->store->execute('INSERT INTO '.$this->store->table('oauth_access').' (hash,grant_id,resource) VALUES (?,?,?)',[hash('sha256',$token['access_token']),$grant['id'],$grant['resource']]);
         $token['scope']=implode(' ',$scopes);$token['resource']=$grant['resource'];unset($token['site_ids']);
-        if(in_array('offline_access',$scopes,true)) {
-            $refresh='wpai_refresh_'.Security::b64(random_bytes(32));
-            $this->store->execute('INSERT INTO '.$this->store->table('oauth_refresh').' (hash,grant_id,expires) VALUES (?,?,?)',[hash('sha256',$refresh),$grant['id'],$grant['expires']]);
-            $token['refresh_token']=$refresh;
-        }
         return $token;
     }
     public function exchange(array $p,int $now,callable $eligible): array {
@@ -90,30 +85,7 @@ final class OAuth {
                 return $this->issue($grant,$now);
             });
         }
-        if(($p['grant_type']??'')!=='refresh_token'||!is_string($p['refresh_token']??null))throw new Fault('unsupported_grant_type');
-        // Returning the error marker commits replay revocation rather than rolling it back.
-        $result=$this->store->transaction(function()use($p,$now,$eligible){
-            $hash=hash('sha256',$p['refresh_token']);
-            // Establish the same account-first lock order used by suspension.
-            $probeRefresh=$this->store->row('SELECT grant_id FROM '.$this->store->table('oauth_refresh').' WHERE hash=?',[$hash]);
-            if(!$probeRefresh)throw new Fault('invalid_grant');
-            $probeGrant=$this->store->row('SELECT owner FROM '.$this->store->table('oauth_grants').' WHERE id=?',[$probeRefresh['grant_id']]);
-            if(!$probeGrant)throw new Fault('invalid_grant');
-            try { $this->core->assertActiveAccount((string)$probeGrant['owner'],true,$now); }
-            catch(Fault $e) { if($e->reason==='account_unavailable')throw new Fault('invalid_grant'); throw $e; }
-
-            $r=$this->store->row('SELECT * FROM '.$this->store->table('oauth_refresh').' WHERE hash=?'.$this->store->lock(),[$hash]);
-            if(!$r||$r['grant_id']!==$probeRefresh['grant_id'])throw new Fault('invalid_grant');
-            $g=$this->store->row('SELECT * FROM '.$this->store->table('oauth_grants').' WHERE id=?'.$this->store->lock(),[$r['grant_id']]);
-            if(!$g||$g['owner']!==$probeGrant['owner']||$g['client']!==$p['client_id']||$g['resource']!==$this->resource||($p['resource']??$g['resource'])!==$g['resource'])throw new Fault('invalid_grant');
-            if((int)$r['used']===1){$this->revokeGrant($g['id']);return ['replayed'=>true];}
-            if((int)$g['revoked']!==0||(int)$r['expires']<=$now||(int)$g['expires']<=$now||!$eligible($g['owner']))throw new Fault('invalid_grant');
-            if(isset($p['scope'])&&$p['scope']!==implode(' ',json_decode($g['scopes'],true)))throw new Fault('invalid_scope');
-            $this->store->execute('UPDATE '.$this->store->table('oauth_refresh').' SET used=1 WHERE hash=?',[$r['hash']]);
-            $this->store->execute('UPDATE '.$this->store->table('tokens').' SET revoked=1 WHERE hash IN (SELECT hash FROM '.$this->store->table('oauth_access').' WHERE grant_id=?)',[$g['id']]);
-            return $this->issue($g,$now);
-        });
-        if(isset($result['replayed']))throw new Fault('invalid_grant');return $result;
+        throw new Fault('unsupported_grant_type');
     }
     private function revokeGrant(string $id): void {
         $this->store->execute('UPDATE '.$this->store->table('oauth_grants').' SET revoked=1 WHERE id=?',[$id]);

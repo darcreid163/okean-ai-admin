@@ -1094,6 +1094,7 @@ frame.addEventListener('load',function(){
   if($type==='file_write'){
    $parts=explode(':',(string)$target,2); if(count($parts)!==2)return new WP_Error('oai_target','File target must be SCOPE:PATH',array('status'=>400));
    $file=OAI_Security::resolve_path_for_write($parts[0],$parts[1]); if(is_wp_error($file))return $file;
+   if(OAI_Security::has_executable_extension($file))return new WP_Error('oai_executable_file_denied','Server-executable files cannot be written through the AI file sandbox',array('status'=>403));
    if(is_dir($file))return new WP_Error('oai_not_file','File target points to a directory',array('status'=>400));
   }
   return true;
@@ -2023,7 +2024,37 @@ frame.addEventListener('load',function(){
   } catch(Throwable $e) { $out['route_error']=$e->getMessage(); }
   return OAI_Security::public_evidence($out);
  }
- public static function execution_readiness(){return array('version'=>OAI_VERSION,'command_registry'=>true,'command_count'=>count(OAI_Command_Registry::all()),'registry_audit'=>OAI_Command_Registry::handler_audit(),'execution'=>OAI_WP_CLI_Execution::readiness(),'normalizer'=>true,'argument_parser'=>true,'permission_resolver'=>true,'dispatcher'=>true,'wp_post_resolver'=>true,'gutenberg_resolver'=>true,'parse_blocks'=>function_exists('parse_blocks'),'serialize_blocks'=>function_exists('serialize_blocks'),'direct_live_writes'=>false,'approval_required'=>true);}
+ public static function execution_readiness(){
+  $lifecycle=class_exists('OAI_AI_Lifecycle_Control')?OAI_AI_Lifecycle_Control::status():array('supported'=>false,'active'=>false,'owner_user_id'=>0);
+  $principal_id=function_exists('get_current_user_id')?absint(get_current_user_id()):0;
+  $lifecycle_available=class_exists('OAI_AI_Lifecycle_Control') && OAI_AI_Lifecycle_Control::is_enabled_for_principal($principal_id);
+  return array(
+   'version'=>OAI_VERSION,
+   'command_registry'=>true,
+   'command_count'=>count(OAI_Command_Registry::all()),
+   'registry_audit'=>OAI_Command_Registry::handler_audit(),
+   'execution'=>OAI_WP_CLI_Execution::readiness(),
+   'normalizer'=>true,
+   'argument_parser'=>true,
+   'permission_resolver'=>true,
+   'dispatcher'=>true,
+   'wp_post_resolver'=>true,
+   'gutenberg_resolver'=>true,
+   'parse_blocks'=>function_exists('parse_blocks'),
+   'serialize_blocks'=>function_exists('serialize_blocks'),
+   'direct_live_writes'=>false,
+   // Approval remains a mandatory lifecycle step; this reports who may perform it.
+   'approval_required'=>true,
+   'approval_actor'=>$lifecycle_available?'ai_and_human':'human_wp_admin',
+   'human_approval_required'=>!$lifecycle_available,
+   'ai_lifecycle_control'=>array(
+    'enabled'=>!empty($lifecycle['active']),
+    'available_to_current_mcp_principal'=>$lifecycle_available,
+    'principal_matches_owner'=>$lifecycle_available,
+    'mode'=>$lifecycle_available?'ai_and_human_lifecycle':'human_lifecycle_only',
+   ),
+  );
+ }
  public static function execution_input($req,$key,$default=null){
   $json=$req->get_json_params();
   if(is_array($json) && array_key_exists($key,$json)) return $json[$key];

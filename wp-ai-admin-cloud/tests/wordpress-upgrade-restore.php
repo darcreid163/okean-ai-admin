@@ -243,14 +243,9 @@ $list=json_decode($sites->get_data()['result']['content'][0]['text']??'null',tru
 cloudUpgradeAssert($sites->get_status()===200 && is_array($list) && array_column($list,'id')===[$state['site']['id']],'MCP site consent isolation failed');
 if(in_array($phase,['repeat','upgraded-again'],true)) {
     $refresh=['grant_type'=>'refresh_token','client_id'=>$state['client']['client_id'],'resource'=>Settings::endpoint(),'refresh_token'=>$state['token']['refresh_token']];
-    $rotated=cloudUpgradeRest('/wpai-cloud/v1/oauth/token',$refresh,true);
-    $new=$rotated->get_data();
-    cloudUpgradeAssert($rotated->get_status()===200 && isset($new['access_token'],$new['refresh_token']) && $new['refresh_token']!==$state['token']['refresh_token'],'Retained refresh token did not rotate');
-    cloudUpgradeAssert(WordPress::authenticateHeader('Bearer '.$new['access_token'])['site_ids']===[$state['site']['id']],'Refresh widened site consent');
-    cloudUpgradeReject(fn()=>WordPress::authenticateHeader('Bearer '.$state['token']['access_token']),'invalid_or_expired_token');
-    $replay=cloudUpgradeRest('/wpai-cloud/v1/oauth/token',$refresh,true);
-    cloudUpgradeAssert($replay->get_status()===400 && ($replay->get_data()['error']??'')==='invalid_grant','Refresh replay accepted');
-    cloudUpgradeReject(fn()=>WordPress::authenticateHeader('Bearer '.$new['access_token']),'invalid_or_expired_token');
+    $rejected=cloudUpgradeRest('/wpai-cloud/v1/oauth/token',$refresh,true);
+    cloudUpgradeAssert($rejected->get_status()===400 && ($rejected->get_data()['error']??'')==='unsupported_grant_type','Legacy refresh token remained usable after strict OAuth cutover');
+    cloudUpgradeAssert(WordPress::authenticateHeader('Bearer '.$state['token']['access_token'])['site_ids']===[$state['site']['id']],'Rejecting a legacy refresh token invalidated the still-live access token');
     update_option('wpai_cloud_upgrade_sentinel','after-upgrade',false);
     $store->execute('UPDATE '.$store->table('balances')." SET used=used+11 WHERE owner='1'");
 }
