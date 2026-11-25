@@ -29,6 +29,8 @@ $GLOBALS['theme_mods'] = array(
     'custom_logo' => 12,
     'background_color' => '#ffffff',
     'custom_css' => 'body{color:red}',
+    'api_key' => 'sk-should-not-leak',
+    'oauth_settings' => array('access_token' => 'access-token-should-not-leak', 'client_name' => 'Public app'),
     'nav_menu_locations' => array('primary' => 3),
 );
 $GLOBALS['posts'] = array(
@@ -143,7 +145,7 @@ class OAI_Permission_Resolver {
     public static function resolve($resolved) { return array('allowed' => true, 'capability' => 'edit_posts'); }
 }
 
-foreach (array('class-oai-argument-parser.php', 'class-oai-command-normalizer.php', 'class-oai-command-registry.php', 'class-oai-wp-cli-execution.php') as $file) {
+foreach (array('class-oai-argument-parser.php', 'class-oai-command-normalizer.php', 'class-oai-command-registry.php', 'class-oai-read.php', 'class-oai-wp-cli-execution.php') as $file) {
     require dirname(__DIR__) . '/includes/' . $file;
 }
 
@@ -211,6 +213,10 @@ $r = ok_result('theme mod get custom_logo');
 check($r['exists'] === true && $r['value'] === 12, 'theme mod get scalar');
 $r = ok_result('theme mod get custom_css');
 check($r['value'] === 'body{color:red}', 'theme mod get css');
+$r = ok_result('theme mod get api_key');
+check($r['redacted'] === true && $r['value'] === '[REDACTED]' && $r['value_sha256'] === null, 'theme mod API key must be redacted without a secret hash');
+$r = ok_result('theme mod get oauth_settings');
+check($r['redacted'] === true && $r['value']['access_token'] === '[REDACTED]' && $r['value']['client_name'] === 'Public app', 'nested theme mod access token must be redacted while preserving safe settings');
 $r = ok_result('theme mod get missing_mod');
 check($r['exists'] === false && $r['value'] === null, 'theme mod get missing');
 $r = ok_result('theme mod list');
