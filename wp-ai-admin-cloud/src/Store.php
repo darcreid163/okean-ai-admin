@@ -17,6 +17,13 @@ final class Store {
         if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events'],true)) throw new Fault('invalid_table',503);
         return '`'.$this->prefix.$name.'`';
     }
+    /** Check for an existing optional schema table without creating it. */
+    public function hasTable(string $name): bool {
+        if (!in_array($name,['accounts','balances','sites','tokens','requests','batch_steps','audit','rate','oauth_clients','oauth_codes','oauth_grants','oauth_refresh','oauth_access','oauth_rate','licenses','license_activations','license_events'],true)) throw new Fault('invalid_table',503);
+        $physical=$this->prefix.$name;
+        if ($this->mysql) return $this->row('SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$physical])!==null;
+        return $this->row("SELECT name FROM sqlite_master WHERE type='table' AND name=?",[$physical])!==null;
+    }
     public function execute(string $sql, array $params=[]): \PDOStatement { $s=$this->db->prepare($sql); $s->execute($params); return $s; }
     public function row(string $sql,array $params=[]): ?array { return $this->execute($sql,$params)->fetch() ?: null; }
     public function rows(string $sql,array $params=[]): array { return $this->execute($sql,$params)->fetchAll(); }
