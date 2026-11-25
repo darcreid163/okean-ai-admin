@@ -54,8 +54,6 @@ final class Licenses {
             $existing=$store->row('SELECT quota_scheme FROM '.$store->table('accounts').' WHERE owner=?',[$owner]);
             if ($existing&&is_string($existing['quota_scheme'])&&$existing['quota_scheme']!=='') $scheme=$existing['quota_scheme'];
         }
-        $scheme=$scheme??QuotaPolicy::scheme($policy);
-        if (!is_string($scheme)||$scheme===''||!QuotaPolicy::offers($policy,$scheme,$plan)) throw new Fault('unknown_plan',403);
         $activationLimit=$options['activation_limit']??1;
         if (!is_int($activationLimit)||$activationLimit<1||$activationLimit>50) throw new Fault('invalid_activation_limit');
         $startsAt=$options['starts_at']??$now;
@@ -67,6 +65,11 @@ final class Licenses {
             $expiresAt=$startsAt+$duration*86400;
         }
         if ($expiresAt!==null&&(!is_int($expiresAt)||$expiresAt<=$startsAt||$expiresAt>self::MAX_EXPIRY)) throw new Fault('invalid_license_dates');
+        // Reject malformed temporal input before checking whether the requested
+        // plan is currently approved. This keeps validation errors deterministic
+        // even while a paid quota is intentionally pending owner approval.
+        $scheme=$scheme??QuotaPolicy::scheme($policy);
+        if (!is_string($scheme)||$scheme===''||!QuotaPolicy::offers($policy,$scheme,$plan)) throw new Fault('unknown_plan',403);
         $comment=(string)($options['comment']??'');
         if (strlen($comment)>255) throw new Fault('invalid_license_comment');
         $source=(string)($options['source']??self::SOURCE_MANUAL);
