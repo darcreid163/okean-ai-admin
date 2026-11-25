@@ -16,12 +16,11 @@ except WordPress APIs, which are called but not copied.
 
 | Project | License | Upstream | Reviewed | Status |
 |---|---|---|---|---|
-| WPVibe (WordPress MCP plugin, wordpress.org slug `vibe-ai`) | GPL-2.0-or-later | https://github.com/awesomemotive/wpvibe-ai-mcp | `1.20.5`, commit `62bc77c` | **reference only, nothing copied** |
+| WPVibe (WordPress MCP plugin, wordpress.org slug `vibe-ai`) | GPL-2.0-or-later | https://github.com/awesomemotive/wpvibe-ai-mcp | `1.20.5`, commit `62bc77c`; public behavior reviewed | **behavioral reference only; no source copied** |
 
 WPVibe is published by Awesome Motive under GPL-2.0-or-later, the same license as this
 plugin, so code may be ported. No WPVibe file has been copied into this repository yet.
-The `includes/class-oai-elementor-schema-save.php` adapter is original work and copies no
-WPVibe source.
+The `includes/class-oai-elementor-schema-save.php` and `includes/class-oai-abilities-compat.php` adapters are original work and copy no WPVibe source. The latter implements read-only public Ability metadata discovery/schema projection based on the WordPress Abilities API and observed public behavior; it does not execute third-party Ability callbacks.
 
 ## Obligations when code is ported
 

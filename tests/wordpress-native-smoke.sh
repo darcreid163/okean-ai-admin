@@ -8,6 +8,8 @@ wp_test() { php "$WORK/wp-cli.phar" --path="$WORK/site" --allow-root "$@"; }
 wp_test core download --version="${WP_TEST_VERSION:-latest}"
 wp_test config create --dbname=wp_test --dbuser=root --dbpass=test-password --dbhost=127.0.0.1
 wp_test core install --url=http://localhost:8080 --title=Smoke --admin_user=ci-admin --admin_password=test-only-ci-password --admin_email=ci@example.invalid --skip-email
+# OAuth schema v2 migration: durable registry mutex row for atomic client-cap admission.
+DB_HOST=127.0.0.1 DB_USER=root DB_PASSWORD=test-password DB_NAME=wp_test php "$GITHUB_WORKSPACE/tests/oauth-schema-upgrade.php"
 install_ci_plugin() {
   local plugin="$1" version="$2"
   if [[ "$version" == "latest" ]]; then
@@ -25,10 +27,30 @@ OAI_DISPOSABLE_WP_TEST=1 bash tests/wordpress-native-upgrade-restore.sh "$WORK/s
 mkdir -p "$WORK/site/wp-content/plugins/okean-ai-admin"
 cp -R okean-ai-admin.php includes starter-themes README.txt "$WORK/site/wp-content/plugins/okean-ai-admin/"
 wp_test plugin activate okean-ai-admin
-# Disposable site only: exercise the additive Native 23 -> 24 schema migration,
+# Run the complete live Native self-test against the freshly installed current schema.
+wp_test eval '$r=OAI_Platform::self_test(); if(!is_array($r)||($r["failed"]??-1)!==0){ fwrite(STDERR,wp_json_encode($r)); exit(1); } echo "PASS: Native runtime self-test ".$r["passed"]."/".$r["total"]."\\n";'
+# Enforce the strict OAuth policy against the disposable WordPress runtime.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-oauth-no-refresh.php"
+# Exercise the durable administrator principal across MCP pairing identity rotation in real WordPress.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-lifecycle-principal.php"
+
+# Register the disposable Ability before the compatibility test; WordPress
+# freezes the registry after wp_abilities_api_init.
+mkdir -p "$WORK/site/wp-content/mu-plugins"
+cp "$GITHUB_WORKSPACE/tests/fixtures/oai-abilities-mu.php" "$WORK/site/wp-content/mu-plugins/oai-abilities-mu.php"
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-bearer-token-hash.php"
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-abilities-compat.php"
+# File snapshots distinguish missing targets from existing files that exceed read limits.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-file-snapshot.php"
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-file-lifecycle.php"
+# OAuth registration bounds, retention and atomic global capacity under concurrent requests.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-oauth-registration.php"
+# Disposable site only: exercise the additive Native 23 -> 25 schema migration,
 # preserving paired identity, registered OAuth client and pending operations.
 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-quota-upgrade-23-24.php"
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-rate-limit-concurrency.php"
 wp_test eval 'if(!class_exists("OAI_Elementor")) { throw new Exception("Missing Elementor adapter"); } echo "PASS: Elementor adapter loaded\\n";'
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-elementor-settings-cas.php"
 wp_test eval 'if(!class_exists("OAI_MCP")) { throw new Exception("Missing MCP"); } echo "PASS: MCP loaded\\n";'
 wp_test plugin status okean-ai-admin
 
@@ -44,6 +66,18 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-wo
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-rollback-parity.php"
 # Order lifecycle (#142): approval, addresses/quantities, WooCommerce totals, 409 and rollback.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-order-lifecycle.php"
+# HPOS acceptance: enable the authoritative custom order datastore on this disposable site,
+# assert the active datastore, then rerun the complete order lifecycle and verify table parity.
+if [[ "${OAI_HPOS_TEST:-0}" == "1" ]]; then
+  echo "=== HPOS status before acceptance ==="
+  wp_test wc hpos status
+  if [[ "$(wp_test option get woocommerce_custom_orders_table_enabled 2>/dev/null || true)" != "yes" ]]; then
+    wp_test wc hpos enable --with-sync
+  fi
+  OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-hpos.php"
+  OAI_DISPOSABLE_WP_TEST=1 OAI_EXPECT_HPOS=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-order-lifecycle.php"
+  wp_test wc hpos verify_data
+fi
 # Customers read surface (#166): capability-gated PII, pagination, REST/MCP/batch parity.
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-woocommerce-customers.php"
 # Coupons (#167): sandbox-only create/update, duplicate codes, 409 conflicts and rollback.
@@ -65,8 +99,6 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-cr
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-public-evidence.php"
 
 # Exercise actual WP Abilities registration and Native read-only discovery.
-mkdir -p "$WORK/site/wp-content/mu-plugins"
-cp "$GITHUB_WORKSPACE/tests/fixtures/oai-abilities-mu.php" "$WORK/site/wp-content/mu-plugins/oai-abilities-mu.php"
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-abilities-smoke.php"
 
 # Disposable workspace creation: durable admission before draft filesystem artifacts.
@@ -114,3 +146,7 @@ OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-cr
 wp_test theme install twentytwentyone || true
 wp_test theme activate twentytwentyone
 OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-classic-theme.php"
+
+# Uninstall is data-preserving by default; explicit per-site opt-in is required.
+# Run last because the opted-in fixture removes only the plugin's disposable tables.
+OAI_DISPOSABLE_WP_TEST=1 wp_test eval-file "$GITHUB_WORKSPACE/tests/wordpress-uninstall-policy.php"

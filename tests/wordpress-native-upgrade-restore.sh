@@ -54,4 +54,4 @@ rm -rf "$PLUGIN"
 wp_upgrade db reset --yes
 wp_upgrade db import "$BACKUP/pristine.sql"
 [[ "$(sha256sum "$SITE/wp-config.php")" == "$CONFIG_HASH" ]] || { echo 'WordPress configuration changed' >&2; exit 1; }
-echo 'PASS: historical Native 2.1.14 -> 2.1.17, repeated boot, full code+DB restore, and re-upgrade'
+echo 'PASS: historical Native 2.1.14 -> 2.1.18, repeated boot, full code+DB restore, and re-upgrade'

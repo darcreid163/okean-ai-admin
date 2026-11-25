@@ -1,12 +1,18 @@
 # WP AI Admin — Public Release Readiness
 
 Status: **IN PROGRESS**
-Current candidate (unreleased): native **2.1.17** (DB24), Cloud Core **0.3.13-dev** (Gateway schema 4, derived from the recovered 0.3.11 baseline).
+Current integrated candidate (unreleased): Native **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`), Cloud Core **0.3.13-dev** (Gateway schema 4, derived from the recovered 0.3.11 baseline).
 Canonical public MCP: **https://wpaiadmin.ru/mcp**
 
 This document is the release-gate checklist for moving WP AI Admin from approved-user beta toward public publication. It does not change the connection contract. Any connection-affecting change must still follow `docs/CHATGPT-CONNECTION-CONTRACT.md`.
 
+> **Current reconciliation (18 November 2026):** Native 2.1.18 / DB25 + Cloud Store + key-preservation candidate source snapshot `576e5c01517fc5f413d45b3dba07ec7f0bc0c817` passed Native run [44292098778](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098778) and Cloud run [44292098786](https://github.com/darcreid163/okean-ai-admin/actions/runs/44292098786). This document reconciliation is a subsequent documentation-only commit and requires its own exact-head CI. PR #232 remains Draft and unmerged. Source PRs #226/#224 are superseded, not merged; their selected changes are integrated in #232. The SSE close-race regression is included; legacy SSE remains best-effort after socket disconnect, with Streamable HTTP preferred when replay is required. Real ChatGPT expiry (#92), two-owner acceptance, staging lifecycle/restore, and final artifacts remain open. See [the canonical 18 November release control](RELEASE-CONTROL-2026-11-18.md) for exact scope and sequence. Any subsequent code or documentation commit needs exact-head revalidation.
+
 Exact current commits, CI runs and installed-build hashes are tracked in issue [#40](https://github.com/darcreid163/okean-ai-admin/issues/40). The roadmap to closed beta is `docs/RELEASE-PLAN-2026-11-05.md`.
+
+## OAuth policy update — 25 November 2026
+
+The owner-approved strict no-refresh policy is implemented by PR #251 and merged into the lifecycle integration branch (merge commit `a7e1ffc9`). Native and Cloud Core reject `offline_access`, issue no refresh tokens, and reject `refresh_token` grants. The user must complete a fresh Authorization Code + PKCE consent after the 3600-second access token expires. PR #251 exact-head Native and Cloud CI passed before merge; the merged lifecycle branch and the documentation changes in this branch still require exact-head CI. This change is not yet on `main` and is not deployed to production.
 
 ## Release principle
 
@@ -53,7 +59,7 @@ Account A must be unable to:
 - substitute or tamper with `site_id`;
 - use a revoked site registration;
 - use an expired/revoked/replayed OAuth token;
-- reuse a refresh token after rotation;
+- attempt a `refresh_token` grant (must be rejected with `unsupported_grant_type`);
 - reuse another owner’s idempotency key to obtain data or mutate state;
 - fetch another owner’s operations, receipts, proof or logs;
 - exceed granted OAuth scopes;
@@ -67,10 +73,13 @@ Required result: deny-by-default on every boundary, with stable sanitized errors
 Confirm from a clean external ChatGPT account:
 - DCR succeeds;
 - authorization-code + PKCE S256 succeeds;
+- `offline_access` is not advertised or accepted;
+- no refresh token is issued or persisted, and `refresh_token` grant is rejected;
+- after real access-token expiry, the user must complete fresh consent without a reconnect loop;
 - exact resource audience is enforced;
 - explicit site selection is required;
 - unselected site access is denied;
-- refresh rotation works;
+- `offline_access` is absent/rejected, no refresh token is issued, and fresh Authorization Code + PKCE consent is required after access-token expiry;
 - revoke works;
 - reconnect does not silently expand old grants;
 - `tools/list` / site catalog remains stable enough for the client;
@@ -86,7 +95,7 @@ The current workflows are:
 
 They run on the exact commit and include:
 - PHP 8.2 / 8.3 / 8.4 syntax and contract tests;
-- WordPress smoke with pinned (WordPress 7.0.6, WooCommerce 4.3.3, Elementor 11.1.2, GD) and latest (Imagick) profiles;
+- WordPress smoke with pinned (WordPress 7.0.6, Elementor 4.3.3, WooCommerce 11.1.2, GD) and latest (Imagick) profiles;
 - WooCommerce / Elementor / Gutenberg integration;
 - WordPress upgrade and paired code/database/uploads restore;
 - creation-claim concurrency and read-only claim inventory;
@@ -111,6 +120,8 @@ For native and Cloud Core packages:
 - public download instructions point to the exact approved artifacts.
 
 The Native archive must contain only Native files. Cloud Core is exported separately and is ultimately maintained in the private `wp-ai-admin-cloud-core` repository. No final tagged release exists yet.
+
+Current Native candidate pipeline: `tools/build-native-candidate.py` builds a sorted, stored ZIP from committed Native paths, emits `PROVENANCE.json` with source commit/tree, build identity, archive checksum and per-file hashes/modes, then verifies that manifest against the exact checkout and ZIP before package installation and tagged publication. The provenance manifest is unsigned metadata; neither it nor `BUILD-SIGNATURE.txt` is a cryptographic publisher signature. The Cloud Core candidate builder has its own equivalent source-bound provenance flow.
 
 ### 6. Secrets and logging gate — AUTOMATED GATE IMPLEMENTED / final scan pending
 
@@ -163,7 +174,7 @@ Before general-public enrollment, publish and link:
 - explicit statement of what data traverses Cloud Core;
 - deletion/account closure procedure.
 
-`SECURITY.md`, `docs/DATA-FLOW.md`, `docs/DATA-RETENTION.md`, `docs/PROOF-SEMANTICS.md`, public onboarding guidance and the release plan are present. Root LICENSE is still intentionally absent: do not choose a software license implicitly; license selection remains a product/legal decision. Privacy Policy, Terms, subprocessors/hosting disclosure, permanent account deletion procedure and paid-plan refund/cancellation terms are still pending.
+`SECURITY.md`, `docs/DATA-FLOW.md`, `docs/DATA-RETENTION.md`, `docs/PROOF-SEMANTICS.md`, public onboarding guidance and the release plan are present. The repository root LICENSE file is present and contains GNU GPL version 2 text; plugin metadata and third-party notices currently state GPL-2.0-or-later. Do not describe the root license file as absent. Any legal review of distribution terms remains separate from this technical readiness checklist. Privacy Policy, Terms, subprocessors/hosting disclosure, permanent account deletion procedure and paid-plan refund/cancellation terms are still pending.
 
 ### 10. Billing and entitlement truthfulness gate — BETA TRUTHFULNESS AUTOMATED / paid commercial enforcement pending
 
@@ -285,7 +296,7 @@ A release candidate is publishable only when:
 - proof/receipt path projection and historical evidence cleanup;
 - WordPress upgrade 23→24, paired code/database/uploads restore and identity preservation;
 - tenant isolation, canonical URL ownership, token TTL/revoke/disconnect/multi-site grants;
-- OAuth PKCE/refresh/replay/concurrency/privacy and HTTP discovery metadata;
+- OAuth PKCE, strict no-refresh behavior, refresh-grant rejection, replay/concurrency/privacy and HTTP discovery metadata;
 - Gateway Ledger quota/idempotency/month rollover/reconciliation; Batch single-charge semantics;
 - sealed credential and reconciliation-evidence tamper resistance;
 - JSON-RPC/MCP protocol and HTTP transport boundaries, request-size and no-store/nosniff hardening;
@@ -294,3 +305,14 @@ A release candidate is publishable only when:
 - deactivation safety reset and automation-mode reset on build change;
 - deterministic Native/Cloud artifacts, SHA-256 provenance and payload secret scans;
 - public health/initialize metadata secret-leak checks.
+
+
+## Exact-head CI and secret-scan update — 19 November 2026
+
+Current PR #232 branch head: `5ae4e9d9f478e289b7cae954d94de5350b3b61ad`. PR remains Draft/open/unmerged; main is unchanged.
+
+- Native exact-head CI [44478492524](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492524): SUCCESS.
+- Cloud Core exact-head CI [44478492520](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492520): SUCCESS.
+- Secret history scan [44478492445](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492445): SUCCESS; 1,855 commits reviewed with no unallowlisted findings.
+
+This closes the automated exact-head CI and repository-history scan checks for this head only. It does not close live OAuth expiry/reconnect (#92), real two-owner acceptance, staging lifecycle/restore, final artifact/legal/privacy review or paid checkout-to-license fulfillment (#203). The release job remains intentionally skipped on PRs. See issue #40 for the canonical gate status. Any documentation commit after this snapshot requires a new exact-head CI run.

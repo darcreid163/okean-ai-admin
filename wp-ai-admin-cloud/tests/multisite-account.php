@@ -24,7 +24,7 @@ check(count(array_unique($ids))===3,'Separate sites need separate registration I
 $oauth=new OAuth($store,$core,'https://wpaiadmin.ru/mcp');
 $client=$oauth->register(['client_name'=>'ChatGPT multisite fixture','redirect_uris'=>['https://chatgpt.com/connector/oauth/fixture-multisite']],$now);
 $verifier=str_repeat('v',64);
-$query=['client_id'=>$client['client_id'],'redirect_uri'=>$client['redirect_uris'][0],'response_type'=>'code','resource'=>'https://wpaiadmin.ru/mcp','scope'=>'mcp:read mcp:write offline_access','code_challenge'=>Security::b64(hash('sha256',$verifier,true)),'code_challenge_method'=>'S256','state'=>'multisite-state'];
+$query=['client_id'=>$client['client_id'],'redirect_uri'=>$client['redirect_uris'][0],'response_type'=>'code','resource'=>'https://wpaiadmin.ru/mcp','scope'=>'mcp:read mcp:write','code_challenge'=>Security::b64(hash('sha256',$verifier,true)),'code_challenge_method'=>'S256','state'=>'multisite-state'];
 $auth=$oauth->authorization($query);
 rejects(fn()=>$oauth->approve('71',$auth,[$ids[0],$other['id']],$now),'invalid_site_consent');
 $code=$oauth->approve('71',$auth,$ids,$now);

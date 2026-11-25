@@ -1,6 +1,6 @@
 # WP AI Admin — Technical Data Flow
 
-Status: technical disclosure for the unreleased candidate **Native 2.1.17 (DB24)** / **Cloud Core 0.3.13-dev (schema4)**.
+Status: technical disclosure for the unreleased candidate **Native 2.1.18 (DB25)** / **Cloud Core 0.3.13-dev (schema4)**.
 This document describes implemented data paths. It is not a substitute for the final Privacy Policy or Terms of Service.
 
 ## Actors

@@ -1,4 +1,6 @@
 # WP AI Admin connection contract
+
+> **Historical contract notice — 25 November 2026:** This 1.2 document records the original 2026-10-07 onboarding baseline. Its historical OAuth refresh-token and `offline_access` clauses are superseded by the owner-approved strict no-refresh policy: Native and Cloud Core accept Authorization Code + PKCE only, reject `offline_access`, never issue refresh tokens, and reject `refresh_token` grants. After the 3600-second access token expires, the user must authorize again. See `CHATGPT-CONNECTION-CONTRACT-ADDENDUM-2026-11-18.md` §3 and `CHATGPT-TOKEN-RENEWAL-QUALIFICATION.md`. Do not implement the historical refresh behavior in current releases.
 Contract version: **1.2**  
 Recorded: **2026-10-07**  
 Supported baseline: native **2.1.14**, central **Cloud Core 0.3.6**; retained predecessor: native 2.1.12 / Core 0.3.5  

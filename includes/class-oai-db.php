@@ -8,6 +8,7 @@ class OAI_DB {
  public static function audit_table(){global $wpdb; return $wpdb->prefix.'oai_audit_log';}
  public static function quota_table(){global $wpdb; return $wpdb->prefix.'oai_quota_usage';}
  public static function quota_events_table(){global $wpdb; return $wpdb->prefix.'oai_quota_events';}
+ public static function rate_limits_table(){global $wpdb; return $wpdb->prefix.'oai_rate_limits';}
  public static function install(){global $wpdb; require_once ABSPATH.'wp-admin/includes/upgrade.php'; $t=self::table(); $charset=$wpdb->get_charset_collate(); $sql="CREATE TABLE $t (
  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
  operation_id varchar(64) NOT NULL,
@@ -39,6 +40,7 @@ class OAI_DB {
  $a=self::audit_table();
  $q=self::quota_table();
  $qe=self::quota_events_table();
+  $rl=self::rate_limits_table();
  $qesql="CREATE TABLE $qe (
  request_key char(64) NOT NULL,
  channel varchar(32) NOT NULL,
@@ -56,6 +58,25 @@ class OAI_DB {
  KEY channel (channel)
  ) ENGINE=InnoDB $charset;";
  dbDelta($qesql);
+  $rlsql="CREATE TABLE $rl (
+  bucket_hash char(64) NOT NULL,
+  client_hash char(64) NOT NULL,
+  window_start bigint(20) unsigned NOT NULL,
+  window_seconds int(10) unsigned NOT NULL,
+  expires_at bigint(20) unsigned NOT NULL,
+  hits bigint(20) unsigned NOT NULL DEFAULT 0,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (bucket_hash,client_hash,window_start,window_seconds),
+  KEY expires_at (expires_at)
+  ) ENGINE=InnoDB $charset;";
+  dbDelta($rlsql);
+  $rate_table_found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($rl)));
+  if((string)$rate_table_found!==$rl) return new WP_Error('oai_rate_limit_schema','Rate counter table is unavailable',array('status'=>503));
+  $rate_indexes=$wpdb->get_results("SHOW INDEX FROM `$rl`",ARRAY_A);
+  $rate_primary=array_values(array_filter(is_array($rate_indexes)?$rate_indexes:array(),static fn($row)=>(string)($row['Key_name']??'')==='PRIMARY'));
+  usort($rate_primary,static fn($a,$b)=>(int)$a['Seq_in_index']<=>(int)$b['Seq_in_index']);
+  $rate_primary_columns=array_map(static fn($row)=>(string)$row['Column_name'],$rate_primary);
+  if($rate_primary_columns!==array('bucket_hash','client_hash','window_start','window_seconds')) return new WP_Error('oai_rate_limit_schema','Rate counter composite key is invalid',array('status'=>503));
  $qsql="CREATE TABLE $q (
  plan varchar(32) NOT NULL,
  period_key varchar(32) NOT NULL,
@@ -86,6 +107,39 @@ class OAI_DB {
   elseif(class_exists('OAI_MCP_OAuth')&&(int)get_option('oai_oauth_schema_version',0)<OAI_MCP_OAuth::SCHEMA_VERSION)OAI_MCP_OAuth::install();
   self::migrate_token();self::prune_quota_events();
  }
+ /** Atomically admit a request up to the configured fixed-window limit. */
+ public static function rate_limit_admit($bucket_hash,$client_hash,$window_start,$window_seconds,$limit){
+  global $wpdb;
+  $limit=(int)$limit;
+  if($limit<1) return false;
+  $table=self::rate_limits_table();
+  // Ensure exactly one row exists for this bucket/client/window. The composite
+  // primary key serializes concurrent first inserts; duplicate rows are ignored.
+  $insert=$wpdb->prepare(
+   "INSERT IGNORE INTO $table (bucket_hash,client_hash,window_start,window_seconds,expires_at,hits,updated_at) VALUES (%s,%s,%d,%d,%d,0,UTC_TIMESTAMP())",
+   (string)$bucket_hash,(string)$client_hash,(int)$window_start,(int)$window_seconds,(int)$window_start+(int)$window_seconds
+  );
+  if($wpdb->query($insert)===false) return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
+  // InnoDB serializes this conditional increment on the unique counter row.
+  // The affected-row result is 1 for an admitted increment and 0 at the cap.
+  $update=$wpdb->prepare(
+   "UPDATE $table SET hits=hits+1,updated_at=UTC_TIMESTAMP() WHERE bucket_hash=%s AND client_hash=%s AND window_start=%d AND window_seconds=%d AND hits<%d",
+   (string)$bucket_hash,(string)$client_hash,(int)$window_start,(int)$window_seconds,$limit
+  );
+  $affected=$wpdb->query($update);
+  if($affected===false) return new WP_Error('oai_rate_limit_storage','Rate limit storage unavailable',array('status'=>503));
+  if($affected===1) return true;
+  if($affected===0) return false;
+  // More than one row means the composite uniqueness invariant is broken.
+  return new WP_Error('oai_rate_limit_integrity','Rate counter uniqueness invariant failed',array('status'=>503));
+ }
+ public static function prune_rate_limits(){
+  global $wpdb;
+  $lock=(int)get_option('oai_rate_limits_pruned_at',0);
+  if($lock && (time()-$lock)<DAY_IN_SECONDS) return;
+  update_option('oai_rate_limits_pruned_at',time(),false);
+  $wpdb->query('DELETE FROM '.self::rate_limits_table().' WHERE expires_at < UNIX_TIMESTAMP() - 86400');
+ }
  public static function prune_quota_events(){
   // Cleanup is throttled to at most once per day; do not run a DELETE on every request.
   $lock=(int)get_option('oai_quota_events_pruned_at',0);
@@ -95,7 +149,19 @@ class OAI_DB {
   // Never erase unresolved reservations: time alone cannot prove the outcome.
   $wpdb->query("DELETE FROM $table WHERE state IN ('succeeded','failed') AND created_at < UTC_TIMESTAMP() - INTERVAL 90 DAY");
  }
- public static function migrate_token(){ $old=get_option('oai_api_token',''); $new=get_option('oai_bearer_token',''); if(!$new && $old) update_option('oai_bearer_token',$old,false); }
+ public static function migrate_token(){
+  $plain_value=get_option('oai_bearer_token','');$plain=is_string($plain_value)?$plain_value:'';
+  if($plain===''){$legacy_value=get_option('oai_api_token','');$plain=is_string($legacy_value)?$legacy_value:'';}
+  $stored=get_option('oai_bearer_token_hash','');$stored_valid=is_string($stored)&&(bool)preg_match('/^[a-f0-9]{64}$/D',$stored);
+  if($plain!==''){
+   if($stored_valid){delete_option('oai_bearer_token');delete_option('oai_api_token');return true;}
+   $candidate=hash('sha256',$plain);update_option('oai_bearer_token_hash',$candidate,false);
+   $persisted=get_option('oai_bearer_token_hash','');
+   if(!is_string($persisted)||!hash_equals($candidate,$persisted))return false;
+   delete_option('oai_bearer_token');delete_option('oai_api_token');return true;
+  }
+  return $stored_valid;
+ }
  private static $media_creation=null;
  /** Atomic first-writer claim admission for new WordPress artifacts.
   * WordPress add_option() can report success for duplicate-key no-op updates
@@ -160,6 +226,36 @@ class OAI_DB {
   try{$ready=$wpdb->query('SET TRANSACTION ISOLATION LEVEL '.str_replace('-',' ',$isolation));}finally{$wpdb->suppress_errors($suppressed);}
   return $ready===false?new WP_Error('oai_intent_transaction','Operation creation requires an autocommit connection',array('status'=>503)):true;
  }
+ /** Strict first-writer INSERT for media claims; add_option() is not used here.
+  * add_option() may report success for duplicate-key no-op updates on some
+  * database drivers/configurations. Only exactly one inserted row owns the
+  * right to create files and attachments.
+  *
+  * @return true|false|WP_Error true=inserted, false=claim already exists
+  */
+ private static function insert_media_creation_claim($name,$raw){
+  global $wpdb;
+  if(!is_string($name)||!preg_match('/^oai_media_creation_[a-f0-9]{64}$/D',$name)||!is_string($raw)||$raw==='')
+   return new WP_Error('oai_creation_claim_value','Invalid media creation reservation',array('status'=>400));
+  $ready=self::intent_autocommit();if(is_wp_error($ready))return $ready;
+  $previous=$wpdb->suppress_errors(true);
+  try{
+   $inserted=$wpdb->insert($wpdb->options,array(
+    'option_name'=>$name,'option_value'=>$raw,'autoload'=>'off'
+   ),array('%s','%s','%s'));
+  }finally{
+   $wpdb->suppress_errors($previous);
+   wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');
+  }
+  if($inserted===1)return true;
+  // Distinguish a duplicate winner from a storage failure using the database,
+  // not WordPress's object cache or add_option()'s boolean result.
+  $existing=$wpdb->get_var($wpdb->prepare(
+   'SELECT option_value FROM '.$wpdb->options.' WHERE option_name=%s',$name
+  ));
+  if($existing!==null)return false;
+  return new WP_Error('oai_creation_storage','Media creation reservation storage unavailable',array('status'=>503));
+ }
  private static function media_creation_cas($name,$expected,$next=null){
   global $wpdb;
   $sql=$next===null?'DELETE FROM '.$wpdb->options.' WHERE option_name=%s AND BINARY option_value=BINARY %s':'UPDATE '.$wpdb->options.' SET option_value=%s WHERE option_name=%s AND BINARY option_value=BINARY %s';
@@ -202,7 +298,9 @@ class OAI_DB {
    if($existing===null){
     if($wpdb->last_error!=='')return new WP_Error('oai_creation_storage','Creation reservation is unavailable',array('status'=>503));
     wp_cache_delete($name,'options');wp_cache_delete('notoptions','options');
-    if(add_option($name,$raw,'',false)){$acquired=true;break;}
+    $inserted=self::insert_media_creation_claim($name,$raw);
+    if(is_wp_error($inserted))return $inserted;
+    if($inserted===true){$acquired=true;break;}
     continue;
    }
    $prior=json_decode((string)$existing['option_value'],true);

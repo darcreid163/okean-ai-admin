@@ -5,10 +5,14 @@
 Security fixes are prepared against the current public-beta candidate and the latest published commercial-beta baseline when practical. Historical development branches and superseded test artifacts are not security-supported release channels.
 
 Current candidate (unreleased):
-- WP AI Admin native: **2.1.17** (DB schema 24)
+- WP AI Admin native: **2.1.18** (DB schema 25; build `2.1.18-native-rate-limit-hpos-v1-20261117`)
 - WP AI Admin Cloud Core: **0.3.13-dev** (Gateway schema 4, derived from the recovered 0.3.11 baseline)
 
-This candidate is not an approved production release. Installed builds, file hashes and the acceptance state are tracked in issue [#40](https://github.com/darcreid163/okean-ai-admin/issues/40). Billing, Batch accounting and commercial entitlement enforcement are disabled for the beta.
+This candidate is not an approved production release. The current Draft integration is PR [#232](https://github.com/darcreid163/okean-ai-admin/pull/232). Native 2.1.18, Cloud Store/key-preservation changes (#226/#224) and SSE close-race hardening are integrated in the release branch; exact-head CI passed at `5ae4e9d9f478e289b7cae954d94de5350b3b61ad` (Native [44478492524](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492524), Cloud [44478492520](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492520)); the all-ref secret history scan [44478492445](https://github.com/darcreid163/okean-ai-admin/actions/runs/44478492445) also passed after reviewing 1,855 commits. These are CI results for the current candidate only; the Actions artifacts are not signed public releases. External OAuth expiry, two-owner acceptance, staging and artifact freeze remain outstanding. See [#40](https://github.com/darcreid163/okean-ai-admin/issues/40) and [the 18 November release control](docs/RELEASE-CONTROL-2026-11-18.md).
+
+Quota and per-object Batch accounting are implemented in Cloud Core, but production activation/account migration is a separate gate. Automatic money debits and auto-renewal remain disabled. Do not represent this candidate as a self-service paid service: payment-to-license fulfillment is not qualified.
+
+Current repository visibility and scan limitations are recorded in [the 18 November repository security audit](docs/REPOSITORY-SECURITY-AUDIT-2026-11-18.md). Use the [documentation index](docs/README.md) to distinguish current release authority from historical snapshots.
 
 ## Reporting a vulnerability
 
@@ -72,6 +76,10 @@ A public release must not be marked ready solely from unit tests. Required evide
 - a final live acceptance against a disposable WordPress site.
 
 CI infrastructure failures are treated separately from product test failures and both must be resolved before closing the release gate.
+
+## Scope and visibility of this repository
+
+`darcreid163/okean-ai-admin` is currently PUBLIC. Native and Cloud source in any public branch, PR, commit, Actions log or artifact must be treated as disclosed. Never commit production credentials, server keys, customer data, database dumps or private backups. A private visibility change does not make already downloaded copies, public forks or local clones private.
 
 ## Scope of this repository
 

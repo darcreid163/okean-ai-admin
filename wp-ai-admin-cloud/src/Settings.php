@@ -34,6 +34,12 @@ final class Settings {
         }
         return new Vault(hash_hkdf('sha256',AUTH_KEY."\0".AUTH_SALT,32,'WP AI Admin Cloud gateway key wrapping v1'));
     }
+    /** Report only the active key source; never expose key material or fingerprints. */
+    public static function keySource(): string {
+        if (defined('WP_AI_CLOUD_VAULT_KEY') || defined('WP_AI_CLOUD_SIGNING_KEY')) return 'wp_config_constants';
+        $sealed=get_option(self::KEY_OPTION,'');
+        return is_string($sealed) && $sealed!=='' ? 'wrapped_database_option' : 'missing';
+    }
     public static function keys(): array {
         if (defined('WP_AI_CLOUD_VAULT_KEY') || defined('WP_AI_CLOUD_SIGNING_KEY')) {
             if (!defined('WP_AI_CLOUD_VAULT_KEY') || !defined('WP_AI_CLOUD_SIGNING_KEY')) throw new Fault('both_gateway_keys_required',503);

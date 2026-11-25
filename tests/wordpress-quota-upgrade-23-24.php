@@ -1,8 +1,8 @@
 <?php
 // WP-CLI eval-file uses eval() internally; strict_types cannot be declared there.
-/** Only run on disposable WordPress CI: simulate 2.1.16 DB 23 -> 2.1.17 DB 24. */
-if (!defined('WP_CLI') || !WP_CLI || !defined('OAI_DB_VERSION') || OAI_DB_VERSION!==24) {
-    throw new RuntimeException('Disposable WP-CLI and Native DB schema 24 required');
+/** Only run on disposable WordPress CI: simulate DB 23 -> Native DB 25 (quota, rate-limit and OAuth schema migrations). */
+if (!defined('WP_CLI') || !WP_CLI || !defined('OAI_DB_VERSION') || OAI_DB_VERSION<24) {
+    throw new RuntimeException('Disposable WP-CLI and a supported Native DB schema required');
 }
 global $wpdb;
 function quotaUpgradeAssert(bool $ok,string $message): void { if(!$ok)throw new RuntimeException($message); }
@@ -20,23 +20,30 @@ quotaUpgradeAssert($insertClient===1,'Cannot create OAuth fixture');
 $insertOperation=$wpdb->insert(OAI_DB::table(),['operation_id'=>$operationId,'status'=>'pending','type'=>'content_patch','target'=>'{"post_id":0}','created_at'=>$now]);
 quotaUpgradeAssert($insertOperation===1,'Cannot create operation fixture');
 $operationsBefore=(int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::table().' WHERE operation_id=%s',$operationId));
-// DB 23 had no v24 quota event tables. Drop only in disposable CI.
-foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table){
+// Drop the versioned quota/rate tables only in disposable CI, then exercise the additive upgrade.
+$resetTables=[OAI_DB::quota_events_table(),OAI_DB::quota_table()];
+if(OAI_DB_VERSION>=25 && method_exists('OAI_DB','rate_limits_table')) $resetTables[]=OAI_DB::rate_limits_table();
+foreach($resetTables as $table){
     $wpdb->query('DROP TABLE IF EXISTS `'.$table.'`');
     quotaUpgradeAssert($wpdb->last_error==='','Unable to reset disposable quota fixture');
 }
-update_option('oai_db_version',23,false);
+update_option('oai_db_version',OAI_DB_VERSION-1,false);
 OAI_DB::maybe_upgrade();
-quotaUpgradeAssert((int)get_option('oai_db_version')===24,'DB schema 24 not recorded');
+quotaUpgradeAssert((int)get_option('oai_db_version')===OAI_DB_VERSION,'Current DB schema not recorded');
 foreach([OAI_DB::quota_events_table(),OAI_DB::quota_table()] as $table) {
     $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));
-    quotaUpgradeAssert($found===$table,'Missing quota v24 table '.$table);
+    quotaUpgradeAssert($found===$table,'Missing quota table '.$table);
+}
+if(OAI_DB_VERSION>=25 && method_exists('OAI_DB','rate_limits_table')){
+    $rateTable=OAI_DB::rate_limits_table();
+    $found=$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($rateTable)));
+    quotaUpgradeAssert($found===$rateTable,'Missing Native rate counter table '.$rateTable);
 }
 quotaUpgradeAssert(OAI_Platform::site_id()===$siteId&&OAI_Platform::installation_id()===$installId,'Site/installation identity changed');
 // A retained enabled option is read as "1" on a new WordPress process; an
 // update to the already-enabled value does not replace it with a cached bool.
 quotaUpgradeAssert(get_option('oai_mcp_token_hash')===$tokenHash&&(string)get_option('oai_mcp_enabled')==='1','MCP credential changed');
-quotaUpgradeAssert((int)get_option('oai_oauth_schema_version')===1,'OAuth schema reset');
+quotaUpgradeAssert((int)get_option('oai_oauth_schema_version')===OAI_MCP_OAuth::SCHEMA_VERSION,'OAuth schema version reset or downgraded');
 quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.$clients.' WHERE client_id=%s',$clientId))===1,'OAuth client lost');
 quotaUpgradeAssert((int)$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.OAI_DB::table().' WHERE operation_id=%s',$operationId))===$operationsBefore,'Pending operation lost');
 OAI_DB::maybe_upgrade();

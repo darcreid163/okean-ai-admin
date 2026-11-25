@@ -4,7 +4,7 @@ Tags: ai, admin, mcp, gutenberg, woocommerce, elementor, sandbox, approval, roll
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 2.1.17
+Stable tag: 2.1.18
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,10 +15,10 @@ Universal AI Admin for WordPress: sandbox, diff, approval, verification and roll
 WP AI Admin connects your WordPress site to AI agents (ChatGPT, custom MCP clients) through a secure
 READ → PLAN → SANDBOX → DIFF → APPROVAL → APPLY → VERIFY → RECEIPT/PROOF → ROLLBACK lifecycle.
 
-Every mutation — post content, WooCommerce products, Gutenberg blocks, Elementor pages, menus, media,
-options — goes through an approval gate before touching the database. Verification confirms the change
-landed correctly; if it did not, one-click rollback restores the exact pre-change state using the
-saved `before_data` snapshot. All operations are sealed with a cryptographic receipt.
+Supported mutations — post content, WooCommerce products, Gutenberg blocks, Elementor pages, menus, media,
+options and guarded files — go through an explicit approval gate before live changes. Verification checks
+persisted state; rollback uses the recorded before snapshot and verifies restoration. If a newer external
+change is detected, the plugin fails closed rather than overwriting it. Settled operations retain sealed receipts/proofs.
 
 Key capabilities:
 
@@ -42,7 +42,7 @@ Key capabilities:
 * **Media** — upload, alt/title update, gallery management.
 * **Menus** — create, add/move/remove items.
 * **Options** — allowlisted option writes with protected-core and control-plane guards.
-* **Abilities API** — extensible read/write ability system for third-party integrations.
+* **WordPress Abilities compatibility** — read-only discovery and schema inspection. Arbitrary third-party Ability execution is disabled; future writes must use a typed sandbox/approval adapter.
 
 == Installation ==
 
@@ -67,8 +67,8 @@ read and plan freely; it cannot apply changes to your database without a human a
 
 = What happens if an AI change breaks something? =
 
-Click Rollback in the WP AI Admin dashboard. The plugin saved the exact pre-change state as
-`before_data` before applying; rollback restores it atomically and verifies the result.
+Use the approved Rollback action in the WP AI Admin dashboard. The plugin records the before snapshot
+before applying and verifies the restored state. If the target has changed independently, rollback is blocked to protect newer data.
 
 = Can I use this without WP AI Admin Cloud? =
 
@@ -80,6 +80,10 @@ central quota ledger, multi-site management, and a signed usage dashboard.
 No. Receipts contain only state/units/fingerprints. Tool output is never stored by the plugin
 or the Cloud service.
 
+== Uninstall and data retention ==
+
+By default, deleting WP AI Admin preserves its local operation history, audit records, OAuth connections, pairing identity and license settings. To remove plugin-owned data, an administrator must explicitly enable the uninstall deletion option in the WP AI Admin dashboard before deleting the plugin. Deactivation and upgrades never delete data. WordPress pages, products, media, users and other plugins' data are not removed. On Multisite, consent is checked separately for each site.
+
 == Screenshots ==
 
 1. Dashboard with server usage projection and approval queue.
@@ -87,6 +91,12 @@ or the Cloud service.
 3. Rollback confirmation screen.
 
 == Changelog ==
+
+= 2.1.18 =
+* Security: replace transient rate-limit read/modify/write with atomic database admission; concurrent requests cannot exceed the configured fixed-window limit.
+* Security: fail closed when rate-counter storage is unavailable; retain the existing HTTP 429 contract for rejected requests.
+* Database: add the Native v25 rate-counter table with bounded expiry cleanup; existing operations, OAuth records and quota data are preserved during upgrade.
+* WooCommerce: declare HPOS compatibility and test the order sandbox lifecycle on the WooCommerce 11.3.0 custom order datastore.
 
 = 2.1.17 =
 * Security: pin usage signing key at pairing; response-body key no longer trusted (issue #135).
@@ -103,6 +113,10 @@ or the Cloud service.
 * Earlier release hardening, consent callback fix, creation-intent identity, abilities API, Gutenberg preservation, Cloud Core 0.3.11 recovery, and Open Beta audit preparation. See docs/ directory for details.
 
 == Upgrade Notice ==
+
+= 2.1.18 =
+Security update: rate-limit admission is now atomic across concurrent requests. The schema upgrade
+adds a dedicated counter table and preserves existing operations, credentials and quota records.
 
 = 2.1.17 =
 Security update: re-pairing now purges old credentials. If you have multiple paired sites, each site

@@ -17,9 +17,11 @@ check($chat['client_id']!==$qwen['client_id'] && !isset($chat['client_secret']),
 foreach(['http://evil.example.com/cb','https://u:p@example.com/cb','https://example.com/cb#x',"https://example.com/cb\n"] as $bad)rejects(fn()=>$oauth->register(['redirect_uris'=>[$bad]],$now),'invalid_redirect_uri');
 rejects(fn()=>$oauth->register(['redirect_uris'=>['https://example.com/cb'],'token_endpoint_auth_method'=>'client_secret_basic'],$now),'unsupported_client_auth_method');
 rejects(fn()=>$oauth->register(['redirect_uris'=>['https://example.com/cb'],'grant_types'=>'bad'],$now),'invalid_client_metadata');
+rejects(fn()=>$oauth->register(['redirect_uris'=>['https://example.com/cb'],'grant_types'=>['authorization_code','refresh_token']],$now),'unsupported_client_grant');
 $verifier=str_repeat('v',64);$challenge=Security::b64(hash('sha256',$verifier,true));
-$query=['client_id'=>$chat['client_id'],'redirect_uri'=>$chat['redirect_uris'][0],'response_type'=>'code','resource'=>$url,'scope'=>'mcp:read mcp:write offline_access','code_challenge'=>$challenge,'code_challenge_method'=>'S256','state'=>'bound-state'];
+$query=['client_id'=>$chat['client_id'],'redirect_uri'=>$chat['redirect_uris'][0],'response_type'=>'code','resource'=>$url,'scope'=>'mcp:read mcp:write','code_challenge'=>$challenge,'code_challenge_method'=>'S256','state'=>'bound-state'];
 $auth=$oauth->authorization($query);
+$offline=$query;$offline['scope']='mcp:read offline_access';rejects(fn()=>$oauth->authorization($offline),'invalid_scope');
 foreach([['resource','https://other.example.com/mcp','invalid_target'],['redirect_uri','https://evil.example.com/cb','invalid_redirect_uri'],['code_challenge_method','plain','pkce_s256_required'],['scope','mcp:write','invalid_scope'],['state','','state_required']] as [$key,$value,$reason]){ $bad=$query;$bad[$key]=$value;rejects(fn()=>$oauth->authorization($bad),$reason); }
 rejects(fn()=>$oauth->approve('1',$auth,[$other['id']],$now),'invalid_site_consent');
 rejects(fn()=>$oauth->approve('1',$auth,[],$now),'invalid_site_consent');
@@ -30,9 +32,23 @@ foreach([['code_verifier',str_repeat('w',64)],['resource','https://evil.example.
 rejects(fn()=>$oauth->exchange($exchange,$now,fn($id)=>false),'access_denied');
 $token=$oauth->exchange($exchange,$now,$eligible);$actor=$core->authenticate($token['access_token'],$now);$oauth->binding($actor,$now);
 check($actor['site_ids']===[$site['id']] && $actor['scopes']===['mcp:read','mcp:write'],'Consent scope/site widened');
-check($token['resource']===$url && isset($token['refresh_token']),'Audience or refresh missing');
+check($token['resource']===$url && !isset($token['refresh_token']),'Access token response exposed a refresh token');
 rejects(fn()=>$oauth->exchange($exchange,$now,$eligible),'invalid_grant');
 rejects(fn()=>$core->catalog($actor,$other['id'],$now),'scope_or_site_denied');
+// Authenticate the second owner independently and prove isolation in both directions.
+$codeOwner2=$oauth->approve('2',$auth,[$other['id']],$now);
+$exchangeOwner2=$exchange;$exchangeOwner2['code']=$codeOwner2;
+$tokenOwner2=$oauth->exchange($exchangeOwner2,$now,fn($id)=>$id==='2');
+$actorOwner2=$core->authenticate($tokenOwner2['access_token'],$now);
+check($actorOwner2['owner']==='2' && $actorOwner2['site_ids']===[$other['id']],
+    'Second owner received another tenant identity or site consent');
+rejects(fn()=>$core->catalog($actorOwner2,$site['id'],$now),'scope_or_site_denied');
+rejects(fn()=>$core->call($actorOwner2,$site['id'],'wp_get_site',[],'cross-tenant-owner2-to-owner1',$now),
+    'scope_or_site_denied');
+rejects(fn()=>$core->call($actor,$other['id'],'wp_get_site',[],'cross-tenant-owner1-to-owner2',$now),
+    'scope_or_site_denied');
+check($core->usage('1',$now)['used']===0 && $core->usage('2',$now)['used']===0,
+    'Denied cross-tenant calls consumed billable quota');
 $wrongAudience=new OAuth($store,$core,'https://other.example.com/mcp');rejects(fn()=>$wrongAudience->binding($actor,$now),'invalid_or_expired_token');
 $queryQ=$query;$queryQ['client_id']=$qwen['client_id'];$queryQ['redirect_uri']=$qwen['redirect_uris'][0];
 $codeQ=$oauth->approve('1',$oauth->authorization($queryQ),[$site['id']],$now);
@@ -40,25 +56,20 @@ $exchangeQ=$exchange;$exchangeQ['client_id']=$qwen['client_id'];$exchangeQ['redi
 $tokenQ=$oauth->exchange($exchangeQ,$now,$eligible);$actorQ=$core->authenticate($tokenQ['access_token'],$now);
 $first=$core->call($actor,$site['id'],'wp_get_site',[],'shared-ai-action',$now);$again=$core->call($actorQ,$site['id'],'wp_get_site',[],'shared-ai-action',$now);
 check(Security::canonical($first)===Security::canonical($again) && $transport->executions===1 && $core->usage('1',$now)['used']===1,'Two AI clients duplicated one logical action');
-$refresh=['grant_type'=>'refresh_token','refresh_token'=>$tokenQ['refresh_token'],'client_id'=>$qwen['client_id'],'resource'=>$url];
-$bad=$refresh;$bad['client_id']=$chat['client_id'];rejects(fn()=>$oauth->exchange($bad,$now,$eligible),'invalid_grant');
-$rotated=$oauth->exchange($refresh,$now+1,$eligible);
-check($rotated['refresh_token']!==$tokenQ['refresh_token'],'Refresh did not rotate');
-rejects(fn()=>$core->authenticate($tokenQ['access_token'],$now+1),'invalid_or_expired_token');
-$core->authenticate($rotated['access_token'],$now+1);
-rejects(fn()=>$oauth->exchange($refresh,$now+2,$eligible),'invalid_grant');
-rejects(fn()=>$core->authenticate($rotated['access_token'],$now+2),'invalid_or_expired_token');
+$refreshAttempt=['grant_type'=>'refresh_token','refresh_token'=>'legacy-refresh-token','client_id'=>$qwen['client_id'],'resource'=>$url];
+rejects(fn()=>$oauth->exchange($refreshAttempt,$now+1,$eligible),'unsupported_grant_type');
+check((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('oauth_refresh'))['n']===0,'Refresh credential was persisted');
 check($core->authenticate($token['access_token'],$now+2)['owner']==='1','One provider replay revoked another provider grant');
 $oauth->revoke($token['access_token'],$chat['client_id']);rejects(fn()=>$core->authenticate($token['access_token'],$now+3),'invalid_or_expired_token');
 $readQuery=$query;$readQuery['scope']='mcp:read';$readCode=$oauth->approve('1',$oauth->authorization($readQuery),[$site['id']],$now);
 $readExchange=$exchange;$readExchange['code']=$readCode;$readToken=$oauth->exchange($readExchange,$now,$eligible);
-check(!isset($readToken['refresh_token']),'Offline access granted without scope');
+check(!isset($readToken['refresh_token']),'Read-only access response exposed a refresh token');
 $readActor=$core->authenticate($readToken['access_token'],$now);
 rejects(fn()=>$core->call($readActor,$site['id'],'operation_apply',[],'read-only-write',$now),'scope_or_site_denied');
 $expired=$oauth->approve('1',$auth,[$site['id']],$now);$expiredExchange=$exchange;$expiredExchange['code']=$expired;
 rejects(fn()=>$oauth->exchange($expiredExchange,$now+300,$eligible),'invalid_grant');
 $oauth->rate('fixture-ip',$now,2);$oauth->rate('fixture-ip',$now,2);rejects(fn()=>$oauth->rate('fixture-ip',$now,2),'oauth_rate_limit');
-check(!str_contains(Security::canonical($store->rows('SELECT * FROM '.$store->table('oauth_refresh'))),$tokenQ['refresh_token']),'Plaintext refresh token');
+check((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('oauth_refresh'))['n']===0,'A new OAuth grant persisted a refresh credential');
 check(!str_contains(Security::canonical($store->rows('SELECT * FROM '.$store->table('oauth_codes'))),$codeQ),'Plaintext authorization code');
 $parallelCode=$oauth->approve('1',$auth,[$site['id']],$now);$parallel=$exchange;$parallel['code']=$parallelCode;
 $before=(int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('tokens'))['n'];
@@ -76,5 +87,5 @@ $success=0;$denied=0;
 foreach($workers as [$handle,$pipes]){$out=trim(stream_get_contents($pipes[1]));$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);$exit=proc_close($handle);check($exit===0,'Concurrent code worker failed '.$err);if($out==='success')$success++;elseif($out==='invalid_grant')$denied++;else throw new RuntimeException('Unexpected worker outcome');}
 putenv('CLOUD_OAUTH_EXCHANGE');check($success===1&&$denied===9,'Authorization code exchanged more than once');
 check((int)$store->row('SELECT COUNT(*) AS n FROM '.$store->table('tokens'))['n']===$before+1,'Duplicate authorization minted extra tokens');
-echo 'PASS '.$checks.' OAuth assertions; PKCE/audience/site consent/refresh replay/shared AI quota; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
+echo 'PASS '.$checks.' OAuth assertions; PKCE/audience/site consent/refresh disabled/shared AI quota; driver='.(getenv('TEST_MYSQL_DSN')?'mysql':'sqlite')."\n";
 if(!getenv('TEST_MYSQL_DSN'))foreach([$database,$database.'-shm',$database.'-wal'] as $file)if(file_exists($file))unlink($file);
