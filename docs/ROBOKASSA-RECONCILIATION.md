@@ -1,10 +1,10 @@
 # Robokassa payment and licence reconciliation
 
-Status: read-only operational report, implemented on `codex/robokassa-reconciliation-report`.
+Status: read-only operational report and explicit repair path are implemented in PR #253. Automated lifecycle coverage is present; disposable Robokassa Test Mode operational acceptance remains open.
 
 ## Purpose
 
-Compare recent Robokassa WooCommerce orders with the Cloud Core payment, refund and licence registries. The report is intended to identify financial-to-entitlement inconsistencies before an operator attempts any repair.
+Compare recent Robokassa WooCommerce orders with Cloud Core payment, refund and licence registries. The report identifies financial-to-entitlement inconsistencies before an operator considers repair.
 
 ## Access
 
@@ -33,14 +33,14 @@ WordPress administrator only (`manage_options`). Open **WP AI Admin Cloud → С
 - It does not retry settlement or refund callbacks.
 - It reports at most 100 detailed findings while retaining aggregate counts.
 - It scans a bounded recent WooCommerce order window and a bounded recent Cloud payment ledger window. A Cloud ledger order is checked by direct WooCommerce order lookup, so a valid older order is not falsely marked missing merely because it is outside the recent order list.
+- Any repair is a separate explicit, scoped and audited action; a report finding is never automatic authorization to repair.
 
 ## Interpretation
 
-A finding is an investigation lead, not permission to modify an entitlement. In particular, `paid_order_missing_ledger` requires verifying the Robokassa callback and immutable order data before any retry. A future repair action must be separate, explicit, idempotent, auditable and require operator confirmation.
+A finding is an investigation lead, not permission to modify an entitlement. In particular, `paid_order_missing_ledger` requires verifying the Robokassa callback and immutable order data before any retry. Do not issue a replacement licence solely from a customer-supplied receipt.
 
 ## Remaining release gates
 
-- Run the automated Cloud Core and Native CI on the exact PR head.
-- Verify the report on a dedicated Robokassa test shop with representative paid, refunded, partial-refund and replayed orders.
-- Add a separate operator-approved repair workflow only after the report has been validated.
-- Keep public payments disabled until all release gates, including test-shop E2E and a verified chargeback policy, pass.
+- Verify the report and approved repair on a disposable Robokassa Test Mode shop with paid, refunded, partial-refund and replayed test orders.
+- Verify that report execution remains read-only under administrator use and that repair requires explicit authorization and is idempotent.
+- Keep public payments disabled until the real test-shop E2E and remaining release gates pass.
